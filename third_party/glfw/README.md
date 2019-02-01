@@ -250,6 +250,8 @@ information on what to include when reporting a bug.
 - [X11] Bugfix: `glfwSetWindowMonitor` did not update hints when resizing
                 non-user-resizable windows
 - [X11] Bugfix: `glfwSetWindowMonitor` did not flush output buffer in some cases
+- [X11] Bugfix: `glfwSetWindowMonitor` did not update the EWMH state of hidden
+                windows (#1358)
 - [Linux] Added workaround for missing `SYN_DROPPED` in pre-2.6.39 kernel
           headers (#1196)
 - [Linux] Moved to evdev for joystick input (#906,#1005)
@@ -260,6 +262,7 @@ information on what to include when reporting a bug.
 - [Cocoa] Added support for Vulkan window surface creation via
           [MoltenVK](https://moltengl.com/moltenvk/) (#870)
 - [Cocoa] Added support for loading a `MainMenu.nib` when available
+- [Cocoa] Disabled automatic window tabbing for created windows (#1250)
 - [Cocoa] Bugfix: Disabling window aspect ratio would assert (#852)
 - [Cocoa] Bugfix: Window creation failed to set first responder (#876,#883)
 - [Cocoa] Bugfix: Removed use of deprecated `CGDisplayIOServicePort` function
@@ -285,6 +288,8 @@ information on what to include when reporting a bug.
 - [Cocoa] Bugfix: OpenGL rendering was not initially visible on 10.14
                   (#1334,#1346)
 - [Cocoa] Bugfix: Caps Lock did not generate any key events (#1368,#1373)
+- [Cocoa] Bugfix: Some buttons for some joysticks were ignored (#1385)
+- [Cocoa] Bugfix: Analog joystick buttons were not translated correctly (#1385)
 - [WGL] Added support for `WGL_EXT_colorspace` for OpenGL ES contexts
 - [WGL] Added support for `WGL_ARB_create_context_no_error`
 - [GLX] Added support for `GLX_ARB_create_context_no_error`
