@@ -2057,3 +2057,62 @@ VgpuResult vgpuSubmitCommandBuffers(uint32_t count, VgpuCommandBuffer *pBuffers)
 {
     return s_renderer->submitCommandBuffers(count, pBuffers);
 }
+
+void vgpuCmdBeginRenderPass(VgpuCommandBuffer commandBuffer, VgpuFramebuffer framebuffer) {
+    VGPU_ASSERT(commandBuffer);
+
+    VkRenderPassBeginInfo renderPassBeginInfo;
+    memset(&renderPassBeginInfo, 0, sizeof(renderPassBeginInfo));
+    renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    //renderPassBeginInfo.renderPass = _currentRenderPass->GetVkRenderPass();
+    //renderPassBeginInfo.framebuffer = _currentFramebuffer->GetVkFramebuffer();
+    //renderPassBeginInfo.renderArea = renderArea;
+    //renderPassBeginInfo.clearValueCount = 0;
+    //renderPassBeginInfo.pClearValues = nullptr;
+    vkCmdBeginRenderPass(commandBuffer->vk_handle, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+}
+
+void vgpuCmdEndRenderPass(VgpuCommandBuffer commandBuffer) {
+    VGPU_ASSERT(commandBuffer);
+    vkCmdEndRenderPass(commandBuffer->vk_handle);
+}
+
+void vgpuCmdSetShader(VgpuCommandBuffer commandBuffer, VgpuShader shader) {
+    VGPU_ASSERT(commandBuffer);
+}
+
+void vgpuCmdSetVertexBuffer(VgpuCommandBuffer commandBuffer, uint32_t binding, VgpuBuffer buffer, uint64_t offset, VgpuVertexInputRate inputRate) {
+    VGPU_ASSERT(commandBuffer);
+}
+
+void vgpuCmdSetIndexBuffer(VgpuCommandBuffer commandBuffer, VgpuBuffer buffer, uint64_t offset, VgpuIndexType indexType) {
+    VGPU_ASSERT(commandBuffer);
+}
+
+void vgpuCmdSetViewport(VgpuCommandBuffer commandBuffer, VgpuViewport viewport) {
+    VGPU_ASSERT(commandBuffer);
+}
+
+void vgpuCmdSetViewports(VgpuCommandBuffer commandBuffer, uint32_t viewportCount, const VgpuViewport* pViewports) {
+    VGPU_ASSERT(commandBuffer);
+}
+
+void vgpuCmdSetScissor(VgpuCommandBuffer commandBuffer, VgpuRect2D scissor) {
+    VGPU_ASSERT(commandBuffer);
+}
+
+void vgpuCmdSetScissors(VgpuCommandBuffer commandBuffer, uint32_t scissorCount, const VgpuRect2D* pScissors) {
+    VGPU_ASSERT(commandBuffer);
+}
+
+void vgpuCmdSetPrimitiveTopology(VgpuCommandBuffer commandBuffer, VgpuPrimitiveTopology topology) {
+    VGPU_ASSERT(commandBuffer);
+}
+
+void vgpuCmdDraw(VgpuCommandBuffer commandBuffer, uint32_t vertexCount, uint32_t firstVertex) {
+    VGPU_ASSERT(commandBuffer);
+}
+
+void vgpuCmdDrawIndexed(VgpuCommandBuffer commandBuffer, uint32_t indexCount, uint32_t firstIndex, int32_t vertexOffset) {
+    VGPU_ASSERT(commandBuffer);
+}

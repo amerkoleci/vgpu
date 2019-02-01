@@ -510,20 +510,20 @@ extern "C"
     VGPU_API VgpuCommandBuffer vgpuRequestCommandBuffer();
     VGPU_API VgpuResult vgpuSubmitCommandBuffers(uint32_t count, VgpuCommandBuffer *pBuffers);
 
-    VGPU_API void vgpuBeginRenderPass(VgpuFramebuffer framebuffer);
-    VGPU_API void vgpuEndRenderPass();
-    VGPU_API void vgpuCmdSetShader(VgpuShader shader);
-    VGPU_API void vgpuCmdSetVertexBuffer(uint32_t binding, VgpuBuffer buffer, uint64_t offset, VgpuVertexInputRate inputRate);
-    VGPU_API void vgpuCmdSetIndexBuffer(VgpuBuffer buffer, uint64_t offset, VgpuIndexType indexType);
+    VGPU_API void vgpuCmdBeginRenderPass(VgpuCommandBuffer commandBuffer, VgpuFramebuffer framebuffer);
+    VGPU_API void vgpuCmdEndRenderPass(VgpuCommandBuffer commandBuffer);
+    VGPU_API void vgpuCmdSetShader(VgpuCommandBuffer commandBuffer, VgpuShader shader);
+    VGPU_API void vgpuCmdSetVertexBuffer(VgpuCommandBuffer commandBuffer, uint32_t binding, VgpuBuffer buffer, uint64_t offset, VgpuVertexInputRate inputRate);
+    VGPU_API void vgpuCmdSetIndexBuffer(VgpuCommandBuffer commandBuffer, VgpuBuffer buffer, uint64_t offset, VgpuIndexType indexType);
 
-    VGPU_API void vgpuCmdSetViewport(VgpuViewport viewport);
-    VGPU_API void vgpuCmdSetViewports(uint32_t viewportCount, const VgpuViewport* pViewports);
-    VGPU_API void vgpuCmdSetScissor(VgpuRect2D scissor);
-    VGPU_API void vgpuCmdSetScissors(uint32_t scissorCount, const VgpuRect2D* pScissors);
+    VGPU_API void vgpuCmdSetViewport(VgpuCommandBuffer commandBuffer, VgpuViewport viewport);
+    VGPU_API void vgpuCmdSetViewports(VgpuCommandBuffer commandBuffer, uint32_t viewportCount, const VgpuViewport* pViewports);
+    VGPU_API void vgpuCmdSetScissor(VgpuCommandBuffer commandBuffer, VgpuRect2D scissor);
+    VGPU_API void vgpuCmdSetScissors(VgpuCommandBuffer commandBuffer, uint32_t scissorCount, const VgpuRect2D* pScissors);
 
-    VGPU_API void vgpuCmdSetPrimitiveTopology(VgpuPrimitiveTopology topology);
-    VGPU_API void vgpuCmdDraw(uint32_t vertexCount, uint32_t firstVertex);
-    VGPU_API void vgpuCmdDrawIndexed(uint32_t indexCount, uint32_t firstIndex, int32_t vertexOffset);
+    VGPU_API void vgpuCmdSetPrimitiveTopology(VgpuCommandBuffer commandBuffer, VgpuPrimitiveTopology topology);
+    VGPU_API void vgpuCmdDraw(VgpuCommandBuffer commandBuffer, uint32_t vertexCount, uint32_t firstVertex);
+    VGPU_API void vgpuCmdDrawIndexed(VgpuCommandBuffer commandBuffer, uint32_t indexCount, uint32_t firstIndex, int32_t vertexOffset);
 
     /* Helper methods */
     /// Get the number of bits per format
