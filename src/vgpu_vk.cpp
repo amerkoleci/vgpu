@@ -1867,53 +1867,44 @@ VgpuResult VgpuRendererVk::commitCommandBuffer(VgpuCommandBuffer commandBuffer, 
 
 VgpuResult VgpuRendererVk::submitCommandBuffers(uint32_t count, VgpuCommandBuffer *pBuffers)
 {
-    VkResult result = VK_SUCCESS;
+    VkCommandBuffer *vkCommandBuffers = VGPU_ALLOCN(VkCommandBuffer, count);
+    for (uint32_t i = 0u; i < count; ++i) {
+        vkCommandBuffers[i] = pBuffers[i]->vk_handle;
+    }
 
     VkSubmitInfo submitInfo;
     memset(&submitInfo, 0, sizeof(submitInfo));
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     submitInfo.pNext = nullptr;
-    submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers = &commandBuffer->vk_handle;
+    submitInfo.commandBufferCount = count;
+    submitInfo.pCommandBuffers = vkCommandBuffers;
 
+    // Create fence to ensure that the command buffer has finished executing
+    VkFenceCreateInfo fenceCreateInfo;
+    fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    fenceCreateInfo.pNext = nullptr;
+    fenceCreateInfo.flags = 0;
     VkFence fence = VK_NULL_HANDLE;
-    if (waitUntilCompleted)
-    {
-        // Create fence to ensure that the command buffer has finished executing
-        VkFenceCreateInfo fenceCreateInfo;
-        fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-        fenceCreateInfo.pNext = nullptr;
-        fenceCreateInfo.flags = 0;
-        result = vkCreateFence(_device, &fenceCreateInfo, nullptr, &fence);
-        if (result != VK_SUCCESS)
-        {
-            return vgpuVkConvertResult(result);
-        }
-    }
+    vgpuVkLogIfFailed(vkCreateFence(_device, &fenceCreateInfo, nullptr, &fence));
 
     // Submit to the queue
-    result = vkQueueSubmit(commandBuffer->queue->vk_queue, 1, &submitInfo, fence);
-    if (result != VK_SUCCESS)
-    {
-        return vgpuVkConvertResult(result);
-    }
+    vgpuVkLogIfFailed(
+        vkQueueSubmit(_graphicsCommandQueue->vk_queue, 1, &submitInfo, fence)
+        );
 
-    if (waitUntilCompleted)
-    {
-        // Wait for the fence to signal that command buffer has finished executing.
-        result = vkWaitForFences(_device, 1, &fence, VK_TRUE, UINT64_MAX);
-        if (result != VK_SUCCESS)
-        {
-            return vgpuVkConvertResult(result);
-        }
+    // Wait for the fence to signal that command buffer has finished executing.
+    vgpuVkLogIfFailed(
+        vkWaitForFences(_device, 1, &fence, VK_TRUE, UINT64_MAX)
+        );
+    vkDestroyFence(_device, fence, nullptr);
 
-        vkDestroyFence(_device, fence, nullptr);
-
-        // Recycle the command buffer for later reuse.
-        commandBuffer->queue->freeCommandBuffers[commandBuffer->queue->freeCommandBuffersCount++] = commandBuffer;
+    // Recycle the command buffer for later reuse.
+    for (uint32_t i = 0u; i < count; ++i) {
+        pBuffers[i]->queue->freeCommandBuffers[pBuffers[i]->queue->freeCommandBuffersCount++] = pBuffers[i];
         //vkFreeCommandBuffers(_device, commandBuffer->queue->vk_handle, 1, &commandBuffer->vk_handle);
     }
 
+    VGPU_FREE(vkCommandBuffers);
     return VGPU_SUCCESS;
 }
 

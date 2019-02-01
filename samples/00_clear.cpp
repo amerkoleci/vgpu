@@ -144,6 +144,7 @@ int main(int argc, char** argv)
         glfwGetFramebufferSize(window, &width, &height);
         // Request command buffer.
         VgpuCommandBuffer commandBuffer = vgpuRequestCommandBuffer();
+        vgpuSubmitCommandBuffers(1, &commandBuffer);
         vgpuFrame();
         glfwPollEvents();
     }
