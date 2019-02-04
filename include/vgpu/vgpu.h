@@ -68,6 +68,7 @@ extern "C"
     VGPU_DEFINE_HANDLE(VgpuShaderModule);
     VGPU_DEFINE_HANDLE(VgpuShader);
     VGPU_DEFINE_HANDLE(VgpuPipeline);
+    VGPU_DEFINE_HANDLE(VgpuSampler);
     VGPU_DEFINE_HANDLE(VgpuCommandBuffer);
 
 #define VGPU_TRUE                           1
@@ -100,6 +101,8 @@ extern "C"
         VGPU_ERROR_OUT_OF_DEVICE_MEMORY = -3,
         VGPU_ERROR_INITIALIZATION_FAILED = -4,
         VGPU_ERROR_DEVICE_LOST = -5,
+        VGPU_ERROR_COMMAND_BUFFER_ALREADY_RECORDING = -6,
+        VGPU_ERROR_COMMAND_BUFFER_NOT_RECORDING = -7,
     } VgpuResult;
 
     typedef enum VgpuBackend {
@@ -349,6 +352,56 @@ extern "C"
         _VGPU_INDEX_TYPE_MAX_ENUM = 0x7FFFFFFF
     } VgpuIndexType;
 
+    typedef enum VgpuCompareOp {
+        VGPU_COMPARE_OP_NEVER = 0,
+        VGPU_COMPARE_OP_LESS,
+        VGPU_COMPARE_OP_EQUAL,
+        VGPU_COMPARE_OP_LESS_EQUAL,
+        VGPU_COMPARE_OP_GREATER,
+        VGPU_COMPARE_OP_NOT_EQUAL,
+        VGPU_COMPARE_OP_GREATER_EQUAL,
+        VGPU_COMPARE_OP_ALWAYS,
+        VGPU_COMPARE_OP_COUNT,
+        _VGPU_COMPARE_OP_MAX_ENUM = 0x7FFFFFFF
+    } VgpuCompareOp;
+
+    typedef enum VgpuSamplerMinMagFilter {
+        VGPU_SAMPLER_MIN_MAG_FILTER_NEAREST = 0,
+        VGPU_SAMPLER_MIN_MAG_FILTER_LINEAR,
+        _VGPU_SAMPLER_MIN_MAG_FILTER_MAX_ENUM = 0x7FFFFFFF
+    } VgpuSamplerMinMagFilter;
+
+    typedef enum VgpuSamplerMipFilter {
+        VGPU_SAMPLER_MIP_FILTER_NEAREST = 0,
+        VGPU_SAMPLER_MIP_FILTER_LINEAR,
+        _VGPU_SAMPLER_MIP_FILTER_MAX_ENUM = 0x7FFFFFFF
+    } VgpuSamplerMipFilter;
+
+    typedef enum VgpuSamplerAddressMode {
+        VGPU_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+        VGPU_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE,
+        VGPU_SAMPLER_ADDRESS_MODE_REPEAT,
+        VGPU_SAMPLER_ADDRESS_MODE_MIRROR_REPEAT,
+        VGPU_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER_COLOR,
+        VGPU_SAMPLER_ADDRESS_MODE_COUNT,
+        _VGPU_SAMPLER_ADDRESS_MODE_MAX_ENUM = 0x7FFFFFFF
+    } VgpuSamplerAddressMode;
+
+    typedef enum VgpuSamplerBorderColor {
+        VK_SAMPLER_BORDER_COLOR_TRANSPARENT_BLACK = 0,
+        VK_SAMPLER_BORDER_COLOR_OPAQUE_BLACK,
+        VK_SAMPLER_BORDER_COLOR_OPAQUE_WHITE,
+        VK_SAMPLER_BORDER_COLOR_COUNT,
+        _VK_SAMPLER_BORDER_COLOR_MAX_ENUM = 0x7FFFFFFF
+    } VgpuSamplerBorderColor;
+
+    typedef enum VgpuCommandQueueType {
+        VGPU_COMMAND_QUEUE_TYPE_GRAPHICS    = 0,
+        VGPU_COMMAND_QUEUE_TYPE_COMPUTE     = 1,
+        VGPU_COMMAND_QUEUE_TYPE_COPY        = 2,
+        _VGPU_COMMAND_QUEUE_TYPE_MAX_ENUM = 0x7FFFFFFF
+    } VgpuCommandQueueType;
+
     /* Callbacks */
     typedef void(*vgpu_log_fn)(VgpuLogLevel level, const char* context, const char* message);
     
@@ -451,6 +504,20 @@ extern "C"
         VgpuShader                  shader;
     } VgpuComputePipelineDescriptor;
 
+    typedef struct VgpuSamplerDescriptor {
+        VgpuSamplerAddressMode  addressModeU;
+        VgpuSamplerAddressMode  addressModeV;
+        VgpuSamplerAddressMode  addressModeW;
+        VgpuSamplerMinMagFilter magFilter;
+        VgpuSamplerMinMagFilter minFilter;
+        VgpuSamplerMipFilter    mipmapFilter;
+        uint32_t                maxAnisotropy;
+        VgpuCompareOp           compareOp;
+        VgpuSamplerBorderColor  borderColor;
+        float                   lodMinClamp;
+        float                   lodMaxClamp;
+    } VgpuSamplerDescriptor;
+
     typedef struct VgpuSwapchainDescriptor {
         uint32_t                    width;
         uint32_t                    height;
@@ -461,6 +528,10 @@ extern "C"
         /// Native window handle (HWND, ANativeWindow, NSWindow).
         uint64_t                    nativeHandle;
     } VgpuSwapchainDescriptor;
+
+    typedef struct VgpuCommandBufferDescriptor {
+        VgpuCommandQueueType       type;
+    } VgpuCommandBufferDescriptor;
 
     typedef struct VgpuDescriptor {
         VgpuDevicePreference            devicePreference;
@@ -476,16 +547,17 @@ extern "C"
 
     VGPU_API VgpuResult vgpuInitialize(const char* applicationName, const VgpuDescriptor* descriptor);
     VGPU_API void vgpuShutdown();
-    VGPU_API uint32_t vgpuFrame();
+    VGPU_API VgpuResult vgpuBeginFrame();
+    VGPU_API VgpuResult vgpuEndFrame();
     VGPU_API VgpuResult vgpuWaitIdle();
 
     /* Buffer */
-    VGPU_API VgpuBuffer vgpuCreateBuffer(const VgpuBufferDescriptor* descriptor, const void* initialData);
+    VGPU_API VgpuBuffer vgpuCreateBuffer(const VgpuBufferDescriptor* descriptor, const void* pInitData);
     VGPU_API VgpuBuffer vgpuCreateExternalBuffer(const VgpuBufferDescriptor* descriptor, void* handle);
     VGPU_API void vgpuDestroyBuffer(VgpuBuffer buffer);
 
     /* Texture */
-    VGPU_API VgpuTexture vgpuCreateTexture(const VgpuTextureDescriptor* descriptor);
+    VGPU_API VgpuTexture vgpuCreateTexture(const VgpuTextureDescriptor* descriptor, const void* pInitData);
     VGPU_API VgpuTexture vgpuCreateExternalTexture(const VgpuTextureDescriptor* descriptor, void* handle);
     VGPU_API void vgpuDestroyTexture(VgpuTexture texture);
 
@@ -506,8 +578,15 @@ extern "C"
     VGPU_API VgpuPipeline vgpuCreateComputePipeline(const VgpuComputePipelineDescriptor* descriptor);
     VGPU_API void vgpuDestroyPipeline(VgpuPipeline pipeline);
 
+    /* Sampler */
+    VGPU_API VgpuSampler vgpuCreateSampler(const VgpuSamplerDescriptor* descriptor);
+    VGPU_API void vgpuDestroySampler(VgpuSampler sampler);
+
     /* Command buffer */
-    VGPU_API VgpuCommandBuffer vgpuRequestCommandBuffer();
+    VGPU_API VgpuCommandBuffer vgpuCreateCommandBuffer(const VgpuCommandBufferDescriptor* descriptor);
+    VGPU_API void vgpuDestroyCommandBuffer(VgpuCommandBuffer commandBuffer);
+    VGPU_API VgpuResult vgpuBeginCommandBuffer(VgpuCommandBuffer commandBuffer);
+    VGPU_API VgpuResult vgpuEndCommandBuffer(VgpuCommandBuffer commandBuffer);
     VGPU_API VgpuResult vgpuSubmitCommandBuffers(uint32_t count, VgpuCommandBuffer *pBuffers);
 
     VGPU_API void vgpuCmdBeginRenderPass(VgpuCommandBuffer commandBuffer, VgpuFramebuffer framebuffer);

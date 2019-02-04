@@ -134,6 +134,14 @@ int main(int argc, char** argv)
         return false;
     }
 
+    // Request command buffer.
+    VgpuCommandBufferDescriptor commandBufferDescriptor = {};
+    commandBufferDescriptor.type = VGPU_COMMAND_QUEUE_TYPE_GRAPHICS;
+    VgpuCommandBuffer commandBuffer = vgpuCreateCommandBuffer(&commandBufferDescriptor);
+
+    VgpuSamplerDescriptor samplerDescriptor = {};
+    vgpuCreateSampler(&samplerDescriptor);
+
     while (!glfwWindowShouldClose(window))
     {
         if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
@@ -142,13 +150,17 @@ int main(int argc, char** argv)
         }
 
         glfwGetFramebufferSize(window, &width, &height);
-        // Request command buffer.
-        VgpuCommandBuffer commandBuffer = vgpuRequestCommandBuffer();
+        vgpuBeginFrame();
+        vgpuBeginCommandBuffer(commandBuffer);
+        //vgpuCmdBeginRenderPass(commandBuffer, nullptr);
+        //vgpuCmdEndRenderPass(commandBuffer);
+        vgpuEndCommandBuffer(commandBuffer);
         vgpuSubmitCommandBuffers(1, &commandBuffer);
-        vgpuFrame();
+        vgpuEndFrame();
         glfwPollEvents();
     }
 
+    vgpuDestroyCommandBuffer(commandBuffer);
     vgpuShutdown();
     glfwTerminate();
 
