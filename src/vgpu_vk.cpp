@@ -22,6 +22,18 @@
 
 #include "vgpu/vgpu.h"
 
+#include <assert.h>
+#include <string.h>
+#if defined(WIN32)
+#   include <malloc.h>
+#   undef    alloca
+#   define   alloca _malloca
+#   define   freea  _freea
+#else
+#   include <alloca.h>
+#endif
+#include <stdio.h> /* vsnprintf */
+
 #if defined(_WIN32) || defined(_WIN64)
 #   ifndef NOMINMAX
 #       define NOMINMAX
@@ -55,28 +67,29 @@
 #   define VGPU_DEBUG 1
 #endif
 
-#ifndef VGPU_ASSERT
-#   include <assert.h>
-#   define VGPU_ASSERT(c) assert(c)
-#endif
-
-#include <stdio.h>
-
 #ifndef VGPU_ALLOC
-#   include <stdlib.h>
-#   include <malloc.h>
 #   define VGPU_ALLOC(type) ((type*) malloc(sizeof(type)))
 #   define VGPU_ALLOCN(type, n) ((type*) malloc(sizeof(type) * n))
 #   define VGPU_FREE(ptr) free(ptr)
 #   define VGPU_ALLOC_HANDLE(type) ((type) calloc(1, sizeof(type##_T)))
 #endif
 
-#if defined(__GNUC__)
+#ifndef VGPU_ASSERT
+#   define VGPU_ASSERT(c) assert(c)
+#endif
+
+#if defined( __clang__ )
 #   define VGPU_UNREACHABLE() __builtin_unreachable()
+#   define VGPU_THREADLOCAL _Thread_local
+#elif defined(__GNUC__)
+#   define VGPU_UNREACHABLE() __builtin_unreachable()
+#   define VGPU_THREADLOCAL __thread
 #elif defined(_MSC_VER)
 #   define VGPU_UNREACHABLE() __assume(false)
+#   define VGPU_THREADLOCAL __declspec(thread)
 #else
 #   define VGPU_UNREACHABLE()((void)0)
+#   define VGPU_THREADLOCAL
 #endif
 
 #define _vgpu_min(a,b) ((a<b)?a:b)
@@ -90,44 +103,46 @@ VGPU_DEFINE_HANDLE(VgpuCommandQueue);
 
 /* Handle declaration */
 typedef struct VgpuPhysicalDevice_T {
-    VkPhysicalDevice                        device;
-    VkPhysicalDeviceProperties              properties;
-    VkPhysicalDeviceMemoryProperties        memoryProperties;
-    VkPhysicalDeviceFeatures                features;
-    uint32_t                                queueFamilyCount;
-    VkQueueFamilyProperties*                queueFamilyProperties;
-    uint32_t                                extensionsCount;
-    VkExtensionProperties*                  extensions;
+    VkPhysicalDevice                    device;
+    VkPhysicalDeviceProperties          properties;
+    VkPhysicalDeviceMemoryProperties    memoryProperties;
+    VkPhysicalDeviceFeatures            features;
+    uint32_t                            queueFamilyCount;
+    VkQueueFamilyProperties*            queueFamilyProperties;
+    uint32_t                            extensionsCount;
+    VkExtensionProperties*              extensions;
 } VgpuPhysicalDevice_T;
 
 typedef struct VgpuCommandQueue_T {
-    VkQueue                                 vk_queue;
-    uint32_t                                vk_queueFamilyIndex;
-    VkCommandPool                           vk_handle;
-    uint32_t                                commandBuffersCount;
-    VgpuCommandBuffer                       commandBuffers[VGPU_MAX_COMMAND_BUFFER];
+    VkQueue             vk_queue;
+    uint32_t            vk_queueFamilyIndex;
+    VkCommandPool       vk_handle;
+    uint32_t            commandBuffersCount;
+    VgpuCommandBuffer   commandBuffers[VGPU_MAX_COMMAND_BUFFER];
 } VgpuCommandQueue_T;
 
 typedef struct VgpuCommandBuffer_T {
-    VgpuCommandQueue                        queue;
-    VkCommandBuffer                         vk_handle;
-    VkSemaphore                             vk_semaphore;
-    bool                                    recording;
+    VgpuCommandQueue    queue;
+    VkCommandBuffer     vk_handle;
+    VkSemaphore         vk_semaphore;
+    bool                recording;
 } VgpuCommandBuffer_T;
 
 typedef struct VgpuSwapchain_T {
-    VkSurfaceKHR                            surface;
-    VkSwapchainKHR                          swapchain;
-    uint32_t                                imageIndex;  // index of currently acquired image.
-    uint32_t                                imageCount;
-    VkImage*                                images;
-    VkSemaphore*                            imageSemaphores;
-    VgpuTexture*                            textures;
+    VkSwapchainKHR      vk_handle;
+    VkRenderPass        renderPass;
+    uint32_t            imageIndex;  // index of currently acquired image.
+    uint32_t            imageCount;
+    VkImage*            images;
+    VkSemaphore*        imageSemaphores;
+    VgpuTexture*        textures;
+    VgpuFramebuffer*    framebuffers;
+    VkFormat            depthStencilFormat;
 } VgpuSwapchain_T;
 
 typedef struct VgpuTexture_T {
-    VkImage                                 image;
-    VkFormat                                format;
+    VkImage     image;
+    VkFormat    format;
 } VgpuTexture_T;
 
 typedef struct VgpuFramebuffer_T {
@@ -138,6 +153,10 @@ typedef struct VgpuFramebuffer_T {
 typedef struct VgpuSampler_T {
     VkSampler   vk_handle;
 } VgpuSampler_T;
+
+typedef struct VgpuShaderModule_T {
+    VkShaderModule  vk_handle;
+} VgpuShaderModule_T;
 
 // Proxy log callback
 #define VGPU_MAX_LOG_MESSAGE 4096
@@ -181,6 +200,13 @@ struct VgpuDeviceFeaturesVk
     VkPhysicalDeviceFeatures enabledFeatures = {};
 };
 
+struct VgpuVkFrameData {
+    uint32_t                    submittedCmdBuffersCount;
+    VkCommandBuffer             submittedCmdBuffers[VGPU_MAX_COMMAND_BUFFER];
+    VkSemaphore                 waitSemaphores[VGPU_MAX_COMMAND_BUFFER];
+    VkFence                     fence;
+};
+
 struct {
     VkInstance                  instance = VK_NULL_HANDLE;
     VkDevice                    device = VK_NULL_HANDLE;
@@ -188,7 +214,25 @@ struct {
     VkPhysicalDevice            physicalDevice;
     VkPhysicalDeviceProperties  physicalDeviceProperties;
     VgpuDeviceFeaturesVk        features = {};
+
+    uint32_t                    graphicsQueueFamily = VK_QUEUE_FAMILY_IGNORED;
+    uint32_t                    computeQueueFamily = VK_QUEUE_FAMILY_IGNORED;
+    uint32_t                    transferQueueFamily = VK_QUEUE_FAMILY_IGNORED;
+
+    VkQueue                     graphicsQueue = VK_NULL_HANDLE;
+    VkQueue                     computeQueue = VK_NULL_HANDLE;
+    VkQueue                     transferQueue = VK_NULL_HANDLE;
 } _vk;
+
+struct VgpuVkContext {
+    uint32_t                    maxInflightFrames;
+    uint32_t                    frameIndex;
+    VgpuVkFrameData*            frameData = nullptr;
+    VkSurfaceKHR                surface = VK_NULL_HANDLE;
+    VgpuSwapchain               swapchain = VK_NULL_HANDLE;
+};
+
+VGPU_THREADLOCAL VgpuVkContext *s_current_context = NULL;
 
 /* Conversion functions */
 static const char* vgpuVkVulkanResultString(VkResult result)
@@ -717,13 +761,10 @@ static void vgpuVkCreateSemaphore(VkSemaphore* pSemaphore)
         );
 }
 
-struct VgpuVkFrameData
-{
-    uint32_t                                submittedCmdBuffersCount;
-    VkCommandBuffer                         submittedCmdBuffers[VGPU_MAX_COMMAND_BUFFER];
-    VkSemaphore                             waitSemaphores[VGPU_MAX_COMMAND_BUFFER];
-    VkFence                                 fence;
-};
+VkResult vgpuVkCreateSurface(const VgpuSwapchainDescriptor*  descriptor, VkSurfaceKHR* pSurface);
+VgpuResult vgpuCreateSwapchain(const VgpuSwapchainDescriptor* descriptor, VkSwapchainKHR oldSwapchain, VkSurfaceKHR surface, VgpuSwapchain* pSwapchain);
+void vgpuDestroySwapchain(VgpuSwapchain swapchain);
+VgpuResult vgpuVkFlushCommandBuffer(VgpuCommandBuffer commandBuffer);
 
 struct VgpuRendererVk
 {
@@ -733,28 +774,18 @@ public:
 
     void shutdown();
     VgpuResult initialize(const char* applicationName, const VgpuDescriptor* descriptor);
-    VgpuResult waitIdle();
     VgpuResult beginFrame();
     VgpuResult endFrame();
 
     VkResult initializeExtensionsAndLayers();
     VkResult createInstance(const char* applicationName, bool validation, bool headless);
     VkResult detectPhysicalDevice(VgpuDevicePreference preference);
-    VkResult createDevice();
+    VkResult createDevice(VkSurfaceKHR surface);
     void initializeFeatures();
-
-    /* Swapchain */
-    VkResult createSurface(const VgpuSwapchainDescriptor* descriptor, VkSurfaceKHR* pSurface);
-    VgpuResult createSwapchain(const VgpuSwapchainDescriptor* descriptor, VkSwapchainKHR oldSwapchain, VkSurfaceKHR surface, VgpuSwapchain* pSwapchain);
-    void destroySwapchain(VgpuSwapchain swapchain);
 
     /* CommandQueue */
     VgpuResult createCommandQueue(VkQueue queue, uint32_t queueFamilyIndex, VgpuCommandQueue* pCommandQueue);
     void destoryCommandQueue(VgpuCommandQueue queue);
-
-    /* CommandBuffer */
-    VgpuResult flushCommandBuffer(VgpuCommandBuffer commandBuffer);
-    VgpuResult submitCommandBuffers(uint32_t count, VgpuCommandBuffer *pBuffers);
 
     VgpuCommandQueue getCommandQueue(VgpuCommandQueueType type) const
     {
@@ -796,22 +827,10 @@ private:
     VkDebugUtilsMessengerEXT                _debugMessenger = VK_NULL_HANDLE;
     VgpuPhysicalDevice                      _physicalDevices[VGPU_MAX_PHYSICAL_DEVICES];
     VgpuPhysicalDevice                      _physicalDevice = VK_NULL_HANDLE;
-    uint32_t                                _graphicsQueueFamily = VK_QUEUE_FAMILY_IGNORED;
-    uint32_t                                _computeQueueFamily = VK_QUEUE_FAMILY_IGNORED;
-    uint32_t                                _transferQueueFamily = VK_QUEUE_FAMILY_IGNORED;
-    
-    VkQueue                                 _graphicsQueue = VK_NULL_HANDLE;
-    VkQueue                                 _computeQueue = VK_NULL_HANDLE;
-    VkQueue                                 _transferQueue = VK_NULL_HANDLE;
     VmaAllocator                            _memoryAllocator = VK_NULL_HANDLE;
     VgpuCommandQueue                        _graphicsCommandQueue = VK_NULL_HANDLE;
     VgpuCommandQueue                        _computeCommandQueue = VK_NULL_HANDLE;
     VgpuCommandQueue                        _copyCommandQueue = VK_NULL_HANDLE;
-    VkSurfaceKHR                            _mainWindowSurface = VK_NULL_HANDLE;
-    VgpuSwapchain                           _mainSwapchain = VK_NULL_HANDLE;
-    uint32_t                                _maxInflightFrames;
-    uint32_t                                _frameIndex;
-    VgpuVkFrameData*                        _frameData = nullptr;
 };
 
 VgpuRendererVk::VgpuRendererVk()
@@ -825,23 +844,12 @@ VgpuRendererVk::~VgpuRendererVk()
 
 void VgpuRendererVk::shutdown()
 {
-    vkDeviceWaitIdle(_vk.device);
-
     // Delete swap chain if created.
-    if (_mainSwapchain != nullptr)
+    if (s_current_context->swapchain != nullptr)
     {
-        destroySwapchain(_mainSwapchain);
-        _mainSwapchain = nullptr;
+        vgpuDestroySwapchain(s_current_context->swapchain);
+        s_current_context->swapchain = nullptr;
     }
-
-    /*for (uint32_t i = 0; i < RenderLatency; i++)
-    {
-        vkDestroyFence(_device, _waitFences[i], nullptr);
-        vkDestroySemaphore(_device, _renderCompleteSemaphores[i], nullptr);
-        vkDestroySemaphore(_device, _presentCompleteSemaphores[i], nullptr);
-    }
-
-    _commandBuffers.clear();*/
     destoryCommandQueue(_graphicsCommandQueue);
     destoryCommandQueue(_computeCommandQueue);
     destoryCommandQueue(_copyCommandQueue);
@@ -887,7 +895,9 @@ VgpuResult VgpuRendererVk::initialize(const char* applicationName, const VgpuDes
         return vgpuVkConvertResult(result);
     }
 
-    result = createInstance(applicationName, descriptor->validation, descriptor->swapchain == nullptr);
+    VgpuVkContext* context = VGPU_ALLOC(VgpuVkContext);
+    const bool headless = descriptor->swapchain == nullptr;
+    result = createInstance(applicationName, descriptor->validation, headless);
     if (result != VK_SUCCESS)
     {
         return vgpuVkConvertResult(result);
@@ -899,54 +909,58 @@ VgpuResult VgpuRendererVk::initialize(const char* applicationName, const VgpuDes
         return vgpuVkConvertResult(result);
     }
 
-    result = createSurface(descriptor->swapchain, &_mainWindowSurface);
-    if (result != VK_SUCCESS)
+    if (!headless)
     {
-        return vgpuVkConvertResult(result);
-    }
-
-    result = createDevice();
-    if (result != VK_SUCCESS)
-    {
-        return vgpuVkConvertResult(result);
-    }
-
-    // Create command queue's.
-    createCommandQueue(_graphicsQueue, _graphicsQueueFamily, &_graphicsCommandQueue);
-    createCommandQueue(_computeQueue, _computeQueueFamily, &_computeCommandQueue);
-    createCommandQueue(_transferQueue, _transferQueueFamily, &_copyCommandQueue);
-
-    initializeFeatures();
-
-    if (descriptor->swapchain != nullptr)
-    {
-        createSwapchain(
-            descriptor->swapchain,
-            _mainSwapchain != nullptr ? _mainSwapchain->swapchain : VK_NULL_HANDLE,
-            _mainWindowSurface,
-            &_mainSwapchain);
-    }
-
-    // Create per frame resources
-    _frameIndex = 0u;
-    _maxInflightFrames = _mainSwapchain != nullptr ? _mainSwapchain->imageCount : 3u;
-    _frameData = VGPU_ALLOCN(VgpuVkFrameData, _maxInflightFrames);
-    for (uint32_t i = 0u; i < _maxInflightFrames; i++)
-    {
-        _frameData[i].submittedCmdBuffersCount = 0;
-
-        VkFenceCreateInfo fenceCreateInfo;
-        fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-        fenceCreateInfo.pNext = nullptr;
-        fenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-
-        result = vkCreateFence(_vk.device, &fenceCreateInfo, nullptr, &_frameData[i].fence);
+        result = vgpuVkCreateSurface(descriptor->swapchain, &context->surface);
         if (result != VK_SUCCESS)
         {
             return vgpuVkConvertResult(result);
         }
     }
 
+    result = createDevice(context->surface);
+    if (result != VK_SUCCESS)
+    {
+        return vgpuVkConvertResult(result);
+    }
+
+    // Create command queue's.
+    createCommandQueue(_vk.graphicsQueue, _vk.graphicsQueueFamily, &_graphicsCommandQueue);
+    createCommandQueue(_vk.computeQueue, _vk.computeQueueFamily, &_computeCommandQueue);
+    createCommandQueue(_vk.transferQueue, _vk.transferQueueFamily, &_copyCommandQueue);
+
+    initializeFeatures();
+
+    if (!headless)
+    {
+        vgpuCreateSwapchain(
+            descriptor->swapchain,
+            /*s_current_context->swapchain != nullptr ? s_current_context->swapchain->vk_handle : */VK_NULL_HANDLE,
+            context->surface,
+            &context->swapchain);
+    }
+
+    // Create per frame resources
+    context->frameIndex = 0u;
+    context->maxInflightFrames = headless ?  3u : context->swapchain->imageCount;
+    context->frameData = VGPU_ALLOCN(VgpuVkFrameData, context->maxInflightFrames);
+    for (uint32_t i = 0u; i < context->maxInflightFrames; i++)
+    {
+        context->frameData[i].submittedCmdBuffersCount = 0;
+
+        VkFenceCreateInfo fenceCreateInfo;
+        fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        fenceCreateInfo.pNext = nullptr;
+        fenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+        result = vkCreateFence(_vk.device, &fenceCreateInfo, nullptr, &context->frameData[i].fence);
+        if (result != VK_SUCCESS)
+        {
+            return vgpuVkConvertResult(result);
+        }
+    }
+
+    s_current_context = context;
     return VGPU_SUCCESS;
 }
 
@@ -1214,23 +1228,23 @@ VkResult VgpuRendererVk::detectPhysicalDevice(VgpuDevicePreference preference)
     return VK_SUCCESS;
 }
 
-VkResult VgpuRendererVk::createDevice()
+VkResult VgpuRendererVk::createDevice(VkSurfaceKHR surface)
 {
     VkResult result = VK_SUCCESS;
 
     for (uint32_t i = 0; i < _physicalDevice->queueFamilyCount; i++)
     {
-        VkBool32 supported = _mainWindowSurface == VK_NULL_HANDLE;
-        if (_mainWindowSurface != VK_NULL_HANDLE)
+        VkBool32 supported = surface == VK_NULL_HANDLE;
+        if (surface != VK_NULL_HANDLE)
         {
-            vkGetPhysicalDeviceSurfaceSupportKHR(_physicalDevice->device, i, _mainWindowSurface, &supported);
+            vkGetPhysicalDeviceSurfaceSupportKHR(_physicalDevice->device, i, surface, &supported);
         }
 
         static const VkQueueFlags required = VK_QUEUE_COMPUTE_BIT | VK_QUEUE_GRAPHICS_BIT;
         if (supported
             && ((_physicalDevice->queueFamilyProperties[i].queueFlags & required) == required))
         {
-            _graphicsQueueFamily = i;
+            _vk.graphicsQueueFamily = i;
             break;
         }
     }
@@ -1238,10 +1252,10 @@ VkResult VgpuRendererVk::createDevice()
     for (uint32_t i = 0; i < _physicalDevice->queueFamilyCount; i++)
     {
         static const VkQueueFlags required = VK_QUEUE_COMPUTE_BIT;
-        if (i != _graphicsQueueFamily
+        if (i != _vk.graphicsQueueFamily
             && (_physicalDevice->queueFamilyProperties[i].queueFlags & required) == required)
         {
-            _computeQueueFamily = i;
+            _vk.computeQueueFamily = i;
             break;
         }
     }
@@ -1249,30 +1263,30 @@ VkResult VgpuRendererVk::createDevice()
     for (uint32_t i = 0; i < _physicalDevice->queueFamilyCount; i++)
     {
         static const VkQueueFlags required = VK_QUEUE_TRANSFER_BIT;
-        if (i != _graphicsQueueFamily
-            && i != _computeQueueFamily
+        if (i != _vk.graphicsQueueFamily
+            && i != _vk.computeQueueFamily
             && (_physicalDevice->queueFamilyProperties[i].queueFlags & required) == required)
         {
-            _transferQueueFamily = i;
+            _vk.transferQueueFamily = i;
             break;
         }
     }
 
-    if (_transferQueueFamily == VK_QUEUE_FAMILY_IGNORED)
+    if (_vk.transferQueueFamily == VK_QUEUE_FAMILY_IGNORED)
     {
         for (uint32_t i = 0; i < _physicalDevice->queueFamilyCount; i++)
         {
             static const VkQueueFlags required = VK_QUEUE_TRANSFER_BIT;
-            if (i != _graphicsQueueFamily
+            if (i != _vk.graphicsQueueFamily
                 && (_physicalDevice->queueFamilyProperties[i].queueFlags & required) == required)
             {
-                _transferQueueFamily = i;
+                _vk.transferQueueFamily = i;
                 break;
             }
         }
     }
 
-    if (_graphicsQueueFamily == VK_QUEUE_FAMILY_IGNORED)
+    if (_vk.graphicsQueueFamily == VK_QUEUE_FAMILY_IGNORED)
     {
         //ALIMER_LOGERROR("Vulkan: Invalid graphics queue family");
         return VK_ERROR_INITIALIZATION_FAILED;
@@ -1283,22 +1297,22 @@ VkResult VgpuRendererVk::createDevice()
     uint32_t computeQueueIndex = 0;
     uint32_t transferQueueIndex = 0;
 
-    if (_computeQueueFamily == VK_QUEUE_FAMILY_IGNORED)
+    if (_vk.computeQueueFamily == VK_QUEUE_FAMILY_IGNORED)
     {
-        _computeQueueFamily = _graphicsQueueFamily;
-        computeQueueIndex = _vgpu_min(_physicalDevice->queueFamilyProperties[_graphicsQueueFamily].queueCount - 1, universalQueueIndex);
+        _vk.computeQueueFamily = _vk.graphicsQueueFamily;
+        computeQueueIndex = _vgpu_min(_physicalDevice->queueFamilyProperties[_vk.graphicsQueueFamily].queueCount - 1, universalQueueIndex);
         universalQueueIndex++;
     }
 
-    if (_transferQueueFamily == VK_QUEUE_FAMILY_IGNORED)
+    if (_vk.transferQueueFamily == VK_QUEUE_FAMILY_IGNORED)
     {
-        _transferQueueFamily = _graphicsQueueFamily;
-        transferQueueIndex = _vgpu_min(_physicalDevice->queueFamilyProperties[_graphicsQueueFamily].queueCount - 1, universalQueueIndex);
+        _vk.transferQueueFamily = _vk.graphicsQueueFamily;
+        transferQueueIndex = _vgpu_min(_physicalDevice->queueFamilyProperties[_vk.graphicsQueueFamily].queueCount - 1, universalQueueIndex);
         universalQueueIndex++;
     }
-    else if (_transferQueueFamily == _computeQueueFamily)
+    else if (_vk.transferQueueFamily == _vk.computeQueueFamily)
     {
-        transferQueueIndex = _vgpu_min(_physicalDevice->queueFamilyProperties[_computeQueueFamily].queueCount - 1, 1u);
+        transferQueueIndex = _vgpu_min(_physicalDevice->queueFamilyProperties[_vk.computeQueueFamily].queueCount - 1, 1u);
     }
 
     static const float graphicsQueuePriority = 0.5f;
@@ -1313,26 +1327,26 @@ VkResult VgpuRendererVk::createDevice()
     deviceCreateInfo.pQueueCreateInfos = queueCreateInfo;
 
     queueCreateInfo[queueFamilyCount].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-    queueCreateInfo[queueFamilyCount].queueFamilyIndex = _graphicsQueueFamily;
-    queueCreateInfo[queueFamilyCount].queueCount = _vgpu_min(universalQueueIndex, _physicalDevice->queueFamilyProperties[_graphicsQueueFamily].queueCount);
+    queueCreateInfo[queueFamilyCount].queueFamilyIndex = _vk.graphicsQueueFamily;
+    queueCreateInfo[queueFamilyCount].queueCount = _vgpu_min(universalQueueIndex, _physicalDevice->queueFamilyProperties[_vk.graphicsQueueFamily].queueCount);
     queueCreateInfo[queueFamilyCount].pQueuePriorities = queuePriorities;
     queueFamilyCount++;
 
-    if (_computeQueueFamily != _graphicsQueueFamily)
+    if (_vk.computeQueueFamily != _vk.graphicsQueueFamily)
     {
         queueCreateInfo[queueFamilyCount].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-        queueCreateInfo[queueFamilyCount].queueFamilyIndex = _computeQueueFamily;
-        queueCreateInfo[queueFamilyCount].queueCount = _vgpu_min(_transferQueueFamily == _computeQueueFamily ? 2u : 1u,
-            _physicalDevice->queueFamilyProperties[_computeQueueFamily].queueCount);
+        queueCreateInfo[queueFamilyCount].queueFamilyIndex = _vk.computeQueueFamily;
+        queueCreateInfo[queueFamilyCount].queueCount = _vgpu_min(_vk.transferQueueFamily == _vk.computeQueueFamily ? 2u : 1u,
+            _physicalDevice->queueFamilyProperties[_vk.computeQueueFamily].queueCount);
         queueCreateInfo[queueFamilyCount].pQueuePriorities = queuePriorities + 1;
         queueFamilyCount++;
     }
 
-    if (_transferQueueFamily != _graphicsQueueFamily
-        && _transferQueueFamily != _computeQueueFamily)
+    if (_vk.transferQueueFamily != _vk.graphicsQueueFamily
+        && _vk.transferQueueFamily != _vk.computeQueueFamily)
     {
         queueCreateInfo[queueFamilyCount].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-        queueCreateInfo[queueFamilyCount].queueFamilyIndex = _transferQueueFamily;
+        queueCreateInfo[queueFamilyCount].queueFamilyIndex = _vk.transferQueueFamily;
         queueCreateInfo[queueFamilyCount].queueCount = 1;
         queueCreateInfo[queueFamilyCount].pQueuePriorities = queuePriorities + 2;
         queueFamilyCount++;
@@ -1340,7 +1354,7 @@ VkResult VgpuRendererVk::createDevice()
 
     uint32_t enabledExtensionsCount = 0;
     const char* enabledExtensions[20];
-    if (_mainWindowSurface != VK_NULL_HANDLE)
+    if (surface != VK_NULL_HANDLE)
     {
         enabledExtensions[enabledExtensionsCount++] = VK_KHR_SWAPCHAIN_EXTENSION_NAME;
     }
@@ -1455,9 +1469,9 @@ VkResult VgpuRendererVk::createDevice()
     }
 
     volkLoadDevice(_vk.device);
-    vkGetDeviceQueue(_vk.device, _graphicsQueueFamily, graphicsQueueIndex, &_graphicsQueue);
-    vkGetDeviceQueue(_vk.device, _computeQueueFamily, computeQueueIndex, &_computeQueue);
-    vkGetDeviceQueue(_vk.device, _transferQueueFamily, transferQueueIndex, &_transferQueue);
+    vkGetDeviceQueue(_vk.device, _vk.graphicsQueueFamily, graphicsQueueIndex, &_vk.graphicsQueue);
+    vkGetDeviceQueue(_vk.device, _vk.computeQueueFamily, computeQueueIndex, &_vk.computeQueue);
+    vkGetDeviceQueue(_vk.device, _vk.transferQueueFamily, transferQueueIndex, &_vk.transferQueue);
 
     // Set up VMA.
     VmaVulkanFunctions vulkanFunctions = {};
@@ -1496,7 +1510,7 @@ VkResult VgpuRendererVk::createDevice()
     return result;
 }
 
-VkResult VgpuRendererVk::createSurface(const VgpuSwapchainDescriptor*  descriptor, VkSurfaceKHR* pSurface)
+VkResult vgpuVkCreateSurface(const VgpuSwapchainDescriptor*  descriptor, VkSurfaceKHR* pSurface)
 {
     VkResult result = VK_SUCCESS;
     if (descriptor == nullptr)
@@ -1557,10 +1571,10 @@ VkResult VgpuRendererVk::createSurface(const VgpuSwapchainDescriptor*  descripto
     return result;
 }
 
-VgpuResult VgpuRendererVk::createSwapchain(const VgpuSwapchainDescriptor* descriptor, VkSwapchainKHR oldSwapchain, VkSurfaceKHR surface, VgpuSwapchain* pSwapchain)
+VgpuResult vgpuCreateSwapchain(const VgpuSwapchainDescriptor* descriptor, VkSwapchainKHR oldSwapchain, VkSurfaceKHR surface, VgpuSwapchain* pSwapchain)
 {
     VkSurfaceCapabilitiesKHR surfaceCaps;
-    if (vkGetPhysicalDeviceSurfaceCapabilitiesKHR(_physicalDevice->device, surface, &surfaceCaps) != VK_SUCCESS)
+    if (vkGetPhysicalDeviceSurfaceCapabilitiesKHR(_vk.physicalDevice, surface, &surfaceCaps) != VK_SUCCESS)
     {
         return VGPU_ERROR_INITIALIZATION_FAILED;
     }
@@ -1573,16 +1587,16 @@ VgpuResult VgpuRendererVk::createSwapchain(const VgpuSwapchainDescriptor* descri
     }
 
     VkBool32 supported = VK_FALSE;
-    vkGetPhysicalDeviceSurfaceSupportKHR(_physicalDevice->device, _graphicsQueueFamily, surface, &supported);
+    vkGetPhysicalDeviceSurfaceSupportKHR(_vk.physicalDevice, _vk.graphicsQueueFamily, surface, &supported);
     if (!supported)
     {
         return VGPU_ERROR_INITIALIZATION_FAILED;
     }
 
     uint32_t formatCount;
-    vkGetPhysicalDeviceSurfaceFormatsKHR(_physicalDevice->device, surface, &formatCount, nullptr);
+    vkGetPhysicalDeviceSurfaceFormatsKHR(_vk.physicalDevice, surface, &formatCount, nullptr);
     VkSurfaceFormatKHR *formats = (VkSurfaceFormatKHR*)alloca(sizeof(VkSurfaceFormatKHR) * formatCount);
-    vkGetPhysicalDeviceSurfaceFormatsKHR(_physicalDevice->device, surface, &formatCount, formats);
+    vkGetPhysicalDeviceSurfaceFormatsKHR(_vk.physicalDevice, surface, &formatCount, formats);
 
     VkSurfaceFormatKHR format = { VK_FORMAT_UNDEFINED, VK_COLORSPACE_SRGB_NONLINEAR_KHR };
     if (formatCount == 1 && formats[0].format == VK_FORMAT_UNDEFINED)
@@ -1629,9 +1643,9 @@ VgpuResult VgpuRendererVk::createSwapchain(const VgpuSwapchainDescriptor* descri
     }
 
     uint32_t presentModeCount;
-    vkGetPhysicalDeviceSurfacePresentModesKHR(_physicalDevice->device, surface, &presentModeCount, nullptr);
+    vkGetPhysicalDeviceSurfacePresentModesKHR(_vk.physicalDevice, surface, &presentModeCount, nullptr);
     VkPresentModeKHR *presentModes = (VkPresentModeKHR*)alloca(sizeof(VkPresentModeKHR) * presentModeCount);
-    vkGetPhysicalDeviceSurfacePresentModesKHR(_physicalDevice->device, surface, &presentModeCount, presentModes);
+    vkGetPhysicalDeviceSurfacePresentModesKHR(_vk.physicalDevice, surface, &presentModeCount, presentModes);
 
     VkPresentModeKHR swapchainPresentMode = VK_PRESENT_MODE_FIFO_KHR;
     if (!descriptor->vsync)
@@ -1722,13 +1736,178 @@ VgpuResult VgpuRendererVk::createSwapchain(const VgpuSwapchainDescriptor* descri
     }
 
     VgpuSwapchain handle = VGPU_ALLOC_HANDLE(VgpuSwapchain);
-    handle->surface = surface;
-    handle->swapchain = swapchain;
+    handle->vk_handle = swapchain;
+    handle->depthStencilFormat = VK_FORMAT_UNDEFINED;
+
+    if (descriptor->depthStencil) {
+        VkFormat depthFormats[] = {
+            VK_FORMAT_D32_SFLOAT_S8_UINT,
+            VK_FORMAT_D32_SFLOAT,
+            VK_FORMAT_D24_UNORM_S8_UINT,
+            VK_FORMAT_D16_UNORM_S8_UINT,
+            VK_FORMAT_D16_UNORM };
+        for (auto& format : depthFormats) {
+            VkFormatProperties formatProps;
+            vkGetPhysicalDeviceFormatProperties(_vk.physicalDevice, format, &formatProps);
+            if (formatProps.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT) {
+                handle->depthStencilFormat = format;
+                break;
+            }
+        }
+    }
+
+    /* Create swap chain render pass */
+    VkAttachmentDescription attachments[4u] = {};
+    uint32_t attachmentCount = 0u;
+    VkAttachmentReference colorReference;
+    VkAttachmentReference resolveReference;
+    VkAttachmentReference depthReference;
+
+    VkSubpassDescription subpassDescription;
+    subpassDescription.flags = 0u;
+    subpassDescription.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpassDescription.inputAttachmentCount = 0;
+    subpassDescription.pInputAttachments = nullptr;
+    subpassDescription.colorAttachmentCount = 1;
+    subpassDescription.pColorAttachments = &colorReference;
+    subpassDescription.pResolveAttachments = nullptr;
+    subpassDescription.pDepthStencilAttachment = nullptr;
+    subpassDescription.preserveAttachmentCount = 0;
+    subpassDescription.pPreserveAttachments = nullptr;
+
+    /* Optional depth reference */
+    
+
+    if (descriptor->samples > 1u) {
+        colorReference.attachment = 0;
+        colorReference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+        // Multisampled attachment that we render to
+        attachments[attachmentCount].format = format.format;
+        attachments[attachmentCount].samples = (VkSampleCountFlagBits)descriptor->samples;
+        attachments[attachmentCount].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        attachments[attachmentCount].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        attachments[attachmentCount].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        attachments[attachmentCount].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        attachments[attachmentCount].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        attachments[attachmentCount].finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        ++attachmentCount;
+
+        // This is the frame buffer attachment to where the multisampled image
+        // will be resolved to and which will be presented to the swapchain
+        attachments[attachmentCount].format = format.format;
+        attachments[attachmentCount].samples = VK_SAMPLE_COUNT_1_BIT;
+        attachments[attachmentCount].loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        attachments[attachmentCount].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        attachments[attachmentCount].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        attachments[attachmentCount].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        attachments[attachmentCount].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        attachments[attachmentCount].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        ++attachmentCount;
+
+        // Resolve attachment reference for the color attachment
+        resolveReference.attachment = 1;
+        resolveReference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        subpassDescription.pResolveAttachments = &resolveReference;
+
+        if (handle->depthStencilFormat != VK_FORMAT_UNDEFINED) {
+            // Multisampled depth attachment we render to
+            attachments[attachmentCount].format = handle->depthStencilFormat;
+            attachments[attachmentCount].samples = (VkSampleCountFlagBits)descriptor->samples;
+            attachments[attachmentCount].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+            attachments[attachmentCount].storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+            attachments[attachmentCount].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+            attachments[attachmentCount].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+            attachments[attachmentCount].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            attachments[attachmentCount].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+            ++attachmentCount;
+
+            // Depth resolve attachment
+            attachments[attachmentCount].format = handle->depthStencilFormat;
+            attachments[attachmentCount].samples = VK_SAMPLE_COUNT_1_BIT;
+            attachments[attachmentCount].loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+            attachments[attachmentCount].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+            attachments[attachmentCount].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+            attachments[attachmentCount].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+            attachments[attachmentCount].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            attachments[attachmentCount].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+            ++attachmentCount;
+
+            depthReference = {};
+            depthReference.attachment = 2;
+            depthReference.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+            subpassDescription.pDepthStencilAttachment = &depthReference;
+        }
+    }
+    else {
+        colorReference.attachment = 0;
+        colorReference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+        // Color attachment
+        attachments[attachmentCount].format = format.format;
+        attachments[attachmentCount].samples = VK_SAMPLE_COUNT_1_BIT;
+        attachments[attachmentCount].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        attachments[attachmentCount].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        attachments[attachmentCount].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        attachments[attachmentCount].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        attachments[attachmentCount].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        attachments[attachmentCount].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        ++attachmentCount;
+        
+        // Depth attachment
+        if (handle->depthStencilFormat != VK_FORMAT_UNDEFINED) {
+            attachments[attachmentCount].format = handle->depthStencilFormat;
+            attachments[attachmentCount].samples = VK_SAMPLE_COUNT_1_BIT;
+            attachments[attachmentCount].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+            attachments[attachmentCount].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+            attachments[attachmentCount].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+            attachments[attachmentCount].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+            attachments[attachmentCount].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            attachments[attachmentCount].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+            ++attachmentCount;
+
+            depthReference.attachment = 1;
+            depthReference.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+            subpassDescription.pDepthStencilAttachment = &depthReference;
+        }
+    }
+
+    // Subpass dependencies for layout transitions
+    VkSubpassDependency dependencies[2u];
+
+    dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
+    dependencies[0].dstSubpass = 0;
+    dependencies[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+    dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependencies[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+    dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+    dependencies[1].srcSubpass = 0;
+    dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
+    dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependencies[1].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+    dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    dependencies[1].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+    dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+    VkRenderPassCreateInfo renderPassCreateInfo;
+    renderPassCreateInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    renderPassCreateInfo.pNext = nullptr;
+    renderPassCreateInfo.flags = 0u;
+    renderPassCreateInfo.attachmentCount = attachmentCount;
+    renderPassCreateInfo.pAttachments = attachments;
+    renderPassCreateInfo.subpassCount = 1u;
+    renderPassCreateInfo.pSubpasses = &subpassDescription;
+    renderPassCreateInfo.dependencyCount = 2u;
+    renderPassCreateInfo.pDependencies = dependencies;
+    result = vkCreateRenderPass(_vk.device, &renderPassCreateInfo, nullptr, &handle->renderPass);
 
     vkGetSwapchainImagesKHR(_vk.device, swapchain, &handle->imageCount, nullptr);
     handle->images = VGPU_ALLOCN(VkImage, handle->imageCount);
     handle->imageSemaphores = VGPU_ALLOCN(VkSemaphore, handle->imageCount);
     handle->textures = VGPU_ALLOCN(VgpuTexture, handle->imageCount);
+    handle->framebuffers = VGPU_ALLOCN(VgpuFramebuffer, handle->imageCount);
     vkGetSwapchainImagesKHR(_vk.device, swapchain, &handle->imageCount, handle->images);
 
     /* Setup texture descriptor */
@@ -1745,6 +1924,10 @@ VgpuResult VgpuRendererVk::createSwapchain(const VgpuSwapchainDescriptor* descri
 
     /* Convert pixel format to vgpu */
     textureDescriptor.format = vgpuGetPixelFormat(createInfo.imageFormat, textureDescriptor.sRGB);
+
+    /* Setup framebuffer descriptor */
+    VgpuFramebufferDescriptor framebufferDescriptor;
+    memset(&framebufferDescriptor, 0, sizeof(framebufferDescriptor));
 
     /* Clear or transition to default image layout */
     const bool canClear = createInfo.imageUsage & VK_IMAGE_USAGE_TRANSFER_DST_BIT;
@@ -1793,38 +1976,42 @@ VgpuResult VgpuRendererVk::createSwapchain(const VgpuSwapchainDescriptor* descri
 
         // Create backend texture.
         handle->textures[i] = vgpuCreateExternalTexture(&textureDescriptor, handle->images[i]);
+
+        // Create framebuffer.
+        framebufferDescriptor.colorAttachments[0].texture = handle->textures[i];
+        handle->framebuffers[i] = vgpuCreateFramebuffer(&framebufferDescriptor);
     }
 
     vgpuEndCommandBuffer(clearImageCmdBuffer);
-    flushCommandBuffer(clearImageCmdBuffer);
+    vgpuVkFlushCommandBuffer(clearImageCmdBuffer);
 
     handle->imageIndex = 0;
     *pSwapchain = handle;
     return VGPU_SUCCESS;
 }
 
-void VgpuRendererVk::destroySwapchain(VgpuSwapchain swapchain)
+void vgpuDestroySwapchain(VgpuSwapchain swapchain)
 {
     VGPU_ASSERT(swapchain);
     for (uint32_t i = 0u; swapchain->imageSemaphores != NULL && i < swapchain->imageCount; ++i)
     {
-        if (swapchain->imageSemaphores[i] != VK_NULL_HANDLE)
-        {
+        if (swapchain->imageSemaphores[i] != VK_NULL_HANDLE) {
             vkDestroySemaphore(_vk.device, swapchain->imageSemaphores[i], NULL);
         }
     }
 
-    if (swapchain->imageSemaphores != NULL)
-    {
-        VGPU_FREE(swapchain->imageSemaphores);
+    if (swapchain->renderPass != VK_NULL_HANDLE) {
+        vkDestroyRenderPass(_vk.device, swapchain->renderPass, NULL);
     }
 
-    if (swapchain->swapchain != VK_NULL_HANDLE)
-    {
-        vkDestroySwapchainKHR(_vk.device, swapchain->swapchain, NULL);
+    if (swapchain->vk_handle != VK_NULL_HANDLE) {
+        vkDestroySwapchainKHR(_vk.device, swapchain->vk_handle, NULL);
     }
 
+    VGPU_FREE(swapchain->imageSemaphores);
     VGPU_FREE(swapchain->images);
+    VGPU_FREE(swapchain->textures);
+    VGPU_FREE(swapchain->framebuffers);
     VGPU_FREE(swapchain);
 }
 
@@ -1865,7 +2052,7 @@ void VgpuRendererVk::destoryCommandQueue(VgpuCommandQueue queue)
     VGPU_FREE(queue);
 }
 
-VgpuResult VgpuRendererVk::flushCommandBuffer(VgpuCommandBuffer commandBuffer)
+VgpuResult vgpuVkFlushCommandBuffer(VgpuCommandBuffer commandBuffer)
 {
     VGPU_ASSERT(commandBuffer);
     VkResult result = VK_SUCCESS;
@@ -1910,32 +2097,6 @@ VgpuResult VgpuRendererVk::flushCommandBuffer(VgpuCommandBuffer commandBuffer)
     return VGPU_SUCCESS;
 }
 
-VgpuResult VgpuRendererVk::submitCommandBuffers(uint32_t count, VgpuCommandBuffer *pBuffers)
-{
-    VGPU_ASSERT(count > 0);
-    VGPU_ASSERT(pBuffers);
-
-    uint32_t frameIndex = _frameIndex;
-    VgpuVkFrameData *frameData = &_frameData[frameIndex];
-    for (uint32_t i = 0u; i < count; ++i) {
-        if (pBuffers[i]->recording) {
-            return VGPU_ERROR_COMMAND_BUFFER_NOT_RECORDING;
-        }
-
-        frameData->submittedCmdBuffers[frameData->submittedCmdBuffersCount] = pBuffers[i]->vk_handle;
-
-        // Create semaphore for command buffer
-        if (pBuffers[i]->vk_semaphore == VK_NULL_HANDLE) {
-            vgpuVkCreateSemaphore(&pBuffers[i]->vk_semaphore);
-        }
-
-        frameData->waitSemaphores[frameData->submittedCmdBuffersCount] = pBuffers[i]->vk_semaphore;
-        ++frameData->submittedCmdBuffersCount;
-    }
-
-    return VGPU_SUCCESS;
-}
-
 void VgpuRendererVk::initializeFeatures()
 {
     /*_features.SetBackend(GraphicsBackend::Vulkan);
@@ -1970,30 +2131,20 @@ void VgpuRendererVk::initializeFeatures()
     _features.SetMinUniformBufferOffsetAlignment(static_cast<uint32_t>(_physicalDeviceProperties.limits.minUniformBufferOffsetAlignment));*/
 }
 
-VgpuResult VgpuRendererVk::waitIdle()
-{
-    VkResult result = vkDeviceWaitIdle(_vk.device);
-    if (result < VK_SUCCESS)
-    {
-        return vgpuVkConvertResult(result);
-    }
-
-    return VGPU_SUCCESS;
-}
-
 VgpuResult VgpuRendererVk::beginFrame()
 {
     VkResult result = VK_SUCCESS;
 
-    if (_mainSwapchain != nullptr)
+    uint32_t frameIndex = s_current_context->frameIndex;
+    if (s_current_context->swapchain != nullptr)
     {
         result = vkAcquireNextImageKHR(
             _vk.device,
-            _mainSwapchain->swapchain,
+            s_current_context->swapchain->vk_handle,
             UINT64_MAX,
-            _mainSwapchain->imageSemaphores[_frameIndex],
+            s_current_context->swapchain->imageSemaphores[frameIndex],
             VK_NULL_HANDLE,
-            &_mainSwapchain->imageIndex);
+            &s_current_context->swapchain->imageIndex);
 
         if ((result == VK_ERROR_OUT_OF_DATE_KHR) || (result == VK_SUBOPTIMAL_KHR))
         {
@@ -2007,7 +2158,7 @@ VgpuResult VgpuRendererVk::beginFrame()
     }
     else
     {
-        _frameData[_frameIndex].submittedCmdBuffersCount = 0;
+        s_current_context->frameData[frameIndex].submittedCmdBuffersCount = 0;
         return VGPU_SUCCESS;
     }
 }
@@ -2016,8 +2167,8 @@ VgpuResult VgpuRendererVk::endFrame()
 {
     VkResult result = VK_SUCCESS;
 
-    uint32_t frameIndex = _frameIndex;
-    const VgpuVkFrameData *frameData = &_frameData[frameIndex];
+    uint32_t frameIndex = s_current_context->frameIndex;
+    const VgpuVkFrameData *frameData = &s_current_context->frameData[frameIndex];
 
     // Submit the pending command buffers.
     const VkPipelineStageFlags colorAttachmentStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
@@ -2025,13 +2176,12 @@ VgpuResult VgpuRendererVk::endFrame()
     VkSemaphore* waitSemaphores = NULL;
     const VkPipelineStageFlags *waitStageMasks = NULL;
 
-    if (_mainSwapchain != nullptr) {
+    if (s_current_context->swapchain != nullptr) {
         waitSemaphoreCount++;
-        waitSemaphores = &_mainSwapchain->imageSemaphores[frameIndex];
+        waitSemaphores = &s_current_context->swapchain->imageSemaphores[frameIndex];
         waitStageMasks = &colorAttachmentStage;
     }
 
-    
     VkSubmitInfo submitInfo;
     memset(&submitInfo, 0, sizeof(submitInfo));
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -2051,7 +2201,7 @@ VgpuResult VgpuRendererVk::endFrame()
         return vgpuVkConvertResult(result);
     }
 
-    if (_mainSwapchain != nullptr) {
+    if (s_current_context->swapchain != nullptr) {
         VkResult presentResult = VK_SUCCESS;
         VkPresentInfoKHR presentInfo;
 
@@ -2061,10 +2211,10 @@ VgpuResult VgpuRendererVk::endFrame()
         presentInfo.waitSemaphoreCount = frameData->submittedCmdBuffersCount;
         presentInfo.pWaitSemaphores = frameData->waitSemaphores;
         presentInfo.swapchainCount = 1;
-        presentInfo.pSwapchains = &_mainSwapchain->swapchain;
-        presentInfo.pImageIndices = &_mainSwapchain->imageIndex;
+        presentInfo.pSwapchains = &s_current_context->swapchain->vk_handle;
+        presentInfo.pImageIndices = &s_current_context->swapchain->imageIndex;
         presentInfo.pResults = &presentResult;
-        result = vkQueuePresentKHR(_graphicsQueue, &presentInfo);
+        result = vkQueuePresentKHR(_vk.graphicsQueue, &presentInfo);
         if (result != VK_SUCCESS)
         {
             return vgpuVkConvertResult(presentResult);
@@ -2072,19 +2222,19 @@ VgpuResult VgpuRendererVk::endFrame()
     }
 
     // Wait for frame fence.
-    result = vkWaitForFences(_vk.device, 1, &_frameData[_frameIndex].fence, VK_TRUE, UINT64_MAX);
+    result = vkWaitForFences(_vk.device, 1, &frameData->fence, VK_TRUE, UINT64_MAX);
     if (result != VK_SUCCESS)
     {
         return vgpuVkConvertResult(result);
     }
-    result = vkResetFences(_vk.device, 1, &_frameData[_frameIndex].fence);
+    result = vkResetFences(_vk.device, 1, &frameData->fence);
     if (result != VK_SUCCESS)
     {
         return vgpuVkConvertResult(result);
     }
 
     // Advance frame index.
-    _frameIndex = (_frameIndex + 1u) % _maxInflightFrames;
+    s_current_context->frameIndex = (s_current_context->frameIndex + 1u) % s_current_context->maxInflightFrames;
 
     // TODO: Delete all pending/deferred resources
     // TODO: Free all command buffers (not submitted).
@@ -2110,6 +2260,8 @@ void vgpuShutdown()
 {
     if (s_renderer != nullptr)
     {
+        vkDeviceWaitIdle(_vk.device);
+
         s_renderer->shutdown();
         delete s_renderer;
         s_renderer = nullptr;
@@ -2127,7 +2279,21 @@ VgpuResult vgpuEndFrame()
 }
 
 VgpuResult vgpuWaitIdle() {
-    return s_renderer->waitIdle();
+    VkResult result = vkDeviceWaitIdle(_vk.device);
+    if (result < VK_SUCCESS)
+    {
+        return vgpuVkConvertResult(result);
+    }
+
+    return VGPU_SUCCESS;
+}
+
+VgpuFramebuffer vgpuGetCurrentFramebuffer() {
+    if (s_current_context->swapchain) {
+
+    }
+
+    return nullptr;
 }
 
 /* Buffer */
@@ -2160,6 +2326,13 @@ void vgpuDestroyTexture(VgpuTexture texture) {
 
 VgpuFramebuffer vgpuCreateFramebuffer(const VgpuFramebufferDescriptor* descriptor) {
     VGPU_ASSERT(descriptor);
+    VgpuFramebuffer framebuffer = VGPU_ALLOC_HANDLE(VgpuFramebuffer);
+    for (uint32_t i = 0u; i < VGPU_MAX_COLOR_ATTACHMENTS; ++i) {
+        if (descriptor->colorAttachments[i].texture == nullptr)
+        {
+            continue;
+        }
+    }
     return nullptr;
 }
 
@@ -2170,11 +2343,28 @@ void vgpuDestroyFramebuffer(VgpuFramebuffer framebuffer) {
 
 VgpuShaderModule vgpuCreateShaderModule(const VgpuShaderModuleDescriptor* descriptor) {
     VGPU_ASSERT(descriptor);
-    return nullptr;
+    VgpuShaderModule shaderModule = VGPU_ALLOC_HANDLE(VgpuShaderModule);
+    VkShaderModuleCreateInfo createInfo;
+    createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    createInfo.pNext = NULL;
+    createInfo.flags = 0u;
+    createInfo.codeSize = (size_t)descriptor->codeSize;
+    createInfo.pCode = (uint32_t*)descriptor->pCode;
+    VkResult result = vkCreateShaderModule(_vk.device, &createInfo, nullptr, &shaderModule->vk_handle);
+    if (result != VK_SUCCESS)
+    {
+        vgpuDestroyShaderModule(shaderModule);
+        return nullptr;
+    }
+
+    return shaderModule;
 }
 
 void vgpuDestroyShaderModule(VgpuShaderModule shaderModule) {
     VGPU_ASSERT(shaderModule);
+    if (shaderModule->vk_handle != VK_NULL_HANDLE) {
+        vkDestroyShaderModule(_vk.device, shaderModule->vk_handle, nullptr);
+    }
     VGPU_FREE(shaderModule);
 }
 
@@ -2340,7 +2530,28 @@ VgpuResult vgpuEndCommandBuffer(VgpuCommandBuffer commandBuffer)
 
 VgpuResult vgpuSubmitCommandBuffers(uint32_t count, VgpuCommandBuffer *pBuffers)
 {
-    return s_renderer->submitCommandBuffers(count, pBuffers);
+    VGPU_ASSERT(count > 0);
+    VGPU_ASSERT(pBuffers);
+
+    uint32_t frameIndex = s_current_context->frameIndex;
+    VgpuVkFrameData *frameData = &s_current_context->frameData[frameIndex];
+    for (uint32_t i = 0u; i < count; ++i) {
+        if (pBuffers[i]->recording) {
+            return VGPU_ERROR_COMMAND_BUFFER_NOT_RECORDING;
+        }
+
+        frameData->submittedCmdBuffers[frameData->submittedCmdBuffersCount] = pBuffers[i]->vk_handle;
+
+        // Create semaphore for command buffer
+        if (pBuffers[i]->vk_semaphore == VK_NULL_HANDLE) {
+            vgpuVkCreateSemaphore(&pBuffers[i]->vk_semaphore);
+        }
+
+        frameData->waitSemaphores[frameData->submittedCmdBuffersCount] = pBuffers[i]->vk_semaphore;
+        ++frameData->submittedCmdBuffersCount;
+    }
+
+    return VGPU_SUCCESS;
 }
 
 void vgpuCmdBeginRenderPass(VgpuCommandBuffer commandBuffer, VgpuFramebuffer framebuffer) {

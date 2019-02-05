@@ -116,7 +116,7 @@ int main(int argc, char** argv)
     swapchainDescriptor.width = width;
     swapchainDescriptor.height = height;
     swapchainDescriptor.depthStencil = true;
-    swapchainDescriptor.multisampling = false;
+    swapchainDescriptor.samples = AGPU_SAMPLE_COUNT1;
     swapchainDescriptor.tripleBuffer = false;
     swapchainDescriptor.vsync = true;
 #if defined(_WIN32) || defined(_WIN64)

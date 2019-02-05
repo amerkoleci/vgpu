@@ -477,7 +477,7 @@ extern "C"
 
     typedef struct VgpuShaderModuleDescriptor {
         VgpuShaderStageFlagBits     stage;
-        size_t                      codeSize;
+        uint64_t                    codeSize;
         const uint8_t*              pCode;
         const char*                 source;
         const char*                 entryPoint;
@@ -522,9 +522,9 @@ extern "C"
         uint32_t                    width;
         uint32_t                    height;
         VgpuBool32                  depthStencil;
-        VgpuBool32                  multisampling;
         VgpuBool32                  tripleBuffer;
         VgpuBool32                  vsync;
+        VgpuSampleCount             samples;
         /// Native window handle (HWND, ANativeWindow, NSWindow).
         uint64_t                    nativeHandle;
     } VgpuSwapchainDescriptor;
@@ -550,6 +550,7 @@ extern "C"
     VGPU_API VgpuResult vgpuBeginFrame();
     VGPU_API VgpuResult vgpuEndFrame();
     VGPU_API VgpuResult vgpuWaitIdle();
+    VGPU_API VgpuFramebuffer vgpuGetCurrentFramebuffer();
 
     /* Buffer */
     VGPU_API VgpuBuffer vgpuCreateBuffer(const VgpuBufferDescriptor* descriptor, const void* pInitData);
