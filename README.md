@@ -19,3 +19,4 @@ vgpu uses the following open-source and third-party libraries:
 - [glfw](https://www.glfw.org)
 - [volk](https://github.com/zeux/volk)
 - [vma](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator)
+- [SPIRV-Reflect](https://github.com/chaoticbob/SPIRV-Reflect)
