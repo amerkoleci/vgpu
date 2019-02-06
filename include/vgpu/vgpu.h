@@ -68,7 +68,8 @@ extern "C"
     VGPU_DEFINE_HANDLE(VgpuShaderModule);
     VGPU_DEFINE_HANDLE(VgpuShader);
     VGPU_DEFINE_HANDLE(VgpuPipeline);
-    VGPU_DEFINE_HANDLE(VgpuSampler);
+
+    typedef struct VgpuSampler { uint32_t id; } VgpuSampler;
     VGPU_DEFINE_HANDLE(VgpuCommandBuffer);
 
 #define VGPU_TRUE                           1
@@ -77,6 +78,7 @@ extern "C"
 #define VGPU_VERSION_MINOR                  1
 
     enum {
+        VGPU_INVALID_ID = 0,
         VGPU_MAX_PHYSICAL_DEVICES = 4,
         VGPU_MAX_COLOR_ATTACHMENTS = 8,
         VGPU_MAX_VERTEX_BUFFER_BINDINGS = 4,
@@ -106,13 +108,13 @@ extern "C"
     } VgpuResult;
 
     typedef enum VgpuBackend {
-        VGPU_BACKEND_INVALID    = 0,
-        VGPU_BACKEND_NULL       = 1,
-        VGPU_BACKEND_VULKAN     = 2,
-        VGPU_BACKEND_D3D12      = 3,
-        VGPU_BACKEND_D3D11      = 4,
-        VGPU_BACKEND_OPENGL     = 5,
-        VGPU_BACKEND_COUNT      = (VGPU_BACKEND_OPENGL - VGPU_BACKEND_INVALID + 1),
+        VGPU_BACKEND_DEFAULT = 0,
+        VGPU_BACKEND_NULL,
+        VGPU_BACKEND_VULKAN,
+        VGPU_BACKEND_D3D12,
+        VGPU_BACKEND_D3D11,
+        VGPU_BACKEND_OPENGL,
+        VGPU_BACKEND_COUNT
     } VgpuBackend;
 
     typedef enum VgpuDevicePreference {
@@ -534,6 +536,7 @@ extern "C"
     } VgpuCommandBufferDescriptor;
 
     typedef struct VgpuDescriptor {
+        VgpuBackend                     preferredBackend;
         VgpuDevicePreference            devicePreference;
         VgpuBool32                      validation;
         /// Main swap chain descriptor or null for headless.
@@ -541,6 +544,9 @@ extern "C"
         /// Log callback
         vgpu_log_fn                     logCallback;
     } VgpuDescriptor;
+
+    VGPU_API VgpuBackend vgpuGetDefaultPlatformBackend();
+    VGPU_API VgpuBool32 vgpuIsBackendSupported(VgpuBackend backend, VgpuBool32 headless);
 
     /// Get the gpu backend.
     VGPU_API VgpuBackend vgpuGetBackend();

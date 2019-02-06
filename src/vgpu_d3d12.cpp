@@ -20,11 +20,12 @@
 // THE SOFTWARE.
 //
 
-#include "vgpu.h"
+#define VGPU_IMPLEMENTATION
+#include "vgpu_internal.h"
 
-#if defined(TODO_D3D12) && defined(ALIMER_D3D12)
-#define AGPU_IMPLEMENTATION
-#include "agpu_backend.h"
+#if VGPU_D3D12
+
+#if TODO_D3D12
 #include <wrl/client.h>
 #include <wrl/event.h>
 #include "../Base/HashMap.h"
@@ -586,7 +587,7 @@ namespace d3d12
         Vector<uint8_t> fileData(static_cast<uint32_t>(fileSize));
         dllFile.Read(fileData.Data(), uint32_t(fileSize));
         return GenerateHash(fileData.Data(), int32_t(fileSize));
-    }
+}
 
     static Hash CompilerHash = MakeCompilerHash();
 
@@ -1340,15 +1341,15 @@ namespace d3d12
 
         uint32_t update_vbo_mask = _dirtyVbos & active_vbos;
         ForEachBitRange(update_vbo_mask, [&](uint32_t binding, uint32_t count)
-        {
-#ifdef ALIMER_DEV
-            for (uint32_t i = binding; i < binding + count; i++)
             {
-                ALIMER_ASSERT(_vbo.buffers[i] != nullptr);
-            }
+#ifdef ALIMER_DEV
+                for (uint32_t i = binding; i < binding + count; i++)
+                {
+                    ALIMER_ASSERT(_vbo.buffers[i] != nullptr);
+    }
 #endif
 
-            _commandList->IASetVertexBuffers(binding, count, _d3dVbViews);
+                _commandList->IASetVertexBuffers(binding, count, _d3dVbViews);
         });
 
         _dirtyVbos &= ~update_vbo_mask;
@@ -1433,7 +1434,7 @@ namespace d3d12
             && options.RaytracingTier != D3D12_RAYTRACING_TIER_NOT_SUPPORTED)
         {
             _raytracingSupported = AGPU_TRUE;
-        }
+    }
 #endif
 
         // Create the command queue.
@@ -2252,10 +2253,10 @@ namespace d3d12
 
         // TODO: Cache.
         UINT flags = D3DCOMPILE_WARNINGS_ARE_ERRORS;
-            flags |= D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES;
-            flags |= D3DCOMPILE_ALL_RESOURCES_BOUND;
+        flags |= D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES;
+        flags |= D3DCOMPILE_ALL_RESOURCES_BOUND;
 #ifdef _DEBUG
-            flags |= D3DCOMPILE_DEBUG;
+        flags |= D3DCOMPILE_DEBUG;
 #endif
 
         if (!entryPoint
@@ -2844,15 +2845,17 @@ namespace d3d12
         return renderD3D12;
     }
 }
+#endif // TODO_D3D12
 
-AgpuBool32 agpuIsD3D12Supported()
+
+VgpuBool32 vgpuIsD3D12Supported(bool headless)
 {
-    return d3d12::isSupported();
+    return false; // d3d12::isSupported();
 }
 
-AGpuRendererI* agpuCreateD3D12Backend(bool validation)
+VgpuRendererI* vgpuCreateD3D12Backend()
 {
-    return d3d12::createBackend(validation);
+    return nullptr;
 }
 
-#endif /* ALIMER_D3D12 */
+#endif // VGPU_D3D12

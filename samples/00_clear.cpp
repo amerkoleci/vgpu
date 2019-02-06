@@ -139,8 +139,12 @@ int main(int argc, char** argv)
     commandBufferDescriptor.type = VGPU_COMMAND_QUEUE_TYPE_GRAPHICS;
     VgpuCommandBuffer commandBuffer = vgpuCreateCommandBuffer(&commandBufferDescriptor);
 
-    VgpuSamplerDescriptor samplerDescriptor = {};
-    vgpuCreateSampler(&samplerDescriptor);
+    for (uint32_t i = 0; i < 100; i++)
+    {
+        VgpuSamplerDescriptor samplerDescriptor = {};
+        VgpuSampler sampler = vgpuCreateSampler(&samplerDescriptor);
+        vgpuDestroySampler(sampler);
+    }
 
     while (!glfwWindowShouldClose(window))
     {

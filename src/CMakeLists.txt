@@ -20,14 +20,15 @@
 # THE SOFTWARE.
 #
 
-set (VGPU_HEADER_FILES ${VGPU_ROOT_DIR}/include/vgpu/vgpu.h)
-set (VGPU_SOURCE_FILES ${CMAKE_CURRENT_LIST_DIR}/vgpu.cpp)
-
-if (VGPU_VULKAN)
-    list (APPEND VGPU_SOURCE_FILES ${CMAKE_CURRENT_LIST_DIR}/vgpu_vk.cpp)
-    # volk
-    # list (APPEND VGPU_SOURCE_FILES ${CMAKE_CURRENT_LIST_DIR}/libs/volk/volk.c)
-endif ()
+set (VGPU_HEADER_FILES
+    ${VGPU_ROOT_DIR}/include/vgpu/vgpu.h
+    ${CMAKE_CURRENT_LIST_DIR}/vgpu_internal.h
+    )
+set (VGPU_SOURCE_FILES
+    ${CMAKE_CURRENT_LIST_DIR}/vgpu.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/vgpu_vk.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/vgpu_d3d12.cpp
+    )
 
 if (VGPU_BUILD_SHARED)
     add_library(vgpu SHARED ${VGPU_HEADER_FILES} ${VGPU_SOURCE_FILES})

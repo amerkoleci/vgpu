@@ -20,7 +20,8 @@
 // THE SOFTWARE.
 //
 
-#include "vgpu/vgpu.h"
+#define VGPU_IMPLEMENTATION
+#include "vgpu_internal.h"
 #include <assert.h>
 
 VgpuBackend vgpuGetBackend()
@@ -39,7 +40,6 @@ VgpuBackend vgpuGetBackend()
 }
 
 /* Pixel Format */
-
 typedef struct VgpuPixelFormatDesc
 {
     VgpuPixelFormat         format;
@@ -170,7 +170,6 @@ const VgpuPixelFormatDesc FormatDesc[] =
     { VGPU_PIXEL_FORMAT_ASTC8x8,            "ASTC8x8",          VGPU_PIXEL_FORMAT_TYPE_UNORM,       3,          {8, 8, 16, 1, 1},       {0, 0, 0, 0, 0, 0} },
     { VGPU_PIXEL_FORMAT_ASTC10x10,          "ASTC10x10",        VGPU_PIXEL_FORMAT_TYPE_UNORM,       3,          {10, 10, 16, 1, 1},     {0, 0, 0, 0, 0, 0} },
     { VGPU_PIXEL_FORMAT_ASTC12x12,          "ASTC12x12",        VGPU_PIXEL_FORMAT_TYPE_UNORM,       3,          {12, 12, 16, 1, 1},     {0, 0, 0, 0, 0, 0} },
-
 };
 
 uint32_t vgpuGetFormatBitsPerPixel(VgpuPixelFormat format)
@@ -232,3 +231,148 @@ const char* vgpuGetFormatName(VgpuPixelFormat format)
     return FormatDesc[(uint32_t)format].name;
 }
 
+
+static VgpuRendererI* s_renderer = nullptr;
+
+VgpuBackend vgpuGetDefaultPlatformBackend() {
+#if defined(_WIN32) || defined(_WIN64)
+    if (vgpuIsBackendSupported(VGPU_BACKEND_D3D12, false)) {
+        return VGPU_BACKEND_D3D12;
+    }
+
+    if (vgpuIsBackendSupported(VGPU_BACKEND_VULKAN, false)) {
+        return VGPU_BACKEND_VULKAN;
+    }
+
+    return VGPU_BACKEND_D3D11;
+#elif defined(__linux__) || defined(__ANDROID__)
+    return VGPU_BACKEND_OPENGL;
+#elif defined(__APPLE__) 
+    return VGPU_BACKEND_METAL;
+#else
+    return VGPU_BACKEND_OPENGL;
+#endif
+}
+
+VgpuBool32 vgpuIsBackendSupported(VgpuBackend backend, VgpuBool32 headless) {
+    if (backend == VGPU_BACKEND_DEFAULT)
+    {
+        backend = vgpuGetDefaultPlatformBackend();
+    }
+
+    switch (backend)
+    {
+    case VGPU_BACKEND_NULL:
+        return VGPU_TRUE;
+    case VGPU_BACKEND_VULKAN:
+#if VGPU_VULKAN
+        return vgpuIsVkSupported(headless);
+#else
+        return VGPU_FALSE;
+#endif
+
+    case VGPU_BACKEND_D3D12:
+#if VGPU_D3D12
+        return vgpuIsD3D12Supported(headless);
+#else
+        return VGPU_FALSE;
+#endif
+
+    case VGPU_BACKEND_OPENGL:
+#if VGPU_OPENGL
+        return VGPU_TRUE;
+#else
+        return VGPU_FALSE;
+#endif
+    default:
+        return VGPU_FALSE;
+    }
+}
+
+VgpuResult vgpuInitialize(const char* applicationName, const VgpuDescriptor* descriptor) {
+    if (s_renderer != nullptr) {
+        return VGPU_ALREADY_INITIALIZED;
+    }
+
+    VgpuBackend backend = descriptor->preferredBackend;
+    if (backend == VGPU_BACKEND_DEFAULT)
+    {
+        backend = vgpuGetDefaultPlatformBackend();
+    }
+
+    VgpuRendererI* renderer = nullptr;
+    switch (backend)
+    {
+    case VGPU_BACKEND_NULL:
+        break;
+    case VGPU_BACKEND_VULKAN:
+#if VGPU_D3D12
+        renderer = vgpuCreateVkBackend();
+#else
+        //ALIMER_LOGERROR("D3D12 backend is not supported");
+#endif
+        break;
+    case VGPU_BACKEND_D3D12:
+#if VGPU_D3D12
+        renderer = vgpuCreateD3D12Backend();
+#else
+        //ALIMER_LOGERROR("D3D12 backend is not supported");
+#endif
+        break;
+    case VGPU_BACKEND_OPENGL:
+        break;
+    default:
+        break;
+    }
+
+    if (renderer != nullptr)
+    {
+        s_renderer = renderer;
+        return renderer->initialize(applicationName, descriptor);
+    }
+
+    //s_logCallback = descriptor->logCallback;
+    return VGPU_ERROR_INITIALIZATION_FAILED;
+}
+
+void vgpuShutdown()
+{
+    if (s_renderer != nullptr)
+    {
+        s_renderer->shutdown();
+        delete s_renderer;
+        s_renderer = nullptr;
+    }
+}
+
+VgpuResult vgpuBeginFrame() {
+    return s_renderer->beginFrame();
+}
+
+VgpuResult vgpuEndFrame() {
+    return s_renderer->endFrame();
+}
+
+VgpuResult vgpuWaitIdle() {
+    return s_renderer->waitIdle();
+}
+
+VgpuFramebuffer vgpuGetCurrentFramebuffer() {
+    return nullptr;
+}
+
+/* Sampler */
+VgpuSampler vgpuCreateSampler(const VgpuSamplerDescriptor* descriptor) {
+    VGPU_ASSERT(descriptor);
+    return s_renderer->createSampler(descriptor);
+}
+
+void vgpuDestroySampler(VgpuSampler sampler) {
+    VGPU_ASSERT(sampler.id != VGPU_INVALID_ID);
+    s_renderer->destroySampler(sampler);
+}
+
+/* Command buffer */
+VgpuCommandBuffer vgpuCreateCommandBuffer(const VgpuCommandBufferDescriptor* descriptor) {
+    return s_renderer->createCommandBuffer(descriptor);
+}
