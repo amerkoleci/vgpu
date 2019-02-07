@@ -102,6 +102,9 @@ struct VgpuRendererI
 
     /* CommandBuffer */
     virtual VgpuCommandBuffer createCommandBuffer(const VgpuCommandBufferDescriptor* descriptor) = 0;
+    virtual void cmdBeginDefaultRenderPass(VgpuCommandBuffer commandBuffer, VgpuColor clearColor, float clearDepth, uint8_t clearStencil) = 0;
+    virtual void cmdBeginRenderPass(VgpuCommandBuffer commandBuffer, VgpuFramebuffer framebuffer) = 0;
+    virtual void cmdEndRenderPass(VgpuCommandBuffer commandBuffer) = 0;
 };
 
 

@@ -372,7 +372,23 @@ void vgpuDestroySampler(VgpuSampler sampler) {
     s_renderer->destroySampler(sampler);
 }
 
-/* Command buffer */
+/* CommandBuffer */
 VgpuCommandBuffer vgpuCreateCommandBuffer(const VgpuCommandBufferDescriptor* descriptor) {
+    VGPU_ASSERT(descriptor);
     return s_renderer->createCommandBuffer(descriptor);
+}
+
+void vgpuCmdBeginDefaultRenderPass(VgpuCommandBuffer commandBuffer, VgpuColor clearColor, float clearDepth, uint8_t clearStencil) {
+    VGPU_ASSERT(commandBuffer);
+    s_renderer->cmdBeginDefaultRenderPass(commandBuffer, clearColor, clearDepth, clearStencil);
+}
+
+void vgpuCmdBeginRenderPass(VgpuCommandBuffer commandBuffer, VgpuFramebuffer framebuffer) {
+    VGPU_ASSERT(commandBuffer);
+    VGPU_ASSERT(framebuffer);
+    s_renderer->cmdBeginRenderPass(commandBuffer, framebuffer);
+}
+
+void vgpuCmdEndRenderPass(VgpuCommandBuffer commandBuffer) {
+    s_renderer->cmdEndRenderPass(commandBuffer);
 }

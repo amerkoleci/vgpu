@@ -589,13 +589,14 @@ extern "C"
     VGPU_API VgpuSampler vgpuCreateSampler(const VgpuSamplerDescriptor* descriptor);
     VGPU_API void vgpuDestroySampler(VgpuSampler sampler);
 
-    /* Command buffer */
+    /* CommandBuffer */
     VGPU_API VgpuCommandBuffer vgpuCreateCommandBuffer(const VgpuCommandBufferDescriptor* descriptor);
     VGPU_API void vgpuDestroyCommandBuffer(VgpuCommandBuffer commandBuffer);
     VGPU_API VgpuResult vgpuBeginCommandBuffer(VgpuCommandBuffer commandBuffer);
     VGPU_API VgpuResult vgpuEndCommandBuffer(VgpuCommandBuffer commandBuffer);
     VGPU_API VgpuResult vgpuSubmitCommandBuffers(uint32_t count, VgpuCommandBuffer *pBuffers);
 
+    VGPU_API void vgpuCmdBeginDefaultRenderPass(VgpuCommandBuffer commandBuffer, VgpuColor clearColor, float clearDepth, uint8_t clearStencil);
     VGPU_API void vgpuCmdBeginRenderPass(VgpuCommandBuffer commandBuffer, VgpuFramebuffer framebuffer);
     VGPU_API void vgpuCmdEndRenderPass(VgpuCommandBuffer commandBuffer);
     VGPU_API void vgpuCmdSetShader(VgpuCommandBuffer commandBuffer, VgpuShader shader);

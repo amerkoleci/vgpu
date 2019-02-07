@@ -115,10 +115,10 @@ int main(int argc, char** argv)
     VgpuSwapchainDescriptor swapchainDescriptor = {};
     swapchainDescriptor.width = width;
     swapchainDescriptor.height = height;
-    swapchainDescriptor.depthStencil = true;
+    swapchainDescriptor.depthStencil = VGPU_FALSE;
     swapchainDescriptor.samples = AGPU_SAMPLE_COUNT1;
-    swapchainDescriptor.tripleBuffer = false;
-    swapchainDescriptor.vsync = true;
+    swapchainDescriptor.tripleBuffer = VGPU_FALSE;
+    swapchainDescriptor.vsync = VGPU_TRUE;
 #if defined(_WIN32) || defined(_WIN64)
     swapchainDescriptor.nativeHandle = (uint64_t)glfwGetWin32Window(window);
 #elif defined(__linux__)
@@ -156,8 +156,9 @@ int main(int argc, char** argv)
         glfwGetFramebufferSize(window, &width, &height);
         vgpuBeginFrame();
         vgpuBeginCommandBuffer(commandBuffer);
-        //vgpuCmdBeginRenderPass(commandBuffer, nullptr);
-        //vgpuCmdEndRenderPass(commandBuffer);
+        VgpuColor clearColor = { 0.0f, 0.2f, 0.4f, 1.0f };
+        vgpuCmdBeginDefaultRenderPass(commandBuffer, clearColor, 1.0f, 0);
+        vgpuCmdEndRenderPass(commandBuffer);
         vgpuEndCommandBuffer(commandBuffer);
         vgpuSubmitCommandBuffers(1, &commandBuffer);
         vgpuEndFrame();

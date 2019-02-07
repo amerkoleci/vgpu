@@ -96,13 +96,15 @@ typedef struct VgpuCommandBuffer_T {
 typedef struct VgpuSwapchain_T {
     VkSwapchainKHR      vk_handle;
     VkRenderPass        renderPass;
+    uint32_t            width;
+    uint32_t            height;
     uint32_t            imageIndex;  // index of currently acquired image.
     uint32_t            imageCount;
     VkImage*            images;
     VkImageView*        imageViews;
     VkSemaphore*        imageSemaphores;
-    VgpuTexture*        textures;
-    VgpuFramebuffer*    framebuffers;
+    //VgpuTexture*      textures;       /* TODO: Use VgpuTexture */
+    VkFramebuffer*      framebuffers;   /* TODO: Convert to VgpuFramebuffer */
     VkFormat            depthStencilFormat;
 } VgpuSwapchain_T;
 
@@ -801,6 +803,9 @@ struct VgpuRendererVk : VgpuRendererI
 
     /* Command Buffer */
     VgpuCommandBuffer createCommandBuffer(const VgpuCommandBufferDescriptor* descriptor) override;
+    void cmdBeginDefaultRenderPass(VgpuCommandBuffer commandBuffer, VgpuColor clearColor, float clearDepth, uint8_t clearStencil) override;
+    void cmdBeginRenderPass(VgpuCommandBuffer commandBuffer, VgpuFramebuffer framebuffer) override;
+    void cmdEndRenderPass(VgpuCommandBuffer commandBuffer) override;
 
 private:
     VkDebugReportCallbackEXT                _debugCallback = VK_NULL_HANDLE;
@@ -1655,8 +1660,6 @@ VgpuResult vgpuCreateSwapchain(const VgpuSwapchainDescriptor* descriptor, VkSwap
     subpassDescription.pPreserveAttachments = nullptr;
 
     /* Optional depth reference */
-
-
     if (descriptor->samples > 1u) {
         colorReference.attachment = 0;
         colorReference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
@@ -1786,8 +1789,9 @@ VgpuResult vgpuCreateSwapchain(const VgpuSwapchainDescriptor* descriptor, VkSwap
     handle->images = VGPU_ALLOCN(VkImage, handle->imageCount);
     handle->imageSemaphores = VGPU_ALLOCN(VkSemaphore, handle->imageCount);
     handle->imageViews = VGPU_ALLOCN(VkImageView, handle->imageCount);
-    handle->textures = VGPU_ALLOCN(VgpuTexture, handle->imageCount);
-    handle->framebuffers = VGPU_ALLOCN(VgpuFramebuffer, handle->imageCount);
+    //handle->textures = VGPU_ALLOCN(VgpuTexture, handle->imageCount);
+    //handle->framebuffers = VGPU_ALLOCN(VgpuFramebuffer, handle->imageCount);
+    handle->framebuffers = VGPU_ALLOCN(VkFramebuffer, handle->imageCount);
     vkGetSwapchainImagesKHR(_vk.device, swapchain, &handle->imageCount, handle->images);
 
     /* Setup texture descriptor */
@@ -1806,8 +1810,8 @@ VgpuResult vgpuCreateSwapchain(const VgpuSwapchainDescriptor* descriptor, VkSwap
     textureDescriptor.format = vgpuGetPixelFormat(createInfo.imageFormat, textureDescriptor.sRGB);
 
     /* Setup framebuffer descriptor */
-    VgpuFramebufferDescriptor framebufferDescriptor;
-    memset(&framebufferDescriptor, 0, sizeof(framebufferDescriptor));
+    //VgpuFramebufferDescriptor framebufferDescriptor;
+    //memset(&framebufferDescriptor, 0, sizeof(framebufferDescriptor));
 
     /* Clear or transition to default image layout */
     const bool canClear = createInfo.imageUsage & VK_IMAGE_USAGE_TRANSFER_DST_BIT;
@@ -1879,16 +1883,35 @@ VgpuResult vgpuCreateSwapchain(const VgpuSwapchainDescriptor* descriptor, VkSwap
         vgpuVkCreateSemaphore(_vk.device, &handle->imageSemaphores[i]);
 
         // Create backend texture.
-        handle->textures[i] = vgpuCreateExternalTexture(&textureDescriptor, handle->images[i]);
+        //handle->textures[i] = vgpuCreateExternalTexture(&textureDescriptor, handle->images[i]);
 
         // Create framebuffer.
-        framebufferDescriptor.colorAttachments[0].texture = handle->textures[i];
-        handle->framebuffers[i] = vgpuCreateFramebuffer(&framebufferDescriptor);
+        //framebufferDescriptor.colorAttachments[0].texture = handle->textures[i];
+        //handle->framebuffers[i] = vgpuCreateFramebuffer(&framebufferDescriptor);
+
+        VkImageView attachments[4];
+        attachments[0] = handle->imageViews[i];
+
+        VkFramebufferCreateInfo framebufferCreateInfo = {};
+        framebufferCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        framebufferCreateInfo.renderPass = handle->renderPass;
+        // TODO: Correctly handle multisampling and depth texture
+        framebufferCreateInfo.attachmentCount = 1u;
+        framebufferCreateInfo.pAttachments = attachments;
+        framebufferCreateInfo.width = swapchainSize.width;
+        framebufferCreateInfo.height = swapchainSize.height;
+        framebufferCreateInfo.layers = 1;
+
+        vgpuVkLogIfFailed(
+            vkCreateFramebuffer(_vk.device, &framebufferCreateInfo, nullptr, &handle->framebuffers[i])
+        );
     }
 
     vgpuEndCommandBuffer(clearImageCmdBuffer);
     vgpuVkFlushCommandBuffer(clearImageCmdBuffer);
 
+    handle->width = swapchainSize.width;
+    handle->height = swapchainSize.height;
     handle->imageIndex = 0;
     *pSwapchain = handle;
     return VGPU_SUCCESS;
@@ -1909,6 +1932,11 @@ void vgpuDestroySwapchain(VgpuSwapchain swapchain)
         vkDestroyImageView(_vk.device, swapchain->imageViews[i], NULL);
     }
 
+    for (uint32_t i = 0u;
+        swapchain->framebuffers && i < swapchain->imageCount; ++i) {
+        vkDestroyFramebuffer(_vk.device, swapchain->framebuffers[i], NULL);
+    }
+
     if (swapchain->renderPass != VK_NULL_HANDLE) {
         vkDestroyRenderPass(_vk.device, swapchain->renderPass, NULL);
     }
@@ -1919,7 +1947,7 @@ void vgpuDestroySwapchain(VgpuSwapchain swapchain)
 
     VGPU_FREE(swapchain->imageSemaphores);
     VGPU_FREE(swapchain->images);
-    VGPU_FREE(swapchain->textures);
+    //VGPU_FREE(swapchain->textures);
     VGPU_FREE(swapchain->framebuffers);
     VGPU_FREE(swapchain);
 }
@@ -2312,6 +2340,48 @@ VgpuCommandBuffer VgpuRendererVk::createCommandBuffer(const VgpuCommandBufferDes
     return handle;
 }
 
+void VgpuRendererVk::cmdBeginDefaultRenderPass(VgpuCommandBuffer commandBuffer, VgpuColor clearColor, float clearDepth, uint8_t clearStencil) {
+    if (s_current_context->swapchain == nullptr) {
+        return;
+    }
+    uint32_t frameIndex = s_current_context->frameIndex;
+    VkClearValue clearValues[2u];
+    clearValues[0].color = { { clearColor.r, clearColor.g, clearColor.b, clearColor.a } };
+    clearValues[1].depthStencil = { clearDepth, clearStencil };
+
+    VkRenderPassBeginInfo beginInfo;
+    memset(&beginInfo, 0, sizeof(beginInfo));
+    beginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    beginInfo.renderPass = s_current_context->swapchain->renderPass;
+    beginInfo.framebuffer = s_current_context->swapchain->framebuffers[frameIndex];
+    beginInfo.renderArea.offset.x = 0;
+    beginInfo.renderArea.offset.y = 0;
+    beginInfo.renderArea.extent.width = s_current_context->swapchain->width;
+    beginInfo.renderArea.extent.height = s_current_context->swapchain->height;
+    beginInfo.clearValueCount = 2u;
+    beginInfo.pClearValues = clearValues;
+    vkCmdBeginRenderPass(commandBuffer->vk_handle, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
+}
+
+void VgpuRendererVk::cmdBeginRenderPass(VgpuCommandBuffer commandBuffer, VgpuFramebuffer framebuffer) {
+    VkRenderPassBeginInfo beginInfo;
+    memset(&beginInfo, 0, sizeof(beginInfo));
+    beginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    //beginInfo.renderPass = _currentRenderPass->GetVkRenderPass();
+    //beginInfo.framebuffer = _currentFramebuffer->GetVkFramebuffer();
+    beginInfo.renderArea.offset.x = 0;
+    beginInfo.renderArea.offset.y = 0;
+    beginInfo.renderArea.extent.width = framebuffer->width;
+    beginInfo.renderArea.extent.height = framebuffer->height;
+    //bassBeginInfo.clearValueCount = 0;
+    //bassBeginInfo.pClearValues = nullptr;
+    vkCmdBeginRenderPass(commandBuffer->vk_handle, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
+}
+
+void VgpuRendererVk::cmdEndRenderPass(VgpuCommandBuffer commandBuffer) {
+    vkCmdEndRenderPass(commandBuffer->vk_handle);
+}
+
 void vgpuDestroyCommandBuffer(VgpuCommandBuffer commandBuffer) {
     VGPU_ASSERT(commandBuffer);
 
@@ -2417,28 +2487,6 @@ VgpuResult vgpuSubmitCommandBuffers(uint32_t count, VgpuCommandBuffer *pBuffers)
     }
 
     return VGPU_SUCCESS;
-}
-
-void vgpuCmdBeginRenderPass(VgpuCommandBuffer commandBuffer, VgpuFramebuffer framebuffer) {
-    VGPU_ASSERT(commandBuffer);
-
-    VkRenderPassBeginInfo renderPassBeginInfo;
-    memset(&renderPassBeginInfo, 0, sizeof(renderPassBeginInfo));
-    renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    //renderPassBeginInfo.renderPass = _currentRenderPass->GetVkRenderPass();
-    //renderPassBeginInfo.framebuffer = _currentFramebuffer->GetVkFramebuffer();
-    renderPassBeginInfo.renderArea.offset.x = 0;
-    renderPassBeginInfo.renderArea.offset.y = 0;
-    renderPassBeginInfo.renderArea.extent.width = framebuffer->width;
-    renderPassBeginInfo.renderArea.extent.height = framebuffer->height;
-    //renderPassBeginInfo.clearValueCount = 0;
-    //renderPassBeginInfo.pClearValues = nullptr;
-    vkCmdBeginRenderPass(commandBuffer->vk_handle, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
-}
-
-void vgpuCmdEndRenderPass(VgpuCommandBuffer commandBuffer) {
-    VGPU_ASSERT(commandBuffer);
-    vkCmdEndRenderPass(commandBuffer->vk_handle);
 }
 
 void vgpuCmdSetShader(VgpuCommandBuffer commandBuffer, VgpuShader shader) {
