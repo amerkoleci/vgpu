@@ -20,15 +20,14 @@
 # THE SOFTWARE.
 #
 
-set (VGPU_HEADER_FILES
-    ${VGPU_ROOT_DIR}/include/vgpu/vgpu.h
-    ${CMAKE_CURRENT_LIST_DIR}/vgpu_internal.h
-    )
-set (VGPU_SOURCE_FILES
-    ${CMAKE_CURRENT_LIST_DIR}/vgpu.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/vgpu_vk.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/vgpu_d3d12.cpp
-    )
+set (VGPU_HEADER_FILES ${VGPU_ROOT_DIR}/include/vgpu/vgpu.h)
+set (VGPU_SOURCE_FILES ${CMAKE_CURRENT_LIST_DIR}/vgpu.cpp)
+
+if (VGPU_VULKAN)
+    list (APPEND VGPU_SOURCE_FILES ${CMAKE_CURRENT_SOURCE_DIR}/vgpu_vk.cpp)
+elseif (VGPU_D3D12)
+    list (APPEND VGPU_SOURCE_FILES ${CMAKE_CURRENT_SOURCE_DIR}/vgpu_d3d12.cpp)
+endif()
 
 if (VGPU_BUILD_SHARED)
     add_library(vgpu SHARED ${VGPU_HEADER_FILES} ${VGPU_SOURCE_FILES})
