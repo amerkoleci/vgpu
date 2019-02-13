@@ -2847,15 +2847,88 @@ namespace d3d12
 }
 #endif // TODO_D3D12
 
+struct VgpuRendererD3D12 : public VgpuRendererI
+{
+    VgpuRendererD3D12()  {}
+    ~VgpuRendererD3D12() {}
 
-VgpuBool32 vgpuIsD3D12Supported(bool headless)
+    VgpuResult initialize(const char* applicationName, const VgpuDescriptor* descriptor) override;
+    void shutdown() override;
+    VgpuBackend getBackend() const { return VGPU_BACKEND_D3D12; }
+    VgpuResult beginFrame() override;
+    VgpuResult endFrame() override;
+    VgpuResult waitIdle() override;
+
+    /* Sampler */
+    VgpuSampler createSampler(const VgpuSamplerDescriptor* descriptor) override;
+    void destroySampler(VgpuSampler sampler) override;
+    //VkSampler getVkSampler(VgpuSampler sampler);
+
+    /* Command Buffer */
+    VgpuCommandBuffer createCommandBuffer(const VgpuCommandBufferDescriptor* descriptor) override;
+    void cmdBeginDefaultRenderPass(VgpuCommandBuffer commandBuffer, VgpuColor clearColor, float clearDepth, uint8_t clearStencil) override;
+    void cmdBeginRenderPass(VgpuCommandBuffer commandBuffer, VgpuFramebuffer framebuffer) override;
+    void cmdEndRenderPass(VgpuCommandBuffer commandBuffer) override;
+};
+
+VgpuResult VgpuRendererD3D12::initialize(const char* applicationName, const VgpuDescriptor* descriptor) {
+    return VGPU_ERROR_GENERIC;
+}
+
+void VgpuRendererD3D12::shutdown() {
+
+}
+
+VgpuResult VgpuRendererD3D12::beginFrame() {
+    return VGPU_ERROR_GENERIC;
+}
+
+VgpuResult VgpuRendererD3D12::endFrame() {
+    return VGPU_ERROR_GENERIC;
+}
+
+VgpuResult VgpuRendererD3D12::waitIdle() {
+    return VGPU_ERROR_GENERIC;
+}
+
+
+/* Sampler */
+VgpuSampler VgpuRendererD3D12::createSampler(const VgpuSamplerDescriptor* descriptor) {
+    return {};
+}
+
+void VgpuRendererD3D12::destroySampler(VgpuSampler sampler) {
+
+}
+
+//VkSampler getVkSampler(VgpuSampler sampler);
+
+/* Command Buffer */
+VgpuCommandBuffer VgpuRendererD3D12::createCommandBuffer(const VgpuCommandBufferDescriptor* descriptor) {
+    return nullptr;
+}
+
+void VgpuRendererD3D12::cmdBeginDefaultRenderPass(VgpuCommandBuffer commandBuffer, VgpuColor clearColor, float clearDepth, uint8_t clearStencil) {
+
+}
+
+void VgpuRendererD3D12::cmdBeginRenderPass(VgpuCommandBuffer commandBuffer, VgpuFramebuffer framebuffer) {
+
+}
+
+void VgpuRendererD3D12::cmdEndRenderPass(VgpuCommandBuffer commandBuffer) {
+
+}
+
+
+VgpuBool32 vgpuIsD3D12Supported(VgpuBool32 headless)
 {
     return false; // d3d12::isSupported();
 }
 
 VgpuRendererI* vgpuCreateD3D12Backend()
 {
-    return nullptr;
+    return new VgpuRendererD3D12();
 }
 
 #endif // VGPU_D3D12
