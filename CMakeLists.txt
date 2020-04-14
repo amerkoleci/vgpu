@@ -20,7 +20,8 @@
 # THE SOFTWARE.
 #
 
-cmake_minimum_required(VERSION 3.0)
+# CMake version
+cmake_minimum_required(VERSION 3.10)
 project(vgpu LANGUAGES CXX C)
 
 set(VGPU_VERSION_MAJOR 0)
@@ -44,37 +45,27 @@ set (CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${VGPU_BUILD_DIR}/lib")
 
 # Options
 if (${CMAKE_SYSTEM_NAME} STREQUAL "Windows")
-    #set (VGPU_RENDERER D3D12 CACHE STRING "Select renderer: D3D12 | D3D11 | Vulkan")
-    set (VGPU_RENDERER Vulkan CACHE STRING "Select renderer: D3D12 | D3D11 | Vulkan")
+    option(VGPU_BACKEND_D3D11 "Include Direct3D12 backend" ON)
+    option(VGPU_BACKEND_D3D12 "Include Direct3D12 backend" ON)
+    option(VGPU_BACKEND_OPENGL "Include OpenGL backend" ON)
+    option(VGPU_BACKEND_VULKAN "Include Vulkan backend" ON)
 elseif (${CMAKE_SYSTEM_NAME} STREQUAL "WindowsStore")
-    set (VGPU_RENDERER D3D12 CACHE STRING "Select renderer: D3D12 | D3D11")
-elseif (${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
-    if (IOS)
-        set (VGPU_RENDERER Metal CACHE STRING "Select renderer: Metal | Vulkan")
-    else ()
-        set (VGPU_RENDERER Metal CACHE STRING "Select renderer: Metal | Vulkan")
-    endif ()
-elseif (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
-    set (VGPU_RENDERER Vulkan CACHE STRING "Select renderer: Vulkan | OpenGL")
-elseif (${CMAKE_SYSTEM_NAME} STREQUAL "Android")
-    set (VGPU_RENDERER GLES2 CACHE STRING "Select renderer: GLES2 | GLES3")
+    option(VGPU_BACKEND_D3D11 "Include Direct3D12 backend" ON)
+    option(VGPU_BACKEND_D3D12 "Include Direct3D12 backend" ON)
 elseif (${CMAKE_SYSTEM_NAME} STREQUAL "Durango")
     # XboxOne
-    set (VGPU_RENDERER D3D12 CACHE STRING "Select renderer: D3D12 | D3D11")
-elseif (${CMAKE_SYSTEM_NAME} STREQUAL "Emscripten")
-    set (VGPU_RENDERER GLES2 CACHE STRING "Select renderer: GLES2 | GLES3")
-endif ()
-
-string(TOUPPER "${VGPU_RENDERER}" VGPU_RENDERER)
-set (VGPU_${VGPU_RENDERER} ON CACHE BOOL "" FORCE)
-if (VGPU_GLES2 OR VGPU_GLES3)
-    set (VGPU_OPENGL ON CACHE BOOL "" FORCE)
+    option(VGPU_BACKEND_D3D11 "Include Direct3D12 backend" ON)
+    option(VGPU_BACKEND_D3D12 "Include Direct3D12 backend" ON)
+elseif (${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
+    set(VGPU_BACKEND_VULKAN ON CACHE BOOL "Include Vulkan renderer")
+else()
+    set(VGPU_BACKEND_OPENGL ON CACHE BOOL "Include OpenGL renderer")
+    set(VGPU_BACKEND_OPENGL ON CACHE BOOL "Include OpenGL renderer")
 endif ()
 
 option (VGPU_BUILD_SAMPLES "Build the vgpu samples" ON)
 option (VGPU_INSTALL "Generate installation target" ON)
-option (VGPU_SYSTEM_GLFW "Use the system-provided glfw instead of third_party one" OFF)
-option (VGPU_BUILD_SHARED "Build as shared library." OFF)
+option(BUILD_SHARED_LIBS "Build shared library" ON)
 
 include(GNUInstallDirs)
 
@@ -107,10 +98,86 @@ elseif (UNIX)
 endif ()
 
 # third_party
-add_subdirectory(third_party)
 
-# src
-add_subdirectory(src)
+# GLFW
+if (VGPU_BUILD_SAMPLES AND NOT (EMSCRIPTEN OR ANDROID))
+    set (GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set (GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+    set (GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set (GLFW_INSTALL OFF CACHE BOOL "" FORCE)
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL "")
+    #set (GLFW_USE_WAYLAND ${VGPU_USE_WAYLAND} CACHE BOOL "" FORCE)
+    add_subdirectory(third_party/glfw)
+    set_property(TARGET "glfw" PROPERTY FOLDER "third_party")
+    unset (LIB_SUFFIX CACHE)
+endif ()
+
+if (VGPU_BACKEND_VULKAN)
+    add_subdirectory(third_party/volk)
+    add_subdirectory(third_party/vk_mem_alloc)
+    add_subdirectory(third_party/spirv_reflect)
+
+    set_property(TARGET "volk" PROPERTY FOLDER "third_party")
+    set_property(TARGET "vk_mem_alloc" PROPERTY FOLDER "third_party")
+    set_property(TARGET "spirv_reflect" PROPERTY FOLDER "third_party")
+endif ()
+
+# vgpu
+set(SOURCE_FILES 
+    include/vgpu/vgpu.h
+    src/vgpu_backend.h
+    src/vgpu.c
+)
+
+add_library (vgpu ${SOURCE_FILES})
+target_compile_definitions(vgpu PRIVATE VGPU_IMPLEMENTATION)
+
+if (BUILD_SHARED_LIBS)
+    target_compile_definitions(vgpu PRIVATE VGPU_SHARED_LIBRARY)
+endif ()
+
+if (VGPU_BACKEND_D3D11)
+    target_sources(${PROJECT_NAME} PRIVATE
+        src/vgpu_d3d11.c
+    )
+
+    target_compile_definitions(${PROJECT_NAME} PRIVATE VGPU_BACKEND_D3D11)
+endif ()
+
+
+set_target_properties(vgpu PROPERTIES
+    VERSION ${VGPU_VERSION}
+    SOVERSION ${VGPU_VERSION_MAJOR}
+    POSITION_INDEPENDENT_CODE ON
+    FOLDER "vgpu"
+    C_STANDARD 99
+)
+
+target_include_directories(vgpu PUBLIC
+    "$<BUILD_INTERFACE:${VGPU_ROOT_DIR}/include>"
+    "$<INSTALL_INTERFACE:${CMAKE_INSTALL_FULL_INCLUDEDIR}>"
+)
+
+if (VGPU_VULKAN)
+    target_link_libraries(vgpu PRIVATE volk vk_mem_alloc)
+endif ()
+
+if (MSVC)
+    # Set warning level 3 and treat all other warnings as errors
+	target_compile_options(vgpu PRIVATE
+        /W3
+        /WX
+    )
+endif ()
+
+if (VGPU_INSTALL)
+    install(TARGETS vgpu
+        EXPORT vgpu
+        RUNTIME DESTINATION "bin"
+        ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+        LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+    )
+endif()
 
 # samples
 if (VGPU_BUILD_SAMPLES)
@@ -123,7 +190,7 @@ endif ()
 
 # Print current build configuration
 message(STATUS "Build Configuration:")
-if (VGPU_BUILD_SHARED)
+if (BUILD_SHARED_LIBS)
     message(STATUS "  Library         SHARED")
 else ()
     message(STATUS "  Library         STATIC")

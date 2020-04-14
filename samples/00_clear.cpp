@@ -84,7 +84,8 @@ int main(int argc, char** argv)
     glfwInitHint(GLFW_COCOA_CHDIR_RESOURCES, GLFW_FALSE);
 #endif
 
-    if (vgpuGetBackend() != VGPU_BACKEND_OPENGL)
+    vgpu_desc gpu_desc = {};
+    if (gpu_desc.preferred_backend != VGPU_BACKEND_OPENGL)
     {
         // By default on non opengl context creation.
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
@@ -99,7 +100,7 @@ int main(int argc, char** argv)
     }
 
     GLFWwindow* window = glfwCreateWindow(640, 480, "vgpu", 0, 0);
-    if (vgpuGetBackend() == VGPU_BACKEND_OPENGL)
+    if (gpu_desc.preferred_backend == VGPU_BACKEND_OPENGL)
     {
         glfwMakeContextCurrent(window);
         glfwSwapInterval(1);
@@ -108,7 +109,7 @@ int main(int argc, char** argv)
     int width, height;
     glfwGetWindowSize(window, &width, &height);
 
-    VgpuDescriptor descriptor = {};
+    /*VgpuDescriptor descriptor = {};
 #ifdef _DEBUG
     descriptor.validation = true;
 #endif
@@ -144,7 +145,9 @@ int main(int argc, char** argv)
         VgpuSamplerDescriptor samplerDescriptor = {};
         VgpuSampler sampler = vgpuCreateSampler(&samplerDescriptor);
         vgpuDestroySampler(sampler);
-    }
+    }*/
+
+    vgpu_device* device = vgpu_create_device("00 - clear", &gpu_desc);
 
     while (!glfwWindowShouldClose(window))
     {
@@ -154,19 +157,19 @@ int main(int argc, char** argv)
         }
 
         glfwGetFramebufferSize(window, &width, &height);
-        vgpuBeginFrame();
+        /*vgpuBeginFrame();
         vgpuBeginCommandBuffer(commandBuffer);
         VgpuColor clearColor = { 0.0f, 0.2f, 0.4f, 1.0f };
         vgpuCmdBeginDefaultRenderPass(commandBuffer, clearColor, 1.0f, 0);
         vgpuCmdEndRenderPass(commandBuffer);
         vgpuEndCommandBuffer(commandBuffer);
         vgpuSubmitCommandBuffers(1, &commandBuffer);
-        vgpuEndFrame();
+        vgpuEndFrame();*/
         glfwPollEvents();
     }
 
-    vgpuDestroyCommandBuffer(commandBuffer);
-    vgpuShutdown();
+    /*vgpuDestroyCommandBuffer(commandBuffer);*/
+    vgpu_destroy_device(device);
     glfwTerminate();
 
 #elif defined(__ANDROID__)

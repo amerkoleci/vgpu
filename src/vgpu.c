@@ -20,8 +20,96 @@
 // THE SOFTWARE.
 //
 
-#include "vgpu/vgpu.h"
-#include <assert.h>
+#include "vgpu_backend.h"
+
+vgpu_backend vgpu_get_default_platform_backend(void) {
+#if defined(_WIN32) || defined(_WIN64)
+    if (vgpu_is_backend_supported(VGPU_BACKEND_DIRECT3D12)) {
+        return VGPU_BACKEND_DIRECT3D12;
+    }
+
+    if (vgpu_is_backend_supported(VGPU_BACKEND_VULKAN)) {
+        return VGPU_BACKEND_VULKAN;
+    }
+
+    if (vgpu_is_backend_supported(VGPU_BACKEND_DIRECT3D11)) {
+        return VGPU_BACKEND_DIRECT3D11;
+    }
+
+    if (vgpu_is_backend_supported(VGPU_BACKEND_OPENGL)) {
+        return VGPU_BACKEND_OPENGL;
+    }
+
+    return VGPU_BACKEND_NULL;
+#elif defined(__linux__) || defined(__ANDROID__)
+    return VGPU_BACKEND_OPENGL;
+#elif defined(__APPLE__)
+    return VGPU_BACKEND_VULKAN;
+#else
+    return VGPU_BACKEND_OPENGL;
+#endif
+}
+
+bool vgpu_is_backend_supported(vgpu_backend backend) {
+    if (backend == VGPU_BACKEND_DEFAULT || backend == VGPU_BACKEND_COUNT) {
+        backend = vgpu_get_default_platform_backend();
+    }
+
+    switch (backend)
+    {
+    case VGPU_BACKEND_NULL:
+        return true;
+#if defined(VGPU_VK_BACKEND)
+    case VGPU_BACKEND_VULKAN:
+        return vgpu_vk_supported();
+#endif
+#if defined(VGPU_D3D12_BACKEND)
+    case VGPU_BACKEND_DIRECT3D12:
+        return vgpu_d3d12_supported();
+#endif /* defined(VGPU_D3D12_BACKEND) */
+
+#if defined(VGPU_BACKEND_D3D11)
+    case VGPU_BACKEND_DIRECT3D11:
+        return vgpu_d3d11_supported();
+#endif
+
+#if defined(VGPU_BACKEND_GL)
+    case VGPU_BACKEND_OPENGL:
+        return agpu_gl_supported();
+#endif // defined(AGPU_BACKEND_GL)
+
+    default:
+        return false;
+    }
+}
+
+vgpu_device* vgpu_create_device(const char* app_name, const vgpu_desc* desc) {
+    vgpu_backend backend = desc->preferred_backend;
+    if (backend == VGPU_BACKEND_DEFAULT || backend == VGPU_BACKEND_COUNT) {
+        backend = vgpu_get_default_platform_backend();
+    }
+
+    vgpu_device* device = NULL;
+    switch (backend)
+    {
+    case VGPU_BACKEND_NULL:
+        break;
+
+#if defined(VGPU_BACKEND_D3D11)
+    case VGPU_BACKEND_DIRECT3D11:
+        device = d3d11_create_device(app_name, desc);
+#endif
+    }
+
+    return device;
+}
+
+void vgpu_destroy_device(vgpu_device* device) {
+    if (device == NULL)
+        return;
+
+    device->destroy(device);
+}
 
 /* Pixel Format */
 typedef struct VgpuPixelFormatDesc
@@ -158,7 +246,7 @@ const VgpuPixelFormatDesc FormatDesc[] =
     { VGPU_PIXEL_FORMAT_ASTC12x12,              "ASTC12x12",            VGPU_PIXEL_FORMAT_TYPE_UNORM,       3,          {12, 12, 16, 1, 1},     {0, 0, 0, 0, 0, 0} },
 };
 
-uint32_t vgpuGetFormatBitsPerPixel(VgpuPixelFormat format)
+uint32_t vgpu_get_format_bits_per_pixel(VgpuPixelFormat format)
 {
     assert(FormatDesc[(uint32_t)format].format == format);
     return FormatDesc[(uint32_t)format].bitsPerPixel;

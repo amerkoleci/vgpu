@@ -20,29 +20,41 @@
 // THE SOFTWARE.
 //
 
-#pragma once
+#ifndef VGPU_H_
+#define VGPU_H_
+
+#if defined(VGPU_SHARED_LIBRARY)
+#   if defined(_WIN32)
+#       if defined(VGPU_IMPLEMENTATION)
+#           define VGPU_EXPORT __declspec(dllexport)
+#       else
+#           define VGPU_EXPORT __declspec(dllimport)
+#       endif
+#   else  // defined(_WIN32)
+#       if defined(VGPU_IMPLEMENTATION)
+#           define VGPU_EXPORT __attribute__((visibility("default")))
+#       else
+#           define VGPU_EXPORT
+#       endif
+#   endif  // defined(_WIN32)
+#else       // defined(VGPU_SHARED_LIBRARY)
+#   define VGPU_EXPORT
+#endif  // defined(VGPU_SHARED_LIBRARY)
 
 #include <stdint.h>
+#include <stddef.h>
 #include <stdbool.h>
-
-#if defined(_WIN32) && defined(VGPU_BUILD_SHARED_LIBRARY)
-#   define VGPU_API __declspec(dllexport)
-#elif defined(_WIN32) && defined(VGPU_USE_SHARED_LIBRARY)
-#   define VGPU_API __declspec(dllimport)
-#elif defined(__GNUC__) && defined(VGPU_BUILD_SHARED_LIBRARY)
-#   define VGPU_API __attribute__((visibility("default")))
-#else
-#   define VGPU_API
-#endif
 
 #ifndef VGPU_DEFINE_HANDLE
 #   define VGPU_DEFINE_HANDLE(object) typedef struct object##_T* object
 #endif
 
+typedef struct vgpu_device vgpu_device;
+
 #ifdef __cplusplus
 extern "C"
 {
-#endif // __cplusplus
+#endif
 
     typedef uint32_t VgpuFlags;
     typedef uint32_t VgpuBool32;
@@ -91,15 +103,15 @@ extern "C"
         VGPU_ERROR_COMMAND_BUFFER_NOT_RECORDING = -8,
     } VgpuResult;
 
-    typedef enum VgpuBackend {
-        VGPU_BACKEND_INVALID = 0,
+    typedef enum vgpu_backend {
+        VGPU_BACKEND_DEFAULT = 0,
         VGPU_BACKEND_NULL,
         VGPU_BACKEND_VULKAN,
-        VGPU_BACKEND_D3D12,
-        VGPU_BACKEND_D3D11,
+        VGPU_BACKEND_DIRECT3D12,
+        VGPU_BACKEND_DIRECT3D11,
         VGPU_BACKEND_OPENGL,
         VGPU_BACKEND_COUNT
-    } VgpuBackend;
+    } vgpu_backend;
 
     typedef enum VgpuDevicePreference {
         /// Prefer discrete GPU.
@@ -565,97 +577,105 @@ extern "C"
         vgpu_log_fn                     logCallback;
     } VgpuDescriptor;
 
-    VGPU_API VgpuBackend vgpuGetBackend();
+    typedef struct vgpu_desc {
+        vgpu_backend preferred_backend;
+    } vgpu_desc;
 
-    VGPU_API VgpuResult vgpuInitialize(const char* applicationName, const VgpuDescriptor* descriptor);
-    VGPU_API void vgpuShutdown();
-    VGPU_API VgpuResult vgpuBeginFrame();
-    VGPU_API VgpuResult vgpuEndFrame();
-    VGPU_API VgpuResult vgpuWaitIdle();
-    VGPU_API VgpuPixelFormat vgpuGetDefaultDepthFormat();
-    VGPU_API VgpuPixelFormat vgpuGetDefaultDepthStencilFormat();
-    VGPU_API VgpuFramebuffer vgpuGetCurrentFramebuffer();
-    VGPU_API bool vgpuQueryFeature(VgpuFeature feature);
-    VGPU_API void vgpuQueryLimits(VgpuLimits* pLimits);
-    VGPU_API VgpuBool32 vgpuQueryPixelFormatSupport();
+    VGPU_EXPORT vgpu_backend vgpu_get_default_platform_backend(void);
+    VGPU_EXPORT bool vgpu_is_backend_supported(vgpu_backend backend);
+    VGPU_EXPORT vgpu_device* vgpu_create_device(const char* app_name, const vgpu_desc* desc);
+    VGPU_EXPORT void vgpu_destroy_device(vgpu_device *device);
+    //VGPU_EXPORT VgpuBackend vgpuGetBackend();
+
+    VGPU_EXPORT VgpuResult vgpuBeginFrame();
+    VGPU_EXPORT VgpuResult vgpuEndFrame();
+    VGPU_EXPORT VgpuResult vgpuWaitIdle();
+    VGPU_EXPORT VgpuPixelFormat vgpuGetDefaultDepthFormat();
+    VGPU_EXPORT VgpuPixelFormat vgpuGetDefaultDepthStencilFormat();
+    VGPU_EXPORT VgpuFramebuffer vgpuGetCurrentFramebuffer();
+    VGPU_EXPORT bool vgpuQueryFeature(VgpuFeature feature);
+    VGPU_EXPORT void vgpuQueryLimits(VgpuLimits* pLimits);
+    VGPU_EXPORT VgpuBool32 vgpuQueryPixelFormatSupport();
 
     /* Buffer */
-    VGPU_API VgpuResult vgpuCreateBuffer(const VgpuBufferDescriptor* descriptor, const void* pInitData, VgpuBuffer* pBuffer);
-    VGPU_API VgpuResult vgpuCreateExternalBuffer(const VgpuBufferDescriptor* descriptor, void* handle, VgpuBuffer* pBuffer);
-    VGPU_API void vgpuDestroyBuffer(VgpuBuffer buffer);
+    VGPU_EXPORT VgpuResult vgpuCreateBuffer(const VgpuBufferDescriptor* descriptor, const void* pInitData, VgpuBuffer* pBuffer);
+    VGPU_EXPORT VgpuResult vgpuCreateExternalBuffer(const VgpuBufferDescriptor* descriptor, void* handle, VgpuBuffer* pBuffer);
+    VGPU_EXPORT void vgpuDestroyBuffer(VgpuBuffer buffer);
 
     /* Texture */
-    VGPU_API VgpuResult vgpuCreateTexture(const VgpuTextureDescriptor* descriptor, const void* pInitData, VgpuTexture* pTexture);
-    VGPU_API VgpuResult vgpuCreateExternalTexture(const VgpuTextureDescriptor* descriptor, void* handle, VgpuTexture* pTexture);
-    VGPU_API void vgpuDestroyTexture(VgpuTexture texture);
+    VGPU_EXPORT VgpuResult vgpuCreateTexture(const VgpuTextureDescriptor* descriptor, const void* pInitData, VgpuTexture* pTexture);
+    VGPU_EXPORT VgpuResult vgpuCreateExternalTexture(const VgpuTextureDescriptor* descriptor, void* handle, VgpuTexture* pTexture);
+    VGPU_EXPORT void vgpuDestroyTexture(VgpuTexture texture);
 
     /* Framebuffer */
-    VGPU_API VgpuFramebuffer vgpuCreateFramebuffer(const VgpuFramebufferDescriptor* descriptor);
-    VGPU_API void vgpuDestroyFramebuffer(VgpuFramebuffer framebuffer);
+    VGPU_EXPORT VgpuFramebuffer vgpuCreateFramebuffer(const VgpuFramebufferDescriptor* descriptor);
+    VGPU_EXPORT void vgpuDestroyFramebuffer(VgpuFramebuffer framebuffer);
 
     /* ShaderModule */
-    VGPU_API VgpuShaderModule vgpuCreateShaderModule(const VgpuShaderModuleDescriptor* descriptor);
-    VGPU_API void vgpuDestroyShaderModule(VgpuShaderModule shaderModule);
+    VGPU_EXPORT VgpuShaderModule vgpuCreateShaderModule(const VgpuShaderModuleDescriptor* descriptor);
+    VGPU_EXPORT void vgpuDestroyShaderModule(VgpuShaderModule shaderModule);
 
     /* Shader */
-    VGPU_API VgpuShader vgpuCreateShader(const VgpuShaderDescriptor* descriptor);
-    VGPU_API void vgpuDestroyShader(VgpuShader shader);
+    VGPU_EXPORT VgpuShader vgpuCreateShader(const VgpuShaderDescriptor* descriptor);
+    VGPU_EXPORT void vgpuDestroyShader(VgpuShader shader);
 
     /* Pipeline */
-    VGPU_API VgpuPipeline vgpuCreateRenderPipeline(const VgpuRenderPipelineDescriptor* descriptor);
-    VGPU_API VgpuPipeline vgpuCreateComputePipeline(const VgpuComputePipelineDescriptor* descriptor);
-    VGPU_API void vgpuDestroyPipeline(VgpuPipeline pipeline);
+    VGPU_EXPORT VgpuPipeline vgpuCreateRenderPipeline(const VgpuRenderPipelineDescriptor* descriptor);
+    VGPU_EXPORT VgpuPipeline vgpuCreateComputePipeline(const VgpuComputePipelineDescriptor* descriptor);
+    VGPU_EXPORT void vgpuDestroyPipeline(VgpuPipeline pipeline);
 
     /* Sampler */
-    VGPU_API VgpuResult vgpuCreateSampler(const VgpuSamplerDescriptor* descriptor, VgpuSampler* pSampler);
-    VGPU_API void vgpuDestroySampler(VgpuSampler sampler);
+    VGPU_EXPORT VgpuResult vgpuCreateSampler(const VgpuSamplerDescriptor* descriptor, VgpuSampler* pSampler);
+    VGPU_EXPORT void vgpuDestroySampler(VgpuSampler sampler);
 
     /* CommandBuffer */
-    VGPU_API VgpuCommandBuffer vgpuCreateCommandBuffer(const VgpuCommandBufferDescriptor* descriptor);
-    VGPU_API void vgpuDestroyCommandBuffer(VgpuCommandBuffer commandBuffer);
-    VGPU_API VgpuResult vgpuBeginCommandBuffer(VgpuCommandBuffer commandBuffer);
-    VGPU_API VgpuResult vgpuEndCommandBuffer(VgpuCommandBuffer commandBuffer);
-    VGPU_API VgpuResult vgpuSubmitCommandBuffers(uint32_t count, VgpuCommandBuffer *pBuffers);
+    VGPU_EXPORT VgpuCommandBuffer vgpuCreateCommandBuffer(const VgpuCommandBufferDescriptor* descriptor);
+    VGPU_EXPORT void vgpuDestroyCommandBuffer(VgpuCommandBuffer commandBuffer);
+    VGPU_EXPORT VgpuResult vgpuBeginCommandBuffer(VgpuCommandBuffer commandBuffer);
+    VGPU_EXPORT VgpuResult vgpuEndCommandBuffer(VgpuCommandBuffer commandBuffer);
+    VGPU_EXPORT VgpuResult vgpuSubmitCommandBuffers(uint32_t count, VgpuCommandBuffer *pBuffers);
 
-    VGPU_API void vgpuCmdBeginDefaultRenderPass(VgpuCommandBuffer commandBuffer, VgpuColor clearColor, float clearDepth, uint8_t clearStencil);
-    VGPU_API void vgpuCmdBeginRenderPass(VgpuCommandBuffer commandBuffer, VgpuFramebuffer framebuffer);
-    VGPU_API void vgpuCmdEndRenderPass(VgpuCommandBuffer commandBuffer);
-    VGPU_API void vgpuCmdSetShader(VgpuCommandBuffer commandBuffer, VgpuShader shader);
-    VGPU_API void vgpuCmdSetVertexBuffer(VgpuCommandBuffer commandBuffer, uint32_t binding, VgpuBuffer buffer, uint64_t offset, VgpuVertexInputRate inputRate);
-    VGPU_API void vgpuCmdSetIndexBuffer(VgpuCommandBuffer commandBuffer, VgpuBuffer buffer, uint64_t offset, VgpuIndexType indexType);
+    VGPU_EXPORT void vgpuCmdBeginDefaultRenderPass(VgpuCommandBuffer commandBuffer, VgpuColor clearColor, float clearDepth, uint8_t clearStencil);
+    VGPU_EXPORT void vgpuCmdBeginRenderPass(VgpuCommandBuffer commandBuffer, VgpuFramebuffer framebuffer);
+    VGPU_EXPORT void vgpuCmdEndRenderPass(VgpuCommandBuffer commandBuffer);
+    VGPU_EXPORT void vgpuCmdSetShader(VgpuCommandBuffer commandBuffer, VgpuShader shader);
+    VGPU_EXPORT void vgpuCmdSetVertexBuffer(VgpuCommandBuffer commandBuffer, uint32_t binding, VgpuBuffer buffer, uint64_t offset, VgpuVertexInputRate inputRate);
+    VGPU_EXPORT void vgpuCmdSetIndexBuffer(VgpuCommandBuffer commandBuffer, VgpuBuffer buffer, uint64_t offset, VgpuIndexType indexType);
 
-    VGPU_API void vgpuCmdSetViewport(VgpuCommandBuffer commandBuffer, VgpuViewport viewport);
-    VGPU_API void vgpuCmdSetViewports(VgpuCommandBuffer commandBuffer, uint32_t viewportCount, const VgpuViewport* pViewports);
-    VGPU_API void vgpuCmdSetScissor(VgpuCommandBuffer commandBuffer, VgpuRect2D scissor);
-    VGPU_API void vgpuCmdSetScissors(VgpuCommandBuffer commandBuffer, uint32_t scissorCount, const VgpuRect2D* pScissors);
+    VGPU_EXPORT void vgpuCmdSetViewport(VgpuCommandBuffer commandBuffer, VgpuViewport viewport);
+    VGPU_EXPORT void vgpuCmdSetViewports(VgpuCommandBuffer commandBuffer, uint32_t viewportCount, const VgpuViewport* pViewports);
+    VGPU_EXPORT void vgpuCmdSetScissor(VgpuCommandBuffer commandBuffer, VgpuRect2D scissor);
+    VGPU_EXPORT void vgpuCmdSetScissors(VgpuCommandBuffer commandBuffer, uint32_t scissorCount, const VgpuRect2D* pScissors);
 
-    VGPU_API void vgpuCmdSetPrimitiveTopology(VgpuCommandBuffer commandBuffer, VgpuPrimitiveTopology topology);
-    VGPU_API void vgpuCmdDraw(VgpuCommandBuffer commandBuffer, uint32_t vertexCount, uint32_t firstVertex);
-    VGPU_API void vgpuCmdDrawIndexed(VgpuCommandBuffer commandBuffer, uint32_t indexCount, uint32_t firstIndex, int32_t vertexOffset);
+    VGPU_EXPORT void vgpuCmdSetPrimitiveTopology(VgpuCommandBuffer commandBuffer, VgpuPrimitiveTopology topology);
+    VGPU_EXPORT void vgpuCmdDraw(VgpuCommandBuffer commandBuffer, uint32_t vertexCount, uint32_t firstVertex);
+    VGPU_EXPORT void vgpuCmdDrawIndexed(VgpuCommandBuffer commandBuffer, uint32_t indexCount, uint32_t firstIndex, int32_t vertexOffset);
 
     /* Helper methods */
     /// Get the number of bits per format
-    VGPU_API uint32_t vgpuGetFormatBitsPerPixel(VgpuPixelFormat format);
-    VGPU_API uint32_t vgpuGetFormatBlockSize(VgpuPixelFormat format);
+    VGPU_EXPORT uint32_t vgpu_get_format_bits_per_pixel(VgpuPixelFormat format);
+    VGPU_EXPORT uint32_t vgpu_get_formatBlockSize(VgpuPixelFormat format);
 
     /// Get the format compression ration along the x-axis.
-    VGPU_API uint32_t vgpuGetFormatBlockWidth(VgpuPixelFormat format);
+    VGPU_EXPORT uint32_t vgpuGetFormatBlockWidth(VgpuPixelFormat format);
     /// Get the format compression ration along the y-axis.
-    VGPU_API uint32_t vgpuGetFormatBlockHeight(VgpuPixelFormat format);
+    VGPU_EXPORT uint32_t vgpuGetFormatBlockHeight(VgpuPixelFormat format);
     /// Get the format Type.
-    VGPU_API VgpuPixelFormatType vgpuGetFormatType(VgpuPixelFormat format);
+    VGPU_EXPORT VgpuPixelFormatType vgpuGetFormatType(VgpuPixelFormat format);
 
     /// Check if the format has a depth component.
-    VGPU_API VgpuBool32 vgpuIsDepthFormat(VgpuPixelFormat format);
+    VGPU_EXPORT VgpuBool32 vgpuIsDepthFormat(VgpuPixelFormat format);
     /// Check if the format has a stencil component.
-    VGPU_API VgpuBool32 vgpuIsStencilFormat(VgpuPixelFormat format);
+    VGPU_EXPORT VgpuBool32 vgpuIsStencilFormat(VgpuPixelFormat format);
     /// Check if the format has depth or stencil components.
-    VGPU_API VgpuBool32 vgpuIsDepthStencilFormat(VgpuPixelFormat format);
+    VGPU_EXPORT VgpuBool32 vgpuIsDepthStencilFormat(VgpuPixelFormat format);
     /// Check if the format is a compressed format.
-    VGPU_API VgpuBool32 vgpuIsCompressedFormat(VgpuPixelFormat format);
+    VGPU_EXPORT VgpuBool32 vgpuIsCompressedFormat(VgpuPixelFormat format);
     /// Get format string name.
-    VGPU_API const char* vgpuGetFormatName(VgpuPixelFormat format);
+    VGPU_EXPORT const char* vgpuGetFormatName(VgpuPixelFormat format);
 
 #ifdef __cplusplus
 }
-#endif // __cplusplus
+#endif
+
+#endif // VGPU_H_
