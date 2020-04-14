@@ -1,7 +1,7 @@
 //========================================================================
-// GLFW 3.3 Cocoa - www.glfw.org
+// GLFW 3.4 Cocoa - www.glfw.org
 //------------------------------------------------------------------------
-// Copyright (c) 2009-2016 Camilla Löwy <elmindreda@glfw.org>
+// Copyright (c) 2009-2019 Camilla Löwy <elmindreda@glfw.org>
 // Copyright (c) 2012 Torsten Walluhn <tw@mad-cad.net>
 //
 // This software is provided 'as-is', without any express or implied
@@ -23,6 +23,8 @@
 // 3. This notice may not be removed or altered from any source
 //    distribution.
 //
+//========================================================================
+// It is fine to use C99 in this file because it will not be built with VS
 //========================================================================
 
 #include "internal.h"
@@ -231,6 +233,19 @@ static void matchCallback(void* context,
                     break;
             }
         }
+        else if (page == kHIDPage_Simulation)
+        {
+            switch (usage)
+            {
+                case kHIDUsage_Sim_Accelerator:
+                case kHIDUsage_Sim_Brake:
+                case kHIDUsage_Sim_Throttle:
+                case kHIDUsage_Sim_Rudder:
+                case kHIDUsage_Sim_Steering:
+                    target = axes;
+                    break;
+            }
+        }
         else if (page == kHIDPage_Button || page == kHIDPage_Consumer)
             target = buttons;
 
@@ -316,7 +331,7 @@ void _glfwInitJoysticksNS(void)
         return;
     }
 
-    for (int i = 0;  i < sizeof(usages) / sizeof(long);  i++)
+    for (size_t i = 0;  i < sizeof(usages) / sizeof(long);  i++)
     {
         const long page = kHIDPage_GenericDesktop;
 
@@ -464,7 +479,7 @@ void _glfwPlatformUpdateGamepadGUID(char* guid)
         (strncmp(guid + 20, "000000000000", 12) == 0))
     {
         char original[33];
-        strcpy(original, guid);
+        strncpy(original, guid, sizeof(original) - 1);
         sprintf(guid, "03000000%.4s0000%.4s000000000000",
                 original, original + 16);
     }
