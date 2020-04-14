@@ -22,7 +22,7 @@
 
 function(add_sample name)
     set (target_name "${name}")
-    add_executable(${target_name} ${CMAKE_CURRENT_SOURCE_DIR}/${name}.cpp)
+    add_executable(${target_name} ${CMAKE_CURRENT_SOURCE_DIR}/${name}.c)
     if (MSVC)
         set_target_properties(${target_name} PROPERTIES FOLDER "samples")
     endif()

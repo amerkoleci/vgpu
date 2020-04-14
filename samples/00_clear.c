@@ -21,13 +21,9 @@
 //
 
 #include <vgpu/vgpu.h>
-#include <cstdio>
-#include <cstdlib>
-#include <sstream>
+#include <stdio.h>
+#include <stdlib.h>
 
-void platform_log(const char* str);
-#define LOG(STR)  { std::stringstream ss; ss << STR << std::endl; \
-                    platform_log(ss.str().c_str()); }
 #if defined(__ANDROID__)
 #elif defined(__EMSCRIPTEN__)
 #   include <emscripten/emscripten.h>
@@ -50,27 +46,20 @@ void platform_log(const char* str);
 #include <GLFW/glfw3native.h>
 
 // GLFW3 Error Callback, runs on GLFW3 error
-static void glfwErrorCallback(int error, const char *description)
+static void glfwErrorCallback(int error, const char* description)
 {
-    LOG("[GLFW3 Error] Code: " << error << " Decription: {}" << description);
+    vgpu_log_format(VGPU_LOG_LEVEL_ERROR, "[GLFW3 Error] Code: %d Decription: %s", error, description);
 }
 #endif
 
-static void platform_log(const char* str)
-{
-#if defined(_WIN32)
-    OutputDebugStringA(str);
-#else
-    printf("%s", str);
-#endif
-}
-
-static void vgpuLogCallback(VgpuLogLevel level, const char* context, const char* message)
+static void vgpu_log_fn(void* user_data, vgpu_log_level level, const char* message)
 {
 }
 
 int main(int argc, char** argv)
 {
+    vgpu_set_log_callback_function(vgpu_log_fn, NULL);
+
 #ifdef USE_GLFW
     glfwSetErrorCallback(glfwErrorCallback);
 
@@ -84,8 +73,8 @@ int main(int argc, char** argv)
     glfwInitHint(GLFW_COCOA_CHDIR_RESOURCES, GLFW_FALSE);
 #endif
 
-    vgpu_desc gpu_desc = {};
-    if (gpu_desc.preferred_backend != VGPU_BACKEND_OPENGL)
+    vgpu_backend preferred_backend = VGPU_BACKEND_DEFAULT;
+    if (preferred_backend != VGPU_BACKEND_OPENGL)
     {
         // By default on non opengl context creation.
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
@@ -99,8 +88,8 @@ int main(int argc, char** argv)
         glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     }
 
-    GLFWwindow* window = glfwCreateWindow(640, 480, "vgpu", 0, 0);
-    if (gpu_desc.preferred_backend == VGPU_BACKEND_OPENGL)
+    GLFWwindow* window = glfwCreateWindow(1280, 720, "vgpu", 0, 0);
+    if (preferred_backend == VGPU_BACKEND_OPENGL)
     {
         glfwMakeContextCurrent(window);
         glfwSwapInterval(1);
@@ -109,45 +98,27 @@ int main(int argc, char** argv)
     int width, height;
     glfwGetWindowSize(window, &width, &height);
 
-    /*VgpuDescriptor descriptor = {};
-#ifdef _DEBUG
-    descriptor.validation = true;
-#endif
-    VgpuSwapchainDescriptor swapchainDescriptor = {};
-    swapchainDescriptor.width = width;
-    swapchainDescriptor.height = height;
-    swapchainDescriptor.depthStencil = VGPU_FALSE;
-    swapchainDescriptor.samples = AGPU_SAMPLE_COUNT1;
-    swapchainDescriptor.tripleBuffer = VGPU_FALSE;
-    swapchainDescriptor.vsync = VGPU_TRUE;
+    vgpu_desc gpu_desc = {
+        .preferred_backend = preferred_backend,
+        .swapchain = &(vgpu_swap_chain_desc) {
 #if defined(_WIN32) || defined(_WIN64)
-    swapchainDescriptor.nativeHandle = (uint64_t)glfwGetWin32Window(window);
+            .native_handle = (uint64_t)glfwGetWin32Window(window),
+            .native_display = (uint64_t)GetModuleHandle(NULL),
 #elif defined(__linux__)
 #elif defined(__APPLE__)
 #endif
+            .width = width,
+            .height = height,
+            .fullscreen = false,
+            .vsync = true
+      },
+    };
 
-    descriptor.swapchain = &swapchainDescriptor;
-    descriptor.logCallback = vgpuLogCallback;
+#ifdef _DEBUG
+    gpu_desc.flags |= VGPU_CONFIG_FLAGS_VALIDATION;
+#endif
 
-    if (vgpuInitialize("alimer", &descriptor) != VGPU_SUCCESS)
-    {
-        LOG("Error: Failed to initialize vgpu");
-        return false;
-    }
-
-    // Request command buffer.
-    VgpuCommandBufferDescriptor commandBufferDescriptor = {};
-    commandBufferDescriptor.type = VGPU_COMMAND_QUEUE_TYPE_GRAPHICS;
-    VgpuCommandBuffer commandBuffer = vgpuCreateCommandBuffer(&commandBufferDescriptor);
-
-    for (uint32_t i = 0; i < 100; i++)
-    {
-        VgpuSamplerDescriptor samplerDescriptor = {};
-        VgpuSampler sampler = vgpuCreateSampler(&samplerDescriptor);
-        vgpuDestroySampler(sampler);
-    }*/
-
-    vgpu_device* device = vgpu_create_device("00 - clear", &gpu_desc);
+    vgpu_init("00 - clear", &gpu_desc);
 
     while (!glfwWindowShouldClose(window))
     {
@@ -156,20 +127,20 @@ int main(int argc, char** argv)
             glfwSetWindowShouldClose(window, true);
         }
 
-        glfwGetFramebufferSize(window, &width, &height);
-        /*vgpuBeginFrame();
-        vgpuBeginCommandBuffer(commandBuffer);
-        VgpuColor clearColor = { 0.0f, 0.2f, 0.4f, 1.0f };
-        vgpuCmdBeginDefaultRenderPass(commandBuffer, clearColor, 1.0f, 0);
-        vgpuCmdEndRenderPass(commandBuffer);
-        vgpuEndCommandBuffer(commandBuffer);
-        vgpuSubmitCommandBuffers(1, &commandBuffer);
-        vgpuEndFrame();*/
+        vgpu_begin_frame();
+        vgpu_begin_render_pass_desc begin_pass_desc;
+        begin_pass_desc.render_pass = vgpu_get_default_render_pass();
+        begin_pass_desc.color_attachments[0] = (vgpu_clear_value){ 1.0f, 0.0f, 0.0f, 0.0f };
+        vgpu_cmd_begin_render_pass(&begin_pass_desc);
+        /*VgpuColor clearColor = { 0.0f, 0.2f, 0.4f, 1.0f };
+        vgpuCmdBeginDefaultRenderPass(commandBuffer, clearColor, 1.0f, 0);*/
+        vgpu_cmd_end_render_pass();
+        vgpu_end_frame();
         glfwPollEvents();
     }
 
     /*vgpuDestroyCommandBuffer(commandBuffer);*/
-    vgpu_destroy_device(device);
+    vgpu_shutdown();
     glfwTerminate();
 
 #elif defined(__ANDROID__)

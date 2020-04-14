@@ -137,11 +137,12 @@ if (BUILD_SHARED_LIBS)
 endif ()
 
 if (VGPU_BACKEND_D3D11)
-    target_sources(${PROJECT_NAME} PRIVATE
+    target_sources(vgpu PRIVATE
+        src/vgpu_d3d.h
         src/vgpu_d3d11.c
     )
 
-    target_compile_definitions(${PROJECT_NAME} PRIVATE VGPU_BACKEND_D3D11)
+    target_compile_definitions(vgpu PRIVATE VGPU_BACKEND_D3D11)
 endif ()
 
 
@@ -149,7 +150,6 @@ set_target_properties(vgpu PROPERTIES
     VERSION ${VGPU_VERSION}
     SOVERSION ${VGPU_VERSION_MAJOR}
     POSITION_INDEPENDENT_CODE ON
-    FOLDER "vgpu"
     C_STANDARD 99
 )
 

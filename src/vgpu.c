@@ -21,6 +21,124 @@
 //
 
 #include "vgpu_backend.h"
+#include <stdarg.h>
+
+#if defined(__ANDROID__)
+#   include <android/log.h>
+#elif TARGET_OS_IOS || TARGET_OS_TV
+#   include <sys/syslog.h>
+#elif TARGET_OS_MAC || defined(__linux__)
+#   include <unistd.h>
+#elif defined(_WIN32)
+#   ifndef WIN32_LEAN_AND_MEAN
+#       define WIN32_LEAN_AND_MEAN
+#   endif
+#   ifndef NOMINMAX
+#       define NOMINMAX
+#   endif
+#   include <Windows.h>
+#   include <strsafe.h>
+#elif defined(__EMSCRIPTEN__)
+#   include <emscripten.h>
+#endif
+
+#define VGPU_MAX_LOG_MESSAGE (4096)
+static const char* vgpu_log_priority_prefixes[VGPU_LOG_LEVEL_COUNT] = {
+    NULL,
+    "VERBOSE",
+    "DEBUG",
+    "INFO",
+    "WARN",
+    "ERROR",
+    "CRITICAL"
+};
+
+static void vgpu_default_log_callback(void* user_data, vgpu_log_level level, const char* message);
+static vgpu_log_callback s_log_function = vgpu_default_log_callback;
+static void* s_log_user_data = NULL;
+
+void vgpu_get_log_callback_function(vgpu_log_callback* callback, void** user_data) {
+    if (callback) {
+        *callback = s_log_function;
+    }
+    if (user_data) {
+        *user_data = s_log_user_data;
+    }
+}
+
+void vgpu_set_log_callback_function(vgpu_log_callback callback, void* user_data) {
+    s_log_function = callback;
+    s_log_user_data = user_data;
+}
+
+void vgpu_default_log_callback(void* user_data, vgpu_log_level level, const char* message) {
+#if defined(_WIN32)
+    size_t length = strlen(vgpu_log_priority_prefixes[level]) + 2 + strlen(message) + 1 + 1 + 1;
+    char* output = VGPU_ALLOCA(char, length);
+    snprintf(output, length, "%s: %s\r\n", vgpu_log_priority_prefixes[level], message);
+
+    const int buffer_size = MultiByteToWideChar(CP_UTF8, 0, output, (int)length, nullptr, 0);
+    if (buffer_size == 0)
+        return;
+
+    WCHAR* buffer = VGPU_ALLOCA(WCHAR, buffer_size);
+    if (MultiByteToWideChar(CP_UTF8, 0, message, -1, buffer, buffer_size) == 0)
+        return;
+
+    OutputDebugStringW(buffer);
+
+#   if !defined(NDEBUG) || defined(DEBUG) || defined(_DEBUG)
+    HANDLE handle;
+    switch (level)
+    {
+    case VGPU_LOG_LEVEL_ERROR:
+    case VGPU_LOG_LEVEL_WARN:
+        handle = GetStdHandle(STD_ERROR_HANDLE);
+        break;
+    default:
+        handle = GetStdHandle(STD_OUTPUT_HANDLE);
+        break;
+    }
+
+    WriteConsoleW(handle, buffer, (DWORD)wcslen(buffer), NULL, NULL);
+#   endif
+
+#endif
+}
+
+void vgpu_log(vgpu_log_level level, const char* message) {
+    if (s_log_function) {
+        s_log_function(s_log_user_data, level, message);
+    }
+}
+
+void vgpu_log_message_v(vgpu_log_level level, const char* format, va_list args) {
+    if (s_log_function) {
+        char message[VGPU_MAX_LOG_MESSAGE];
+        vsnprintf(message, VGPU_MAX_LOG_MESSAGE, format, args);
+        vgpu_log(level, message);
+    }
+}
+
+void vgpu_log_format(vgpu_log_level level, const char* format, ...) {
+    if (s_log_function) {
+        va_list args;
+        va_start(args, format);
+        vgpu_log_message_v(level, format, args);
+        va_end(args);
+    }
+}
+
+void vgpu_log_error(const char* message) {
+    vgpu_log(VGPU_LOG_LEVEL_ERROR, message);
+}
+
+void vgpu_log_error_format(const char* format, ...) {
+    va_list args;
+    va_start(args, format);
+    vgpu_log_message_v(VGPU_LOG_LEVEL_ERROR, format, args);
+    va_end(args);
+}
 
 vgpu_backend vgpu_get_default_platform_backend(void) {
 #if defined(_WIN32) || defined(_WIN64)
@@ -83,13 +201,18 @@ bool vgpu_is_backend_supported(vgpu_backend backend) {
     }
 }
 
-vgpu_device* vgpu_create_device(const char* app_name, const vgpu_desc* desc) {
+static vgpu_device* gpu_device = nullptr;
+
+bool vgpu_init(const char* app_name, const vgpu_desc* desc) {
+    if (gpu_device != nullptr) {
+        return true;
+    }
+
     vgpu_backend backend = desc->preferred_backend;
     if (backend == VGPU_BACKEND_DEFAULT || backend == VGPU_BACKEND_COUNT) {
         backend = vgpu_get_default_platform_backend();
     }
 
-    vgpu_device* device = NULL;
     switch (backend)
     {
     case VGPU_BACKEND_NULL:
@@ -97,25 +220,97 @@ vgpu_device* vgpu_create_device(const char* app_name, const vgpu_desc* desc) {
 
 #if defined(VGPU_BACKEND_D3D11)
     case VGPU_BACKEND_DIRECT3D11:
-        device = d3d11_create_device(app_name, desc);
+        gpu_device = d3d11_create_device(app_name, desc);
 #endif
     }
 
-    return device;
+    if (!gpu_device->init(gpu_device, app_name, desc)) {
+        return false;
+    }
+
+    return true;
 }
 
-void vgpu_destroy_device(vgpu_device* device) {
-    if (device == NULL)
+void vgpu_shutdown(void) {
+    if (gpu_device == nullptr) {
         return;
+    }
 
-    device->destroy(device);
+    gpu_device->destroy(gpu_device);
+    gpu_device = nullptr;
+}
+
+vgpu_backend vgpu_get_backend(void) {
+    return gpu_device->get_backend(gpu_device->renderer);
+}
+
+vgpu_features vgpu_get_features(void) {
+    return gpu_device->get_features(gpu_device->renderer);
+}
+
+vgpu_limits vgpu_get_limits(void) {
+    return gpu_device->get_limits(gpu_device->renderer);
+}
+
+vgpu_render_pass* vgpu_get_default_render_pass(void) {
+    return gpu_device->get_default_render_pass(gpu_device->renderer);
+}
+
+void vgpu_begin_frame(void) {
+    gpu_device->begin_frame(gpu_device->renderer);
+}
+
+void vgpu_end_frame(void) {
+    gpu_device->end_frame(gpu_device->renderer);
+}
+
+vgpu_texture* vgpu_texture_create(const vgpu_texture_desc* desc, const void* initial_data) {
+    return gpu_device->texture_create(gpu_device->renderer, desc, initial_data);
+}
+
+vgpu_texture* vgpu_texture_create_external(const vgpu_texture_desc* desc, void* handle) {
+    return gpu_device->texture_create_external(gpu_device->renderer, desc, handle);
+}
+
+void vgpu_texture_destroy(vgpu_texture* texture) {
+    gpu_device->texture_destroy(gpu_device->renderer, texture);
+}
+
+vgpu_sampler* vgpu_sampler_create(const vgpu_sampler_desc* desc) {
+    return gpu_device->sampler_create(gpu_device->renderer, desc);
+}
+
+void vgpu_sampler_destroy(vgpu_sampler* sampler) {
+    gpu_device->sampler_destroy(gpu_device->renderer, sampler);
+}
+
+vgpu_render_pass* vgpu_render_pass_create(const vgpu_render_pass_desc* desc) {
+   return gpu_device->render_pass_create(gpu_device->renderer, desc);
+}
+
+void vgpu_render_pass_destroy(vgpu_render_pass* render_pass) {
+    gpu_device->render_pass_destroy(gpu_device->renderer, render_pass);
+}
+
+void vgpu_render_pass_get_extent(vgpu_render_pass* render_pass, uint32_t* width, uint32_t* height) {
+    gpu_device->render_pass_get_extent(gpu_device->renderer, render_pass, width, height);
+}
+
+/* Commands */
+VGPU_EXPORT void vgpu_cmd_begin_render_pass(const vgpu_begin_render_pass_desc* begin_pass_desc) {
+    VGPU_ASSERT(begin_pass_desc);
+    gpu_device->cmd_begin_render_pass(gpu_device->renderer, begin_pass_desc);
+}
+
+void vgpu_cmd_end_render_pass(void) {
+    gpu_device->cmd_end_render_pass(gpu_device->renderer);
 }
 
 /* Pixel Format */
 typedef struct VgpuPixelFormatDesc
 {
-    VgpuPixelFormat         format;
-    const char*             name;
+    vgpu_pixel_format       format;
+    const char* name;
     VgpuPixelFormatType     type;
     uint8_t                 bitsPerPixel;
     struct
@@ -246,61 +441,61 @@ const VgpuPixelFormatDesc FormatDesc[] =
     { VGPU_PIXEL_FORMAT_ASTC12x12,              "ASTC12x12",            VGPU_PIXEL_FORMAT_TYPE_UNORM,       3,          {12, 12, 16, 1, 1},     {0, 0, 0, 0, 0, 0} },
 };
 
-uint32_t vgpu_get_format_bits_per_pixel(VgpuPixelFormat format)
+uint32_t vgpu_get_format_bits_per_pixel(vgpu_pixel_format format)
 {
     assert(FormatDesc[(uint32_t)format].format == format);
     return FormatDesc[(uint32_t)format].bitsPerPixel;
 }
 
-uint32_t vgpuGetFormatBlockSize(VgpuPixelFormat format)
+uint32_t vgpu_get_format_block_size(vgpu_pixel_format format)
 {
     assert(FormatDesc[(uint32_t)format].format == format);
     return FormatDesc[(uint32_t)format].compression.blockSize;
 }
 
-uint32_t vgpuGetFormatBlockWidth(VgpuPixelFormat format)
+uint32_t vgpuGetFormatBlockWidth(vgpu_pixel_format format)
 {
     assert(FormatDesc[(uint32_t)format].format == format);
     return FormatDesc[(uint32_t)format].compression.blockWidth;
 }
 
-uint32_t vgpuGetFormatBlockHeight(VgpuPixelFormat format)
+uint32_t vgpuGetFormatBlockHeight(vgpu_pixel_format format)
 {
     assert(FormatDesc[(uint32_t)format].format == format);
     return FormatDesc[(uint32_t)format].compression.blockHeight;
 }
 
-VgpuPixelFormatType vgpuGetFormatType(VgpuPixelFormat format)
+VgpuPixelFormatType vgpuGetFormatType(vgpu_pixel_format format)
 {
     assert(FormatDesc[(uint32_t)format].format == format);
     return FormatDesc[(uint32_t)format].type;
 }
 
-VgpuBool32 vgpuIsDepthFormat(VgpuPixelFormat format)
+bool vgpu_is_depth_format(vgpu_pixel_format format)
 {
-    assert(FormatDesc[format].format == format);
+    VGPU_ASSERT(FormatDesc[format].format == format);
     return FormatDesc[format].bits.depth > 0;
 }
 
-VgpuBool32 vgpuIsStencilFormat(VgpuPixelFormat format)
+bool vgpu_is_stencil_format(vgpu_pixel_format format)
 {
-    assert(FormatDesc[format].format == format);
+    VGPU_ASSERT(FormatDesc[format].format == format);
     return FormatDesc[format].bits.stencil > 0;
 }
 
-VgpuBool32 vgpuIsDepthStencilFormat(VgpuPixelFormat format)
+bool vgpu_is_depth_stencil_format(vgpu_pixel_format format)
 {
-    return vgpuIsDepthFormat(format) || vgpuIsStencilFormat(format);
+    return vgpu_is_depth_format(format) || vgpu_is_stencil_format(format);
 }
 
-VgpuBool32 vgpuIsCompressedFormat(VgpuPixelFormat format)
+bool vgpu_is_compressed_format(vgpu_pixel_format format)
 {
-    assert(FormatDesc[format].format == format);
+    VGPU_ASSERT(FormatDesc[format].format == format);
     return format >= VGPU_PIXEL_FORMAT_BC1_UNORM && format <= VGPU_PIXEL_FORMAT_PVRTC_RGBA4;
 }
 
-const char* vgpuGetFormatName(VgpuPixelFormat format)
+const char* vgpu_get_format_name(vgpu_pixel_format format)
 {
-    assert(FormatDesc[(uint32_t)format].format == format);
+    VGPU_ASSERT(FormatDesc[(uint32_t)format].format == format);
     return FormatDesc[(uint32_t)format].name;
 }
