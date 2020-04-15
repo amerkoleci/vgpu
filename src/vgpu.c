@@ -177,16 +177,16 @@ bool vgpu_is_backend_supported(vgpu_backend backend) {
     {
     case VGPU_BACKEND_NULL:
         return true;
-#if defined(VGPU_VK_BACKEND)
+#if defined(VGPU_VULKAN)
     case VGPU_BACKEND_VULKAN:
         return vgpu_vk_supported();
 #endif
-#if defined(VGPU_D3D12_BACKEND)
+#if defined(VGPU_D3D12)
     case VGPU_BACKEND_DIRECT3D12:
         return vgpu_d3d12_supported();
 #endif /* defined(VGPU_D3D12_BACKEND) */
 
-#if defined(VGPU_BACKEND_D3D11)
+#if defined(VGPU_D3D11)
     case VGPU_BACKEND_DIRECT3D11:
         return vgpu_d3d11_supported();
 #endif
@@ -218,7 +218,7 @@ bool vgpu_init(const char* app_name, const vgpu_desc* desc) {
     case VGPU_BACKEND_NULL:
         break;
 
-#if defined(VGPU_BACKEND_D3D11)
+#if defined(VGPU_D3D11)
     case VGPU_BACKEND_DIRECT3D11:
         gpu_device = d3d11_create_device(app_name, desc);
 #endif

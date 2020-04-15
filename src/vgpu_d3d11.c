@@ -880,7 +880,6 @@ vgpu_device* d3d11_create_device() {
 }
 
 bool vgpu_d3d11_supported() {
-
     if (d3d11.available_initialized) {
         return d3d11.available;
     }

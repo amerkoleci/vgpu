@@ -22,7 +22,7 @@
 
 # CMake version
 cmake_minimum_required(VERSION 3.10)
-project(vgpu LANGUAGES CXX C)
+project(vgpu)
 
 set(VGPU_VERSION_MAJOR 0)
 set(VGPU_VERSION_MINOR 1)
@@ -113,13 +113,35 @@ if (VGPU_BUILD_SAMPLES AND NOT (EMSCRIPTEN OR ANDROID))
 endif ()
 
 if (VGPU_BACKEND_VULKAN)
-    add_subdirectory(third_party/volk)
-    add_subdirectory(third_party/vk_mem_alloc)
-    add_subdirectory(third_party/spirv_reflect)
+    # Vulkan headers
+    add_library(vulkan INTERFACE)
+    set (VULKAN_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/third_party/khronos)
+    target_sources (vulkan INTERFACE 
+        ${VULKAN_INCLUDE_DIR}/vulkan/vk_platform.h
+        ${VULKAN_INCLUDE_DIR}/vulkan/vk_sdk_platform.h
+        ${VULKAN_INCLUDE_DIR}/vulkan/vulkan.h
+        ${VULKAN_INCLUDE_DIR}/vulkan/vulkan_core.h
+    )
+    target_include_directories(vulkan INTERFACE ${VULKAN_INCLUDE_DIR})
+    target_compile_definitions(vulkan INTERFACE VK_NO_PROTOTYPES)
 
-    set_property(TARGET "volk" PROPERTY FOLDER "third_party")
-    set_property(TARGET "vk_mem_alloc" PROPERTY FOLDER "third_party")
-    set_property(TARGET "spirv_reflect" PROPERTY FOLDER "third_party")
+    if(ANDROID)
+        target_compile_definitions(vulkan INTERFACE VK_USE_PLATFORM_ANDROID_KHR)
+    elseif(WIN32)
+        target_compile_definitions(vulkan INTERFACE VK_USE_PLATFORM_WIN32_KHR)
+    elseif(APPLE)
+        target_compile_definitions(vulkan INTERFACE VK_USE_PLATFORM_MACOS_MVK)
+    elseif(UNIX)
+        # See whether X11 is available. If not, fall back to direct-to-display mode.
+        find_package(X11 QUIET)
+        if (X11_FOUND)
+            target_compile_definitions(vulkan INTERFACE VK_USE_PLATFORM_XCB_KHR)
+        else()
+            set(DIRECT_TO_DISPLAY TRUE)
+            set(DIRECT_TO_DISPLAY TRUE PARENT_SCOPE)
+            target_compile_definitions(vulkan INTERFACE VK_USE_PLATFORM_DISPLAY_KHR)
+        endif()
+    endif()
 endif ()
 
 # vgpu
@@ -142,14 +164,33 @@ if (VGPU_BACKEND_D3D11)
         src/vgpu_d3d11.c
     )
 
-    target_compile_definitions(vgpu PRIVATE VGPU_BACKEND_D3D11)
+    target_compile_definitions(vgpu PRIVATE VGPU_D3D11)
 endif ()
 
+if (VGPU_BACKEND_VULKAN)
+    target_sources(vgpu PRIVATE
+        src/vk/vk.h
+        src/vk/vk.c
+        src/vk/vk_mem_alloc.h
+        src/vk/vk_mem_alloc.cpp
+        src/vgpu_vk.c
+    )
+
+    if (MSVC)
+        target_sources(vgpu PRIVATE
+            src/vk/vk_mem_alloc.natvis
+        )
+    endif ()
+
+    target_compile_definitions(vgpu PRIVATE VGPU_VULKAN)
+    target_link_libraries(vgpu PRIVATE vulkan)
+endif ()
 
 set_target_properties(vgpu PROPERTIES
     VERSION ${VGPU_VERSION}
     SOVERSION ${VGPU_VERSION_MAJOR}
     POSITION_INDEPENDENT_CODE ON
+    CXX_STANDARD 11
     C_STANDARD 99
 )
 
@@ -157,10 +198,6 @@ target_include_directories(vgpu PUBLIC
     "$<BUILD_INTERFACE:${VGPU_ROOT_DIR}/include>"
     "$<INSTALL_INTERFACE:${CMAKE_INSTALL_FULL_INCLUDEDIR}>"
 )
-
-if (VGPU_VULKAN)
-    target_link_libraries(vgpu PRIVATE volk vk_mem_alloc)
-endif ()
 
 if (MSVC)
     # Set warning level 3 and treat all other warnings as errors

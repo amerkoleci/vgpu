@@ -70,11 +70,26 @@ extern void __cdecl __debugbreak(void);
 #   error "Unsupported compiler"
 #endif
 
+#if defined( __clang__ )
+#   define VGPU_UNREACHABLE() __builtin_unreachable()
+#   define VGPU_THREADLOCAL _Thread_local
+#elif defined(__GNUC__)
+#   define VGPU_UNREACHABLE() __builtin_unreachable()
+#   define VGPU_THREADLOCAL __thread
+#elif defined(_MSC_VER)
+#   define VGPU_UNREACHABLE() __assume(false)
+#   define VGPU_THREADLOCAL __declspec(thread)
+#else
+#   define VGPU_UNREACHABLE()((void)0)
+#   define VGPU_THREADLOCAL
+#endif
+
 #define _VGPU_UNUSED(x) do { (void)sizeof(x); } while(0)
 #define _VGPU_ALLOC_HANDLE(type) ((type*)(calloc(1, sizeof(type))))
 
 #define _vgpu_min(a,b) ((a<b)?a:b)
 #define _vgpu_max(a,b) ((a>b)?a:b)
+#define _vgpu_clamp(v,v0,v1) ((v<v0)?(v0):((v>v1)?(v1):(v)))
 
 typedef struct vgpu_renderer vgpu_renderer;
 
@@ -115,8 +130,11 @@ typedef struct vgpu_device {
 extern bool vgpu_d3d11_supported();
 extern vgpu_device* d3d11_create_device();
 
-#define ASSIGN_DRIVER_FUNC(func, name) \
-	device->func = name##_##func;
+/* vulkan */
+extern bool vgpu_vk_supported();
+extern vgpu_device* vk_create_device();
+
+#define ASSIGN_DRIVER_FUNC(func, name) device->func = name##_##func;
 #define ASSIGN_DRIVER(name) \
 ASSIGN_DRIVER_FUNC(init, name)\
 ASSIGN_DRIVER_FUNC(destroy, name)\
