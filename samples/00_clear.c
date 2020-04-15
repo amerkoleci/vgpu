@@ -73,8 +73,9 @@ int main(int argc, char** argv)
     glfwInitHint(GLFW_COCOA_CHDIR_RESOURCES, GLFW_FALSE);
 #endif
 
-    vgpu_backend preferred_backend = VGPU_BACKEND_DEFAULT;
-    if (preferred_backend != VGPU_BACKEND_OPENGL)
+    //VGPUBackendType preferredBackend = VGPUBackendType_Force32;
+    VGPUBackendType preferredBackend = VGPUBackendType_D3D11;
+    if (preferredBackend != VGPUBackendType_OpenGL)
     {
         // By default on non opengl context creation.
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
@@ -89,7 +90,7 @@ int main(int argc, char** argv)
     }
 
     GLFWwindow* window = glfwCreateWindow(1280, 720, "vgpu", 0, 0);
-    if (preferred_backend == VGPU_BACKEND_OPENGL)
+    if (preferredBackend == VGPUBackendType_OpenGL)
     {
         glfwMakeContextCurrent(window);
         glfwSwapInterval(1);
@@ -98,12 +99,11 @@ int main(int argc, char** argv)
     int width, height;
     glfwGetWindowSize(window, &width, &height);
 
-    vgpu_desc gpu_desc = {
-        .preferred_backend = preferred_backend,
-        .swapchain = &(vgpu_swap_chain_desc) {
+    VGpuDeviceDescriptor gpu_desc = {
+        .preferredBackend = preferredBackend,
+        .swapchain = &(VGPUSwapChainDescriptor) {
 #if defined(_WIN32) || defined(_WIN64)
-            .native_handle = (uint64_t)glfwGetWin32Window(window),
-            .native_display = (uint64_t)GetModuleHandle(NULL),
+            .native_handle = (void*)glfwGetWin32Window(window),
 #elif defined(__linux__)
 #elif defined(__APPLE__)
 #endif
@@ -118,7 +118,7 @@ int main(int argc, char** argv)
     gpu_desc.flags |= VGPU_CONFIG_FLAGS_VALIDATION;
 #endif
 
-    vgpu_init("00 - clear", &gpu_desc);
+    VGPUDevice device = vgpuDeviceCreate("00 - clear", &gpu_desc);
 
     while (!glfwWindowShouldClose(window))
     {
@@ -127,20 +127,20 @@ int main(int argc, char** argv)
             glfwSetWindowShouldClose(window, true);
         }
 
-        vgpu_begin_frame();
+        vgpu_begin_frame(device);
         vgpu_begin_render_pass_desc begin_pass_desc;
-        begin_pass_desc.render_pass = vgpu_get_default_render_pass();
+        begin_pass_desc.render_pass = vgpu_get_default_render_pass(device);
         begin_pass_desc.color_attachments[0] = (vgpu_clear_value){ 1.0f, 0.0f, 0.0f, 0.0f };
         vgpu_cmd_begin_render_pass(&begin_pass_desc);
         /*VgpuColor clearColor = { 0.0f, 0.2f, 0.4f, 1.0f };
         vgpuCmdBeginDefaultRenderPass(commandBuffer, clearColor, 1.0f, 0);*/
         vgpu_cmd_end_render_pass();
-        vgpu_end_frame();
+        vgpu_end_frame(device);
         glfwPollEvents();
     }
 
     /*vgpuDestroyCommandBuffer(commandBuffer);*/
-    vgpu_shutdown();
+    vgpuDeviceDestroy(device);
     glfwTerminate();
 
 #elif defined(__ANDROID__)

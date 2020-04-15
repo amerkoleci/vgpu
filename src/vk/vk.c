@@ -24,7 +24,7 @@ HMODULE vk_module = NULL;
 void* vk_module = NULL;
 #endif
 
-bool agpu_vk_init_loader() {
+bool agpu_vk_init_loader(void) {
 #if defined(_WIN32)
     vk_module = LoadLibraryA("vulkan-1.dll");
     if (!vk_module)

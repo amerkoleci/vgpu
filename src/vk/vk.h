@@ -145,7 +145,7 @@ extern "C" {
     /* Device functions */
     VK_FOREACH_DEVICE(VK_FUNC_DECLARE);
 
-    bool agpu_vk_init_loader();
+    bool agpu_vk_init_loader(void);
     uint32_t agpu_vk_get_instance_version(void);
     void agpu_vk_init_instance(VkInstance instance);
     void agpu_vk_init_device(VkDevice device);

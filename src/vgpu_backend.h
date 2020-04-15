@@ -54,6 +54,8 @@
 #   define VGPU_FREE(p) free(p)
 #endif
 
+#define VGPU_CHECK(c, s) if (!(c)) { vgpu_log_error(s); _VGPU_BREAKPOINT(); }
+
 #if defined(__GNUC__) || defined(__clang__)
 #   if defined(__i386__) || defined(__x86_64__)
 #       define _VGPU_BREAKPOINT() __asm__ __volatile__("int $3\n\t")
@@ -93,13 +95,13 @@ extern void __cdecl __debugbreak(void);
 
 typedef struct vgpu_renderer vgpu_renderer;
 
-typedef struct vgpu_device {
+typedef struct VGPUDevice_T {
     /* Opaque pointer for the renderer. */
     vgpu_renderer* renderer;
 
-    bool (*init)(struct vgpu_device* device, const char* app_name, const vgpu_desc* desc);
-    void (*destroy)(struct vgpu_device* device);
-    vgpu_backend(*get_backend)();
+    bool (*init)(VGPUDevice device, const char* app_name, const VGpuDeviceDescriptor* descriptor);
+    void (*destroy)(VGPUDevice device);
+    VGPUBackendType(*getBackend)(void);
     vgpu_features(*get_features)(vgpu_renderer* driver_data);
     vgpu_limits(*get_limits)(vgpu_renderer* driver_data);
     vgpu_render_pass* (*get_default_render_pass)(vgpu_renderer* driver_data);
@@ -108,13 +110,13 @@ typedef struct vgpu_device {
     void (*end_frame)(vgpu_renderer* driver_data);
 
     /* Texture */
-    vgpu_texture* (*texture_create)(vgpu_renderer* driver_data, const vgpu_texture_desc* desc, const void* initial_data);
-    vgpu_texture* (*texture_create_external)(vgpu_renderer* driver_data, const vgpu_texture_desc* desc, void* handle);
-    void (*texture_destroy)(vgpu_renderer* driver_data, vgpu_texture* texture);
+    VGPUTexture (*textureCreate)(vgpu_renderer* driver_data, const VGPUTextureDescriptor* descriptor, const void* initial_data);
+    VGPUTexture (*textureCreateExternal)(vgpu_renderer* driver_data, const VGPUTextureDescriptor* descriptor, void* handle);
+    void (*textureDestroy)(vgpu_renderer* driver_data, VGPUTexture texture);
 
     /* Sampler */
-    vgpu_sampler* (*sampler_create)(vgpu_renderer* driver_data, const vgpu_sampler_desc* desc);
-    void (*sampler_destroy)(vgpu_renderer* driver_data, vgpu_sampler* sampler);
+    VGPUSampler (*samplerCreate)(vgpu_renderer* driver_data, const VGPUSamplerDescriptor* descriptor);
+    void (*samplerDestroy)(vgpu_renderer* driver_data, VGPUSampler sampler);
 
     /* RenderPass */
     vgpu_render_pass* (*render_pass_create)(vgpu_renderer* driver_data, const vgpu_render_pass_desc* desc);
@@ -124,31 +126,31 @@ typedef struct vgpu_device {
     /* Commands */
     void (*cmd_begin_render_pass)(vgpu_renderer* driver_data, const vgpu_begin_render_pass_desc* begin_pass_desc);
     void (*cmd_end_render_pass)(vgpu_renderer* driver_data);
-} vgpu_device;
+} VGPUDevice_T;
 
 /* d3d11 */
-extern bool vgpu_d3d11_supported();
-extern vgpu_device* d3d11_create_device();
+extern bool vgpu_d3d11_supported(void);
+extern VGPUDevice d3d11_create_device(void);
 
 /* vulkan */
-extern bool vgpu_vk_supported();
-extern vgpu_device* vk_create_device();
+extern bool vgpu_vk_supported(void);
+extern VGPUDevice vk_create_device(void);
 
 #define ASSIGN_DRIVER_FUNC(func, name) device->func = name##_##func;
 #define ASSIGN_DRIVER(name) \
 ASSIGN_DRIVER_FUNC(init, name)\
 ASSIGN_DRIVER_FUNC(destroy, name)\
-ASSIGN_DRIVER_FUNC(get_backend, name)\
+ASSIGN_DRIVER_FUNC(getBackend, name)\
 ASSIGN_DRIVER_FUNC(get_features, name)\
 ASSIGN_DRIVER_FUNC(get_limits, name)\
 ASSIGN_DRIVER_FUNC(get_default_render_pass, name)\
 ASSIGN_DRIVER_FUNC(begin_frame, name)\
 ASSIGN_DRIVER_FUNC(end_frame, name)\
-ASSIGN_DRIVER_FUNC(texture_create, name)\
-ASSIGN_DRIVER_FUNC(texture_create_external, name)\
-ASSIGN_DRIVER_FUNC(texture_destroy, name)\
-ASSIGN_DRIVER_FUNC(sampler_create, name)\
-ASSIGN_DRIVER_FUNC(sampler_destroy, name)\
+ASSIGN_DRIVER_FUNC(textureCreate, name)\
+ASSIGN_DRIVER_FUNC(textureCreateExternal, name)\
+ASSIGN_DRIVER_FUNC(textureDestroy, name)\
+ASSIGN_DRIVER_FUNC(samplerCreate, name)\
+ASSIGN_DRIVER_FUNC(samplerDestroy, name)\
 ASSIGN_DRIVER_FUNC(render_pass_create, name)\
 ASSIGN_DRIVER_FUNC(render_pass_destroy, name)\
 ASSIGN_DRIVER_FUNC(render_pass_get_extent, name)\
