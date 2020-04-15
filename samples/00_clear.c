@@ -73,8 +73,8 @@ int main(int argc, char** argv)
     glfwInitHint(GLFW_COCOA_CHDIR_RESOURCES, GLFW_FALSE);
 #endif
 
-    //VGPUBackendType preferredBackend = VGPUBackendType_Force32;
-    VGPUBackendType preferredBackend = VGPUBackendType_D3D11;
+    VGPUBackendType preferredBackend = VGPUBackendType_Force32;
+    //VGPUBackendType preferredBackend = VGPUBackendType_D3D11;
     if (preferredBackend != VGPUBackendType_OpenGL)
     {
         // By default on non opengl context creation.
@@ -110,7 +110,7 @@ int main(int argc, char** argv)
             .width = width,
             .height = height,
             .fullscreen = false,
-            .vsync = true
+            .presentMode = VGPUPresentMode_Fifo
       },
     };
 
@@ -118,7 +118,9 @@ int main(int argc, char** argv)
     gpu_desc.flags |= VGPU_CONFIG_FLAGS_VALIDATION;
 #endif
 
-    VGPUDevice device = vgpuDeviceCreate("00 - clear", &gpu_desc);
+    if (!vgpuInit("00 - clear", &gpu_desc)) {
+
+    }
 
     while (!glfwWindowShouldClose(window))
     {
@@ -127,20 +129,20 @@ int main(int argc, char** argv)
             glfwSetWindowShouldClose(window, true);
         }
 
-        vgpu_begin_frame(device);
+        vgpuBeginFrame();
         vgpu_begin_render_pass_desc begin_pass_desc;
-        begin_pass_desc.render_pass = vgpu_get_default_render_pass(device);
+        begin_pass_desc.renderPass = vgpuGetDefaultRenderPass();
         begin_pass_desc.color_attachments[0] = (vgpu_clear_value){ 1.0f, 0.0f, 0.0f, 0.0f };
         vgpu_cmd_begin_render_pass(&begin_pass_desc);
         /*VgpuColor clearColor = { 0.0f, 0.2f, 0.4f, 1.0f };
         vgpuCmdBeginDefaultRenderPass(commandBuffer, clearColor, 1.0f, 0);*/
         vgpu_cmd_end_render_pass();
-        vgpu_end_frame(device);
+        vgpuEndFrame();
         glfwPollEvents();
     }
 
     /*vgpuDestroyCommandBuffer(commandBuffer);*/
-    vgpuDeviceDestroy(device);
+    vgpuShutdown();
     glfwTerminate();
 
 #elif defined(__ANDROID__)

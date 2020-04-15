@@ -112,37 +112,6 @@ if (VGPU_BUILD_SAMPLES AND NOT (EMSCRIPTEN OR ANDROID))
     unset (LIB_SUFFIX CACHE)
 endif ()
 
-if (VGPU_BACKEND_VULKAN)
-    # Vulkan headers
-    add_library(vulkan INTERFACE)
-    set (VULKAN_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/third_party/khronos)
-    target_sources (vulkan INTERFACE 
-        ${VULKAN_INCLUDE_DIR}/vulkan/vk_platform.h
-        ${VULKAN_INCLUDE_DIR}/vulkan/vk_sdk_platform.h
-        ${VULKAN_INCLUDE_DIR}/vulkan/vulkan.h
-        ${VULKAN_INCLUDE_DIR}/vulkan/vulkan_core.h
-    )
-    target_include_directories(vulkan INTERFACE ${VULKAN_INCLUDE_DIR})
-    target_compile_definitions(vulkan INTERFACE VK_NO_PROTOTYPES)
-
-    if(ANDROID)
-        target_compile_definitions(vulkan INTERFACE VK_USE_PLATFORM_ANDROID_KHR)
-    elseif(WIN32)
-        target_compile_definitions(vulkan INTERFACE VK_USE_PLATFORM_WIN32_KHR)
-    elseif(APPLE)
-        target_compile_definitions(vulkan INTERFACE VK_USE_PLATFORM_MACOS_MVK)
-    elseif(UNIX)
-        # See whether X11 is available. If not, fall back to direct-to-display mode.
-        find_package(X11 QUIET)
-        if (X11_FOUND)
-            target_compile_definitions(vulkan INTERFACE VK_USE_PLATFORM_XCB_KHR)
-        else()
-            set(DIRECT_TO_DISPLAY TRUE)
-            set(DIRECT_TO_DISPLAY TRUE PARENT_SCOPE)
-            target_compile_definitions(vulkan INTERFACE VK_USE_PLATFORM_DISPLAY_KHR)
-        endif()
-    endif()
-endif ()
 
 # vgpu
 set(SOURCE_FILES 
@@ -169,8 +138,7 @@ endif ()
 
 if (VGPU_BACKEND_VULKAN)
     target_sources(vgpu PRIVATE
-        src/vk/vk.h
-        src/vk/vk.c
+        src/vk/vkbind.h
         src/vk/vk_mem_alloc.h
         src/vk/vk_mem_alloc.cpp
         src/vgpu_vk.c
@@ -183,7 +151,7 @@ if (VGPU_BACKEND_VULKAN)
     endif ()
 
     target_compile_definitions(vgpu PRIVATE VGPU_VULKAN)
-    target_link_libraries(vgpu PRIVATE vulkan)
+    #target_link_libraries(vgpu PRIVATE vulkan)
 endif ()
 
 set_target_properties(vgpu PROPERTIES
