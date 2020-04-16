@@ -116,6 +116,7 @@ endif ()
 # vgpu
 set(SOURCE_FILES 
     include/vgpu/vgpu.h
+    src/stb_ds.h
     src/vgpu_backend.h
     src/vgpu.c
 )

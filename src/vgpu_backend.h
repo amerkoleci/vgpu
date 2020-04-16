@@ -103,30 +103,35 @@ typedef struct VGPUDeviceImpl {
     bool (*init)(VGPUDevice device, const char* app_name, const VGpuDeviceDescriptor* descriptor);
     void (*destroy)(VGPUDevice device);
     VGPUBackendType(*getBackend)(void);
-    vgpu_features(*get_features)(VGPURenderer* driver_data);
-    vgpu_limits(*get_limits)(VGPURenderer* driver_data);
+    VGPUFeatures(*getFeatures)(VGPURenderer* driver_data);
+    vgpu_limits(*getLimits)(VGPURenderer* driver_data);
     VGPURenderPass (*get_default_render_pass)(VGPURenderer* driver_data);
 
-    void (*begin_frame)(VGPURenderer* driver_data);
-    void (*end_frame)(VGPURenderer* driver_data);
+    void (*begin_frame)(VGPURenderer* driverData);
+    void (*end_frame)(VGPURenderer* driverData);
+
+    /* Buffer */
+    VGPUBuffer(*bufferCreate)(VGPURenderer* driverData, const VGPUBufferDescriptor* descriptor);
+    void (*bufferDestroy)(VGPURenderer* driverData, VGPUBuffer handle);
 
     /* Texture */
-    VGPUTexture (*textureCreate)(VGPURenderer* driver_data, const VGPUTextureDescriptor* descriptor, const void* initial_data);
-    VGPUTexture (*textureCreateExternal)(VGPURenderer* driver_data, const VGPUTextureDescriptor* descriptor, void* handle);
-    void (*textureDestroy)(VGPURenderer* driver_data, VGPUTexture handle);
+    VGPUTexture (*textureCreate)(VGPURenderer* driverData, const VGPUTextureDescriptor* descriptor, const void* initial_data);
+    VGPUTexture (*textureCreateExternal)(VGPURenderer* driverData, const VGPUTextureDescriptor* descriptor, void* handle);
+    void (*textureDestroy)(VGPURenderer* driverData, VGPUTexture handle);
 
     /* Sampler */
     VGPUSampler (*samplerCreate)(VGPURenderer* driver_data, const VGPUSamplerDescriptor* descriptor);
     void (*samplerDestroy)(VGPURenderer* driver_data, VGPUSampler handle);
 
     /* RenderPass */
-    VGPURenderPass (*renderPassCreate)(VGPURenderer* driverData, const vgpu_render_pass_desc* desc);
+    VGPURenderPass (*renderPassCreate)(VGPURenderer* driverData, const VGPURenderPassDescriptor* descriptor);
     void (*renderPassDestroy)(VGPURenderer* driverData, VGPURenderPass handle);
     void (*renderPassGetExtent)(VGPURenderer* driverData, VGPURenderPass handle, uint32_t* width, uint32_t* height);
+    void (*renderPassSetClearColors)(VGPURenderer* driverData, VGPURenderPass handle, uint32_t firstAttachment, uint32_t count, const VGPUColor* pColors);
 
     /* Commands */
-    void (*cmd_begin_render_pass)(VGPURenderer* driver_data, const vgpu_begin_render_pass_desc* begin_pass_desc);
-    void (*cmd_end_render_pass)(VGPURenderer* driver_data);
+    void (*cmdBeginRenderPass)(VGPURenderer* driverData, VGPURenderPass handle);
+    void (*cmdEndRenderPass)(VGPURenderer* driverData);
 } VGPUDeviceImpl;
 
 /* d3d11 */
@@ -142,11 +147,13 @@ extern VGPUDevice vk_create_device(void);
 ASSIGN_DRIVER_FUNC(init, name)\
 ASSIGN_DRIVER_FUNC(destroy, name)\
 ASSIGN_DRIVER_FUNC(getBackend, name)\
-ASSIGN_DRIVER_FUNC(get_features, name)\
-ASSIGN_DRIVER_FUNC(get_limits, name)\
+ASSIGN_DRIVER_FUNC(getFeatures, name)\
+ASSIGN_DRIVER_FUNC(getLimits, name)\
 ASSIGN_DRIVER_FUNC(get_default_render_pass, name)\
 ASSIGN_DRIVER_FUNC(begin_frame, name)\
 ASSIGN_DRIVER_FUNC(end_frame, name)\
+ASSIGN_DRIVER_FUNC(bufferCreate, name)\
+ASSIGN_DRIVER_FUNC(bufferDestroy, name)\
 ASSIGN_DRIVER_FUNC(textureCreate, name)\
 ASSIGN_DRIVER_FUNC(textureCreateExternal, name)\
 ASSIGN_DRIVER_FUNC(textureDestroy, name)\
@@ -155,5 +162,6 @@ ASSIGN_DRIVER_FUNC(samplerDestroy, name)\
 ASSIGN_DRIVER_FUNC(renderPassCreate, name)\
 ASSIGN_DRIVER_FUNC(renderPassDestroy, name)\
 ASSIGN_DRIVER_FUNC(renderPassGetExtent, name)\
-ASSIGN_DRIVER_FUNC(cmd_begin_render_pass, name)\
-ASSIGN_DRIVER_FUNC(cmd_end_render_pass, name)
+ASSIGN_DRIVER_FUNC(renderPassSetClearColors, name)\
+ASSIGN_DRIVER_FUNC(cmdBeginRenderPass, name)\
+ASSIGN_DRIVER_FUNC(cmdEndRenderPass, name)

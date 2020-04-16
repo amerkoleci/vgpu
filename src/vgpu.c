@@ -21,6 +21,8 @@
 //
 
 #include "vgpu_backend.h"
+#define STB_DS_IMPLEMENTATION
+#include "stb_ds.h"
 #include <stdarg.h>
 
 #if defined(__ANDROID__)
@@ -261,12 +263,12 @@ VGPUBackendType vgpuGetBackend(void) {
     return s_gpuDevice->getBackend();
 }
 
-vgpu_features vgpuGetFeatures(void) {
-    return s_gpuDevice->get_features(s_gpuDevice->renderer);
+VGPUFeatures vgpuGetFeatures(void) {
+    return s_gpuDevice->getFeatures(s_gpuDevice->renderer);
 }
 
 vgpu_limits vgpuGetLimits(void) {
-    return s_gpuDevice->get_limits(s_gpuDevice->renderer);
+    return s_gpuDevice->getLimits(s_gpuDevice->renderer);
 }
 
 VGPURenderPass vgpuGetDefaultRenderPass(void) {
@@ -279,6 +281,17 @@ void vgpuBeginFrame(void) {
 
 void vgpuEndFrame(void) {
     s_gpuDevice->end_frame(s_gpuDevice->renderer);
+}
+
+/* Buffer */
+VGPUBuffer vgpuBufferCreate(const VGPUBufferDescriptor* descriptor)
+{
+    return s_gpuDevice->bufferCreate(s_gpuDevice->renderer, descriptor);
+}
+
+void vgpuBufferDestroy(VGPUBuffer buffer)
+{
+    s_gpuDevice->bufferDestroy(s_gpuDevice->renderer, buffer);
 }
 
 VGPUTexture vgpuTextureCreate(const VGPUTextureDescriptor* descriptor, const void* initial_data) {
@@ -301,8 +314,10 @@ void vgpuSamplerDestroy(VGPUSampler sampler) {
     s_gpuDevice->samplerDestroy(s_gpuDevice->renderer, sampler);
 }
 
-VGPURenderPass vgpuRenderPassCreate(const vgpu_render_pass_desc* desc) {
-    return s_gpuDevice->renderPassCreate(s_gpuDevice->renderer, desc);
+VGPURenderPass vgpuRenderPassCreate(const VGPURenderPassDescriptor* descriptor)
+{
+    VGPU_ASSERT(descriptor);
+    return s_gpuDevice->renderPassCreate(s_gpuDevice->renderer, descriptor);
 }
 
 void vgpuRenderPassDestroy(VGPURenderPass renderPass) {
@@ -313,14 +328,19 @@ void vgpuRenderPassGetExtent(VGPURenderPass renderPass, uint32_t* width, uint32_
     s_gpuDevice->renderPassGetExtent(s_gpuDevice->renderer, renderPass, width, height);
 }
 
-/* Commands */
-VGPU_EXPORT void vgpu_cmd_begin_render_pass(const vgpu_begin_render_pass_desc* begin_pass_desc) {
-    VGPU_ASSERT(begin_pass_desc);
-    //gpu_device->cmd_begin_render_pass(gpu_device->renderer, begin_pass_desc);
+void vgpuRenderPassSetClearColors(VGPURenderPass renderPass, uint32_t firstAttachment, uint32_t count, const VGPUColor* pColors) {
+    s_gpuDevice->renderPassSetClearColors(s_gpuDevice->renderer, renderPass, firstAttachment, count, pColors);
 }
 
-void vgpu_cmd_end_render_pass(void) {
-    //gpu_device->cmd_end_render_pass(gpu_device->renderer);
+/* Commands */
+VGPU_EXPORT void vgpuCmdBeginRenderPass(VGPURenderPass renderPass)
+{
+    VGPU_ASSERT(renderPass);
+    s_gpuDevice->cmdBeginRenderPass(s_gpuDevice->renderer, renderPass);
+}
+
+void vgpuCmdEndRenderPass(void) {
+    s_gpuDevice->cmdEndRenderPass(s_gpuDevice->renderer);
 }
 
 /* Pixel Format */

@@ -21,6 +21,7 @@
 //
 
 #include "vgpu_backend.h"
+#include "stb_ds.h"
 
 #if defined(_WIN32) || defined(_WIN64)
 #   define   VK_SURFACE_EXT             "VK_KHR_win32_surface"
@@ -88,24 +89,78 @@ typedef struct VGPUSwapchainVk {
     uint32_t height;
     VkPresentModeKHR presentMode;
     VGPUTextureFormat color_format;
-
+    VGPUColor       colorClearValue;
+    uint32_t imageIndex;
     uint32_t imageCount;
     VGPUTexture backbufferTextures[4];
     VGPUTexture depthStencilTexture;
-    VkRenderPass vkRenderPass;
-    VGPURenderPass renderPass;
+    VGPURenderPass renderPasses[4];
 } VGPUSwapchainVk;
 
-typedef struct VGPUTextureVk {
+typedef struct {
+    VkBuffer handle;
+    VmaAllocation memory;
+} VGPUBufferVk;
+
+typedef struct {
     VkFormat format;
     VkImage handle;
     VkImageView view;
     VmaAllocation memory;
     bool external;
+    VGPUTextureLayout layout;
     VGPUExtent3D size;
 } VGPUTextureVk;
 
-typedef struct VGPUVkRenderer {
+typedef struct {
+    VkSampler handle;
+} VGPUSamplerVk;
+
+typedef struct {
+    VkRenderPass renderPass;
+    VkFramebuffer framebuffer;
+    VkRect2D renderArea;
+    uint32_t attachmentCount;
+    VGPUTexture textures[VGPU_MAX_COLOR_ATTACHMENTS + 1];
+    VkClearValue clears[VGPU_MAX_COLOR_ATTACHMENTS + 1];
+} VGPURenderPassVk;
+
+typedef struct {
+    VkObjectType type;
+    void* handle1;
+    void* handle2;
+} VGPUVkObjectRef;
+
+typedef struct {
+    VGPUVkObjectRef* data;
+    size_t capacity;
+    size_t length;
+} VGPUVkFreeList;
+
+typedef struct {
+    uint32_t index;
+    VkFence fence;
+    VkSemaphore imageAvailableSemaphore;
+    VkSemaphore renderCompleteSemaphore;
+    VkCommandBuffer commandBuffer;
+    VGPUVkFreeList freeList;
+} VGPUVkFrame;
+
+typedef struct
+{
+    uint32_t colorFormatsCount;
+    VkFormat colorFormats[VGPU_MAX_COLOR_ATTACHMENTS];
+    VGPULoadOp loadOperations[VGPU_MAX_COLOR_ATTACHMENTS];
+    VkFormat depthStencilFormat;
+} RenderPassHash;
+
+typedef struct
+{
+    RenderPassHash key;
+    VkRenderPass value;
+} RenderPassHashMap;
+
+typedef struct VGPURendererVk {
     /* Associated vgpu_device */
     VGPUDevice gpu_device;
 
@@ -115,7 +170,7 @@ typedef struct VGPUVkRenderer {
     bool api_version_12;
     vk_physical_device_features device_features;
 
-    vgpu_features features;
+    VGPUFeatures features;
     vgpu_limits limits;
 
     VkbAPI api;
@@ -125,10 +180,17 @@ typedef struct VGPUVkRenderer {
     VkQueue graphics_queue;
     VkQueue compute_queue;
     VkQueue copy_queue;
-    VmaAllocator memory_allocator;
+    VmaAllocator allocator;
+    VkCommandPool commandPool;
+
+    VGPUVkFrame frames[3];
+    VGPUVkFrame* frame;
+    uint32_t max_inflight_frames;
 
     VGPUSwapchainVk swapchains[_VGPU_VK_MAX_SWAPCHAINS];
-} VGPUVkRenderer;
+
+    RenderPassHashMap* renderPassHashMap;
+} VGPURendererVk;
 
 static struct {
     bool available_initialized;
@@ -401,13 +463,351 @@ static bool vk_create_surface(void* native_handle, VkSurfaceKHR* pSurface) {
     return true;
 }
 
-static VkImageView vgpuVkCreateImageView(
+/* Conversion functions */
+static inline VkFormat GetVkFormat(VGPUTextureFormat format)
+{
+    static VkFormat formats[VGPUTextureFormat_Count] = {
+        VK_FORMAT_UNDEFINED,
+        // 8-bit pixel formats
+        VK_FORMAT_R8_UNORM,
+        VK_FORMAT_R8_SNORM,
+        VK_FORMAT_R8_UINT,
+        VK_FORMAT_R8_SINT,
+        // 16-bit pixel formats
+        VK_FORMAT_R16_UNORM,
+        VK_FORMAT_R16_SNORM,
+        VK_FORMAT_R16_UINT,
+        VK_FORMAT_R16_SINT,
+        VK_FORMAT_R16_SFLOAT,
+        VK_FORMAT_R8G8_UNORM,
+        VK_FORMAT_R8G8_SNORM,
+        VK_FORMAT_R8G8_UINT,
+        VK_FORMAT_R8G8_SINT,
+
+        // Packed 16-bit pixel formats
+        //VK_FORMAT_B5G6R5_UNORM_PACK16,
+        //VK_FORMAT_B4G4R4A4_UNORM_PACK16,
+
+        // 32-bit pixel formats
+        VK_FORMAT_R32_UINT,
+        VK_FORMAT_R32_SINT,
+        VK_FORMAT_R32_SFLOAT,
+        //VK_FORMAT_R16G16_UNORM,
+        //VK_FORMAT_R16G16_SNORM,
+        VK_FORMAT_R16G16_UINT,
+        VK_FORMAT_R16G16_SINT,
+        VK_FORMAT_R16G16_SFLOAT,
+
+        VK_FORMAT_R8G8B8A8_UNORM,
+        VK_FORMAT_R8G8B8A8_SRGB,
+        VK_FORMAT_R8G8B8A8_SNORM,
+        VK_FORMAT_R8G8B8A8_UINT,
+        VK_FORMAT_R8G8B8A8_SINT,
+
+        VK_FORMAT_B8G8R8A8_UNORM,
+        VK_FORMAT_B8G8R8A8_SRGB,
+
+        // Packed 32-Bit Pixel formats
+        VK_FORMAT_A2B10G10R10_UNORM_PACK32,
+        VK_FORMAT_B10G11R11_UFLOAT_PACK32,
+
+        // 64-Bit Pixel Formats
+        VK_FORMAT_R32G32_UINT,
+        VK_FORMAT_R32G32_SINT,
+        VK_FORMAT_R32G32_SFLOAT,
+        //VK_FORMAT_R16G16B16A16_UNORM,
+        //VK_FORMAT_R16G16B16A16_SNORM,
+        VK_FORMAT_R16G16B16A16_UINT,
+        VK_FORMAT_R16G16B16A16_SINT,
+        VK_FORMAT_R16G16B16A16_SFLOAT,
+
+        // 128-Bit Pixel Formats
+        VK_FORMAT_R32G32B32A32_UINT,
+        VK_FORMAT_R32G32B32A32_SINT,
+        VK_FORMAT_R32G32B32A32_SFLOAT,
+
+        // Depth-stencil formats
+        //VK_FORMAT_D16_UNORM,
+        VK_FORMAT_D32_SFLOAT,
+        VK_FORMAT_D24_UNORM_S8_UINT, /* Dawn maps to VK_FORMAT_D32_SFLOAT */
+        VK_FORMAT_D32_SFLOAT_S8_UINT,
+
+        // Compressed BC formats
+        VK_FORMAT_BC1_RGB_UNORM_BLOCK,
+        VK_FORMAT_BC1_RGB_SRGB_BLOCK,
+        VK_FORMAT_BC2_UNORM_BLOCK,
+        VK_FORMAT_BC2_SRGB_BLOCK,
+        VK_FORMAT_BC3_UNORM_BLOCK,
+        VK_FORMAT_BC3_SRGB_BLOCK,
+        VK_FORMAT_BC4_UNORM_BLOCK,
+        VK_FORMAT_BC4_SNORM_BLOCK,
+        VK_FORMAT_BC5_UNORM_BLOCK,
+        VK_FORMAT_BC5_SNORM_BLOCK,
+        VK_FORMAT_BC6H_UFLOAT_BLOCK,
+        VK_FORMAT_BC6H_SFLOAT_BLOCK,
+        VK_FORMAT_BC7_UNORM_BLOCK,
+        VK_FORMAT_BC7_SRGB_BLOCK,
+    };
+
+    return formats[format];
+}
+
+static inline VkImageAspectFlags GetVkAspectMask(VkFormat format)
+{
+    switch (format)
+    {
+    case VK_FORMAT_UNDEFINED:
+        return 0;
+
+    case VK_FORMAT_S8_UINT:
+        return VK_IMAGE_ASPECT_STENCIL_BIT;
+
+    case VK_FORMAT_D16_UNORM_S8_UINT:
+    case VK_FORMAT_D24_UNORM_S8_UINT:
+    case VK_FORMAT_D32_SFLOAT_S8_UINT:
+        return VK_IMAGE_ASPECT_STENCIL_BIT | VK_IMAGE_ASPECT_DEPTH_BIT;
+
+    case VK_FORMAT_D16_UNORM:
+    case VK_FORMAT_D32_SFLOAT:
+    case VK_FORMAT_X8_D24_UNORM_PACK32:
+        return VK_IMAGE_ASPECT_DEPTH_BIT;
+
+    default:
+        return VK_IMAGE_ASPECT_COLOR_BIT;
+    }
+}
+
+static VkCompareOp getVkCompareOp(VGPUCompareFunction function, VkCompareOp defaultValue)
+{
+    switch (function)
+    {
+    case VGPUCompareFunction_Never:
+        return VK_COMPARE_OP_NEVER;
+    case VGPUCompareFunction_Less:
+        return VK_COMPARE_OP_LESS;
+    case VGPUCompareFunction_LessEqual:
+        return VK_COMPARE_OP_LESS_OR_EQUAL;
+    case VGPUCompareFunction_Greater:
+        return VK_COMPARE_OP_GREATER;
+    case VGPUCompareFunction_GreaterEqual:
+        return VK_COMPARE_OP_GREATER_OR_EQUAL;
+    case VGPUCompareFunction_Equal:
+        return VK_COMPARE_OP_EQUAL;
+    case VGPUCompareFunction_NotEqual:
+        return VK_COMPARE_OP_NOT_EQUAL;
+    case VGPUCompareFunction_Always:
+        return VK_COMPARE_OP_ALWAYS;
+
+    default:
+        return defaultValue;
+    }
+}
+
+/* Helper functions .*/
+static void vgpuVkDeferredDestroy(VGPURendererVk* renderer, void* handle1, void* handle2, VkObjectType type)
+{
+    VGPUVkFreeList* freelist = &renderer->frame->freeList;
+
+    if (freelist->length >= freelist->capacity) {
+        freelist->capacity = freelist->capacity ? (freelist->capacity * 2) : 1;
+        freelist->data = realloc(freelist->data, freelist->capacity * sizeof(*freelist->data));
+        VGPU_CHECK(freelist->data, "Out of memory");
+    }
+
+    freelist->data[freelist->length++] = (VGPUVkObjectRef){ type, handle1, handle2 };
+}
+
+static void vgpuVkProcessDeferredDestroy(VGPURendererVk* renderer, VGPUVkFrame* frame)
+{
+    for (size_t i = 0; i < frame->freeList.length; i++)
+    {
+        VGPUVkObjectRef* ref = &frame->freeList.data[i];
+        switch (ref->type)
+        {
+        case VK_OBJECT_TYPE_BUFFER:
+            vmaDestroyBuffer(renderer->allocator, (VkBuffer)ref->handle1, (VmaAllocation)ref->handle2);
+            break;
+
+        case VK_OBJECT_TYPE_IMAGE:
+            vmaDestroyImage(renderer->allocator, (VkImage)ref->handle1, (VmaAllocation)ref->handle2);
+            break;
+
+        case VK_OBJECT_TYPE_IMAGE_VIEW:
+            renderer->api.vkDestroyImageView(renderer->device, (VkImageView)ref->handle1, NULL);
+            break;
+
+        case VK_OBJECT_TYPE_SAMPLER:
+            renderer->api.vkDestroySampler(renderer->device, (VkSampler)ref->handle1, NULL);
+            break;
+
+        case VK_OBJECT_TYPE_RENDER_PASS:
+            renderer->api.vkDestroyRenderPass(renderer->device, (VkRenderPass)ref->handle1, NULL);
+            break;
+
+        case VK_OBJECT_TYPE_FRAMEBUFFER:
+            renderer->api.vkDestroyFramebuffer(renderer->device, (VkFramebuffer)ref->handle1, NULL);
+            break;
+
+        case VK_OBJECT_TYPE_PIPELINE:
+            renderer->api.vkDestroyPipeline(renderer->device, (VkPipeline)ref->handle1, NULL);
+            break;
+        default:
+            VGPU_UNREACHABLE();
+            break;
+        }
+    }
+
+    frame->freeList.length = 0;
+}
+
+/* Barriers */
+static VkAccessFlagBits vgpuVkGetAccessMask(VGPUTextureLayout state, VkImageAspectFlags aspectMask)
+{
+    switch (state)
+    {
+    case VGPUTextureLayout_Undefined:
+    case VGPUTextureLayout_General:
+    case VGPUTextureLayout_Present:
+        //case VGPUTextureLayout_PreInitialized:
+        return (VkAccessFlagBits)0;
+    case VGPUTextureLayout_RenderTarget:
+        if (aspectMask == VK_IMAGE_ASPECT_COLOR_BIT)
+        {
+            return VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
+        }
+
+        return VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+
+    case VGPUTextureLayout_ShaderRead:
+        return VK_ACCESS_INPUT_ATTACHMENT_READ_BIT;
+
+    case VGPUTextureLayout_ShaderWrite:
+        return VK_ACCESS_SHADER_WRITE_BIT;
+
+        /*case VGPUTextureLayout_ResolveDest:
+        case VGPUTextureLayout_CopyDest:
+            return VK_ACCESS_TRANSFER_WRITE_BIT;
+        case VGPUTextureLayout_ResolveSource:
+        case VGPUTextureLayout_CopySource:
+            return VK_ACCESS_TRANSFER_READ_BIT;*/
+
+    default:
+        VGPU_UNREACHABLE();
+        return (VkAccessFlagBits)-1;
+    }
+}
+
+VkImageLayout vgpuVkGetImageLayout(VGPUTextureLayout layout, VkImageAspectFlags aspectMask)
+{
+    switch (layout)
+    {
+    case VGPUTextureLayout_Undefined:
+        return VK_IMAGE_LAYOUT_UNDEFINED;
+
+    case VGPUTextureLayout_General:
+        return VK_IMAGE_LAYOUT_GENERAL;
+
+    case VGPUTextureLayout_RenderTarget:
+        if (aspectMask == VK_IMAGE_ASPECT_COLOR_BIT) {
+            return VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        }
+
+        return VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+        //case VGPUTextureLayout_DepthStencilReadOnly:
+        //    return VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+
+    case VGPUTextureLayout_ShaderRead:
+        return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+    case VGPUTextureLayout_ShaderWrite:
+        return VK_IMAGE_LAYOUT_GENERAL;
+
+    case VGPUTextureLayout_Present:
+        return VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+    default:
+        _VGPU_UNREACHABLE();
+        return (VkImageLayout)-1;
+    }
+}
+
+static VkPipelineStageFlags vgpuVkGetShaderStageMask(VGPUTextureLayout layout, VkImageAspectFlags aspectMask, bool src)
+{
+    switch (layout)
+    {
+    case VGPUTextureLayout_Undefined:
+    case VGPUTextureLayout_General:
+        assert(src);
+        return src ? VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT : (VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT | VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+    case VGPUTextureLayout_ShaderRead:
+    case VGPUTextureLayout_ShaderWrite:
+        return VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT; // #OPTME Assume the worst
+    case VGPUTextureLayout_RenderTarget:
+        if (aspectMask == VK_IMAGE_ASPECT_COLOR_BIT)
+        {
+            return VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        }
+
+        return src ? VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT : VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+        /*case Resource::State::IndirectArg:
+            return VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT;
+        case VGPUTextureLayout_CopyDest:
+        case VGPUTextureLayout_CopySource:
+        case VGPUTextureLayout_ResolveDest:
+        case VGPUTextureLayout_ResolveSource:
+            return VK_PIPELINE_STAGE_TRANSFER_BIT;*/
+    case VGPUTextureLayout_Present:
+        return src ? (VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT | VK_PIPELINE_STAGE_ALL_COMMANDS_BIT) : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+    default:
+        _VGPU_UNREACHABLE();
+        return VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+    }
+}
+
+static void vgpuVkTextureBarrier(
     VGPURenderer* driverData,
-    VkImage image,
-    VkImageViewType  image_type,
-    VkFormat         image_format,
-    uint32_t         nmips,
-    uint32_t         nlayers);
+    VkCommandBuffer commandBuffer,
+    VGPUTexture handle,
+    VGPUTextureLayout newState)
+{
+    VGPURendererVk* renderer = (VGPURendererVk*)driverData;
+    VGPUTextureVk* texture = (VGPUTextureVk*)handle;
+
+    if (texture->layout == newState) {
+        return;
+    }
+
+    const VkImageAspectFlags aspectMask = GetVkAspectMask(texture->format);
+
+    // Create an image barrier object
+    const VkImageMemoryBarrier barrier = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .pNext = nullptr,
+        .srcAccessMask = vgpuVkGetAccessMask(texture->layout, aspectMask),
+        .dstAccessMask = vgpuVkGetAccessMask(newState, aspectMask),
+        .oldLayout = vgpuVkGetImageLayout(texture->layout, aspectMask),
+        .newLayout = vgpuVkGetImageLayout(newState, aspectMask),
+        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .image = texture->handle,
+        .subresourceRange = {
+            .aspectMask = aspectMask,
+            .baseMipLevel = 0,
+            .levelCount = 1,
+            .baseArrayLayer = 0,
+            .layerCount = 1
+        }
+    };
+
+    renderer->api.vkCmdPipelineBarrier(
+        commandBuffer,
+        vgpuVkGetShaderStageMask(texture->layout, aspectMask, true),
+        vgpuVkGetShaderStageMask(newState, aspectMask, false),
+        0, 0, nullptr, 0, nullptr, 1, &barrier);
+
+    texture->layout = newState;
+}
 
 /* Swapchain */
 #define _VGPU_VK_MAX_SURFACE_FORMATS (32u)
@@ -524,7 +924,7 @@ static void vgpuVkSwapchainDestroy(VGPURenderer* driverData, VGPUSwapchainVk* sw
 
 static bool vgpuVkSwapchainInit(VGPURenderer* driverData, VGPUSwapchainVk* swapchain)
 {
-    VGPUVkRenderer* renderer = (VGPUVkRenderer*)driverData;
+    VGPURendererVk* renderer = (VGPURendererVk*)driverData;
 
     VGPUVkSurfaceCaps surface_caps = vgpuVkQuerySwapchainSupport(renderer->physical_device, swapchain->surface);
 
@@ -614,8 +1014,7 @@ static bool vgpuVkSwapchainInit(VGPURenderer* driverData, VGPUSwapchainVk* swapc
 
     VGPUTextureUsage textureUsage = VGPUTextureUsage_OutputAttachment;
 
-    // Enable transfer destination on swap chain images if supported
-    VkImageUsageFlags image_usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    VkImageUsageFlags image_usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 
     // Enable transfer source on swap chain images if supported
     if (surface_caps.capabilities.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) {
@@ -693,77 +1092,6 @@ static bool vgpuVkSwapchainInit(VGPURenderer* driverData, VGPUSwapchainVk* swapc
     {
         renderer->api.vkDestroySwapchainKHR(renderer->device, oldSwapchain, NULL);
     }
-    else
-    {
-        /* Create swapchain render pass */
-
-        VkFormat depthFormat = VK_FORMAT_UNDEFINED;
-        uint32_t attachmentCount = 1;
-        VkAttachmentDescription attachments[4];
-        VkAttachmentReference references[3];
-        references[0] = (VkAttachmentReference){ 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
-
-        // Color attachment
-        attachments[0].flags = 0u;
-        attachments[0].format = format.format;
-        attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
-        attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-        attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-        attachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-        attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        attachments[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        attachments[0].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-        if (depthFormat != VK_FORMAT_UNDEFINED)
-        {
-            // Depth attachment
-            attachments[1].format = depthFormat;
-            attachments[1].samples = VK_SAMPLE_COUNT_1_BIT;
-            attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-            attachments[1].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-            attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-            attachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-            attachments[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-            attachments[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-            attachmentCount++;
-        }
-
-        VkSubpassDescription subpass = {
-            .colorAttachmentCount = 1,
-            .pColorAttachments = references,
-            .pDepthStencilAttachment = nullptr // info->depth.texture ? &references[canvas->colorAttachmentCount] : NULL
-        };
-
-        // Subpass dependencies for layout transitions
-        VkSubpassDependency dependencies[2];
-
-        dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
-        dependencies[0].dstSubpass = 0;
-        dependencies[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-        dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        dependencies[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-        dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-        dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
-
-        dependencies[1].srcSubpass = 0;
-        dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
-        dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        dependencies[1].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-        dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-        dependencies[1].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-        dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
-
-        const VkRenderPassCreateInfo renderPassInfo = {
-            .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-            .attachmentCount = attachmentCount,
-            .pAttachments = attachments,
-            .subpassCount = 1,
-            .pSubpasses = &subpass,
-            .dependencyCount = 2,
-            .pDependencies = dependencies
-        };
-
-        VK_CHECK(renderer->api.vkCreateRenderPass(renderer->device, &renderPassInfo, nullptr, &swapchain->vkRenderPass));
-    }
 
     // Obtain swapchain images.
     result = renderer->api.vkGetSwapchainImagesKHR(renderer->device, swapchain->handle, &swapchain->imageCount, NULL);
@@ -792,26 +1120,26 @@ static bool vgpuVkSwapchainInit(VGPURenderer* driverData, VGPUSwapchainVk* swapc
         .sampleCount = 1u
     };
 
+    VGPURenderPassDescriptor passDesc;
+    memset(&passDesc, 0, sizeof(VGPURenderPassDescriptor));
+
     for (uint32_t i = 0; i < swapchain->imageCount; i++)
     {
         swapchain->backbufferTextures[i] = vgpuTextureCreateExternal(&textureDesc, swapChainImages[i]);
-
-        ((VGPUTextureVk*)swapchain->backbufferTextures[i])->view = vgpuVkCreateImageView(driverData, swapChainImages[i], VK_IMAGE_VIEW_TYPE_2D, format.format, 1, 1);
+        passDesc.colorAttachments[0].texture = swapchain->backbufferTextures[i];
+        passDesc.colorAttachments[0].loadOp = VGPULoadOp_Clear;
+        passDesc.colorAttachments[0].clearColor = swapchain->colorClearValue;
+        swapchain->renderPasses[i] = vgpuRenderPassCreate(&passDesc);
     }
 
     swapchain->depthStencilTexture = nullptr;
 
-    /*const vgpu_render_pass_desc pass_desc = {
-        .color_attachments[0].texture = swapchain->backbufferTexture
-    };
-
-    swapchain->render_pass = vgpu_render_pass_create(&pass_desc);*/
     return true;
 }
 
 static void vgpuVkSwapchainDestroy(VGPURenderer* driverData, VGPUSwapchainVk* swapchain)
 {
-    VGPUVkRenderer* renderer = (VGPUVkRenderer*)driverData;
+    VGPURendererVk* renderer = (VGPURendererVk*)driverData;
     if (swapchain->depthStencilTexture) {
         vgpuTextureDestroy(swapchain->depthStencilTexture);
     }
@@ -819,14 +1147,8 @@ static void vgpuVkSwapchainDestroy(VGPURenderer* driverData, VGPUSwapchainVk* sw
     for (uint32_t i = 0; i < swapchain->imageCount; i++)
     {
         vgpuTextureDestroy(swapchain->backbufferTextures[i]);
+        vgpuRenderPassDestroy(swapchain->renderPasses[i]);
     }
-
-    if (swapchain->vkRenderPass != VK_NULL_HANDLE)
-    {
-        renderer->api.vkDestroyRenderPass(renderer->device, swapchain->vkRenderPass, NULL);
-        swapchain->vkRenderPass = VK_NULL_HANDLE;
-    }
-    //vgpu_render_pass_destroy(swapchain->renderPass);
 
     if (swapchain->handle != VK_NULL_HANDLE)
     {
@@ -1046,7 +1368,7 @@ static bool vk_init(VGPUDevice device, const char* app_name, const VGpuDeviceDes
     }
 
     const bool headless = desc->swapchain == nullptr;
-    VGPUVkRenderer* renderer = (VGPUVkRenderer*)device->renderer;
+    VGPURendererVk* renderer = (VGPURendererVk*)device->renderer;
     renderer->api = vk.api;
 
     /* Create surface if required. */
@@ -1274,6 +1596,9 @@ static bool vk_init(VGPUDevice device, const char* app_name, const VGpuDeviceDes
     renderer->api.vkGetDeviceQueue(renderer->device, renderer->queue_families.compute_queue_family, compute_queue_index, &renderer->compute_queue);
     renderer->api.vkGetDeviceQueue(renderer->device, renderer->queue_families.copy_queue_family, copy_queue_index, &renderer->copy_queue);
 
+    /* Init hash maps */
+    hmdefault(renderer->renderPassHashMap, NULL);
+
     /* Create memory allocator. */
     {
         VmaAllocatorCreateFlags allocator_flags = 0;
@@ -1290,7 +1615,7 @@ static bool vk_init(VGPUDevice device, const char* app_name, const VGpuDeviceDes
             .instance = vk.instance,
             .vulkanApiVersion = vk.apiVersion
         };
-        result = vmaCreateAllocator(&allocator_info, &renderer->memory_allocator);
+        result = vmaCreateAllocator(&allocator_info, &renderer->allocator);
         if (result != VK_SUCCESS) {
             vgpu_log_error("Vulkan: Cannot create memory allocator.");
             vgpuShutdown();
@@ -1299,23 +1624,19 @@ static bool vk_init(VGPUDevice device, const char* app_name, const VGpuDeviceDes
     }
 
     /* Init features and limits. */
-    renderer->features.independent_blend = features.features.independentBlend;
-    renderer->features.compute_shader = true;
-    renderer->features.geometry_shader = features.features.geometryShader;
-    renderer->features.tessellation_shader = features.features.tessellationShader;
-    renderer->features.multi_viewport = features.features.multiViewport;
-    renderer->features.index_uint32 = features.features.fullDrawIndexUint32;
-    renderer->features.multi_draw_indirect = features.features.multiDrawIndirect;
-    renderer->features.fill_mode_non_solid = features.features.fillModeNonSolid;
-    renderer->features.sampler_anisotropy = features.features.samplerAnisotropy;
-    renderer->features.texture_compression_BC = features.features.textureCompressionBC;
-    renderer->features.texture_compression_PVRTC = false;
-    renderer->features.texture_compression_ETC2 = features.features.textureCompressionETC2;
-    renderer->features.texture_compression_ASTC = features.features.textureCompressionASTC_LDR;
-    //renderer->features.texture_1D = true;
-    renderer->features.texture_3D = true;
-    renderer->features.texture_2D_array = true;
-    renderer->features.texture_cube_array = features.features.imageCubeArray;
+    renderer->features.independentBlend = features.features.independentBlend;
+    renderer->features.computeShader = true;
+    renderer->features.geometryShader = features.features.geometryShader;
+    renderer->features.tessellationShader = features.features.tessellationShader;
+    renderer->features.multiViewport = features.features.multiViewport;
+    renderer->features.indexUint32 = features.features.fullDrawIndexUint32;
+    renderer->features.multiDrawIndirect = features.features.multiDrawIndirect;
+    renderer->features.fillModeNonSolid = features.features.fillModeNonSolid;
+    renderer->features.samplerAnisotropy = features.features.samplerAnisotropy;
+    renderer->features.textureCompressionETC2 = features.features.textureCompressionETC2;
+    renderer->features.textureCompressionASTC_LDR = features.features.textureCompressionASTC_LDR;
+    renderer->features.textureCompressionBC = features.features.textureCompressionBC;
+    renderer->features.textureCubeArray = features.features.imageCubeArray;
     //renderer->features.raytracing = vk.KHR_get_physical_device_properties2
     //    && renderer->device_features.get_memory_requirements2
     //    || HasExtension(VK_NV_RAY_TRACING_EXTENSION_NAME);
@@ -1360,12 +1681,80 @@ static bool vk_init(VGPUDevice device, const char* app_name, const VGpuDeviceDes
         renderer->swapchains[0].surface = surface;
         renderer->swapchains[0].width = desc->swapchain->width;
         renderer->swapchains[0].height = desc->swapchain->height;
+        renderer->swapchains[0].colorClearValue = desc->swapchain->colorClearValue;
         renderer->swapchains[0].presentMode = vgpuVkGetPresentMode(desc->swapchain->presentMode);
 
         if (!vgpuVkSwapchainInit(device->renderer, &renderer->swapchains[0]))
         {
             vgpuShutdown();
             return false;
+        }
+    }
+
+    {
+        const VkCommandPoolCreateInfo commandPoolInfo = {
+            .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+            .flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+            .queueFamilyIndex = renderer->queue_families.graphics_queue_family
+        };
+
+        if (renderer->api.vkCreateCommandPool(renderer->device, &commandPoolInfo, NULL, &renderer->commandPool) != VK_SUCCESS)
+        {
+            vgpuShutdown();
+            return false;
+        }
+    }
+
+    renderer->max_inflight_frames = 2u;
+    {
+        // Frame state
+        renderer->frame = &renderer->frames[0];
+
+        const VkCommandBufferAllocateInfo commandBufferInfo = {
+            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+            .commandPool = renderer->commandPool,
+            .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+            .commandBufferCount = 1
+        };
+
+        const VkSemaphoreCreateInfo semaphoreInfo = {
+            .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+            .pNext = NULL,
+            .flags = 0
+        };
+
+        const VkFenceCreateInfo fenceInfo = {
+            .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+            .flags = VK_FENCE_CREATE_SIGNALED_BIT
+        };
+
+        for (uint32_t i = 0; i < renderer->max_inflight_frames; i++)
+        {
+            renderer->frames[i].index = i;
+
+            if (renderer->api.vkAllocateCommandBuffers(renderer->device, &commandBufferInfo, &renderer->frames[i].commandBuffer) != VK_SUCCESS)
+            {
+                vgpuShutdown();
+                return false;
+            }
+
+            if (renderer->api.vkCreateFence(renderer->device, &fenceInfo, NULL, &renderer->frames[i].fence) != VK_SUCCESS)
+            {
+                vgpuShutdown();
+                return false;
+            }
+
+            if (renderer->api.vkCreateSemaphore(renderer->device, &semaphoreInfo, NULL, &renderer->frames[i].imageAvailableSemaphore) != VK_SUCCESS)
+            {
+                vgpuShutdown();
+                return false;
+            }
+
+            if (renderer->api.vkCreateSemaphore(renderer->device, &semaphoreInfo, NULL, &renderer->frames[i].renderCompleteSemaphore) != VK_SUCCESS)
+            {
+                vgpuShutdown();
+                return false;
+            }
         }
     }
 
@@ -1379,10 +1768,10 @@ static void vk_waitIdle(VGPUDevice device);
 
 static void vk_destroy(VGPUDevice device)
 {
-    VGPUVkRenderer* renderer = (VGPUVkRenderer*)device->renderer;
+    VGPURendererVk* renderer = (VGPURendererVk*)device->renderer;
 
     if (renderer->device != VK_NULL_HANDLE) {
-        vk_waitIdle(device);
+        VK_CHECK(renderer->api.vkDeviceWaitIdle(renderer->device));
     }
 
     /* Destroy swap chains.*/
@@ -1394,16 +1783,57 @@ static void vk_destroy(VGPUDevice device)
         vgpuVkSwapchainDestroy(device->renderer, &renderer->swapchains[i]);
     }
 
-    if (renderer->memory_allocator != VK_NULL_HANDLE)
+    /* Destroy hashed objects */
+    {
+        for (uint32_t i = 0; i < hmlenu(renderer->renderPassHashMap); i++)
+        {
+            renderer->api.vkDestroyRenderPass(
+                renderer->device,
+                renderer->renderPassHashMap[i].value,
+                NULL
+            );
+        }
+    }
+
+    /* Destroy frame data. */
+    for (uint32_t i = 0; i < renderer->max_inflight_frames; i++)
+    {
+        VGPUVkFrame* frame = &renderer->frames[i];
+
+        vgpuVkProcessDeferredDestroy(renderer, frame);
+        free(frame->freeList.data);
+
+        if (frame->fence) {
+            renderer->api.vkDestroyFence(renderer->device, frame->fence, NULL);
+        }
+
+        if (frame->imageAvailableSemaphore) {
+            renderer->api.vkDestroySemaphore(renderer->device, frame->imageAvailableSemaphore, NULL);
+        }
+
+        if (frame->renderCompleteSemaphore) {
+            renderer->api.vkDestroySemaphore(renderer->device, frame->renderCompleteSemaphore, NULL);
+        }
+
+        if (frame->commandBuffer) {
+            renderer->api.vkFreeCommandBuffers(renderer->device, renderer->commandPool, 1, &frame->commandBuffer);
+        }
+    }
+
+    if (renderer->commandPool) {
+        renderer->api.vkDestroyCommandPool(renderer->device, renderer->commandPool, NULL);
+    }
+
+    if (renderer->allocator != VK_NULL_HANDLE)
     {
         VmaStats stats;
-        vmaCalculateStats(renderer->memory_allocator, &stats);
+        vmaCalculateStats(renderer->allocator, &stats);
 
         if (stats.total.usedBytes > 0) {
             vgpu_log_format(VGPU_LOG_LEVEL_ERROR, "Total device memory leaked: %llx bytes.", stats.total.usedBytes);
         }
 
-        vmaDestroyAllocator(renderer->memory_allocator);
+        vmaDestroyAllocator(renderer->allocator);
     }
 
     if (renderer->device != VK_NULL_HANDLE) {
@@ -1437,7 +1867,7 @@ static void vk_destroy(VGPUDevice device)
 }
 
 static void vk_waitIdle(VGPUDevice device) {
-    VGPUVkRenderer* renderer = (VGPUVkRenderer*)device->renderer;
+    VGPURendererVk* renderer = (VGPURendererVk*)device->renderer;
     VK_CHECK(renderer->api.vkDeviceWaitIdle(renderer->device));
 }
 
@@ -1445,98 +1875,156 @@ static VGPUBackendType vk_getBackend(void) {
     return VGPUBackendType_Vulkan;
 }
 
-static vgpu_features vk_get_features(VGPURenderer* driver_data)
+static VGPUFeatures vk_getFeatures(VGPURenderer* driverData)
 {
-    VGPUVkRenderer* renderer = (VGPUVkRenderer*)driver_data;
+    VGPURendererVk* renderer = (VGPURendererVk*)driverData;
     return renderer->features;
 }
 
-static vgpu_limits vk_get_limits(VGPURenderer* driver_data)
+static vgpu_limits vk_getLimits(VGPURenderer* driverData)
 {
-    VGPUVkRenderer* renderer = (VGPUVkRenderer*)driver_data;
+    VGPURendererVk* renderer = (VGPURendererVk*)driverData;
     return renderer->limits;
 }
 
-static VGPURenderPass vk_get_default_render_pass(VGPURenderer* driver_data)
+static VGPURenderPass vk_get_default_render_pass(VGPURenderer* driverData)
 {
-    VGPUVkRenderer* renderer = (VGPUVkRenderer*)driver_data;
-    return nullptr;
+    VGPURendererVk* renderer = (VGPURendererVk*)driverData;
+    uint32_t imageIndex = renderer->swapchains[0].imageIndex;
+    return renderer->swapchains[0].renderPasses[imageIndex];
 }
 
-static void vk_begin_frame(VGPURenderer* driver_data)
+static void vk_begin_frame(VGPURenderer* driverData)
 {
+    VGPURendererVk* renderer = (VGPURendererVk*)driverData;
+    VK_CHECK(renderer->api.vkWaitForFences(renderer->device, 1, &renderer->frame->fence, VK_FALSE, ~0ull));
+    VK_CHECK(renderer->api.vkResetFences(renderer->device, 1, &renderer->frame->fence));
+    vgpuVkProcessDeferredDestroy(renderer, renderer->frame);
 
+    VkResult result = renderer->api.vkAcquireNextImageKHR(
+        renderer->device,
+        renderer->swapchains[0].handle,
+        UINT64_MAX,
+        renderer->frame->imageAvailableSemaphore,
+        VK_NULL_HANDLE,
+        &renderer->swapchains[0].imageIndex);
+
+    if (result == VK_ERROR_OUT_OF_DATE_KHR ||
+        result == VK_SUBOPTIMAL_KHR)
+    {
+    }
+    else
+    {
+        VK_CHECK(result);
+    }
+
+    const VkCommandBufferBeginInfo beginfo = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
+    };
+
+    VK_CHECK(renderer->api.vkBeginCommandBuffer(renderer->frame->commandBuffer, &beginfo));
 }
 
-static void vk_end_frame(VGPURenderer* driver_data)
+static void vk_end_frame(VGPURenderer* driverData)
 {
+    VGPURendererVk* renderer = (VGPURendererVk*)driverData;
 
+    uint32_t imageIndex = renderer->swapchains[0].imageIndex;
+    vgpuVkTextureBarrier(driverData,
+        renderer->frame->commandBuffer,
+        renderer->swapchains[0].backbufferTextures[imageIndex],
+        VGPUTextureLayout_Present
+    );
+
+    VK_CHECK(renderer->api.vkEndCommandBuffer(renderer->frame->commandBuffer));
+
+
+    const VkPipelineStageFlags waitDstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    VkSubmitInfo submitInfo = {
+        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .waitSemaphoreCount = 1u,
+        .pWaitSemaphores = &renderer->frame->imageAvailableSemaphore,
+        .pWaitDstStageMask = &waitDstStageMask,
+        .pCommandBuffers = &renderer->frame->commandBuffer,
+        .commandBufferCount = 1u,
+        .signalSemaphoreCount = 1u,
+        .pSignalSemaphores = &renderer->frame->renderCompleteSemaphore
+    };
+
+    VK_CHECK(vkQueueSubmit(renderer->graphics_queue, 1, &submitInfo, renderer->frame->fence));
+
+    /* Present swap chains. */
+    const VkPresentInfoKHR presentInfo = {
+        .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+        .pNext = NULL,
+        .waitSemaphoreCount = 1u,
+        .pWaitSemaphores = &renderer->frame->renderCompleteSemaphore,
+        .swapchainCount = 1u,
+        .pSwapchains = &renderer->swapchains[0].handle,
+        .pImageIndices = &renderer->swapchains[0].imageIndex,
+        .pResults = NULL
+    };
+
+    VkResult result = renderer->api.vkQueuePresentKHR(renderer->graphics_queue, &presentInfo);
+    if (!((result == VK_SUCCESS) || (result == VK_SUBOPTIMAL_KHR)))
+    {
+        if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+            //windowResize();
+            return;
+        }
+        else {
+            VK_CHECK(result);
+        }
+    }
+
+    /* Advance to next frame. */
+    renderer->frame = &renderer->frames[(renderer->frame->index + 1) % renderer->max_inflight_frames];
+}
+
+
+
+/* Buffer */
+static VGPUBuffer vk_bufferCreate(VGPURenderer* driverData, const VGPUBufferDescriptor* descriptor)
+{
+    VGPURendererVk* renderer = (VGPURendererVk*)driverData;
+    VGPUBufferVk* result = _VGPU_ALLOC_HANDLE(VGPUBufferVk);
+    return (VGPUBuffer)result;
+}
+
+static void vk_bufferDestroy(VGPURenderer* driverData, VGPUBuffer handle)
+{
+    VGPURendererVk* renderer = (VGPURendererVk*)driverData;
+    VGPUBufferVk* buffer = (VGPUBufferVk*)handle;
+    vgpuVkDeferredDestroy(renderer, buffer->handle, buffer->memory, VK_OBJECT_TYPE_BUFFER);
+    VGPU_FREE(buffer);
 }
 
 /* Texture */
-static VkImageView vgpuVkCreateImageView(
-    VGPURenderer* driverData,
-    VkImage image,
-    VkImageViewType  image_type,
-    VkFormat         image_format,
-    uint32_t         nmips,
-    uint32_t         nlayers)
+static VGPUTexture vk_textureCreate(VGPURenderer* driverData, const VGPUTextureDescriptor* descriptor, const void* initial_data)
 {
-    const bool is_depth = image_format == VK_FORMAT_D16_UNORM ||
-        image_format == VK_FORMAT_D16_UNORM_S8_UINT ||
-        image_format == VK_FORMAT_D24_UNORM_S8_UINT ||
-        image_format == VK_FORMAT_D32_SFLOAT ||
-        image_format == VK_FORMAT_D32_SFLOAT_S8_UINT;
-
-    const VkImageViewCreateInfo createInfo = {
-        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-        .image = image,
-        .viewType = image_type,
-        .format = image_format,
-        .components = {
-            .r = VK_COMPONENT_SWIZZLE_IDENTITY,
-            .g = VK_COMPONENT_SWIZZLE_IDENTITY,
-            .b = VK_COMPONENT_SWIZZLE_IDENTITY,
-            .a = VK_COMPONENT_SWIZZLE_IDENTITY
-        },
-        .subresourceRange = {
-            .aspectMask = is_depth ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT,
-            .baseMipLevel = 0u,
-            .levelCount = nmips,
-            .baseArrayLayer = 0u,
-            .layerCount = nlayers
-        }
-    };
-
-    VGPUVkRenderer* renderer = (VGPUVkRenderer*)driverData;
-    VkImageView handle;
-    const VkResult result = renderer->api.vkCreateImageView(renderer->device, &createInfo, NULL, &handle);
-    if (result != VK_SUCCESS) {
-        return VK_NULL_HANDLE;
-    }
-
-    return handle;
-}
-
-static VGPUTexture vk_textureCreate(VGPURenderer* driverData, const VGPUTextureDescriptor* desc, const void* initial_data)
-{
-    VGPUVkRenderer* renderer = (VGPUVkRenderer*)driverData;
+    VGPURendererVk* renderer = (VGPURendererVk*)driverData;
+    VGPUTextureVk* result = _VGPU_ALLOC_HANDLE(VGPUTextureVk);
+    result->format = GetVkFormat(descriptor->format);
+    result->layout = VGPUTextureLayout_Undefined;
     return nullptr;
 }
 
 static VGPUTexture vk_textureCreateExternal(VGPURenderer* driverData, const VGPUTextureDescriptor* descriptor, void* handle)
 {
-    VGPUVkRenderer* renderer = (VGPUVkRenderer*)driverData;
+    VGPURendererVk* renderer = (VGPURendererVk*)driverData;
     VGPUTextureVk* result = _VGPU_ALLOC_HANDLE(VGPUTextureVk);
+    result->format = GetVkFormat(descriptor->format);
     result->handle = (VkImage)handle;
     result->external = true;
+    result->layout = VGPUTextureLayout_Undefined;
     result->size = descriptor->size;
     return (VGPUTexture)result;
 }
 
 static void vk_textureDestroy(VGPURenderer* driverData, VGPUTexture handle)
 {
-    VGPUVkRenderer* renderer = (VGPUVkRenderer*)driverData;
+    VGPURendererVk* renderer = (VGPURendererVk*)driverData;
     VGPUTextureVk* texture = (VGPUTextureVk*)handle;
     if (!texture->external)
     {
@@ -1551,91 +2039,371 @@ static void vk_textureDestroy(VGPURenderer* driverData, VGPUTexture handle)
 }
 
 /* Sampler */
-static VGPUSampler vk_samplerCreate(VGPURenderer* driverData, const VGPUSamplerDescriptor* descriptor)
+static inline VkFilter getVkFilter(VGPUFilterMode filter)
 {
-    return nullptr;
+    switch (filter)
+    {
+    case VGPUFilterMode_Nearest:
+        return VK_FILTER_NEAREST;
+    case VGPUFilterMode_Linear:
+        return VK_FILTER_LINEAR;
+    default:
+        _VGPU_UNREACHABLE();
+        return VK_FILTER_NEAREST;
+    }
 }
 
-static void vk_samplerDestroy(VGPURenderer* driver_data, VGPUSampler sampler)
+static inline VkSamplerMipmapMode getVkMipMapFilterMode(VGPUFilterMode filter)
 {
+    switch (filter)
+    {
+    case VGPUFilterMode_Nearest:
+        return VK_SAMPLER_MIPMAP_MODE_NEAREST;
+    case VGPUFilterMode_Linear:
+        return VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    default:
+        _VGPU_UNREACHABLE();
+        return VK_SAMPLER_MIPMAP_MODE_NEAREST;
+    }
+}
 
+VkSamplerAddressMode getVkAddressMode(VGPUAddressMode mode)
+{
+    switch (mode)
+    {
+    case VGPUAddressMode_Repeat:
+        return VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    case VGPUAddressMode_MirrorRepeat:
+        return VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+    case VGPUAddressMode_ClampToEdge:
+        return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    case VGPUAddressMode_ClampToBorderColor:
+        return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+        //case VGPUAddressMode_MirrorClampToEdge:
+         //   return VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
+    default:
+        _VGPU_UNREACHABLE();
+        return VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    }
+}
+
+static inline VkBorderColor getVkBorderColor(VGPUBorderColor value)
+{
+    switch (value)
+    {
+    case VGPUBorderColor_TransparentBlack:
+        return VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
+    case VGPUBorderColor_OpaqueBlack:
+        return VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
+    case VGPUBorderColor_OpaqueWhite:
+        return VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+    default:
+        _VGPU_UNREACHABLE();
+        return VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
+    }
+}
+
+static VGPUSampler vk_samplerCreate(VGPURenderer* driverData, const VGPUSamplerDescriptor* descriptor)
+{
+    VGPURendererVk* renderer = (VGPURendererVk*)driverData;
+    const VkBool32 compareEnable =
+        (descriptor->compare != VGPUCompareFunction_Undefined) &&
+        (descriptor->compare != VGPUCompareFunction_Never);
+
+    const VkSamplerCreateInfo createInfo = {
+        .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = 0u,
+        .magFilter = getVkFilter(descriptor->magFilter),
+        .minFilter = getVkFilter(descriptor->minFilter),
+        .mipmapMode = getVkMipMapFilterMode(descriptor->mipmapFilter),
+        .addressModeU = getVkAddressMode(descriptor->addressModeU),
+        .addressModeV = getVkAddressMode(descriptor->addressModeV),
+        .addressModeW = getVkAddressMode(descriptor->addressModeW),
+        .mipLodBias = 0.0f,
+        .anisotropyEnable = descriptor->maxAnisotropy > 0,
+        .maxAnisotropy = (float)descriptor->maxAnisotropy,
+        .compareEnable = compareEnable,
+        .compareOp = getVkCompareOp(descriptor->compare, VK_COMPARE_OP_NEVER),
+        .minLod = descriptor->lodMinClamp,
+        .minLod = descriptor->lodMaxClamp == 0.0f ? 3.402823466e+38F : descriptor->lodMaxClamp,
+        .borderColor = getVkBorderColor(descriptor->borderColor),
+        .unnormalizedCoordinates = VK_FALSE
+    };
+
+    VkSampler handle;
+    if (renderer->api.vkCreateSampler(renderer->device, &createInfo, NULL, &handle) != VK_SUCCESS)
+    {
+        return nullptr;
+    }
+
+    VGPUSamplerVk* result = _VGPU_ALLOC_HANDLE(VGPUSamplerVk);
+    result->handle = handle;
+    return (VGPUSampler)result;
+}
+
+static void vk_samplerDestroy(VGPURenderer* driverData, VGPUSampler handle)
+{
+    VGPURendererVk* renderer = (VGPURendererVk*)driverData;
+    VGPUSamplerVk* sampler = (VGPUSamplerVk*)handle;
+    vgpuVkDeferredDestroy(renderer, sampler->handle, NULL, VK_OBJECT_TYPE_SAMPLER);
+    VGPU_FREE(sampler);
 }
 
 /* RenderPass */
-static VGPURenderPass vk_renderPassCreate(VGPURenderer* driverData, const vgpu_render_pass_desc* desc)
+static RenderPassHash vk_GetRenderPassHash(const VGPURenderPassDescriptor* descriptor)
 {
-    VGPUVkRenderer* renderer = (VGPUVkRenderer*)driverData;
+    RenderPassHash hash = {
+        .colorFormatsCount = 0,
+        .depthStencilFormat = VK_FORMAT_UNDEFINED
+    };
 
-    uint32_t attachmentCount = 0;
-    VkAttachmentDescription attachments[VGPU_MAX_COLOR_ATTACHMENTS + 1];
-    VkAttachmentReference references[VGPU_MAX_COLOR_ATTACHMENTS + 1];
-    //VkImageView imageViews[VGPU_MAX_COLOR_ATTACHMENTS + 1];
-
-    bool hasDepthStencil = desc->depth_stencil_attachment.texture != nullptr;
-    uint32_t colorAttachmentCount = 0;
     for (uint32_t i = 0; i < VGPU_MAX_COLOR_ATTACHMENTS; i++)
     {
-        if (!desc->color_attachments[i].texture) {
+        if (!descriptor->colorAttachments[i].texture) {
             continue;
         }
 
-        VGPUTextureVk* texture = (VGPUTextureVk*)desc->color_attachments[i].texture;
+        VGPUTextureVk* texture = (VGPUTextureVk*)descriptor->colorAttachments[i].texture;
 
-        attachments[attachmentCount] = (VkAttachmentDescription){
-            .format = texture->format,
+        hash.colorFormats[hash.colorFormatsCount] = texture->format;
+        hash.loadOperations[hash.colorFormatsCount] = descriptor->colorAttachments[i].loadOp;
+        hash.colorFormatsCount++;
+    }
+
+
+    if (descriptor->depthStencilAttachment.texture)
+    {
+        VGPUTextureVk* texture = (VGPUTextureVk*)descriptor->depthStencilAttachment.texture;
+        hash.depthStencilFormat = texture->format;
+    }
+
+    return hash;
+}
+
+static VkRenderPass vk_GetRenderPass(VGPURenderer* driverData, const VGPURenderPassDescriptor* descriptor)
+{
+    static const VkAttachmentLoadOp loadOps[] = {
+        [VGPULoadOp_DontCare] = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+        [VGPULoadOp_Load] = VK_ATTACHMENT_LOAD_OP_LOAD,
+        [VGPULoadOp_Clear] = VK_ATTACHMENT_LOAD_OP_CLEAR,
+    };
+
+    VGPURendererVk* renderer = (VGPURendererVk*)driverData;
+
+    RenderPassHash hash = vk_GetRenderPassHash(descriptor);
+
+    /* Lookup hash first */
+    if (stbds_hmgeti(renderer->renderPassHashMap, hash) != -1)
+    {
+        return stbds_hmget(renderer->renderPassHashMap, hash);
+    }
+
+    uint32_t attachmentCount = hash.colorFormatsCount;
+    VkAttachmentDescription attachments[VGPU_MAX_COLOR_ATTACHMENTS + 1];
+    VkAttachmentReference references[VGPU_MAX_COLOR_ATTACHMENTS + 1];
+
+    for (uint32_t i = 0; i < hash.colorFormatsCount; i++)
+    {
+        attachments[i] = (VkAttachmentDescription){
+            .format = hash.colorFormats[i],
             .samples = VK_SAMPLE_COUNT_1_BIT,
-            .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+            .loadOp = loadOps[hash.loadOperations[i]],
             .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+            .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+            .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
             .initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
         };
 
         references[i] = (VkAttachmentReference){ i, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
-        attachmentCount++;
-        colorAttachmentCount++;
+    }
+
+    if (hash.depthStencilFormat != VK_FORMAT_UNDEFINED)
+    {
+        uint32_t i = attachmentCount++;
+        attachments[i] = (VkAttachmentDescription){
+            .format = hash.depthStencilFormat,
+            .samples = VK_SAMPLE_COUNT_1_BIT,
+            .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+            .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+            .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+            .stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE,
+            .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+            .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+        };
+
+        references[i] = (VkAttachmentReference){ i, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL };
     }
 
     VkSubpassDescription subpass = {
-        .colorAttachmentCount = colorAttachmentCount,
+        .flags = 0u,
+        .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+        .inputAttachmentCount = 0u,
+        .pInputAttachments = nullptr,
+        .colorAttachmentCount = hash.colorFormatsCount,
         .pColorAttachments = references,
-        .pDepthStencilAttachment = hasDepthStencil ? &references[colorAttachmentCount] : NULL
+        .pResolveAttachments = nullptr,
+        .pDepthStencilAttachment = (hash.depthStencilFormat != VK_FORMAT_UNDEFINED) ? &references[hash.colorFormatsCount] : NULL,
+        .preserveAttachmentCount = 0u,
+        .pPreserveAttachments = nullptr
     };
 
-    VkRenderPassCreateInfo renderPassInfo = {
+    const VkRenderPassCreateInfo renderPassInfo = {
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = 0u,
         .attachmentCount = attachmentCount,
         .pAttachments = attachments,
         .subpassCount = 1,
-        .pSubpasses = &subpass
+        .pSubpasses = &subpass,
+        .dependencyCount = 0u,
+        .pDependencies = nullptr
     };
 
     VkRenderPass renderPass;
-    if (renderer->api.vkCreateRenderPass(renderer->device, &renderPassInfo, NULL, &renderPass)) {
+    if (renderer->api.vkCreateRenderPass(renderer->device, &renderPassInfo, NULL, &renderPass) != VK_SUCCESS)
+    {
         return nullptr;
     }
 
-    return nullptr;
+    hmput(renderer->renderPassHashMap, hash, renderPass);
+    return renderPass;
 }
 
-static void vk_renderPassDestroy(VGPURenderer* driver_data, VGPURenderPass handle)
+static VGPURenderPass vk_renderPassCreate(VGPURenderer* driverData, const VGPURenderPassDescriptor* descriptor)
 {
+    VGPURendererVk* renderer = (VGPURendererVk*)driverData;
+    VGPURenderPassVk* renderPass = _VGPU_ALLOC_HANDLE(VGPURenderPassVk);
+    renderPass->renderPass = vk_GetRenderPass(driverData, descriptor);
 
+    renderPass->attachmentCount = 0;
+    VkImageView attachments[VGPU_MAX_COLOR_ATTACHMENTS + 1];
+
+    renderPass->renderArea.offset = (VkOffset2D){ 0, 0 };
+    renderPass->renderArea.extent.width = UINT32_MAX;
+    renderPass->renderArea.extent.height = UINT32_MAX;
+
+    for (uint32_t i = 0; i < VGPU_MAX_COLOR_ATTACHMENTS; i++)
+    {
+        if (!descriptor->colorAttachments[i].texture) {
+            continue;
+        }
+
+        VGPUTextureVk* texture = (VGPUTextureVk*)descriptor->colorAttachments[i].texture;
+
+        uint32_t mipLevel = descriptor->colorAttachments[i].mipLevel;
+        renderPass->renderArea.extent.width = _vgpu_min(renderPass->renderArea.extent.width, _vgpu_max(1u, texture->size.width >> mipLevel));
+        renderPass->renderArea.extent.height = _vgpu_min(renderPass->renderArea.extent.height, _vgpu_max(1u, texture->size.height >> mipLevel));
+
+        VkImageViewCreateInfo createInfo = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+            .image = texture->handle,
+            .viewType = VK_IMAGE_VIEW_TYPE_2D,
+            .format = texture->format,
+            .components = {
+                .r = VK_COMPONENT_SWIZZLE_IDENTITY,
+                .g = VK_COMPONENT_SWIZZLE_IDENTITY,
+                .b = VK_COMPONENT_SWIZZLE_IDENTITY,
+                .a = VK_COMPONENT_SWIZZLE_IDENTITY
+            },
+            .subresourceRange = {
+                .aspectMask = GetVkAspectMask(texture->format),
+                .baseMipLevel = mipLevel,
+                .levelCount = VK_REMAINING_MIP_LEVELS,
+                .baseArrayLayer = descriptor->colorAttachments[i].slice,
+                .layerCount = VK_REMAINING_ARRAY_LAYERS
+            }
+        };
+
+        VK_CHECK(renderer->api.vkCreateImageView(renderer->device, &createInfo, NULL, &texture->view));
+
+        attachments[renderPass->attachmentCount] = texture->view;
+        renderPass->textures[i] = descriptor->colorAttachments[i].texture;
+        memcpy(renderPass->clears[i].color.float32, &descriptor->colorAttachments[i].clearColor, 4 * sizeof(float));
+        renderPass->attachmentCount++;
+    }
+
+    VkFramebufferCreateInfo framebufferInfo = {
+        .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = 0u,
+        .renderPass = renderPass->renderPass,
+        .attachmentCount = renderPass->attachmentCount,
+        .pAttachments = attachments,
+        .width = renderPass->renderArea.extent.width,
+        .height = renderPass->renderArea.extent.height,
+        .layers = 1
+    };
+
+    if (renderer->api.vkCreateFramebuffer(renderer->device, &framebufferInfo, NULL, &renderPass->framebuffer) != VK_SUCCESS)
+    {
+        VGPU_FREE(renderPass);
+        return nullptr;
+    }
+
+    return (VGPURenderPass)renderPass;
+}
+
+static void vk_renderPassDestroy(VGPURenderer* driverData, VGPURenderPass handle)
+{
+    VGPURendererVk* renderer = (VGPURendererVk*)driverData;
+    VGPURenderPassVk* renderPass = (VGPURenderPassVk*)handle;
+    vgpuVkDeferredDestroy(renderer, renderPass->framebuffer, nullptr, VK_OBJECT_TYPE_FRAMEBUFFER);
+    VGPU_FREE(renderPass);
 }
 
 static void vk_renderPassGetExtent(VGPURenderer* driver_data, VGPURenderPass handle, uint32_t* width, uint32_t* height)
 {
+    VGPURenderPassVk* renderPass = (VGPURenderPassVk*)handle;
+    if (width) {
+        *width = renderPass->renderArea.extent.width;
+    }
 
+    if (height) {
+        *height = renderPass->renderArea.extent.height;
+    }
+}
+
+void vk_renderPassSetClearColors(VGPURenderer* driverData, VGPURenderPass handle, uint32_t firstAttachment, uint32_t count, const VGPUColor* pColors)
+{
+    VGPURenderPassVk* renderPass = (VGPURenderPassVk*)handle;
+    for (uint32_t i = firstAttachment; i < count; i++)
+    {
+        memcpy(renderPass->clears[i].color.float32, &pColors[i].r, sizeof(VGPUColor));
+    }
 }
 
 /* Commands */
-static void vk_cmd_begin_render_pass(VGPURenderer* driver_data, const vgpu_begin_render_pass_desc* begin_pass_desc)
+static void vk_cmdBeginRenderPass(VGPURenderer* driverData, VGPURenderPass handle)
 {
+    VGPURendererVk* renderer = (VGPURendererVk*)driverData;
+    VGPURenderPassVk* renderPass = (VGPURenderPassVk*)handle;
 
+    for (uint32_t i = 0; i < renderPass->attachmentCount; i++) {
+        vgpuVkTextureBarrier(driverData,
+            renderer->frame->commandBuffer,
+            renderPass->textures[i],
+            VGPUTextureLayout_RenderTarget
+        );
+    }
+
+    const VkRenderPassBeginInfo beginfo = {
+        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+        .renderPass = renderPass->renderPass,
+        .framebuffer = renderPass->framebuffer,
+        .renderArea = renderPass->renderArea,
+        .clearValueCount = renderPass->attachmentCount,
+        .pClearValues = renderPass->clears
+    };
+
+    renderer->api.vkCmdBeginRenderPass(renderer->frame->commandBuffer, &beginfo, VK_SUBPASS_CONTENTS_INLINE);
 }
 
-static void vk_cmd_end_render_pass(VGPURenderer* driver_data)
+static void vk_cmdEndRenderPass(VGPURenderer* driverData)
 {
-
+    VGPURendererVk* renderer = (VGPURendererVk*)driverData;
+    renderer->api.vkCmdEndRenderPass(renderer->frame->commandBuffer);
 }
 
 bool vgpu_vk_supported(void) {
@@ -1657,13 +2425,13 @@ bool vgpu_vk_supported(void) {
 
 VGPUDevice vk_create_device(void) {
     VGPUDevice device;
-    VGPUVkRenderer* renderer;
+    VGPURendererVk* renderer;
 
     device = (VGPUDeviceImpl*)VGPU_MALLOC(sizeof(VGPUDeviceImpl));
     ASSIGN_DRIVER(vk);
 
     /* Init the vk renderer */
-    renderer = (VGPUVkRenderer*)_VGPU_ALLOC_HANDLE(VGPUVkRenderer);
+    renderer = (VGPURendererVk*)_VGPU_ALLOC_HANDLE(VGPURendererVk);
 
     /* Reference vgpu_device and renderer together. */
     renderer->gpu_device = device;

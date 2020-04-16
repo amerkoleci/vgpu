@@ -99,6 +99,8 @@ int main(int argc, char** argv)
     int width, height;
     glfwGetWindowSize(window, &width, &height);
 
+    VGPUColor clearColor = { 1.0f, 0.0f, 0.0f, 1.0f };
+
     VGpuDeviceDescriptor gpu_desc = {
         .preferredBackend = preferredBackend,
         .swapchain = &(VGPUSwapChainDescriptor) {
@@ -110,6 +112,7 @@ int main(int argc, char** argv)
             .width = width,
             .height = height,
             .fullscreen = false,
+            .colorClearValue = clearColor,
             .presentMode = VGPUPresentMode_Fifo
       },
     };
@@ -130,13 +133,15 @@ int main(int argc, char** argv)
         }
 
         vgpuBeginFrame();
-        vgpu_begin_render_pass_desc begin_pass_desc;
-        begin_pass_desc.renderPass = vgpuGetDefaultRenderPass();
-        begin_pass_desc.color_attachments[0] = (vgpu_clear_value){ 1.0f, 0.0f, 0.0f, 0.0f };
-        vgpu_cmd_begin_render_pass(&begin_pass_desc);
-        /*VgpuColor clearColor = { 0.0f, 0.2f, 0.4f, 1.0f };
-        vgpuCmdBeginDefaultRenderPass(commandBuffer, clearColor, 1.0f, 0);*/
-        vgpu_cmd_end_render_pass();
+
+        /* Begin default render pass and change its clear color */
+        VGPURenderPass renderPass = vgpuGetDefaultRenderPass();
+        float g = clearColor.g + 0.01f;
+        clearColor.g = (g > 1.0f) ? 0.0f : g;
+        vgpuRenderPassSetClearColors(renderPass, 0, 1, &clearColor);
+
+        vgpuCmdBeginRenderPass(renderPass);
+        vgpuCmdEndRenderPass();
         vgpuEndFrame();
         glfwPollEvents();
     }
