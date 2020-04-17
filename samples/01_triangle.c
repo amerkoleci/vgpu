@@ -73,8 +73,8 @@ int main(int argc, char** argv)
     glfwInitHint(GLFW_COCOA_CHDIR_RESOURCES, GLFW_FALSE);
 #endif
 
-    //VGPUBackendType preferredBackend = VGPUBackendType_Force32;
-    VGPUBackendType preferredBackend = VGPUBackendType_D3D11;
+    VGPUBackendType preferredBackend = VGPUBackendType_Force32;
+    //VGPUBackendType preferredBackend = VGPUBackendType_D3D11;
     if (preferredBackend != VGPUBackendType_OpenGL)
     {
         // By default on non opengl context creation.
@@ -89,7 +89,7 @@ int main(int argc, char** argv)
         glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     }
 
-    GLFWwindow* window = glfwCreateWindow(1280, 720, "vgpu", 0, 0);
+    GLFWwindow* window = glfwCreateWindow(1280, 720, "01 - triangle", 0, 0);
     if (preferredBackend == VGPUBackendType_OpenGL)
     {
         glfwMakeContextCurrent(window);
@@ -112,6 +112,7 @@ int main(int argc, char** argv)
             .width = width,
             .height = height,
             .fullscreen = false,
+            .colorFormat = VGPUTextureFormat_BGRA8Unorm,
             .colorClearValue = clearColor,
             .depthStencilFormat = VGPUTextureFormat_Depth32Float,
             .presentMode = VGPUPresentMode_Fifo
@@ -121,6 +122,7 @@ int main(int argc, char** argv)
 #ifdef _DEBUG
     gpu_desc.flags |= VGPU_CONFIG_FLAGS_VALIDATION;
 #endif
+
 
     if (!vgpuInit(&gpu_desc)) {
 

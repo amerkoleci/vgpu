@@ -89,6 +89,8 @@ extern void __cdecl __debugbreak(void);
 #define _VGPU_UNUSED(x) do { (void)sizeof(x); } while(0)
 #define _VGPU_ALLOC_HANDLE(type) ((type*)(calloc(1, sizeof(type))))
 
+#define _vgpu_def(val, def) (((val) == 0) ? (def) : (val))
+#define _vgpu_def_flt(val, def) (((val) == 0.0f) ? (def) : (val))
 #define _vgpu_min(a,b) ((a<b)?a:b)
 #define _vgpu_max(a,b) ((a>b)?a:b)
 #define _vgpu_clamp(v,v0,v1) ((v<v0)?(v0):((v>v1)?(v1):(v)))
@@ -100,28 +102,28 @@ typedef struct VGPUDeviceImpl {
     /* Opaque pointer for the renderer. */
     VGPURenderer* renderer;
 
-    bool (*init)(VGPUDevice device, const char* app_name, const VGpuDeviceDescriptor* descriptor);
+    bool (*init)(VGPUDevice device, const VGpuDeviceDescriptor* descriptor);
     void (*destroy)(VGPUDevice device);
     VGPUBackendType(*getBackend)(void);
     VGPUFeatures(*getFeatures)(VGPURenderer* driver_data);
-    vgpu_limits(*getLimits)(VGPURenderer* driver_data);
+    VGPULimits(*getLimits)(VGPURenderer* driver_data);
     VGPURenderPass (*get_default_render_pass)(VGPURenderer* driver_data);
 
     void (*begin_frame)(VGPURenderer* driverData);
     void (*end_frame)(VGPURenderer* driverData);
 
     /* Buffer */
-    VGPUBuffer(*bufferCreate)(VGPURenderer* driverData, const VGPUBufferDescriptor* descriptor);
+    VGPUBuffer(*bufferCreate)(VGPURenderer* driverData, const VGPUBufferDescriptor* desc);
     void (*bufferDestroy)(VGPURenderer* driverData, VGPUBuffer handle);
 
     /* Texture */
-    VGPUTexture (*textureCreate)(VGPURenderer* driverData, const VGPUTextureDescriptor* descriptor, const void* initial_data);
-    VGPUTexture (*textureCreateExternal)(VGPURenderer* driverData, const VGPUTextureDescriptor* descriptor, void* handle);
-    void (*textureDestroy)(VGPURenderer* driverData, VGPUTexture handle);
+    VGPUTexture (*create_texture)(VGPURenderer* driverData, const vgpu_texture_desc* desc);
+    void (*destroy_texture)(VGPURenderer* driverData, VGPUTexture handle);
+    vgpu_texture_desc(*query_texture_desc)(VGPUTexture handle);
 
     /* Sampler */
-    VGPUSampler (*samplerCreate)(VGPURenderer* driver_data, const VGPUSamplerDescriptor* descriptor);
-    void (*samplerDestroy)(VGPURenderer* driver_data, VGPUSampler handle);
+    vgpu_sampler(*samplerCreate)(VGPURenderer* driver_data, const VGPUSamplerDescriptor* desc);
+    void (*samplerDestroy)(VGPURenderer* driver_data, vgpu_sampler handle);
 
     /* RenderPass */
     VGPURenderPass (*renderPassCreate)(VGPURenderer* driverData, const VGPURenderPassDescriptor* descriptor);
@@ -154,9 +156,9 @@ ASSIGN_DRIVER_FUNC(begin_frame, name)\
 ASSIGN_DRIVER_FUNC(end_frame, name)\
 ASSIGN_DRIVER_FUNC(bufferCreate, name)\
 ASSIGN_DRIVER_FUNC(bufferDestroy, name)\
-ASSIGN_DRIVER_FUNC(textureCreate, name)\
-ASSIGN_DRIVER_FUNC(textureCreateExternal, name)\
-ASSIGN_DRIVER_FUNC(textureDestroy, name)\
+ASSIGN_DRIVER_FUNC(create_texture, name)\
+ASSIGN_DRIVER_FUNC(destroy_texture, name)\
+ASSIGN_DRIVER_FUNC(query_texture_desc, name)\
 ASSIGN_DRIVER_FUNC(samplerCreate, name)\
 ASSIGN_DRIVER_FUNC(samplerDestroy, name)\
 ASSIGN_DRIVER_FUNC(renderPassCreate, name)\

@@ -205,7 +205,8 @@ bool vgpuIsBackendSupported(VGPUBackendType backend) {
 
 static VGPUDevice s_gpuDevice = nullptr;
 
-bool vgpuInit(const char* app_name, const VGpuDeviceDescriptor* descriptor) {
+bool vgpuInit(const VGpuDeviceDescriptor* descriptor)
+{
     if (s_gpuDevice != nullptr) {
         return true;
     }
@@ -239,7 +240,7 @@ bool vgpuInit(const char* app_name, const VGpuDeviceDescriptor* descriptor) {
     }
 
     s_gpuDevice = device;
-    if (!s_gpuDevice->init(device, app_name, descriptor)) {
+    if (!s_gpuDevice->init(device, descriptor)) {
         s_gpuDevice = nullptr;
         return false;
     }
@@ -256,22 +257,24 @@ void vgpuShutdown(void) {
 }
 
 VGPUBackendType vgpuGetBackend(void) {
-    if (s_gpuDevice == nullptr) {
-        return VGPUBackendType_Force32;
-    }
-
+    VGPU_ASSERT(s_gpuDevice);
     return s_gpuDevice->getBackend();
 }
 
 VGPUFeatures vgpuGetFeatures(void) {
+    VGPU_ASSERT(s_gpuDevice);
     return s_gpuDevice->getFeatures(s_gpuDevice->renderer);
 }
 
-vgpu_limits vgpuGetLimits(void) {
+VGPULimits vgpuGetLimits(void)
+{
+    VGPU_ASSERT(s_gpuDevice);
     return s_gpuDevice->getLimits(s_gpuDevice->renderer);
 }
 
-VGPURenderPass vgpuGetDefaultRenderPass(void) {
+VGPURenderPass vgpuGetDefaultRenderPass(void)
+{
+    VGPU_ASSERT(s_gpuDevice);
     return s_gpuDevice->get_default_render_pass(s_gpuDevice->renderer);
 }
 
@@ -284,43 +287,73 @@ void vgpuEndFrame(void) {
 }
 
 /* Buffer */
-VGPUBuffer vgpuBufferCreate(const VGPUBufferDescriptor* descriptor)
+VGPUBuffer vgpuCreateBuffer(const VGPUBufferDescriptor* descriptor)
 {
     return s_gpuDevice->bufferCreate(s_gpuDevice->renderer, descriptor);
 }
 
-void vgpuBufferDestroy(VGPUBuffer buffer)
+void vgpuDestroyBuffer(VGPUBuffer buffer)
 {
     s_gpuDevice->bufferDestroy(s_gpuDevice->renderer, buffer);
 }
 
-VGPUTexture vgpuTextureCreate(const VGPUTextureDescriptor* descriptor, const void* initial_data) {
-    return s_gpuDevice->textureCreate(s_gpuDevice->renderer, descriptor, initial_data);
+/* Texture */
+static vgpu_texture_desc _vgpu_texture_desc_defaults(const vgpu_texture_desc* desc) {
+    vgpu_texture_desc def = *desc;
+    def.type = _vgpu_def(desc->type, VGPU_TEXTURE_TYPE_2D);
+    def.width = _vgpu_def(desc->width, 1);
+    def.height = _vgpu_def(desc->height, 1);
+    def.depth = _vgpu_def(desc->depth, 1);
+    def.format = _vgpu_def(def.format, VGPUTextureFormat_RGBA8Unorm);
+    def.mip_levels = _vgpu_def(def.mip_levels, 1);
+    def.sample_count = _vgpu_def(def.sample_count, 1);
+    return def;
 }
 
-VGPUTexture vgpuTextureCreateExternal(const VGPUTextureDescriptor* descriptor, void* handle) {
-    return s_gpuDevice->textureCreateExternal(s_gpuDevice->renderer, descriptor, handle);
+VGPUTexture vgpu_create_texture(const vgpu_texture_desc* desc)
+{
+    vgpu_texture_desc desc_def = _vgpu_texture_desc_defaults(desc);
+    return s_gpuDevice->create_texture(s_gpuDevice->renderer, &desc_def);
 }
 
-void vgpuTextureDestroy(VGPUTexture texture) {
-    s_gpuDevice->textureDestroy(s_gpuDevice->renderer, texture);
+void vgpu_destroy_texture(VGPUTexture texture)
+{
+    s_gpuDevice->destroy_texture(s_gpuDevice->renderer, texture);
 }
 
-VGPUSampler vgpuSamplerCreate(const VGPUSamplerDescriptor* descriptor) {
-    return s_gpuDevice->samplerCreate(s_gpuDevice->renderer, descriptor);
+vgpu_texture_desc vgpu_query_texture_desc(VGPUTexture texture)
+{
+    return s_gpuDevice->query_texture_desc(texture);
 }
 
-void vgpuSamplerDestroy(VGPUSampler sampler) {
+uint32_t vgpu_get_texture_width(VGPUTexture texture, uint32_t mip_level)
+{
+    return _vgpu_max(1u, vgpu_query_texture_desc(texture).width >> mip_level);
+}
+
+uint32_t vgpu_get_texture_height(VGPUTexture texture, uint32_t mip_level)
+{
+    return _vgpu_max(1u, vgpu_query_texture_desc(texture).height >> mip_level);
+}
+
+/* Sampler */
+vgpu_sampler vgpu_create_sampler(const VGPUSamplerDescriptor* desc)
+{
+    return s_gpuDevice->samplerCreate(s_gpuDevice->renderer, desc);
+}
+
+void vgpu_destroy_sampler(vgpu_sampler sampler)
+{
     s_gpuDevice->samplerDestroy(s_gpuDevice->renderer, sampler);
 }
 
-VGPURenderPass vgpuRenderPassCreate(const VGPURenderPassDescriptor* descriptor)
+VGPURenderPass vgpuCreateRenderPass(const VGPURenderPassDescriptor* descriptor)
 {
     VGPU_ASSERT(descriptor);
     return s_gpuDevice->renderPassCreate(s_gpuDevice->renderer, descriptor);
 }
 
-void vgpuRenderPassDestroy(VGPURenderPass renderPass) {
+void vgpuDestroyRenderPass(VGPURenderPass renderPass) {
     s_gpuDevice->renderPassDestroy(s_gpuDevice->renderer, renderPass);
 }
 
@@ -434,7 +467,7 @@ const VgpuPixelFormatDesc FormatDesc[] =
     { VGPUTextureFormat_RGBA32Float,           "RGBA32Float",              VGPUTextureFormatType_Float,       128,        {1, 1, 16, 1, 1},       {0, 0, 32, 32, 32, 32}},
 
     // Depth-stencil
-    //{ VGPU_PIXEL_FORMAT_D16_UNORM,            "Depth16UNorm",         VGPUTextureFormatType_Unorm,       16,         {1, 1, 2, 1, 1},        {16, 0, 0, 0, 0, 0}},
+    { VGPUTextureFormat_Depth16Unorm,           "Depth16Unorm",         VGPUTextureFormatType_Unorm,       16,         {1, 1, 2, 1, 1},        {16, 0, 0, 0, 0, 0}},
     { VGPUTextureFormat_Depth32Float,           "Depth32Float",         VGPUTextureFormatType_Float,       32,         {1, 1, 4, 1, 1},        {32, 0, 0, 0, 0, 0}},
     { VGPUTextureFormat_Depth24Plus,            "Depth24Plus", VGPUTextureFormatType_Unorm,       32,         {1, 1, 4, 1, 1},        {24, 8, 0, 0, 0, 0}},
     { VGPUTextureFormat_Depth24PlusStencil8,    "Depth32FloatStencil8", VGPUTextureFormatType_Float,       32,         {1, 1, 4, 1, 1},        {32, 8, 0, 0, 0, 0}},

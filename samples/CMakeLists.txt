@@ -35,3 +35,4 @@ function(add_sample name)
 endfunction()
 
 add_sample(00_clear)
+add_sample(01_triangle)

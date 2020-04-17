@@ -26,7 +26,7 @@
 #include <d3dcommon.h>
 #include <dxgiformat.h>
 
-static DXGI_FORMAT vgpuGetD3DFormat(VGPUTextureFormat format) {
+static DXGI_FORMAT _vgpu_d3d_get_format(VGPUTextureFormat format) {
     static DXGI_FORMAT formats[VGPUTextureFormat_Count] = {
         DXGI_FORMAT_UNKNOWN,
         // 8-bit pixel formats
@@ -85,7 +85,7 @@ static DXGI_FORMAT vgpuGetD3DFormat(VGPUTextureFormat format) {
         DXGI_FORMAT_R32G32B32A32_FLOAT,
 
         // Depth-stencil formats
-        //DXGI_FORMAT_D16_UNORM,
+        DXGI_FORMAT_D16_UNORM,
         DXGI_FORMAT_D32_FLOAT,
         DXGI_FORMAT_D24_UNORM_S8_UINT,
         DXGI_FORMAT_D32_FLOAT_S8X24_UINT,
@@ -109,11 +109,12 @@ static DXGI_FORMAT vgpuGetD3DFormat(VGPUTextureFormat format) {
     return formats[format];
 }
 
-static DXGI_FORMAT vgpuGetTypelessFormatFromDepthFormat(VGPUTextureFormat format) {
+static DXGI_FORMAT _vgpu_d3d_get_typeless_format(VGPUTextureFormat format)
+{
     switch (format)
     {
-    //case VGPU_PIXEL_FORMAT_D16_UNORM:
-    //    return DXGI_FORMAT_R16_TYPELESS;
+    case VGPUTextureFormat_Depth16Unorm:
+        return DXGI_FORMAT_R16_TYPELESS;
     case VGPUTextureFormat_Depth32Float:
         return DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS;
     case VGPUTextureFormat_Depth24Plus:
@@ -122,7 +123,7 @@ static DXGI_FORMAT vgpuGetTypelessFormatFromDepthFormat(VGPUTextureFormat format
         return DXGI_FORMAT_R32_TYPELESS;
     default:
         assert(!vgpu_is_depth_format(format));
-        return vgpuGetD3DFormat(format);
+        return _vgpu_d3d_get_format(format);
     }
 }
 
