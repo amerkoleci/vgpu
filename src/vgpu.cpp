@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2019 Amer Koleci.
+// Copyright (c) 2019-2020 Amer Koleci.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -203,14 +203,8 @@ bool vgpuIsBackendSupported(VGPUBackendType backend) {
     }
 }
 
-static VGPUDevice s_gpuDevice = nullptr;
-
-bool vgpuInit(const VGpuDeviceDescriptor* descriptor)
+VGPUDevice vgpuCreateDevice(const VGpuDeviceDescriptor* descriptor)
 {
-    if (s_gpuDevice != nullptr) {
-        return true;
-    }
-
     VGPUBackendType backend = descriptor->preferredBackend;
     if (backend == VGPUBackendType_Force32) {
         backend = vgpuGetDefaultPlatformBackend();
@@ -239,141 +233,126 @@ bool vgpuInit(const VGpuDeviceDescriptor* descriptor)
         return false;
     }
 
-    s_gpuDevice = device;
-    if (!s_gpuDevice->init(device, descriptor)) {
-        s_gpuDevice = nullptr;
-        return false;
+    if (!device->init(device, descriptor)) {
+        return nullptr;
     }
 
-    return true;
+    return device;
 }
 
-void vgpuShutdown(void) {
-    if (s_gpuDevice == nullptr) {
+void vgpuDestroyDevice(VGPUDevice device) {
+    if (device == nullptr) {
         return;
     }
 
-    s_gpuDevice->destroy(s_gpuDevice);
+    device->destroy(device);
 }
 
-VGPUBackendType vgpuGetBackend(void) {
-    VGPU_ASSERT(s_gpuDevice);
-    return s_gpuDevice->getBackend();
+VGPUBackendType vgpuGetBackend(VGPUDevice device) {
+    VGPU_ASSERT(device);
+    return device->GetBackend();
 }
 
-VGPUFeatures vgpuGetFeatures(void) {
-    VGPU_ASSERT(s_gpuDevice);
-    return s_gpuDevice->getFeatures(s_gpuDevice->renderer);
+VGPUFeatures vgpuGetFeatures(VGPUDevice device) {
+    VGPU_ASSERT(device);
+    return device->GetFeatures(device->renderer);
 }
 
-VGPULimits vgpuGetLimits(void)
+VGPULimits vgpuGetLimits(VGPUDevice device)
 {
-    VGPU_ASSERT(s_gpuDevice);
-    return s_gpuDevice->getLimits(s_gpuDevice->renderer);
+    VGPU_ASSERT(device);
+    return device->GetLimits(device->renderer);
 }
 
-VGPURenderPass vgpuGetDefaultRenderPass(void)
+VGPUTextureFormat vgpuGetDefaultDepthFormat(VGPUDevice device) {
+    VGPU_ASSERT(device);
+    return device->GetDefaultDepthFormat(device->renderer);
+}
+
+VGPUTextureFormat vgpuGetDefaultDepthStencilFormat(VGPUDevice device) {
+    VGPU_ASSERT(device);
+    return device->GetDefaultDepthStencilFormat(device->renderer);
+}
+
+void vgpuDeviceWaitIdle(VGPUDevice device) {
+    device->DeviceWaitIdle(device->renderer);
+}
+
+void vgpuBeginFrame(VGPUDevice device) {
+    device->BeginFrame(device->renderer);
+}
+
+void vgpuEndFrame(VGPUDevice device) {
+    device->EndFrame(device->renderer);
+}
+
+VGPUTexture vgpuGetCurrentTexture(VGPUDevice device)
 {
-    VGPU_ASSERT(s_gpuDevice);
-    return s_gpuDevice->get_default_render_pass(s_gpuDevice->renderer);
-}
-
-void vgpuBeginFrame(void) {
-    s_gpuDevice->begin_frame(s_gpuDevice->renderer);
-}
-
-void vgpuEndFrame(void) {
-    s_gpuDevice->end_frame(s_gpuDevice->renderer);
+    VGPU_ASSERT(device);
+    return device->getCurrentTexture(device->renderer);
 }
 
 /* Buffer */
-VGPUBuffer vgpuCreateBuffer(const VGPUBufferDescriptor* descriptor)
+VGPUBuffer vgpuCreateBuffer(VGPUDevice device, const VGPUBufferDescriptor* descriptor)
 {
-    return s_gpuDevice->bufferCreate(s_gpuDevice->renderer, descriptor);
+    return device->bufferCreate(device->renderer, descriptor);
 }
 
-void vgpuDestroyBuffer(VGPUBuffer buffer)
+void vgpuDestroyBuffer(VGPUDevice device, VGPUBuffer buffer)
 {
-    s_gpuDevice->bufferDestroy(s_gpuDevice->renderer, buffer);
+    device->bufferDestroy(device->renderer, buffer);
 }
 
 /* Texture */
-static vgpu_texture_desc _vgpu_texture_desc_defaults(const vgpu_texture_desc* desc) {
-    vgpu_texture_desc def = *desc;
-    def.type = _vgpu_def(desc->type, VGPU_TEXTURE_TYPE_2D);
-    def.width = _vgpu_def(desc->width, 1);
-    def.height = _vgpu_def(desc->height, 1);
-    def.depth = _vgpu_def(desc->depth, 1);
+static VGPUTextureDescriptor _vgpu_texture_desc_defaults(const VGPUTextureDescriptor* desc) {
+    VGPUTextureDescriptor def = *desc;
+    def.dimension = _vgpu_def(desc->dimension, VGPUTextureDimension_2D);
+    def.size.width = _vgpu_def(desc->size.width, 1);
+    def.size.height = _vgpu_def(desc->size.height, 1);
+    def.size.depth = _vgpu_def(desc->size.depth, 1);
     def.format = _vgpu_def(def.format, VGPUTextureFormat_RGBA8Unorm);
-    def.mip_levels = _vgpu_def(def.mip_levels, 1);
-    def.sample_count = _vgpu_def(def.sample_count, 1);
+    def.mipLevelCount = _vgpu_def(def.mipLevelCount, 1);
+    def.sampleCount = _vgpu_def(def.sampleCount, 1);
     return def;
 }
 
-VGPUTexture vgpu_create_texture(const vgpu_texture_desc* desc)
+VGPUTexture vgpuCreateTexture(VGPUDevice device, const VGPUTextureDescriptor* descriptor)
 {
-    vgpu_texture_desc desc_def = _vgpu_texture_desc_defaults(desc);
-    return s_gpuDevice->create_texture(s_gpuDevice->renderer, &desc_def);
+    VGPUTextureDescriptor desc_def = _vgpu_texture_desc_defaults(descriptor);
+    return device->create_texture(device->renderer, &desc_def);
 }
 
-void vgpu_destroy_texture(VGPUTexture texture)
+void vgpuDestroyTexture(VGPUDevice device, VGPUTexture texture)
 {
-    s_gpuDevice->destroy_texture(s_gpuDevice->renderer, texture);
-}
-
-vgpu_texture_desc vgpu_query_texture_desc(VGPUTexture texture)
-{
-    return s_gpuDevice->query_texture_desc(texture);
-}
-
-uint32_t vgpu_get_texture_width(VGPUTexture texture, uint32_t mip_level)
-{
-    return _vgpu_max(1u, vgpu_query_texture_desc(texture).width >> mip_level);
-}
-
-uint32_t vgpu_get_texture_height(VGPUTexture texture, uint32_t mip_level)
-{
-    return _vgpu_max(1u, vgpu_query_texture_desc(texture).height >> mip_level);
+    device->destroy_texture(device->renderer, texture);
 }
 
 /* Sampler */
-vgpu_sampler vgpu_create_sampler(const VGPUSamplerDescriptor* desc)
+VGPUSampler vgpuCreateSampler(VGPUDevice device, const VGPUSamplerDescriptor* descriptor)
 {
-    return s_gpuDevice->samplerCreate(s_gpuDevice->renderer, desc);
-}
-
-void vgpu_destroy_sampler(vgpu_sampler sampler)
-{
-    s_gpuDevice->samplerDestroy(s_gpuDevice->renderer, sampler);
-}
-
-VGPURenderPass vgpuCreateRenderPass(const VGPURenderPassDescriptor* descriptor)
-{
+    VGPU_ASSERT(device);
     VGPU_ASSERT(descriptor);
-    return s_gpuDevice->renderPassCreate(s_gpuDevice->renderer, descriptor);
+
+    return device->samplerCreate(device->renderer, descriptor);
 }
 
-void vgpuDestroyRenderPass(VGPURenderPass renderPass) {
-    s_gpuDevice->renderPassDestroy(s_gpuDevice->renderer, renderPass);
-}
+void vgpuDestroySampler(VGPUDevice device, VGPUSampler sampler)
+{
+    VGPU_ASSERT(device);
+    VGPU_ASSERT(sampler.id != VGPU_INVALID_ID);
 
-void vgpuRenderPassGetExtent(VGPURenderPass renderPass, uint32_t* width, uint32_t* height) {
-    s_gpuDevice->renderPassGetExtent(s_gpuDevice->renderer, renderPass, width, height);
-}
-
-void vgpuRenderPassSetClearColors(VGPURenderPass renderPass, uint32_t firstAttachment, uint32_t count, const VGPUColor* pColors) {
-    s_gpuDevice->renderPassSetClearColors(s_gpuDevice->renderer, renderPass, firstAttachment, count, pColors);
+    device->samplerDestroy(device->renderer, sampler);
 }
 
 /* Commands */
-VGPU_EXPORT void vgpuCmdBeginRenderPass(VGPURenderPass renderPass)
+VGPU_EXPORT void vgpuCmdBeginRenderPass(VGPUDevice device, const VGPURenderPassDescriptor* descriptor)
 {
-    VGPU_ASSERT(renderPass);
-    s_gpuDevice->cmdBeginRenderPass(s_gpuDevice->renderer, renderPass);
+    VGPU_ASSERT(descriptor);
+    device->cmdBeginRenderPass(device->renderer, descriptor);
 }
 
-void vgpuCmdEndRenderPass(void) {
-    s_gpuDevice->cmdEndRenderPass(s_gpuDevice->renderer);
+void vgpuCmdEndRenderPass(VGPUDevice device) {
+    device->cmdEndRenderPass(device->renderer);
 }
 
 /* Pixel Format */

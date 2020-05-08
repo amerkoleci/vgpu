@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2019 Amer Koleci.
+// Copyright (c) 2019-2020 Amer Koleci.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -45,19 +45,23 @@
 #include <stddef.h>
 #include <stdbool.h>
 
-typedef struct VGPUBufferImpl* VGPUBuffer;
-typedef struct VGPUTextureImpl* VGPUTexture;
-//typedef struct VGPUTextureViewImpl* VGPUTextureView;
-typedef struct vgpu_sampler_t* vgpu_sampler;
-typedef struct VGPURenderPassImpl* VGPURenderPass;
-
+/* Constants */
 enum {
+    VGPU_INVALID_ID = 0,
     VGPU_MAX_COLOR_ATTACHMENTS = 8u,
     VGPU_MAX_VERTEX_BUFFER_BINDINGS = 8u,
     VGPU_MAX_VERTEX_ATTRIBUTES = 16u,
     VGPU_MAX_VERTEX_ATTRIBUTE_OFFSET = 2047u,
     VGPU_MAX_VERTEX_BUFFER_STRIDE = 2048u,
 };
+
+/* Handles */
+typedef struct VGPUDeviceImpl* VGPUDevice;
+typedef struct VGPUTexture { uint32_t id; } VGPUTexture;
+typedef struct VGPUBuffer { uint32_t id; } VGPUBuffer;
+typedef struct VGPUSampler { uint32_t id; } VGPUSampler;
+
+typedef uint32_t VGPUFlags;
 
 typedef enum vgpu_log_level {
     VGPU_LOG_LEVEL_OFF = 0,
@@ -203,22 +207,21 @@ typedef enum VGPUTextureFormatType {
     VGPUTextureFormatType_Force32 = 0x7FFFFFFF
 } VGPUTextureFormatType;
 
-typedef enum vgpu_texture_type {
-    VGPU_TEXTURE_TYPE_2D = 0,
-    VGPU_TEXTURE_TYPE_3D,
-    VGPU_TEXTURE_TYPE_CUBE,
-    _VGPU_TEXTURE_TYPE_COUNT,
-    _VGPU_TEXTURE_TYPE_FORCE_U32 = 0x7FFFFFFF
-} vgpu_texture_type;
+typedef enum VGPUTextureDimension {
+    VGPUTextureDimension_2D = 0,
+    VGPUTextureDimension_3D,
+    VGPUTextureDimension_CUBE,
+    VGPUTextureDimension_Force32 = 0x7FFFFFFF
+} VGPUTextureDimension;
 
-typedef enum vgpu_texture_usage {
-    VGPU_TEXTURE_USAGE_NONE = 0,
-    VGPU_TEXTURE_USAGE_SAMPLED = 0x04,
-    VGPU_TEXTURE_USAGE_STORAGE = 0x08,
-    VGPU_TEXTURE_USAGE_RENDERTARGET = 0x10,
-    _VGPU_TEXTURE_USAGE_FORCE_U32 = 0x7FFFFFFF
-} vgpu_texture_usage;
-typedef uint32_t vgpu_texture_usage_flags;
+typedef enum VGPUTextureUsage {
+    VGPUTextureUsage_None = 0x00000000,
+    VGPUTextureUsage_Sampled = 0x04,
+    VGPUTextureUsage_Storage = 0x08,
+    VGPUTextureUsage_OutputAttachment = 0x10,
+    VGPUTextureUsage_Force32 = 0x7FFFFFFF
+} VGPUTextureUsage;
+typedef VGPUFlags VGPUTextureUsageFlags;
 
 typedef enum VGPUBufferUsage {
     VGPU_BUFFER_USAGE_NONE = 0,
@@ -416,11 +419,11 @@ typedef struct VGPULimits {
     uint64_t        min_uniform_buffer_offset_alignment;
     uint32_t        max_storage_buffer_size;
     uint64_t        min_storage_buffer_offset_alignment;
-    uint32_t        max_sampler_anisotropy;
-    uint32_t        max_viewports;
-    uint32_t        max_viewport_width;
-    uint32_t        max_viewport_height;
-    uint32_t        max_tessellation_patch_size;
+    uint32_t        maxSamplerAnisotropy;
+    uint32_t        maxViewports;
+    uint32_t        maxViewportWidth;
+    uint32_t        maxViewportHeight;
+    uint32_t        maxTessellationPatchSize;
     float           point_size_range_min;
     float           point_size_range_max;
     float           line_width_range_min;
@@ -442,42 +445,40 @@ typedef struct VGPUBufferDescriptor {
     const char* label;
 } VGPUBufferDescriptor;
 
-typedef struct vgpu_texture_desc {
-    vgpu_texture_type type;
-    vgpu_texture_usage_flags usage;
-    uint32_t width;
-    uint32_t height;
-    union {
-        uint32_t depth;
-        uint32_t layers;
-    };
+typedef struct VGPUTextureDescriptor {
+    const char* label;
+    VGPUTextureUsageFlags usage;
+    VGPUTextureDimension dimension;
+    VGPUExtent3D size;
     VGPUTextureFormat format;
-    uint32_t mip_levels;
-    uint32_t sample_count;
+    uint32_t mipLevelCount;
+    uint32_t sampleCount;
     /// Initial content to initialize with.
     const void* content;
     /// Pointer to external texture handle
-    const void* external_handle;
-    const char* label;
-} vgpu_texture_desc;
+    const void* externalHandle;
+} VGPUTextureDescriptor;
 
-typedef struct VGPUColorAttachment {
+typedef struct VGPURenderPassColorAttachment {
     VGPUTexture     texture;
     uint32_t        mipLevel;
     uint32_t        slice;
     VGPULoadOp      loadOp;
     VGPUColor       clearColor;
-} VGPUColorAttachment;
+} VGPURenderPassColorAttachment;
 
-typedef struct VGPUDepthStencilAttachment {
-    VGPUTexture               texture;
-    float clearDepth;
-    uint32_t clearStencil;
-} VGPUDepthStencilAttachment;
+typedef struct VGPURenderPassDepthStencilAttachment {
+    VGPUTexture     texture;
+    VGPULoadOp      depthLoadOp;
+    float           clearDepth;
+    VGPULoadOp      stencilLoadOp;
+    uint32_t        clearStencil;
+} VGPURenderPassDepthStencilAttachment;
 
 typedef struct VGPURenderPassDescriptor {
-    VGPUColorAttachment         colorAttachments[VGPU_MAX_COLOR_ATTACHMENTS];
-    VGPUDepthStencilAttachment  depthStencilAttachment;
+    const char*                             label;
+    VGPURenderPassColorAttachment           colorAttachments[VGPU_MAX_COLOR_ATTACHMENTS];
+    VGPURenderPassDepthStencilAttachment    depthStencilAttachment;
 } VGPURenderPassDescriptor;
 
 typedef struct VgpuVertexBufferLayoutDescriptor {
@@ -542,15 +543,13 @@ typedef struct VGPUSamplerDescriptor {
 } VGPUSamplerDescriptor;
 
 typedef struct VGPUSwapChainDescriptor {
+    const char* label;
     /// Native window handle (HWND, IUnknown, ANativeWindow, NSWindow).
     void*               nativeHandle;
 
+    VGPUTextureFormat   format;
     uint32_t            width;
     uint32_t            height;
-    bool                fullscreen;
-    VGPUTextureFormat   colorFormat;
-    VGPUColor           colorClearValue;
-    VGPUTextureFormat   depthStencilFormat;
     VGPUPresentMode     presentMode;
 } VGPUSwapChainDescriptor;
 
@@ -578,39 +577,31 @@ extern "C"
 
     VGPU_EXPORT VGPUBackendType vgpuGetDefaultPlatformBackend(void);
     VGPU_EXPORT bool vgpuIsBackendSupported(VGPUBackendType backend);
-    VGPU_EXPORT bool vgpuInit(const VGpuDeviceDescriptor* desc);
-    VGPU_EXPORT void vgpuShutdown(void);
-    VGPU_EXPORT VGPUBackendType vgpuGetBackend(void);
-    VGPU_EXPORT VGPUFeatures vgpuGetFeatures(void);
-    VGPU_EXPORT VGPULimits vgpuGetLimits(void);
-    VGPU_EXPORT VGPURenderPass vgpuGetDefaultRenderPass(void);
+    VGPU_EXPORT VGPUDevice vgpuCreateDevice(const VGpuDeviceDescriptor* desc);
+    VGPU_EXPORT void vgpuDestroyDevice(VGPUDevice device);
+    VGPU_EXPORT VGPUBackendType vgpuGetBackend(VGPUDevice device);
+    VGPU_EXPORT VGPUFeatures vgpuGetFeatures(VGPUDevice device);
+    VGPU_EXPORT VGPULimits vgpuGetLimits(VGPUDevice device);
+    VGPU_EXPORT VGPUTextureFormat vgpuGetDefaultDepthFormat(VGPUDevice device);
+    VGPU_EXPORT VGPUTextureFormat vgpuGetDefaultDepthStencilFormat(VGPUDevice device);
 
-    VGPU_EXPORT void vgpuBeginFrame(void);
-    VGPU_EXPORT void vgpuEndFrame(void);
-    //VGPU_EXPORT VgpuPixelFormat vgpuGetDefaultDepthFormat(void);
-    //VGPU_EXPORT VgpuPixelFormat vgpuGetDefaultDepthStencilFormat(void);
+    VGPU_EXPORT void vgpuDeviceWaitIdle(VGPUDevice device);
+    VGPU_EXPORT void vgpuBeginFrame(VGPUDevice device);
+    VGPU_EXPORT void vgpuEndFrame(VGPUDevice device);
+    VGPU_EXPORT VGPUTexture vgpuGetCurrentTexture(VGPUDevice device);
    
     /* Buffer */
-    VGPU_EXPORT VGPUBuffer vgpuCreateBuffer(const VGPUBufferDescriptor* desc);
-    VGPU_EXPORT void vgpuDestroyBuffer(VGPUBuffer buffer);
+    VGPU_EXPORT VGPUBuffer vgpuCreateBuffer(VGPUDevice device, const VGPUBufferDescriptor* descriptor);
+    VGPU_EXPORT void vgpuDestroyBuffer(VGPUDevice device, VGPUBuffer buffer);
 
     /* Texture */
-    VGPU_EXPORT VGPUTexture vgpu_create_texture(const vgpu_texture_desc* desc);
-    VGPU_EXPORT void vgpu_destroy_texture(VGPUTexture texture);
-    VGPU_EXPORT vgpu_texture_desc vgpu_query_texture_desc(VGPUTexture texture);
-    VGPU_EXPORT uint32_t vgpu_get_texture_width(VGPUTexture texture, uint32_t mip_level);
-    VGPU_EXPORT uint32_t vgpu_get_texture_height(VGPUTexture texture, uint32_t mip_level);
+    VGPU_EXPORT VGPUTexture vgpuCreateTexture(VGPUDevice device, const VGPUTextureDescriptor* descriptor);
+    VGPU_EXPORT void vgpuDestroyTexture(VGPUDevice device, VGPUTexture texture);
 
     /* Sampler */
-    VGPU_EXPORT vgpu_sampler vgpu_create_sampler(const VGPUSamplerDescriptor* desc);
-    VGPU_EXPORT void vgpu_destroy_sampler(vgpu_sampler sampler);
+    VGPU_EXPORT VGPUSampler vgpuCreateSampler(VGPUDevice device, const VGPUSamplerDescriptor* descriptor);
+    VGPU_EXPORT void vgpuDestroySampler(VGPUDevice device, VGPUSampler sampler);
 
-    /* RenderPass */
-    VGPU_EXPORT VGPURenderPass vgpuCreateRenderPass(const VGPURenderPassDescriptor* descriptor);
-    //VGPU_EXPORT VGPURenderPass vgpuRenderPassCreate(const VGPUSwapChainDescriptor* descriptor);
-    VGPU_EXPORT void vgpuDestroyRenderPass(VGPURenderPass renderPass);
-    VGPU_EXPORT void vgpuRenderPassGetExtent(VGPURenderPass renderPass, uint32_t* width, uint32_t* height);
-    VGPU_EXPORT void vgpuRenderPassSetClearColors(VGPURenderPass renderPass, uint32_t firstAttachment, uint32_t count, const VGPUColor* pColor);
 
     /* ShaderModule */
     //VGPU_EXPORT VgpuShaderModule vgpuCreateShaderModule(const VgpuShaderModuleDescriptor* descriptor);
@@ -626,8 +617,8 @@ extern "C"
     //VGPU_EXPORT void vgpuDestroyPipeline(VgpuPipeline pipeline);
 
     /* Commands */
-    VGPU_EXPORT void vgpuCmdBeginRenderPass(VGPURenderPass renderPass);
-    VGPU_EXPORT void vgpuCmdEndRenderPass(void);
+    VGPU_EXPORT void vgpuCmdBeginRenderPass(VGPUDevice device, const VGPURenderPassDescriptor* descriptor);
+    VGPU_EXPORT void vgpuCmdEndRenderPass(VGPUDevice device);
     /*VGPU_EXPORT void vgpuCmdSetShader(VgpuCommandBuffer commandBuffer, VgpuShader shader);
     VGPU_EXPORT void vgpuCmdSetVertexBuffer(VgpuCommandBuffer commandBuffer, uint32_t binding, VgpuBuffer buffer, uint64_t offset, VgpuVertexInputRate inputRate);
     VGPU_EXPORT void vgpuCmdSetIndexBuffer(VgpuCommandBuffer commandBuffer, VgpuBuffer buffer, uint64_t offset, VgpuIndexType indexType);
@@ -666,6 +657,27 @@ extern "C"
     VGPU_EXPORT const char* vgpu_get_format_name(VGPUTextureFormat format);
 
 #ifdef __cplusplus
+}
+#endif
+
+#ifdef __cplusplus
+namespace vgpu
+{
+    static constexpr uint32_t kInvalidHandle = VGPU_INVALID_ID;
+    static constexpr VGPUTexture kInvalidTexture = { kInvalidHandle };
+    static constexpr VGPUBuffer kInvalidBuffer = { kInvalidHandle };
+    static constexpr VGPUSampler kInvalidSampler = { kInvalidHandle };
+
+    inline bool isValid(VGPUTexture handle) { return  handle.id != kInvalidHandle; }
+    inline bool isValid(VGPUBuffer handle) { return  handle.id != kInvalidHandle; }
+    inline bool isValid(VGPUSampler handle) { return  handle.id != kInvalidHandle; }
+
+    enum class TextureUsage : uint32_t {
+        None = VGPUTextureUsage_None,
+        Sampled = VGPUTextureUsage_Sampled,
+        Storage = VGPUTextureUsage_Storage,
+        OutputAttachment = VGPUTextureUsage_OutputAttachment
+    };
 }
 #endif
 

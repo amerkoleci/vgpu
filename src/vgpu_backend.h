@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2019 Amer Koleci.
+// Copyright (c) 2019-2020 Amer Koleci.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -24,6 +24,7 @@
 
 #include "vgpu/vgpu.h"
 #include <string.h> /* memset */
+#include <new>
 
 #if defined(_MSC_VER) || defined(__MINGW32__)
 #   include <malloc.h>
@@ -95,7 +96,117 @@ extern void __cdecl __debugbreak(void);
 #define _vgpu_max(a,b) ((a>b)?a:b)
 #define _vgpu_clamp(v,v0,v1) ((v<v0)?(v0):((v>v1)?(v1):(v)))
 
-typedef struct VGPUDeviceImpl* VGPUDevice;
+namespace vgpu
+{
+    template <typename T, uint32_t MAX_COUNT>
+    struct Pool
+    {
+        void init()
+        {
+            values = (T*)mem;
+            for (int i = 0; i < MAX_COUNT + 1; ++i) {
+                new (&values[i]) int(i + 1);
+            }
+            new (&values[MAX_COUNT]) int(-1);
+            first_free = 1;
+        }
+
+        int alloc()
+        {
+            if (first_free == -1) return -1;
+
+            const int id = first_free;
+            first_free = *((int*)&values[id]);
+            new (&values[id]) T;
+            return id;
+        }
+
+        void dealloc(uint32_t idx)
+        {
+            values[idx].~T();
+            new (&values[idx]) int(first_free);
+            first_free = idx;
+        }
+
+        alignas(T) uint8_t mem[sizeof(T) * (MAX_COUNT + 1)];
+        T* values;
+        int first_free;
+
+        T& operator[](int idx) { return values[idx]; }
+        bool isFull() const { return first_free == -1; }
+    };
+
+    using Hash = uint64_t;
+
+    class Hasher
+    {
+    public:
+        explicit Hasher(Hash h_)
+            : h(h_)
+        {
+        }
+
+        Hasher() = default;
+
+        template <typename T>
+        inline void data(const T* data_, size_t size)
+        {
+            size /= sizeof(*data_);
+            for (size_t i = 0; i < size; i++)
+                h = (h * 0x100000001b3ull) ^ data_[i];
+        }
+
+        inline void u32(uint32_t value)
+        {
+            h = (h * 0x100000001b3ull) ^ value;
+        }
+
+        inline void s32(int32_t value)
+        {
+            u32(uint32_t(value));
+        }
+
+        inline void f32(float value)
+        {
+            union
+            {
+                float f32;
+                uint32_t u32;
+            } u;
+            u.f32 = value;
+            u32(u.u32);
+        }
+
+        inline void u64(uint64_t value)
+        {
+            u32(value & 0xffffffffu);
+            u32(value >> 32);
+        }
+
+        template <typename T>
+        inline void pointer(T* ptr)
+        {
+            u64(reinterpret_cast<uintptr_t>(ptr));
+        }
+
+        inline void string(const char* str)
+        {
+            char c;
+            u32(0xff);
+            while ((c = *str++) != '\0')
+                u32(uint8_t(c));
+        }
+
+        inline Hash get() const
+        {
+            return h;
+        }
+
+    private:
+        Hash h = 0xcbf29ce484222325ull;
+    };
+}
+
 typedef struct VGPURenderer VGPURenderer;
 
 typedef struct VGPUDeviceImpl {
@@ -104,66 +215,65 @@ typedef struct VGPUDeviceImpl {
 
     bool (*init)(VGPUDevice device, const VGpuDeviceDescriptor* descriptor);
     void (*destroy)(VGPUDevice device);
-    VGPUBackendType(*getBackend)(void);
-    VGPUFeatures(*getFeatures)(VGPURenderer* driver_data);
-    VGPULimits(*getLimits)(VGPURenderer* driver_data);
-    VGPURenderPass (*get_default_render_pass)(VGPURenderer* driver_data);
+    VGPUBackendType(*GetBackend)(void);
+    VGPUFeatures(*GetFeatures)(VGPURenderer* driverData);
+    VGPULimits(*GetLimits)(VGPURenderer* driverData);
+    VGPUTextureFormat(*GetDefaultDepthFormat)(VGPURenderer* driverData);
+    VGPUTextureFormat(*GetDefaultDepthStencilFormat)(VGPURenderer* driverData);
 
-    void (*begin_frame)(VGPURenderer* driverData);
-    void (*end_frame)(VGPURenderer* driverData);
+    VGPUTexture (*getCurrentTexture)(VGPURenderer* driverData);
+
+    void (*DeviceWaitIdle)(VGPURenderer* driverData);
+    void (*BeginFrame)(VGPURenderer* driverData);
+    void (*EndFrame)(VGPURenderer* driverData);
 
     /* Buffer */
     VGPUBuffer(*bufferCreate)(VGPURenderer* driverData, const VGPUBufferDescriptor* desc);
     void (*bufferDestroy)(VGPURenderer* driverData, VGPUBuffer handle);
 
     /* Texture */
-    VGPUTexture (*create_texture)(VGPURenderer* driverData, const vgpu_texture_desc* desc);
+    VGPUTexture (*create_texture)(VGPURenderer* driverData, const VGPUTextureDescriptor* desc);
     void (*destroy_texture)(VGPURenderer* driverData, VGPUTexture handle);
-    vgpu_texture_desc(*query_texture_desc)(VGPUTexture handle);
 
     /* Sampler */
-    vgpu_sampler(*samplerCreate)(VGPURenderer* driver_data, const VGPUSamplerDescriptor* desc);
-    void (*samplerDestroy)(VGPURenderer* driver_data, vgpu_sampler handle);
-
-    /* RenderPass */
-    VGPURenderPass (*renderPassCreate)(VGPURenderer* driverData, const VGPURenderPassDescriptor* descriptor);
-    void (*renderPassDestroy)(VGPURenderer* driverData, VGPURenderPass handle);
-    void (*renderPassGetExtent)(VGPURenderer* driverData, VGPURenderPass handle, uint32_t* width, uint32_t* height);
-    void (*renderPassSetClearColors)(VGPURenderer* driverData, VGPURenderPass handle, uint32_t firstAttachment, uint32_t count, const VGPUColor* pColors);
+    VGPUSampler(*samplerCreate)(VGPURenderer* driverData, const VGPUSamplerDescriptor* desc);
+    void (*samplerDestroy)(VGPURenderer* driverData, VGPUSampler handle);
 
     /* Commands */
-    void (*cmdBeginRenderPass)(VGPURenderer* driverData, VGPURenderPass handle);
+    void (*cmdBeginRenderPass)(VGPURenderer* driverData, const VGPURenderPassDescriptor* descriptor);
     void (*cmdEndRenderPass)(VGPURenderer* driverData);
 } VGPUDeviceImpl;
 
+#if defined(VGPU_D3D11)
 /* d3d11 */
 extern bool vgpu_d3d11_supported(void);
 extern VGPUDevice d3d11_create_device(void);
+#endif /* defined(VGPU_D3D11) */
 
+#if defined(VGPU_VULKAN)
 /* vulkan */
 extern bool vgpu_vk_supported(void);
 extern VGPUDevice vk_create_device(void);
+#endif /* defined(VGPU_VULKAN) */
 
 #define ASSIGN_DRIVER_FUNC(func, name) device->func = name##_##func;
 #define ASSIGN_DRIVER(name) \
 ASSIGN_DRIVER_FUNC(init, name)\
 ASSIGN_DRIVER_FUNC(destroy, name)\
-ASSIGN_DRIVER_FUNC(getBackend, name)\
-ASSIGN_DRIVER_FUNC(getFeatures, name)\
-ASSIGN_DRIVER_FUNC(getLimits, name)\
-ASSIGN_DRIVER_FUNC(get_default_render_pass, name)\
-ASSIGN_DRIVER_FUNC(begin_frame, name)\
-ASSIGN_DRIVER_FUNC(end_frame, name)\
+ASSIGN_DRIVER_FUNC(GetBackend, name)\
+ASSIGN_DRIVER_FUNC(GetFeatures, name)\
+ASSIGN_DRIVER_FUNC(GetLimits, name)\
+ASSIGN_DRIVER_FUNC(GetDefaultDepthFormat, name)\
+ASSIGN_DRIVER_FUNC(GetDefaultDepthStencilFormat, name)\
+ASSIGN_DRIVER_FUNC(getCurrentTexture, name)\
+ASSIGN_DRIVER_FUNC(DeviceWaitIdle, name)\
+ASSIGN_DRIVER_FUNC(BeginFrame, name)\
+ASSIGN_DRIVER_FUNC(EndFrame, name)\
 ASSIGN_DRIVER_FUNC(bufferCreate, name)\
 ASSIGN_DRIVER_FUNC(bufferDestroy, name)\
 ASSIGN_DRIVER_FUNC(create_texture, name)\
 ASSIGN_DRIVER_FUNC(destroy_texture, name)\
-ASSIGN_DRIVER_FUNC(query_texture_desc, name)\
 ASSIGN_DRIVER_FUNC(samplerCreate, name)\
 ASSIGN_DRIVER_FUNC(samplerDestroy, name)\
-ASSIGN_DRIVER_FUNC(renderPassCreate, name)\
-ASSIGN_DRIVER_FUNC(renderPassDestroy, name)\
-ASSIGN_DRIVER_FUNC(renderPassGetExtent, name)\
-ASSIGN_DRIVER_FUNC(renderPassSetClearColors, name)\
 ASSIGN_DRIVER_FUNC(cmdBeginRenderPass, name)\
 ASSIGN_DRIVER_FUNC(cmdEndRenderPass, name)

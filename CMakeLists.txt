@@ -118,7 +118,7 @@ set(SOURCE_FILES
     include/vgpu/vgpu.h
     src/stb_ds.h
     src/vgpu_backend.h
-    src/vgpu.c
+    src/vgpu.cpp
 )
 
 add_library (vgpu ${SOURCE_FILES})
@@ -129,20 +129,19 @@ if (BUILD_SHARED_LIBS)
 endif ()
 
 if (VGPU_BACKEND_D3D11)
-    target_sources(vgpu PRIVATE
-        src/vgpu_d3d.h
-        src/vgpu_d3d11.c
-    )
+    #target_sources(vgpu PRIVATE
+    #    src/vgpu_d3d.h
+    #    src/vgpu_d3d11.cpp
+    #)
 
-    target_compile_definitions(vgpu PRIVATE VGPU_D3D11)
+    #target_compile_definitions(vgpu PRIVATE VGPU_D3D11)
 endif ()
 
 if (VGPU_BACKEND_VULKAN)
     target_sources(vgpu PRIVATE
         src/vk/vkbind.h
         src/vk/vk_mem_alloc.h
-        src/vk/vk_mem_alloc.cpp
-        src/vgpu_vk.c
+        src/vgpu_vk.cpp
     )
 
     if (MSVC)

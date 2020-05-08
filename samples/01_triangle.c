@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2019 Amer Koleci.
+// Copyright (c) 2019-2020 Amer Koleci.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -111,10 +111,7 @@ int main(int argc, char** argv)
 #endif
             .width = width,
             .height = height,
-            .fullscreen = false,
-            .colorFormat = VGPUTextureFormat_BGRA8Unorm,
-            .colorClearValue = clearColor,
-            .depthStencilFormat = VGPUTextureFormat_Depth32Float,
+            .format = VGPUTextureFormat_BGRA8Unorm,
             .presentMode = VGPUPresentMode_Fifo
       },
     };
@@ -123,9 +120,9 @@ int main(int argc, char** argv)
     gpu_desc.flags |= VGPU_CONFIG_FLAGS_VALIDATION;
 #endif
 
-
-    if (!vgpuInit(&gpu_desc)) {
-
+    VGPUDevice device = vgpuCreateDevice(&gpu_desc);
+    if (!device) {
+        return EXIT_FAILURE;
     }
 
     while (!glfwWindowShouldClose(window))
@@ -135,22 +132,25 @@ int main(int argc, char** argv)
             glfwSetWindowShouldClose(window, true);
         }
 
-        vgpuBeginFrame();
+        vgpuBeginFrame(device);
 
         /* Begin default render pass and change its clear color */
-        VGPURenderPass renderPass = vgpuGetDefaultRenderPass();
-        float g = clearColor.g + 0.01f;
-        clearColor.g = (g > 1.0f) ? 0.0f : g;
-        vgpuRenderPassSetClearColors(renderPass, 0, 1, &clearColor);
+        VGPURenderPassDescriptor renderPass;
+        memset(&renderPass, 0, sizeof(VGPURenderPassDescriptor));
+        renderPass.colorAttachments[0].texture = vgpuGetCurrentTexture(device);
+        renderPass.colorAttachments[0].mipLevel = 0;
+        renderPass.colorAttachments[0].slice = 0;
+        renderPass.colorAttachments[0].loadOp = VGPULoadOp_Clear;
+        renderPass.colorAttachments[0].clearColor = clearColor;
 
-        vgpuCmdBeginRenderPass(renderPass);
-        vgpuCmdEndRenderPass();
-        vgpuEndFrame();
+        vgpuCmdBeginRenderPass(device, &renderPass);
+        vgpuCmdEndRenderPass(device);
+        vgpuEndFrame(device);
         glfwPollEvents();
     }
 
     /*vgpuDestroyCommandBuffer(commandBuffer);*/
-    vgpuShutdown();
+    vgpuDestroyDevice(device);
     glfwTerminate();
 
 #elif defined(__ANDROID__)
