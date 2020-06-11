@@ -22,7 +22,7 @@
 
 # CMake version
 cmake_minimum_required(VERSION 3.10)
-project(vgpu)
+project(vgpu C)
 
 set(VGPU_VERSION_MAJOR 0)
 set(VGPU_VERSION_MINOR 1)
@@ -63,44 +63,29 @@ else()
     set(VGPU_BACKEND_OPENGL ON CACHE BOOL "Include OpenGL renderer")
 endif ()
 
-option (VGPU_BUILD_SAMPLES "Build the vgpu samples" ON)
+# Platform Flags
+if(APPLE)
+	set(CMAKE_MACOSX_RPATH ON)
+	set(CMAKE_OSX_DEPLOYMENT_TARGET 10.9)
+	set(LOBJC "objc")
+elseif(WIN32)
+	# "vgpu.dll", not "vgpu.dll"
+	set(CMAKE_SHARED_LIBRARY_PREFIX "")
+endif()
+
+if (ANDROID OR IOS)
+    set(BUILD_EXAMPLES OFF CACHE INTERNAL "Build examples" FORCE)
+else ()
+    option (BUILD_EXAMPLES "Build the vgpu samples" ON)
+endif ()
+
 option (VGPU_INSTALL "Generate installation target" ON)
 option(BUILD_SHARED_LIBS "Build shared library" ON)
-
-include(GNUInstallDirs)
-
-# Setup
-if (EMSCRIPTEN)
-  string(CONCAT VGPU_EMSCRIPTEN_FLAGS
-    "-O3 "
-    "-s WASM=1 "
-    "-s USE_GLFW=3 "
-    "-s USE_WEBGL2=1 "
-    "-s GL_PREINITIALIZED_CONTEXT=1 "
-    "-s USE_ZLIB=1 "
-    "-s USE_PTHREADS=0 "
-    "-s FULL_ES3=1 "
-    "-s FORCE_FILESYSTEM=1 "
-    "-s ALLOW_MEMORY_GROWTH=1 "
-    "-s \"EXTRA_EXPORTED_RUNTIME_METHODS=['getValue','setValue']\" "
-    "--shell-file \"${CMAKE_CURRENT_SOURCE_DIR}/src/resources/vgpu.html\""
-  )
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${VGPU_EMSCRIPTEN_FLAGS}")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${VGPU_EMSCRIPTEN_FLAGS}")
-  set(CMAKE_EXECUTABLE_SUFFIX ".html")
-
-elseif (ANDROID)
-elseif (UNIX)
-  if (APPLE)
-    set (CMAKE_MACOSX_RPATH 1)
-  endif ()
-  find_package(PkgConfig)
-endif ()
 
 # third_party
 
 # GLFW
-if (VGPU_BUILD_SAMPLES AND NOT (EMSCRIPTEN OR ANDROID))
+if (BUILD_EXAMPLES AND NOT (EMSCRIPTEN OR ANDROID))
     set (GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
     set (GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
     set (GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
@@ -112,13 +97,17 @@ if (VGPU_BUILD_SAMPLES AND NOT (EMSCRIPTEN OR ANDROID))
     unset (LIB_SUFFIX CACHE)
 endif ()
 
-
 # vgpu
-set(SOURCE_FILES 
+set(SOURCE_FILES
+    # Public Headers
     include/vgpu/vgpu.h
+    # Internal Headers
     src/stb_ds.h
-    src/vgpu_backend.h
-    src/vgpu.cpp
+    src/vgpu_driver.h
+    src/vgpu_d3d_common.h
+    # Source Files
+    src/vgpu.c
+    src/vgpu_driver_d3d11.c
 )
 
 add_library (vgpu ${SOURCE_FILES})
@@ -129,37 +118,44 @@ if (BUILD_SHARED_LIBS)
 endif ()
 
 if (VGPU_BACKEND_D3D11)
-    #target_sources(vgpu PRIVATE
-    #    src/vgpu_d3d.h
-    #    src/vgpu_d3d11.cpp
-    #)
+    target_compile_definitions(vgpu PRIVATE VGPU_DRIVER_D3D11)
+endif ()
 
-    #target_compile_definitions(vgpu PRIVATE VGPU_D3D11)
+if (VGPU_BACKEND_D3D12)
+    target_compile_definitions(vgpu PRIVATE VGPU_DRIVER_D3D12)
 endif ()
 
 if (VGPU_BACKEND_VULKAN)
-    target_sources(vgpu PRIVATE
-        src/vk/vkbind.h
-        src/vk/vk_mem_alloc.h
-        src/vgpu_vk.cpp
-    )
+    #target_sources(vgpu PRIVATE
+    #    src/vk/vkbind.h
+    #    src/vk/vk_mem_alloc.h
+    #    src/vgpu_vk.cpp
+    #)
 
-    if (MSVC)
-        target_sources(vgpu PRIVATE
-            src/vk/vk_mem_alloc.natvis
-        )
-    endif ()
+    #if (MSVC)
+    #    target_sources(vgpu PRIVATE
+    #        src/vk/vk_mem_alloc.natvis
+    #    )
+    #endif ()
 
-    target_compile_definitions(vgpu PRIVATE VGPU_VULKAN)
+    #target_compile_definitions(vgpu PRIVATE VGPU_VULKAN)
     #target_link_libraries(vgpu PRIVATE vulkan)
 endif ()
 
+# Build flags
+if (NOT MSVC)
+	set_property(TARGET vgpu PROPERTY COMPILE_FLAGS "-std=gnu99 -Wall -Wno-strict-aliasing -pedantic")
+endif()
+
+# MinGW builds should statically link libgcc
+if (MINGW)
+	target_link_libraries(vgpu PRIVATE -static-libgcc)
+endif()
+
 set_target_properties(vgpu PROPERTIES
+    OUTPUT_NAME "vgpu"
     VERSION ${VGPU_VERSION}
     SOVERSION ${VGPU_VERSION_MAJOR}
-    POSITION_INDEPENDENT_CODE ON
-    CXX_STANDARD 11
-    C_STANDARD 99
 )
 
 target_include_directories(vgpu PUBLIC
@@ -200,4 +196,3 @@ if (BUILD_SHARED_LIBS)
 else ()
     message(STATUS "  Library         STATIC")
 endif ()
-message(STATUS "  Renderer        ${VGPU_RENDERER}")

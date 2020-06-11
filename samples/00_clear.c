@@ -21,6 +21,7 @@
 //
 
 #include <vgpu/vgpu.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -48,17 +49,18 @@
 // GLFW3 Error Callback, runs on GLFW3 error
 static void glfwErrorCallback(int error, const char* description)
 {
-    vgpu_log_format(VGPU_LOG_LEVEL_ERROR, "[GLFW3 Error] Code: %d Decription: %s", error, description);
+    vgpu_log_error("[GLFW3 Error] Code: %d Decription: %s", error, description);
 }
 #endif
 
 static void vgpu_log_fn(void* user_data, vgpu_log_level level, const char* message)
 {
+    printf("%s\n", message);
 }
 
 int main(int argc, char** argv)
 {
-    vgpu_set_log_callback_function(vgpu_log_fn, NULL);
+    vgpuSetLogCallback(vgpu_log_fn, NULL);
 
 #ifdef USE_GLFW
     glfwSetErrorCallback(glfwErrorCallback);
@@ -73,69 +75,65 @@ int main(int argc, char** argv)
     glfwInitHint(GLFW_COCOA_CHDIR_RESOURCES, GLFW_FALSE);
 #endif
 
-    VGPUBackendType preferredBackend = VGPUBackendType_Force32;
+    //VGPUBackendType preferredBackend = VGPUBackendType_Force32;
     //VGPUBackendType preferredBackend = VGPUBackendType_D3D11;
-    if (preferredBackend != VGPUBackendType_OpenGL)
+    //if (preferredBackend != VGPUBackendType_OpenGL)
     {
         // By default on non opengl context creation.
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     }
-    else
+    /*else
     {
         glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_API);
         glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
         glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
         glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
         glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    }
+    }*/
 
     GLFWwindow* window = glfwCreateWindow(1280, 720, "vgpu", 0, 0);
-    if (preferredBackend == VGPUBackendType_OpenGL)
+    /*if (preferredBackend == VGPUBackendType_OpenGL)
     {
         glfwMakeContextCurrent(window);
         glfwSwapInterval(1);
-    }
+    }*/
 
     int width, height;
     glfwGetWindowSize(window, &width, &height);
 
     VGPUColor clearColor = { 1.0f, 0.0f, 0.0f, 1.0f };
 
-    VGpuDeviceDescriptor gpu_desc = {
-        .preferredBackend = preferredBackend,
-        .swapchain = &(VGPUSwapChainDescriptor) {
-#if defined(_WIN32) || defined(_WIN64)
-            .nativeHandle = (void*)glfwGetWin32Window(window),
-#elif defined(__linux__)
-#elif defined(__APPLE__)
-#endif
+    vgpu_device_info gpu_desc = {
+        .swapchain = {
             .width = width,
             .height = height,
-            .format = VGPUTextureFormat_BGRA8Unorm,
-            .presentMode = VGPUPresentMode_Fifo
+            .color_format = VGPU_TEXTURE_FORMAT_BGRA8,
+#if defined(_WIN32) || defined(_WIN64)
+            .window_handle = (void*)glfwGetWin32Window(window),
+#endif
       },
     };
 
 #ifdef _DEBUG
-    gpu_desc.flags |= VGPU_CONFIG_FLAGS_VALIDATION;
+    gpu_desc.debug = true;
 #endif
 
-    VGPUDevice device = vgpuCreateDevice(&gpu_desc);
+    VGPUDevice device = vgpuCreateDevice(VGPU_BACKEND_TYPE_DEFAULT, &gpu_desc);
     if (!device) {
         return EXIT_FAILURE;
     }
 
-    VGPUTexture depthTexture = vgpuCreateTexture(device , &(VGPUTextureDescriptor) {
-        .usage = VGPUTextureUsage_OutputAttachment,
-        .size = { width, height, 1u},
-        .format = vgpuGetDefaultDepthFormat(device)
-    });
+    /* VGPUTexture depthTexture = vgpuCreateTexture(device , &(VGPUTextureDescriptor) {
+         .usage = VGPU_TEXTURE_USAGE_RENDER_TARGET,
+         .size = { width, height, 1u},
+         .format = vgpuGetDefaultDepthFormat(device)
+     });*/
 
     while (!glfwWindowShouldClose(window))
     {
         if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         {
-            glfwSetWindowShouldClose(window, true);
+            glfwSetWindowShouldClose(window, GLFW_TRUE);
         }
 
         vgpuBeginFrame(device);
@@ -144,16 +142,16 @@ int main(int argc, char** argv)
         float g = clearColor.g + 0.01f;
         clearColor.g = (g > 1.0f) ? 0.0f : g;
 
-        VGPURenderPassDescriptor renderPass;
-        memset(&renderPass, 0, sizeof(VGPURenderPassDescriptor));
-        renderPass.colorAttachments[0].texture = vgpuGetCurrentTexture(device);
+        VGPURenderPassDescription renderPass;
+        memset(&renderPass, 0, sizeof(VGPURenderPassDescription));
+        renderPass.colorAttachments[0].texture = vgpuGetBackbufferTexture(device);
         renderPass.colorAttachments[0].mipLevel = 0;
         renderPass.colorAttachments[0].slice = 0;
-        renderPass.colorAttachments[0].loadOp = VGPULoadOp_Clear;
+        renderPass.colorAttachments[0].loadOp = VGPU_LOAD_OP_CLEAR;
         renderPass.colorAttachments[0].clearColor = clearColor;
-        renderPass.depthStencilAttachment.texture = depthTexture;
-        renderPass.depthStencilAttachment.depthLoadOp = VGPULoadOp_Clear;
-        renderPass.depthStencilAttachment.clearDepth = 1.0f;
+        //renderPass.depthStencilAttachment.texture = depthTexture;
+        //renderPass.depthStencilAttachment.depthLoadOp = VGPULoadOp_Clear;
+        //renderPass.depthStencilAttachment.clearDepth = 1.0f;
 
         vgpuCmdBeginRenderPass(device, &renderPass);
         vgpuCmdEndRenderPass(device);
@@ -162,7 +160,7 @@ int main(int argc, char** argv)
     }
 
     /*vgpuDestroyCommandBuffer(commandBuffer);*/
-    vgpuDestroyTexture(device, depthTexture);
+    //vgpuDestroyTexture(device, depthTexture);
     vgpuDestroyDevice(device);
     glfwTerminate();
 

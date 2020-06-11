@@ -73,36 +73,35 @@ int main(int argc, char** argv)
     glfwInitHint(GLFW_COCOA_CHDIR_RESOURCES, GLFW_FALSE);
 #endif
 
-    VGPUBackendType preferredBackend = VGPUBackendType_Force32;
+    //VGPUBackendType preferredBackend = VGPUBackendType_Force32;
     //VGPUBackendType preferredBackend = VGPUBackendType_D3D11;
-    if (preferredBackend != VGPUBackendType_OpenGL)
+    //if (preferredBackend != VGPUBackendType_OpenGL)
     {
         // By default on non opengl context creation.
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     }
-    else
+    /*else
     {
         glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_API);
         glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
         glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
         glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
         glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    }
+    }*/
 
     GLFWwindow* window = glfwCreateWindow(1280, 720, "01 - triangle", 0, 0);
-    if (preferredBackend == VGPUBackendType_OpenGL)
+   /* if (preferredBackend == VGPUBackendType_OpenGL)
     {
         glfwMakeContextCurrent(window);
         glfwSwapInterval(1);
-    }
+    }*/
 
     int width, height;
     glfwGetWindowSize(window, &width, &height);
 
     VGPUColor clearColor = { 1.0f, 0.0f, 0.0f, 1.0f };
 
-    VGpuDeviceDescriptor gpu_desc = {
-        .preferredBackend = preferredBackend,
+    vgpu_device_info gpu_desc = {
         .swapchain = &(VGPUSwapChainDescriptor) {
 #if defined(_WIN32) || defined(_WIN64)
             .nativeHandle = (void*)glfwGetWin32Window(window),
@@ -111,7 +110,7 @@ int main(int argc, char** argv)
 #endif
             .width = width,
             .height = height,
-            .format = VGPUTextureFormat_BGRA8Unorm,
+            .format = VGPU_TEXTURE_FORMAT_BGRA8,
             .presentMode = VGPUPresentMode_Fifo
       },
     };
@@ -120,7 +119,7 @@ int main(int argc, char** argv)
     gpu_desc.flags |= VGPU_CONFIG_FLAGS_VALIDATION;
 #endif
 
-    VGPUDevice device = vgpuCreateDevice(&gpu_desc);
+    vgpu_device device = vgpu_device_create(VGPU_BACKEND_TYPE_DEFAULT, &gpu_desc);
     if (!device) {
         return EXIT_FAILURE;
     }
