@@ -118,7 +118,7 @@ int main(int argc, char** argv)
     gpu_desc.debug = true;
 #endif
 
-    VGPUDevice device = vgpuCreateDevice(VGPU_BACKEND_TYPE_DEFAULT, &gpu_desc);
+    VGPUDevice device = vgpuCreateDevice(VGPU_BACKEND_TYPE_COUNT, &gpu_desc);
     if (!device) {
         return EXIT_FAILURE;
     }

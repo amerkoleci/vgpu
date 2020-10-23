@@ -55,7 +55,7 @@ const vgpu_allocation_callbacks vgpu_default_alloc_cb = {
 const vgpu_allocation_callbacks* vgpu_alloc_cb = &vgpu_default_alloc_cb;
 void* vgpu_allocation_user_data = NULL;
 
-void vgpu_set_allocation_callbacks(const vgpu_allocation_callbacks* callbacks) {
+void vgpuSetAllocationCallbacks(const vgpu_allocation_callbacks* callbacks) {
     if (callbacks == NULL) {
         vgpu_alloc_cb = &vgpu_default_alloc_cb;
     }
@@ -125,7 +125,7 @@ static const vgpu_driver* drivers[] = {
 VGPUDevice vgpuCreateDevice(vgpu_backend_type preferred_backend, const vgpu_device_info* info)
 {
     VGPUDevice device = NULL;
-    if (preferred_backend == VGPU_BACKEND_TYPE_DEFAULT || preferred_backend == VGPU_BACKEND_TYPE_COUNT) {
+    if (preferred_backend == VGPU_BACKEND_TYPE_COUNT) {
         for (uint32_t i = 0; _vgpu_count_of(drivers); i++) {
             if (drivers[i]->is_supported()) {
                 device = drivers[i]->createDevice(info);
@@ -384,13 +384,13 @@ const VgpuPixelFormatDesc FormatDesc[] =
     { VGPU_PIXEL_FORMAT_ASTC12x12,              "ASTC12x12",            VGPU_PIXEL_FORMAT_TYPE_UNORM,       3,          {12, 12, 16, 1, 1},     {0, 0, 0, 0, 0, 0} },*/
 };
 
-uint32_t vgpu_get_format_bits_per_pixel(VGPUTextureFormat format)
+uint32_t vgpuGetFormatBitsPerPixel(VGPUTextureFormat format)
 {
     assert(FormatDesc[(uint32_t)format].format == format);
     return FormatDesc[(uint32_t)format].bitsPerPixel;
 }
 
-uint32_t vgpu_get_format_block_size(VGPUTextureFormat format)
+uint32_t vgpuGetFormatBlockSize(VGPUTextureFormat format)
 {
     assert(FormatDesc[(uint32_t)format].format == format);
     return FormatDesc[(uint32_t)format].compression.blockSize;

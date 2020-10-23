@@ -61,6 +61,9 @@ typedef uint32_t vgpu_bool;
 
 /* Constants */
 enum {
+    VGPU_MAX_ADAPTER_NAME_SIZE = 256u,
+    VGPU_NUM_INFLIGHT_FRAMES = 2u,
+    VGPU_MAX_INFLIGHT_FRAMES = 3u,
     VGPU_MAX_COLOR_ATTACHMENTS = 8u,
     VGPU_MAX_VERTEX_BUFFER_BINDINGS = 8u,
     VGPU_MAX_VERTEX_ATTRIBUTES = 16u,
@@ -85,7 +88,6 @@ typedef enum vgpu_log_level {
 } vgpu_log_level;
 
 typedef enum vgpu_backend_type {
-    VGPU_BACKEND_TYPE_DEFAULT,
     VGPU_BACKEND_TYPE_NULL,
     VGPU_BACKEND_TYPE_D3D11,
     VGPU_BACKEND_TYPE_D3D12,
@@ -96,12 +98,19 @@ typedef enum vgpu_backend_type {
     _VGPU_BACKEND_TYPE_FORCE_U32 = 0x7FFFFFFF
 } vgpu_backend_type;
 
-typedef enum vgpu_device_preference {
-    VGPU_DEVICE_PREFERENCE_HIGH_PERFORMANCE = 0,
-    VGPU_DEVICE_PREFERENCE_LOW_POWER = 1,
-    VGPU_DEVICE_PREFERENCE_DONT_CARE = 2,
-    _VGPU_DEVICE_PREFERENCE_FORCE_U32 = 0x7FFFFFFF
-} vgpu_device_preference;
+typedef enum VGPUPowerPreference {
+    VGPUPowerPreference_LowPower = 0,
+    VGPUPowerPreference_HighPerformance = 1,
+    VGPUPowerPreference_Force32 = 0x7FFFFFFF
+} VGPUPowerPreference;
+
+typedef enum VGPUAdapterType {
+    VGPUAdapterType_DiscreteGPU,
+    VGPUAdapterType_IntegratedGPU,
+    VGPUAdapterType_CPU,
+    VGPUAdapterType_Unknown,
+    VGPUAdapterType_Force32 = 0x7FFFFFFF
+} VGPUAdapterType;
 
 typedef enum vgpu_present_mode {
     VGPU_PRESENT_MODE_FIFO,
@@ -387,7 +396,7 @@ typedef struct vgpu_allocation_callbacks {
     void (VGPU_CALL* free_memory)(void* user_data, void* ptr);
 } vgpu_allocation_callbacks;
 
-typedef struct vgpu_features {
+typedef struct VGPUDeviceFeatures {
     vgpu_bool independentBlend;
     vgpu_bool computeShader;
     vgpu_bool tessellationShader;
@@ -401,48 +410,45 @@ typedef struct vgpu_features {
     vgpu_bool textureCompressionBC;
     vgpu_bool textureCubeArray;
     vgpu_bool raytracing;
-} vgpu_features;
+} VGPUDeviceFeatures;
 
-typedef struct vgpu_limits {
-    uint32_t        max_vertex_attributes;
-    uint32_t        max_vertex_bindings;
-    uint32_t        max_vertex_attribute_offset;
-    uint32_t        max_vertex_binding_stride;
-    uint32_t        max_texture_size_1d;
-    uint32_t        max_texture_size_2d;
-    uint32_t        max_texture_size_3d;
-    uint32_t        max_texture_size_cube;
-    uint32_t        max_texture_array_layers;
-    uint32_t        max_color_attachments;
-    uint32_t        max_uniform_buffer_size;
-    uint64_t        min_uniform_buffer_offset_alignment;
-    uint32_t        max_storage_buffer_size;
-    uint64_t        min_storage_buffer_offset_alignment;
-    uint32_t        max_sampler_anisotropy;
-    uint32_t        max_viewports;
-    uint32_t        max_viewport_width;
-    uint32_t        max_viewport_height;
-    uint32_t        max_tessellation_patch_size;
-    float           point_size_range_min;
-    float           point_size_range_max;
-    float           line_width_range_min;
-    float           line_width_range_max;
-    uint32_t        max_compute_shared_memory_size;
-    uint32_t        max_compute_work_group_count_x;
-    uint32_t        max_compute_work_group_count_y;
-    uint32_t        max_compute_work_group_count_z;
-    uint32_t        max_compute_work_group_invocations;
-    uint32_t        max_compute_work_group_size_x;
-    uint32_t        max_compute_work_group_size_y;
-    uint32_t        max_compute_work_group_size_z;
-} vgpu_limits;
+typedef struct VGPUDeviceLimits {
+    uint32_t        maxVertexAttributes;
+    uint32_t        maxVertexBindings;
+    uint32_t        maxVertexAttributeOffset;
+    uint32_t        maxVertexBindingStride;
+    uint32_t        maxTextureDimension2D;
+    uint32_t        maxTextureDimension3D;
+    uint32_t        maxTextureDimensionCube;
+    uint32_t        maxTextureArrayLayers;
+    uint32_t        maxColorAttachments;
+    uint32_t        maxUniformBufferRange;
+    uint32_t        maxStorageBufferRange;
+    uint64_t        minUniformBufferOffsetAlignment;
+    uint64_t        minStorageBufferOffsetAlignment;
+    uint32_t        maxSamplerAnisotropy;
+    uint32_t        maxViewports;
+    uint32_t        maxViewportWidth;
+    uint32_t        maxViewportHeight;
+    uint32_t        maxTessellationPatchSize;
+    uint32_t        maxComputeSharedMemorySize;
+    uint32_t        maxComputeWorkGroupCountX;
+    uint32_t        maxComputeWorkGroupCountY;
+    uint32_t        maxComputeWorkGroupCountZ;
+    uint32_t        maxComputeWorkGroupInvocations;
+    uint32_t        maxComputeWorkGroupSizeX;
+    uint32_t        maxComputeWorkGroupSizeY;
+    uint32_t        maxComputeWorkGroupSizeZ;
+} VGPUDeviceLimits;
 
 typedef struct VGPUDeviceCaps {
-    vgpu_backend_type backendType;
-    uint32_t vendorId;
-    uint32_t deviceId;
-    vgpu_features features;
-    vgpu_limits limits;
+    vgpu_backend_type   backendType;
+    uint32_t            vendorId;
+    uint32_t            adapterId;
+    VGPUAdapterType     adapterType;
+    char                adapterName[VGPU_MAX_ADAPTER_NAME_SIZE];
+    VGPUDeviceFeatures  features;
+    VGPUDeviceLimits    limits;
 } VGPUDeviceCaps;
 
 typedef struct VGPUBufferDescriptor {
@@ -562,15 +568,15 @@ typedef struct vgpu_swapchain_info {
 } vgpu_swapchain_info;
 
 typedef struct vgpu_device_info {
-    vgpu_bool debug;
-    vgpu_device_preference device_preference;
+    vgpu_bool           debug;
+    VGPUPowerPreference powerPreference;
     vgpu_swapchain_info swapchain;
 } vgpu_device_info;
 
 /* Functions */
 
 /* Allocation functions */
-VGPU_API void vgpu_set_allocation_callbacks(const vgpu_allocation_callbacks* callbacks);
+VGPU_API void vgpuSetAllocationCallbacks(const vgpu_allocation_callbacks* callbacks);
 
 /* Log functions */
 VGPU_API void vgpuSetLogCallback(vgpu_log_callback callback, void* user_data);
@@ -634,8 +640,8 @@ VGPU_EXPORT void vgpuCmdDrawIndexed(VgpuCommandBuffer commandBuffer, uint32_t in
 
 /* Helper methods */
 /// Get the number of bits per format
-VGPU_API uint32_t vgpu_get_format_bits_per_pixel(VGPUTextureFormat format);
-VGPU_API uint32_t vgpu_get_format_block_size(VGPUTextureFormat format);
+VGPU_API uint32_t vgpuGetFormatBitsPerPixel(VGPUTextureFormat format);
+VGPU_API uint32_t vgpuGetFormatBlockSize(VGPUTextureFormat format);
 
 /// Get the format compression ration along the x-axis.
 VGPU_API uint32_t vgpuGetFormatBlockWidth(VGPUTextureFormat format);

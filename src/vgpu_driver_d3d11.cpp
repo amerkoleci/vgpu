@@ -20,25 +20,18 @@
 // THE SOFTWARE.
 //
 
-#if defined(VGPU_DRIVER_D3D11) 
-#include "vgpu_d3d_common.h"
+#if defined(VGPU_DRIVER_D3D11)
 #define D3D11_NO_HELPERS
 #include <d3d11_1.h>
+#include "vgpu_d3d_common.h"
 #include "stb_ds.h"
 #include <stdio.h>
-
-/* D3D11 guids */
-static const IID D3D11_IID_ID3D11DeviceContext1 = { 0xbb2c6faa, 0xb5fb, 0x4082, {0x8e, 0x6b, 0x38, 0x8b, 0x8c, 0xfa, 0x90, 0xe1} };
-static const IID D3D11_IID_ID3D11Device1 = { 0xa04bfb29, 0x08ef, 0x43d6, {0xa4, 0x9c, 0xa9, 0xbd, 0xbd, 0xcb, 0xe6, 0x86} };
-static const IID D3D11_IID_ID3DUserDefinedAnnotation = { 0xb2daad8b, 0x03d4, 0x4dbf, {0x95, 0xeb, 0x32, 0xab, 0x4b, 0x63, 0xd0, 0xab} };
-static const IID D3D11_IID_ID3D11Texture2D = { 0x6f15aaf2,0xd208,0x4e89, {0x9a,0xb4,0x48,0x95,0x35,0xd3,0x4f,0x9c } };
 
 #ifdef _DEBUG
 static const IID D3D11_WKPDID_D3DDebugObjectName = { 0x429b8c22, 0x9188, 0x4b0c, { 0x87,0x42,0xac,0xb0,0xbf,0x85,0xc2,0x00 } };
 static const IID D3D11_IID_ID3D11Debug = { 0x79cf2233, 0x7536, 0x4948, {0x9d, 0x36, 0x1e, 0x46, 0x92, 0xdc, 0x57, 0x60} };
 static const IID D3D11_IID_ID3D11InfoQueue = { 0x6543dbb6, 0x1b48, 0x42f5, {0xab,0x82,0xe9,0x7e,0xc7,0x43,0x26,0xf6} };
 #endif
-
 
 typedef struct D3D11Texture {
     ID3D11Resource* handle;
@@ -75,8 +68,6 @@ typedef struct d3d11_renderer {
     IDXGIFactory2* factory;
     uint32_t factory_caps;
 
-    uint32_t  num_backbuffers;
-    uint32_t  max_frame_latency;
     uint32_t sync_interval;
     uint32_t present_flags;
 
@@ -223,40 +214,41 @@ static bool d3d11_create_factory(d3d11_renderer* renderer)
 
     return true;
 }
-static IDXGIAdapter1* d3d11_get_adapter(d3d11_renderer* renderer, vgpu_device_preference device_preference)
+static IDXGIAdapter1* d3d11_get_adapter(d3d11_renderer* renderer, VGPUPowerPreference powerPreference)
 {
     /* Detect adapter now. */
     IDXGIAdapter1* adapter = NULL;
 
 #if defined(__dxgi1_6_h__) && defined(NTDDI_WIN10_RS4)
-    if (device_preference != VGPU_DEVICE_PREFERENCE_DONT_CARE) {
+    {
         IDXGIFactory6* factory6;
-        HRESULT hr = IDXGIFactory2_QueryInterface(renderer->factory, &D3D_IID_IDXGIFactory6, (void**)&factory6);
+        HRESULT hr = renderer->factory->QueryInterface(__uuidof(IDXGIFactory6), (void**)&factory6);
         if (SUCCEEDED(hr))
         {
             // By default prefer high performance
             DXGI_GPU_PREFERENCE gpuPreference = DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE;
-            if (device_preference == VGPU_DEVICE_PREFERENCE_LOW_POWER) {
+            if (powerPreference == VGPUPowerPreference_LowPower)
+            {
                 gpuPreference = DXGI_GPU_PREFERENCE_MINIMUM_POWER;
             }
 
             for (uint32_t i = 0;
-                DXGI_ERROR_NOT_FOUND != IDXGIFactory6_EnumAdapterByGpuPreference(factory6, i, gpuPreference, &D3D_IID_IDXGIAdapter1, (void**)&adapter); i++)
+                DXGI_ERROR_NOT_FOUND != factory6->EnumAdapterByGpuPreference(i, gpuPreference, __uuidof(IDXGIAdapter1), (void**)&adapter); i++)
             {
                 DXGI_ADAPTER_DESC1 desc;
-                VHR(IDXGIAdapter1_GetDesc1(adapter, &desc));
+                VHR(adapter->GetDesc1(&desc));
 
                 if (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)
                 {
                     // Don't select the Basic Render Driver adapter.
-                    IDXGIAdapter1_Release(adapter);
+                    adapter->Release();
                     continue;
                 }
 
                 break;
             }
 
-            IDXGIFactory6_Release(factory6);
+            factory6->Release();
         }
     }
 #endif
@@ -422,7 +414,7 @@ static void d3d11_swapchain_create(d3d11_renderer* renderer, d3d11_swapchain* sw
         info->window_handle,
         info->width, info->height,
         info->colorFormat,
-        renderer->num_backbuffers,  /* 3 for triple buffering */
+        VGPU_NUM_INFLIGHT_FRAMES,
         !info->fullscreen
     );
 
@@ -733,11 +725,9 @@ static VGPUDeviceImpl* d3d11_create_device(const vgpu_device_info* info) {
         return NULL;
     }
 
-    IDXGIAdapter1* dxgi_adapter = d3d11_get_adapter(renderer, info->device_preference);
+    IDXGIAdapter1* dxgi_adapter = d3d11_get_adapter(renderer, info->powerPreference);
 
     /* Setup present flags. */
-    renderer->num_backbuffers = 2;
-    renderer->max_frame_latency = 3;
     renderer->sync_interval = _vgpu_d3d_sync_interval(info->swapchain.present_mode);
     renderer->present_flags = 0;
     if (info->swapchain.present_mode == VGPU_PRESENT_MODE_IMMEDIATE
@@ -858,7 +848,7 @@ static VGPUDeviceImpl* d3d11_create_device(const vgpu_device_info* info) {
             if (SUCCEEDED(temp_d3d_device->QueryInterface(__uuidof(IDXGIDevice1), (void**)&dxgiDevice1)))
             {
                 /* Default to 3. */
-                VHR(dxgiDevice1->SetMaximumFrameLatency(renderer->max_frame_latency));
+                VHR(dxgiDevice1->SetMaximumFrameLatency(VGPU_MAX_INFLIGHT_FRAMES));
                 dxgiDevice1->Release();
             }
         }
@@ -873,16 +863,27 @@ static VGPUDeviceImpl* d3d11_create_device(const vgpu_device_info* info) {
 
     /* Init caps first. */
     {
-        DXGI_ADAPTER_DESC1 adapter_desc;
-        VHR(dxgi_adapter->GetDesc1(&adapter_desc));
+        DXGI_ADAPTER_DESC1 adapterDesc;
+        VHR(dxgi_adapter->GetDesc1(&adapterDesc));
 
         /* Log some info */
         vgpu_log_info("vgpu driver: D3D11");
-        vgpu_log_info("Direct3D Adapter: VID:%04X, PID:%04X - %ls", adapter_desc.VendorId, adapter_desc.DeviceId, adapter_desc.Description);
+        vgpu_log_info("Direct3D Adapter: VID:%04X, PID:%04X - %ls", adapterDesc.VendorId, adapterDesc.DeviceId, adapterDesc.Description);
 
         renderer->caps.backendType = VGPU_BACKEND_TYPE_D3D11;
-        renderer->caps.vendorId = adapter_desc.VendorId;
-        renderer->caps.deviceId = adapter_desc.DeviceId;
+        renderer->caps.vendorId = adapterDesc.VendorId;
+        renderer->caps.adapterId = adapterDesc.DeviceId;
+        _vgpu_StringConvert(adapterDesc.Description, renderer->caps.adapterName);
+
+        // Detect adapter type.
+        if (adapterDesc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)
+        {
+            renderer->caps.adapterType = VGPUAdapterType_CPU;
+        }
+        else
+        {
+            renderer->caps.adapterType = VGPUAdapterType_IntegratedGPU;
+        }
 
         renderer->caps.features.independentBlend = (renderer->feature_level >= D3D_FEATURE_LEVEL_10_0);
         renderer->caps.features.computeShader = (renderer->feature_level >= D3D_FEATURE_LEVEL_10_0);
@@ -899,38 +900,33 @@ static VGPUDeviceImpl* d3d11_create_device(const vgpu_device_info* info) {
         renderer->caps.features.raytracing = false;
 
         // Limits
-        renderer->caps.limits.max_vertex_attributes = VGPU_MAX_VERTEX_ATTRIBUTES;
-        renderer->caps.limits.max_vertex_bindings = VGPU_MAX_VERTEX_ATTRIBUTES;
-        renderer->caps.limits.max_vertex_attribute_offset = VGPU_MAX_VERTEX_ATTRIBUTE_OFFSET;
-        renderer->caps.limits.max_vertex_binding_stride = VGPU_MAX_VERTEX_BUFFER_STRIDE;
+        renderer->caps.limits.maxVertexAttributes = VGPU_MAX_VERTEX_ATTRIBUTES;
+        renderer->caps.limits.maxVertexBindings = VGPU_MAX_VERTEX_ATTRIBUTES;
+        renderer->caps.limits.maxVertexAttributeOffset = VGPU_MAX_VERTEX_ATTRIBUTE_OFFSET;
+        renderer->caps.limits.maxVertexBindingStride = VGPU_MAX_VERTEX_BUFFER_STRIDE;
 
-        renderer->caps.limits.max_texture_size_1d = D3D11_REQ_TEXTURE1D_U_DIMENSION;
-        renderer->caps.limits.max_texture_size_2d = D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION;
-        renderer->caps.limits.max_texture_size_3d = D3D11_REQ_TEXTURE3D_U_V_OR_W_DIMENSION;
-        renderer->caps.limits.max_texture_size_cube = D3D11_REQ_TEXTURECUBE_DIMENSION;
-        renderer->caps.limits.max_texture_array_layers = D3D11_REQ_TEXTURE2D_ARRAY_AXIS_DIMENSION;
-        renderer->caps.limits.max_color_attachments = D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT;
-        renderer->caps.limits.max_uniform_buffer_size = D3D11_REQ_CONSTANT_BUFFER_ELEMENT_COUNT * 16;
-        renderer->caps.limits.min_uniform_buffer_offset_alignment = 256u;
-        renderer->caps.limits.max_storage_buffer_size = UINT32_MAX;
-        renderer->caps.limits.min_storage_buffer_offset_alignment = 16;
-        renderer->caps.limits.max_sampler_anisotropy = D3D11_MAX_MAXANISOTROPY;
-        renderer->caps.limits.max_viewports = D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE;
-        renderer->caps.limits.max_viewport_width = D3D11_VIEWPORT_BOUNDS_MAX;
-        renderer->caps.limits.max_viewport_height = D3D11_VIEWPORT_BOUNDS_MAX;
-        renderer->caps.limits.max_tessellation_patch_size = D3D11_IA_PATCH_MAX_CONTROL_POINT_COUNT;
-        renderer->caps.limits.point_size_range_min = 1.0f;
-        renderer->caps.limits.point_size_range_max = 1.0f;
-        renderer->caps.limits.line_width_range_min = 1.0f;
-        renderer->caps.limits.line_width_range_max = 1.0f;
-        renderer->caps.limits.max_compute_shared_memory_size = D3D11_CS_THREAD_LOCAL_TEMP_REGISTER_POOL;
-        renderer->caps.limits.max_compute_work_group_count_x = D3D11_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION;
-        renderer->caps.limits.max_compute_work_group_count_y = D3D11_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION;
-        renderer->caps.limits.max_compute_work_group_count_z = D3D11_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION;
-        renderer->caps.limits.max_compute_work_group_invocations = D3D11_CS_THREAD_GROUP_MAX_THREADS_PER_GROUP;
-        renderer->caps.limits.max_compute_work_group_size_x = D3D11_CS_THREAD_GROUP_MAX_X;
-        renderer->caps.limits.max_compute_work_group_size_y = D3D11_CS_THREAD_GROUP_MAX_Y;
-        renderer->caps.limits.max_compute_work_group_size_z = D3D11_CS_THREAD_GROUP_MAX_Z;
+        renderer->caps.limits.maxTextureDimension2D = D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION;
+        renderer->caps.limits.maxTextureDimension3D = D3D11_REQ_TEXTURE3D_U_V_OR_W_DIMENSION;
+        renderer->caps.limits.maxTextureDimensionCube = D3D11_REQ_TEXTURECUBE_DIMENSION;
+        renderer->caps.limits.maxTextureArrayLayers = D3D11_REQ_TEXTURE2D_ARRAY_AXIS_DIMENSION;
+        renderer->caps.limits.maxColorAttachments = D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT;
+        renderer->caps.limits.maxUniformBufferRange = D3D11_REQ_CONSTANT_BUFFER_ELEMENT_COUNT * 16;
+        renderer->caps.limits.maxStorageBufferRange = UINT32_MAX;
+        renderer->caps.limits.minUniformBufferOffsetAlignment = 256u;
+        renderer->caps.limits.minStorageBufferOffsetAlignment = 32u;
+        renderer->caps.limits.maxSamplerAnisotropy = D3D11_MAX_MAXANISOTROPY;
+        renderer->caps.limits.maxViewports = D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE;
+        renderer->caps.limits.maxViewportWidth = D3D11_VIEWPORT_BOUNDS_MAX;
+        renderer->caps.limits.maxViewportHeight = D3D11_VIEWPORT_BOUNDS_MAX;
+        renderer->caps.limits.maxTessellationPatchSize = D3D11_IA_PATCH_MAX_CONTROL_POINT_COUNT;
+        renderer->caps.limits.maxComputeSharedMemorySize = D3D11_CS_THREAD_LOCAL_TEMP_REGISTER_POOL;
+        renderer->caps.limits.maxComputeWorkGroupCountX = D3D11_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION;
+        renderer->caps.limits.maxComputeWorkGroupCountY = D3D11_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION;
+        renderer->caps.limits.maxComputeWorkGroupCountZ = D3D11_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION;
+        renderer->caps.limits.maxComputeWorkGroupInvocations = D3D11_CS_THREAD_GROUP_MAX_THREADS_PER_GROUP;
+        renderer->caps.limits.maxComputeWorkGroupSizeX = D3D11_CS_THREAD_GROUP_MAX_X;
+        renderer->caps.limits.maxComputeWorkGroupSizeY = D3D11_CS_THREAD_GROUP_MAX_Y;
+        renderer->caps.limits.maxComputeWorkGroupSizeZ = D3D11_CS_THREAD_GROUP_MAX_Z;
 
         /* see: https://docs.microsoft.com/en-us/windows/win32/api/d3d11/ne-d3d11-d3d11_format_support */
         UINT dxgiFormatCaps = 0;
