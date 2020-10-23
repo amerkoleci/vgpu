@@ -153,23 +153,26 @@ void vgpuDestroyDevice(VGPUDevice device) {
     device->destroy(device);
 }
 
-void vgpuGetDeviceCaps(VGPUDevice device, VGPUDeviceCaps* caps) {
+void vgpuGetDeviceCaps(VGPUDevice device, VGPUDeviceCaps* caps)
+{
     VGPU_ASSERT(device);
     device->get_caps(device->renderer, caps);
 }
 
-vgpu_texture_format vgpuGetDefaultDepthFormat(VGPUDevice device) {
+VGPUTextureFormat vgpuGetDefaultDepthFormat(VGPUDevice device)
+{
     VGPU_ASSERT(device);
-    return device->GetDefaultDepthFormat(device->renderer);
+    return device->getDefaultDepthFormat(device->renderer);
 }
 
-vgpu_texture_format vgpuGetDefaultDepthStencilFormat(VGPUDevice device) {
+VGPUTextureFormat vgpuGetDefaultDepthStencilFormat(VGPUDevice device)
+{
     VGPU_ASSERT(device);
-    return device->GetDefaultDepthStencilFormat(device->renderer);
+    return device->getDefaultDepthStencilFormat(device->renderer);
 }
 
-void vgpuBeginFrame(VGPUDevice device) {
-    device->frame_begin(device->renderer);
+vgpu_bool vgpuBeginFrame(VGPUDevice device) {
+    return device->frame_begin(device->renderer);
 }
 
 void vgpuEndFrame(VGPUDevice device) {
@@ -251,8 +254,8 @@ void vgpuCmdEndRenderPass(VGPUDevice device) {
 /* Pixel Format */
 typedef struct VgpuPixelFormatDesc
 {
-    vgpu_texture_format       format;
-    VGPUTextureFormatType    type;
+    VGPUTextureFormat       format;
+    VGPUTextureFormatType   type;
     uint8_t                 bitsPerPixel;
     struct
     {
@@ -338,10 +341,10 @@ const VgpuPixelFormatDesc FormatDesc[] =
     { VGPUTextureFormat_RGBA32Float,               VGPUTextureFormatType_Float,       128,        {1, 1, 16, 1, 1},       {0, 0, 32, 32, 32, 32}},
 
     // Depth-stencil
-    { VGPU_TEXTURE_FORMAT_D16,           VGPUTextureFormatType_Unorm,       16,         {1, 1, 2, 1, 1},        {16, 0, 0, 0, 0, 0}},
-    { VGPU_TEXTURE_FORMAT_D32F,           VGPUTextureFormatType_Float,       32,         {1, 1, 4, 1, 1},        {32, 0, 0, 0, 0, 0}},
-    { VGPU_TEXTURE_FORMAT_D24_PLUS,             VGPUTextureFormatType_Unorm,       32,         {1, 1, 4, 1, 1},        {24, 8, 0, 0, 0, 0}},
-    { VGPU_TEXTURE_FORMAT_D24S8,    VGPUTextureFormatType_Float,       32,         {1, 1, 4, 1, 1},        {32, 8, 0, 0, 0, 0}},
+    { VGPUTextureFormat_Depth16UNorm,           VGPUTextureFormatType_Unorm,       16,         {1, 1, 2, 1, 1},        {16, 0, 0, 0, 0, 0}},
+    { VGPUTextureFormat_Depth32Float,           VGPUTextureFormatType_Float,       32,         {1, 1, 4, 1, 1},        {32, 0, 0, 0, 0, 0}},
+    { VGPUTextureFormat_Depth24UnormStencil8,   VGPUTextureFormatType_Float,       32,         {1, 1, 4, 1, 1},        {24, 8, 0, 0, 0, 0}},
+    { VGPUTextureFormat_Depth32FloatStencil8,   VGPUTextureFormatType_Float,       48,         {1, 1, 4, 1, 1},        {32, 8, 0, 0, 0, 0}},
 
     // Compressed formats
     { VGPU_TEXTURE_FORMAT_BC1,             VGPUTextureFormatType_Unorm,        4,          {4, 4, 8, 1, 1},        {0, 0, 0, 0, 0, 0}},
@@ -381,54 +384,54 @@ const VgpuPixelFormatDesc FormatDesc[] =
     { VGPU_PIXEL_FORMAT_ASTC12x12,              "ASTC12x12",            VGPU_PIXEL_FORMAT_TYPE_UNORM,       3,          {12, 12, 16, 1, 1},     {0, 0, 0, 0, 0, 0} },*/
 };
 
-uint32_t vgpu_get_format_bits_per_pixel(vgpu_texture_format format)
+uint32_t vgpu_get_format_bits_per_pixel(VGPUTextureFormat format)
 {
     assert(FormatDesc[(uint32_t)format].format == format);
     return FormatDesc[(uint32_t)format].bitsPerPixel;
 }
 
-uint32_t vgpu_get_format_block_size(vgpu_texture_format format)
+uint32_t vgpu_get_format_block_size(VGPUTextureFormat format)
 {
     assert(FormatDesc[(uint32_t)format].format == format);
     return FormatDesc[(uint32_t)format].compression.blockSize;
 }
 
-uint32_t vgpuGetFormatBlockWidth(vgpu_texture_format format)
+uint32_t vgpuGetFormatBlockWidth(VGPUTextureFormat format)
 {
     assert(FormatDesc[(uint32_t)format].format == format);
     return FormatDesc[(uint32_t)format].compression.blockWidth;
 }
 
-uint32_t vgpuGetFormatBlockHeight(vgpu_texture_format format)
+uint32_t vgpuGetFormatBlockHeight(VGPUTextureFormat format)
 {
     assert(FormatDesc[(uint32_t)format].format == format);
     return FormatDesc[(uint32_t)format].compression.blockHeight;
 }
 
-VGPUTextureFormatType vgpuGetFormatType(vgpu_texture_format format)
+VGPUTextureFormatType vgpuGetFormatType(VGPUTextureFormat format)
 {
     assert(FormatDesc[(uint32_t)format].format == format);
     return FormatDesc[(uint32_t)format].type;
 }
 
-vgpu_bool vgpu_is_depth_format(vgpu_texture_format format)
+vgpu_bool vgpuIsDepthFormat(VGPUTextureFormat format)
 {
     VGPU_ASSERT(FormatDesc[format].format == format);
     return FormatDesc[format].bits.depth > 0;
 }
 
-vgpu_bool vgpu_is_stencil_format(vgpu_texture_format format)
+vgpu_bool vgpuIsStencilFormat(VGPUTextureFormat format)
 {
     VGPU_ASSERT(FormatDesc[format].format == format);
     return FormatDesc[format].bits.stencil > 0;
 }
 
-vgpu_bool vgpu_is_depth_stencil_format(vgpu_texture_format format)
+vgpu_bool vgpuIsDepthStencilFormat(VGPUTextureFormat format)
 {
-    return vgpu_is_depth_format(format) || vgpu_is_stencil_format(format);
+    return vgpuIsDepthFormat(format) || vgpuIsStencilFormat(format);
 }
 
-vgpu_bool vgpuIsCompressedFormat(vgpu_texture_format format)
+vgpu_bool vgpuIsCompressedFormat(VGPUTextureFormat format)
 {
     VGPU_ASSERT(FormatDesc[format].format == format);
     return format >= VGPU_TEXTURE_FORMAT_BC1 && format <= VGPU_TEXTURE_FORMAT_BC7_SRGB;

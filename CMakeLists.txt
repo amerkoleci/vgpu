@@ -22,7 +22,7 @@
 
 # CMake version
 cmake_minimum_required(VERSION 3.10)
-project(vgpu C)
+project(vgpu)
 
 set(VGPU_VERSION_MAJOR 0)
 set(VGPU_VERSION_MINOR 1)
@@ -71,6 +71,21 @@ if(APPLE)
 elseif(WIN32)
 	# "vgpu.dll", not "vgpu.dll"
 	set(CMAKE_SHARED_LIBRARY_PREFIX "")
+
+    option(ALIMER_USE_STATIC_CRT "Link against the static runtime libraries." ON)
+
+    # Select static/dynamic runtime library
+	if (ALIMER_USE_STATIC_CRT)
+        string(REGEX REPLACE "/MDd" "/MTd" CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG}")
+		string(REGEX REPLACE "/MDd" "/MTd" CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
+        string(REGEX REPLACE "/MD" "/MT" CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE}")
+		string(REGEX REPLACE "/MD" "/MT" CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
+	else()
+        string(REGEX REPLACE "/MTd" "/MDd" CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG}")
+		string(REGEX REPLACE "/MTd" "/MDd" CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
+        string(REGEX REPLACE "/MT" "/MD" CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE}")
+		string(REGEX REPLACE "/MT" "/MD" CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
+	endif()
 endif()
 
 if (ANDROID OR IOS)
@@ -79,7 +94,7 @@ else ()
     option (BUILD_EXAMPLES "Build the vgpu samples" ON)
 endif ()
 
-option (VGPU_INSTALL "Generate installation target" ON)
+option(VGPU_INSTALL "Generate installation target" ON)
 option(BUILD_SHARED_LIBS "Build shared library" ON)
 
 # third_party
@@ -107,7 +122,7 @@ set(SOURCE_FILES
     src/vgpu_d3d_common.h
     # Source Files
     src/vgpu.c
-    src/vgpu_driver_d3d11.c
+    src/vgpu_driver_d3d11.cpp
 )
 
 add_library (vgpu ${SOURCE_FILES})
@@ -181,7 +196,7 @@ if (VGPU_INSTALL)
 endif()
 
 # samples
-if (VGPU_BUILD_SAMPLES)
+if (BUILD_EXAMPLES)
     add_subdirectory(samples)
 endif ()
 

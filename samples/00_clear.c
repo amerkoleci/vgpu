@@ -107,7 +107,7 @@ int main(int argc, char** argv)
         .swapchain = {
             .width = width,
             .height = height,
-            .color_format = VGPU_TEXTURE_FORMAT_BGRA8,
+            .colorFormat = VGPU_TEXTURE_FORMAT_BGRA8,
 #if defined(_WIN32) || defined(_WIN64)
             .window_handle = (void*)glfwGetWin32Window(window),
 #endif
@@ -123,11 +123,12 @@ int main(int argc, char** argv)
         return EXIT_FAILURE;
     }
 
-    /* VGPUTexture depthTexture = vgpuCreateTexture(device , &(VGPUTextureDescriptor) {
-         .usage = VGPU_TEXTURE_USAGE_RENDER_TARGET,
-         .size = { width, height, 1u},
-         .format = vgpuGetDefaultDepthFormat(device)
-     });*/
+    VGPUTexture depthTexture = vgpuCreateTexture(device, &(VGPUTextureDescription) {
+        .usage = VGPUTextureUsage_RenderTarget,
+        .width = width,
+        .height = height,
+        .format = vgpuGetDefaultDepthFormat(device)
+    });
 
     while (!glfwWindowShouldClose(window))
     {
@@ -136,7 +137,9 @@ int main(int argc, char** argv)
             glfwSetWindowShouldClose(window, GLFW_TRUE);
         }
 
-        vgpuBeginFrame(device);
+        if (!vgpuBeginFrame(device)) {
+            return;
+        }
 
         /* Begin default render pass and change its clear color */
         float g = clearColor.g + 0.01f;
@@ -147,11 +150,11 @@ int main(int argc, char** argv)
         renderPass.colorAttachments[0].texture = vgpuGetBackbufferTexture(device);
         renderPass.colorAttachments[0].mipLevel = 0;
         renderPass.colorAttachments[0].slice = 0;
-        renderPass.colorAttachments[0].loadOp = VGPU_LOAD_OP_CLEAR;
+        renderPass.colorAttachments[0].loadOp = VGPULoadOp_Clear;
         renderPass.colorAttachments[0].clearColor = clearColor;
-        //renderPass.depthStencilAttachment.texture = depthTexture;
-        //renderPass.depthStencilAttachment.depthLoadOp = VGPULoadOp_Clear;
-        //renderPass.depthStencilAttachment.clearDepth = 1.0f;
+        renderPass.depthStencilAttachment.texture = depthTexture;
+        renderPass.depthStencilAttachment.depthLoadOp = VGPULoadOp_Clear;
+        renderPass.depthStencilAttachment.clearDepth = 1.0f;
 
         vgpuCmdBeginRenderPass(device, &renderPass);
         vgpuCmdEndRenderPass(device);
@@ -159,8 +162,7 @@ int main(int argc, char** argv)
         glfwPollEvents();
     }
 
-    /*vgpuDestroyCommandBuffer(commandBuffer);*/
-    //vgpuDestroyTexture(device, depthTexture);
+    vgpuDestroyTexture(device, depthTexture);
     vgpuDestroyDevice(device);
     glfwTerminate();
 

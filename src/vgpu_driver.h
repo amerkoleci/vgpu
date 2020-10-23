@@ -27,8 +27,8 @@
 #include <stdbool.h>
 #include <string.h> /* memset */
 
-extern const vgpu_allocation_callbacks* vgpu_alloc_cb;
-extern void* vgpu_allocation_user_data;
+_VGPU_EXTERN const vgpu_allocation_callbacks* vgpu_alloc_cb;
+_VGPU_EXTERN void* vgpu_allocation_user_data;
 
 #define VGPU_ALLOC(T)     ((T*) vgpu_alloc_cb->allocate_memory(vgpu_allocation_user_data, sizeof(T)))
 #define VGPU_FREE(ptr)       (vgpu_alloc_cb->free_memory(vgpu_allocation_user_data, (void*)(ptr)))
@@ -78,12 +78,12 @@ extern void __cdecl __debugbreak(void);
 typedef struct vgpu_renderer_t* vgpu_renderer;
 
 typedef struct VGPUDeviceImpl {
-    void (*destroy)(VGPUDevice device);
+    void(*destroy)(VGPUDevice device);
     void(*get_caps)(vgpu_renderer driver_data, VGPUDeviceCaps* caps);
-    vgpu_texture_format(*GetDefaultDepthFormat)(vgpu_renderer driverData);
-    vgpu_texture_format(*GetDefaultDepthStencilFormat)(vgpu_renderer driverData);
+    VGPUTextureFormat(*getDefaultDepthFormat)(vgpu_renderer driverData);
+    VGPUTextureFormat(*getDefaultDepthStencilFormat)(vgpu_renderer driverData);
 
-    void (*frame_begin)(vgpu_renderer driverData);
+    vgpu_bool(*frame_begin)(vgpu_renderer driverData);
     void (*frame_end)(vgpu_renderer driverData);
     VGPUTexture (*getBackbufferTexture)(vgpu_renderer driverData, uint32_t swapchain);
 
@@ -113,12 +113,14 @@ typedef struct vgpu_driver {
     VGPUDeviceImpl*(*createDevice)(const vgpu_device_info* info);
 } vgpu_driver;
 
-extern vgpu_driver d3d11_driver;
+_VGPU_EXTERN vgpu_driver d3d11_driver;
 
 #define ASSIGN_DRIVER_FUNC(func, name) device->func = name##_##func;
 #define ASSIGN_DRIVER(name) \
 ASSIGN_DRIVER_FUNC(destroy, name)\
 ASSIGN_DRIVER_FUNC(get_caps, name)\
+ASSIGN_DRIVER_FUNC(getDefaultDepthFormat, name)\
+ASSIGN_DRIVER_FUNC(getDefaultDepthStencilFormat, name)\
 ASSIGN_DRIVER_FUNC(frame_begin, name)\
 ASSIGN_DRIVER_FUNC(frame_end, name)\
 ASSIGN_DRIVER_FUNC(getBackbufferTexture, name)\
