@@ -581,7 +581,7 @@ VGPU_API void vgpuSetAllocationCallbacks(const vgpu_allocation_callbacks* callba
 /* Log functions */
 VGPU_API void vgpuSetLogCallback(vgpu_log_callback callback, void* user_data);
 VGPU_API void vgpu_log(vgpu_log_level level, const char* format, ...);
-VGPU_API void vgpu_log_error(const char* format, ...);
+VGPU_API void vgpuLogError(const char* format, ...);
 VGPU_API void vgpu_log_info(const char* format, ...);
 
 /* Device */

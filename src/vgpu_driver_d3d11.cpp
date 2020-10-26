@@ -295,7 +295,7 @@ static void d3d11_destroy(VGPUDevice device) {
     ULONG refCount = renderer->device->Release();
     if (refCount > 0)
     {
-        vgpu_log_error("Direct3D11: There are %d unreleased references left on the device", refCount);
+        vgpuLogError("Direct3D11: There are %d unreleased references left on the device", refCount);
 
         ID3D11Debug* d3d11_debug = NULL;
         if (SUCCEEDED(renderer->device->QueryInterface(__uuidof(ID3D11Debug), (void**)&d3d11_debug)))
@@ -410,7 +410,7 @@ static void d3d11_swapchain_create(d3d11_renderer* renderer, d3d11_swapchain* sw
     swapchain->handle = vgpu_d3d_create_swapchain(
         renderer->factory,
         renderer->factory_caps,
-        (IUnknown*)renderer->device,
+        renderer->device,
         info->window_handle,
         info->width, info->height,
         info->colorFormat,
@@ -669,10 +669,6 @@ static bool d3d11_is_supported(void) {
     }
 
     d3d11.dxgi.CreateDXGIFactory2 = (PFN_CREATE_DXGI_FACTORY2)GetProcAddress(d3d11.dxgi.instance, "CreateDXGIFactory2");
-    if (!d3d11.dxgi.CreateDXGIFactory2)
-    {
-        return false;
-    }
     d3d11.dxgi.DXGIGetDebugInterface1 = (PFN_GET_DXGI_DEBUG_INTERFACE1)GetProcAddress(d3d11.dxgi.instance, "DXGIGetDebugInterface1");
 
     d3d11.instance = LoadLibraryA("d3d11.dll");
@@ -782,7 +778,7 @@ static VGPUDeviceImpl* d3d11_create_device(const vgpu_device_info* info) {
 #if defined(NDEBUG)
         else
         {
-            vgpu_log_error("No Direct3D hardware device found");
+            vgpuLogError("No Direct3D hardware device found");
             VGPU_UNREACHABLE();
         }
 #else
@@ -997,7 +993,7 @@ static VGPUDeviceImpl* d3d11_create_device(const vgpu_device_info* info) {
     return device;
 }
 
-vgpu_driver d3d11_driver = {
+VGPU_Driver D3D11_Driver = {
     VGPU_BACKEND_TYPE_D3D11,
     d3d11_is_supported,
     d3d11_create_device

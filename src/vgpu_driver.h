@@ -48,7 +48,7 @@ _VGPU_EXTERN void* vgpu_allocation_user_data;
 #   define VGPU_ASSERT(c) assert(c)
 #endif
 
-#define VGPU_CHECK(c, s) if (!(c)) { vgpu_log_error(s); _VGPU_BREAKPOINT(); }
+#define VGPU_CHECK(c, s) if (!(c)) { vgpuLogError(s); _VGPU_BREAKPOINT(); }
 
 #if defined(__GNUC__) || defined(__clang__)
 #   if defined(__i386__) || defined(__x86_64__)
@@ -107,13 +107,14 @@ typedef struct VGPUDeviceImpl {
     vgpu_renderer renderer;
 } VGPUDeviceImpl;
 
-typedef struct vgpu_driver {
+typedef struct VGPU_Driver {
     vgpu_backend_type backendType;
     bool(*is_supported)(void);
     VGPUDeviceImpl*(*createDevice)(const vgpu_device_info* info);
-} vgpu_driver;
+} VGPU_Driver;
 
-_VGPU_EXTERN vgpu_driver d3d11_driver;
+_VGPU_EXTERN VGPU_Driver D3D12_Driver;
+_VGPU_EXTERN VGPU_Driver D3D11_Driver;
 
 #define ASSIGN_DRIVER_FUNC(func, name) device->func = name##_##func;
 #define ASSIGN_DRIVER(name) \

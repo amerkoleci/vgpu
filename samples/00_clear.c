@@ -49,7 +49,7 @@
 // GLFW3 Error Callback, runs on GLFW3 error
 static void glfwErrorCallback(int error, const char* description)
 {
-    vgpu_log_error("[GLFW3 Error] Code: %d Decription: %s", error, description);
+    vgpuLogError("[GLFW3 Error] Code: %d Decription: %s", error, description);
 }
 #endif
 

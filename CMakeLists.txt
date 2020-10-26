@@ -123,6 +123,7 @@ set(SOURCE_FILES
     # Source Files
     src/vgpu.c
     src/vgpu_driver_d3d11.cpp
+    src/vgpu_driver_d3d12.cpp
 )
 
 add_library (vgpu ${SOURCE_FILES})
@@ -137,7 +138,23 @@ if (VGPU_BACKEND_D3D11)
 endif ()
 
 if (VGPU_BACKEND_D3D12)
+    target_sources(vgpu PRIVATE
+        src/d3d12/D3D12MemAlloc.h
+        src/d3d12/D3D12MemAlloc.cpp
+    )
+
+    if (MSVC)
+        target_sources(vgpu PRIVATE
+            src/d3d12/D3D12MemAlloc.natvis
+        )
+    endif ()
+
     target_compile_definitions(vgpu PRIVATE VGPU_DRIVER_D3D12)
+
+    target_include_directories(vgpu PUBLIC
+        "$<BUILD_INTERFACE:${VGPU_ROOT_DIR}/src/d3d12>"
+    )
+
 endif ()
 
 if (VGPU_BACKEND_VULKAN)

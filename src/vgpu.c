@@ -84,7 +84,7 @@ void vgpu_log(vgpu_log_level level, const char* format, ...) {
     }
 }
 
-void vgpu_log_error(const char* format, ...) {
+void vgpuLogError(const char* format, ...) {
     if (s_log_function) {
         va_list args;
         va_start(args, format);
@@ -106,13 +106,14 @@ void vgpu_log_info(const char* format, ...) {
     }
 }
 
-static const vgpu_driver* drivers[] = {
+static const VGPU_Driver* drivers[] = {
+#if defined(VGPU_DRIVER_D3D12)
+    &D3D12_Driver,
+#endif
 #if defined(VGPU_DRIVER_D3D11) 
-    &d3d11_driver,
+    &D3D11_Driver,
 #endif
-#if defined(VGPU_DRIVER_D3D12) && defined(TODO_D3D12)
-    &d3d12_driver,
-#endif
+
 #if defined(VGPU_DRIVER_VULKAN)
     &vulkan_driver,
 #endif

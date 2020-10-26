@@ -249,7 +249,7 @@ static inline IDXGISwapChain1* vgpu_d3d_create_swapchain(
 #if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
     HWND window = (HWND)window_handle;
     if (!IsWindow(window)) {
-        vgpu_log_error("Invalid HWND handle");
+        vgpuLogError("Invalid HWND handle");
         return NULL;
     }
 #else
