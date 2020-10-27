@@ -37,7 +37,8 @@
 
 typedef struct D3D12Texture {
     ID3D12Resource* handle;
-    DXGI_FORMAT dxgi_format;
+    D3D12MA::Allocation* allocation;
+    DXGI_FORMAT dxgiFormat;
 
     VGPUTextureType type;
     uint32_t width;
@@ -47,6 +48,12 @@ typedef struct D3D12Texture {
     uint32_t mipLevels;
     uint32_t sample_count;
 } D3D12Texture;
+
+
+typedef struct D3D12Buffer {
+    ID3D12Resource* handle;
+    D3D12MA::Allocation* allocation;
+} D3D12Buffer;
 
 typedef struct D3D12Swapchain {
     IDXGISwapChain3* handle;
@@ -467,7 +474,8 @@ static void d3d12_swapchain_create(D3D12Renderer* renderer, D3D12Swapchain* swap
 }
 
 /* Texture */
-static VGPUTexture d3d12_createTexture(vgpu_renderer driverData, const VGPUTextureDescription* desc) {
+static VGPUTexture d3d12_createTexture(vgpu_renderer driverData, const VGPUTextureDescription* desc)
+{
     D3D12Renderer* renderer = (D3D12Renderer*)driverData;
     D3D12Texture* texture = VGPU_ALLOC_HANDLE(D3D12Texture);
     texture->type = desc->type;
@@ -478,7 +486,7 @@ static VGPUTexture d3d12_createTexture(vgpu_renderer driverData, const VGPUTextu
     texture->mipLevels = desc->mipLevelCount;
     texture->sample_count = desc->sampleCount;
 
-    texture->dxgi_format = _vgpu_d3d_format_with_usage(desc->format, desc->usage);
+    texture->dxgiFormat = _vgpu_d3d_format_with_usage(desc->format, desc->usage);
 
     HRESULT hr = S_OK;
     if (desc->externalHandle)
@@ -513,6 +521,46 @@ static void d3d12_destroyTexture(vgpu_renderer driverData, VGPUTexture handle)
     VGPU_FREE(texture);
 }
 
+/* Buffer */
+static VGPUBuffer d3d12_createBuffer(vgpu_renderer driverData, const VGPUBufferDescriptor* descriptor)
+{
+    D3D12Renderer* renderer = (D3D12Renderer*)driverData;
+    D3D12Buffer* buffer = VGPU_ALLOC_HANDLE(D3D12Buffer);
+    return (VGPUBuffer)buffer;
+}
+
+static void d3d12_destroyBuffer(vgpu_renderer driverData, VGPUBuffer handle)
+{
+    D3D12Buffer* buffer = (D3D12Buffer*)handle;
+    //SAFE_RELEASE(buffer->handle);
+    VGPU_FREE(buffer);
+}
+
+
+/* Sampler */
+static VGPUSampler d3d12_createSampler(vgpu_renderer driverData, const VGPUSamplerDescriptor* desc)
+{
+    return nullptr;
+}
+
+static void d3d12_destroySampler(vgpu_renderer driverData, VGPUSampler handle)
+{
+
+}
+
+/* Shader */
+static VGPUShaderModule d3d12_createShaderModule(vgpu_renderer driverData, const VGPUShaderModuleDescriptor* desc)
+{
+    return nullptr;
+}
+
+static void d3d12_destroyShaderModule(vgpu_renderer driverData, VGPUShaderModule handle)
+{
+
+}
+
+
+/* SwapChain */
 static void d3d12_swapchain_destroy(D3D12Renderer* renderer, D3D12Swapchain* swapchain)
 {
     for (uint32_t i = 0; i < VGPU_NUM_INFLIGHT_FRAMES; i++)
@@ -715,8 +763,8 @@ static VGPUDeviceImpl* d3d12_create_device(const VGPUDeviceDescriptor* info) {
         VHR(dxgiAdapter->GetDesc1(&adapterDesc));
 
         /* Log some info */
-        vgpu_log_info("vgpu driver: D3D12");
-        vgpu_log_info("Direct3D Adapter: VID:%04X, PID:%04X - %ls", adapterDesc.VendorId, adapterDesc.DeviceId, adapterDesc.Description);
+        vgpuLogInfo("VGPU driver: D3D12");
+        vgpuLogInfo("Direct3D Adapter: VID:%04X, PID:%04X - %ls", adapterDesc.VendorId, adapterDesc.DeviceId, adapterDesc.Description);
 
         renderer->caps.backendType = VGPUBackendType_D3D12;
         renderer->caps.vendorId = adapterDesc.VendorId;
@@ -836,11 +884,11 @@ static VGPUDeviceImpl* d3d12_create_device(const VGPUDeviceDescriptor* info) {
         }
         else
         {
-            support.Format = _vgpu_to_dxgi_format(VGPUTextureFormat_Depth16UNorm);
+            support.Format = _vgpu_to_dxgi_format(VGPUTextureFormat_Depth16Unorm);
             VHR(renderer->device->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT, &support, sizeof(support)));
             if (support.Support1 & D3D12_FORMAT_SUPPORT1_DEPTH_STENCIL)
             {
-                renderer->defaultDepthFormat = VGPUTextureFormat_Depth16UNorm;
+                renderer->defaultDepthFormat = VGPUTextureFormat_Depth16Unorm;
             }
         }
 

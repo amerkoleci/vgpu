@@ -52,7 +52,7 @@ static void glfwErrorCallback(int error, const char* description)
 }
 #endif
 
-static void vgpu_log_fn(void* user_data, vgpu_log_level level, const char* message)
+static void vgpu_log_fn(void* user_data, VGPULogLevel level, const char* message)
 {
 }
 
@@ -65,7 +65,7 @@ int main(int argc, char** argv)
 
     if (!glfwInit())
     {
-        //ALIMER_LOGERROR("Failed to initialize GLFW");
+        vgpuLogError("Failed to initialize GLFW");
         return EXIT_FAILURE;
     }
 
@@ -119,6 +119,40 @@ int main(int argc, char** argv)
         return EXIT_FAILURE;
     }
 
+    const float vertices[] = {
+        /* positions            colors */
+         0.0f, 0.5f, 0.5f,      1.0f, 0.0f, 0.0f, 1.0f,
+         0.5f, -0.5f, 0.5f,     0.0f, 1.0f, 0.0f, 1.0f,
+        -0.5f, -0.5f, 0.5f,     0.0f, 0.0f, 1.0f, 1.0f
+    };
+
+    VGPUBuffer vertexBuffer = vgpuCreateBuffer(device, &(VGPUBufferDescriptor) {
+        .usage = VGPUBufferUsage_Vertex,
+        .size = sizeof(vertices),
+        .content = vertices
+    });
+
+    VGPUShader shader = vgpuCreateShader(device, &(VGPUShaderDescriptor){
+        .vertex.code = "struct vs_in {\n"
+            "  float4 pos: POS;\n"
+            "  float4 color: COLOR;\n"
+            "};\n"
+            "struct vs_out {\n"
+            "  float4 color: COLOR0;\n"
+            "  float4 pos: SV_Position;\n"
+            "};\n"
+            "vs_out main(vs_in inp) {\n"
+            "  vs_out outp;\n"
+            "  outp.pos = inp.pos;\n"
+            "  outp.color = inp.color;\n"
+            "  return outp;\n"
+            "}\n",
+        .fragment.code =
+            "float4 main(float4 color: COLOR0): SV_Target0 {\n"
+            "  return color;\n"
+            "}\n"
+    });
+
     VGPUColor clearColor = { 0.392156899f, 0.584313750f, 0.929411829f, 1.0f };
     while (!glfwWindowShouldClose(window))
     {
@@ -146,7 +180,7 @@ int main(int argc, char** argv)
         glfwPollEvents();
     }
 
-    /*vgpuDestroyCommandBuffer(commandBuffer);*/
+    vgpuDestroyBuffer(device, vertexBuffer);
     vgpuDestroyDevice(device);
     glfwTerminate();
 

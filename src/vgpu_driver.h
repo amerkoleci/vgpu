@@ -92,12 +92,16 @@ typedef struct VGPUDeviceImpl {
     void (*destroyTexture)(vgpu_renderer driverData, VGPUTexture handle);
 
     /* Buffer */
-    VGPUBuffer(*bufferCreate)(vgpu_renderer driverData, const VGPUBufferDescriptor* desc);
-    void (*bufferDestroy)(vgpu_renderer driverData, VGPUBuffer handle);
+    VGPUBuffer(*createBuffer)(vgpu_renderer driverData, const VGPUBufferDescriptor* desc);
+    void (*destroyBuffer)(vgpu_renderer driverData, VGPUBuffer handle);
    
     /* Sampler */
-    VGPUSampler(*samplerCreate)(vgpu_renderer driverData, const VGPUSamplerDescriptor* desc);
-    void (*samplerDestroy)(vgpu_renderer driverData, VGPUSampler handle);
+    VGPUSampler(*createSampler)(vgpu_renderer driverData, const VGPUSamplerDescriptor* desc);
+    void (*destroySampler)(vgpu_renderer driverData, VGPUSampler handle);
+
+    /* Shader */
+    VGPUShaderModule(*createShaderModule)(vgpu_renderer driverData, const VGPUShaderModuleDescriptor* desc);
+    void (*destroyShaderModule)(vgpu_renderer driverData, VGPUShaderModule handle);
 
     /* Commands */
     void (*cmdBeginRenderPass)(vgpu_renderer driverData, const VGPURenderPassDescriptor* desc);
@@ -127,6 +131,12 @@ ASSIGN_DRIVER_FUNC(frame_end, name)\
 ASSIGN_DRIVER_FUNC(getBackbufferTexture, name)\
 ASSIGN_DRIVER_FUNC(createTexture, name)\
 ASSIGN_DRIVER_FUNC(destroyTexture, name)\
+ASSIGN_DRIVER_FUNC(createBuffer, name)\
+ASSIGN_DRIVER_FUNC(destroyBuffer, name)\
+ASSIGN_DRIVER_FUNC(createSampler, name)\
+ASSIGN_DRIVER_FUNC(destroySampler, name)\
+ASSIGN_DRIVER_FUNC(createShaderModule, name)\
+ASSIGN_DRIVER_FUNC(destroyShaderModule, name)\
 ASSIGN_DRIVER_FUNC(cmdBeginRenderPass, name)\
 ASSIGN_DRIVER_FUNC(cmdEndRenderPass, name)
 

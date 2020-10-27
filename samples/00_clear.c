@@ -53,7 +53,7 @@ static void glfwErrorCallback(int error, const char* description)
 }
 #endif
 
-static void vgpu_log_fn(void* user_data, vgpu_log_level level, const char* message)
+static void vgpu_log_fn(void* user_data, VGPULogLevel level, const char* message)
 {
     printf("%s\n", message);
 }
