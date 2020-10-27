@@ -101,24 +101,21 @@ int main(int argc, char** argv)
     int width, height;
     glfwGetWindowSize(window, &width, &height);
 
-    VGPUColor clearColor = { 1.0f, 0.0f, 0.0f, 1.0f };
-
-    vgpu_device_info gpu_desc = {
+    VGPUDeviceDescriptor deviceDesc = {
+#ifdef _DEBUG
+        .flags = VGPUDeviceFlags_Debug,
+#endif
         .swapchain = {
             .width = width,
             .height = height,
-            .colorFormat = VGPU_TEXTURE_FORMAT_BGRA8,
+            .colorFormat = VGPUTextureFormat_BGRA8Unorm,
 #if defined(_WIN32) || defined(_WIN64)
             .window_handle = (void*)glfwGetWin32Window(window),
 #endif
-      },
+      }
     };
 
-#ifdef _DEBUG
-    gpu_desc.debug = true;
-#endif
-
-    VGPUDevice device = vgpuCreateDevice(VGPU_BACKEND_TYPE_COUNT, &gpu_desc);
+    VGPUDevice device = vgpuCreateDevice(VGPUBackendType_D3D11, &deviceDesc);
     if (!device) {
         return EXIT_FAILURE;
     }
@@ -129,6 +126,9 @@ int main(int argc, char** argv)
         .height = height,
         .format = vgpuGetDefaultDepthFormat(device)
     });
+
+
+    VGPUColor clearColor = { 1.0f, 0.0f, 0.0f, 1.0f };
 
     while (!glfwWindowShouldClose(window))
     {
@@ -145,8 +145,8 @@ int main(int argc, char** argv)
         float g = clearColor.g + 0.01f;
         clearColor.g = (g > 1.0f) ? 0.0f : g;
 
-        VGPURenderPassDescription renderPass;
-        memset(&renderPass, 0, sizeof(VGPURenderPassDescription));
+        VGPURenderPassDescriptor renderPass;
+        memset(&renderPass, 0, sizeof(VGPURenderPassDescriptor));
         renderPass.colorAttachments[0].texture = vgpuGetBackbufferTexture(device);
         renderPass.colorAttachments[0].mipLevel = 0;
         renderPass.colorAttachments[0].slice = 0;

@@ -69,72 +69,58 @@ static inline DXGI_FORMAT _vgpu_to_dxgi_format(VGPUTextureFormat format)
     switch (format)
     {
         // 8-bit pixel formats
-    case VGPUTextureFormat_R8UNorm:     return DXGI_FORMAT_R8_UNORM;
-    case VGPUTextureFormat_R8SNorm:     return DXGI_FORMAT_R8_SNORM;
-    case VGPUTextureFormat_R8UInt:      return DXGI_FORMAT_R8_UINT;
-    case VGPUTextureFormat_R8SInt:      return DXGI_FORMAT_R8_SINT;
+    case VGPUTextureFormat_R8UNorm:         return DXGI_FORMAT_R8_UNORM;
+    case VGPUTextureFormat_R8SNorm:         return DXGI_FORMAT_R8_SNORM;
+    case VGPUTextureFormat_R8UInt:          return DXGI_FORMAT_R8_UINT;
+    case VGPUTextureFormat_R8SInt:          return DXGI_FORMAT_R8_SINT;
         // 16-bit formats.
-    case VGPUTextureFormat_R16UNorm:    return DXGI_FORMAT_R16_UNORM;
-    case VGPUTextureFormat_R16SNorm:    return DXGI_FORMAT_R16_SNORM;
-    case VGPUTextureFormat_R16UInt:     return DXGI_FORMAT_R16_UINT;
-    case VGPUTextureFormat_R16SInt:     return DXGI_FORMAT_R16_SINT;
-    case VGPUTextureFormat_R16Float:    return DXGI_FORMAT_R16_FLOAT;
-    case VGPUTextureFormat_RG8UNorm:    return DXGI_FORMAT_R8G8_UNORM;
-    case VGPUTextureFormat_RG8SNorm:    return DXGI_FORMAT_R8G8_SNORM;
-    case VGPUTextureFormat_RG8UInt:     return DXGI_FORMAT_R8G8_UINT;
-    case VGPUTextureFormat_RG8SInt:     return DXGI_FORMAT_R8G8_SINT;
+    case VGPUTextureFormat_R16UNorm:        return DXGI_FORMAT_R16_UNORM;
+    case VGPUTextureFormat_R16SNorm:        return DXGI_FORMAT_R16_SNORM;
+    case VGPUTextureFormat_R16UInt:         return DXGI_FORMAT_R16_UINT;
+    case VGPUTextureFormat_R16SInt:         return DXGI_FORMAT_R16_SINT;
+    case VGPUTextureFormat_R16Float:        return DXGI_FORMAT_R16_FLOAT;
+    case VGPUTextureFormat_RG8UNorm:        return DXGI_FORMAT_R8G8_UNORM;
+    case VGPUTextureFormat_RG8SNorm:        return DXGI_FORMAT_R8G8_SNORM;
+    case VGPUTextureFormat_RG8UInt:         return DXGI_FORMAT_R8G8_UINT;
+    case VGPUTextureFormat_RG8SInt:         return DXGI_FORMAT_R8G8_SINT;
         // 32-bit formats.
-    case VGPUTextureFormat_R32UInt:     return DXGI_FORMAT_R32_UINT;
-    case VGPUTextureFormat_R32SInt:     return DXGI_FORMAT_R32_SINT;
-    case VGPUTextureFormat_R32Float:    return DXGI_FORMAT_R32_FLOAT;
-    case VGPUTextureFormat_RG16UInt:    return DXGI_FORMAT_R16G16_UINT;
-    case VGPUTextureFormat_RG16SInt:    return DXGI_FORMAT_R16G16_SINT;
-    case VGPUTextureFormat_RG16Float:   return DXGI_FORMAT_R16G16_FLOAT;
-    case VGPU_TEXTURE_FORMAT_RGBA8:
-        return DXGI_FORMAT_R8G8B8A8_UNORM;
-    case VGPU_TEXTURE_FORMAT_RGBA8_SRGB:
-        return DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
-    case VGPUTextureFormat_RGBA8SNorm:
-        return DXGI_FORMAT_R8G8B8A8_SNORM;
-    case VGPUTextureFormat_RGBA8UInt:
-        return DXGI_FORMAT_R8G8B8A8_UINT;
-    case VGPUTextureFormat_RGBA8SInt:
-        return DXGI_FORMAT_R8G8B8A8_SINT;
-    case VGPU_TEXTURE_FORMAT_BGRA8:
-        return DXGI_FORMAT_B8G8R8A8_UNORM;
-    case VGPU_TEXTURE_FORMAT_BGRA8_SRGB:
-        return DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
-    case VGPU_TEXTURE_FORMAT_RGB10A2:
-        return DXGI_FORMAT_R10G10B10A2_UNORM;
-    case VGPU_TEXTURE_FORMAT_RG11B10F:
-        return DXGI_FORMAT_R11G11B10_FLOAT;
-    case VGPUTextureFormat_RG32Float:
-        return DXGI_FORMAT_R32G32_FLOAT;
-    case VGPUTextureFormat_RG32UInt:
-        return DXGI_FORMAT_R32G32_UINT;
-    case VGPUTextureFormat_RG32SInt:
-        return DXGI_FORMAT_R32G32_SINT;
-    case VGPUTextureFormat_RGBA16UInt:
-        return DXGI_FORMAT_R16G16B16A16_UINT;
-    case VGPUTextureFormat_RGBA16SInt:
-        return DXGI_FORMAT_R16G16B16A16_SINT;
-    case VGPUTextureFormat_RGBA16Float:
-        return DXGI_FORMAT_R16G16B16A16_FLOAT;
-    case VGPUTextureFormat_RGBA32Float:
-        return DXGI_FORMAT_R32G32B32A32_FLOAT;
-    case VGPUTextureFormat_RGBA32UInt:
-        return DXGI_FORMAT_R32G32B32A32_UINT;
-    case VGPUTextureFormat_RGBA32SInt:
-        return DXGI_FORMAT_R32G32B32A32_SINT;
+    case VGPUTextureFormat_R32UInt:         return DXGI_FORMAT_R32_UINT;
+    case VGPUTextureFormat_R32SInt:         return DXGI_FORMAT_R32_SINT;
+    case VGPUTextureFormat_R32Float:        return DXGI_FORMAT_R32_FLOAT;
+    case VGPUTextureFormat_RG16UNorm:       return DXGI_FORMAT_R16G16_UNORM;
+    case VGPUTextureFormat_RG16SNorm:       return DXGI_FORMAT_R16G16_SNORM;
+    case VGPUTextureFormat_RG16UInt:        return DXGI_FORMAT_R16G16_UINT;
+    case VGPUTextureFormat_RG16SInt:        return DXGI_FORMAT_R16G16_SINT;
+    case VGPUTextureFormat_RG16Float:       return DXGI_FORMAT_R16G16_FLOAT;
+    case VGPUTextureFormat_RGBA8Unorm:      return DXGI_FORMAT_R8G8B8A8_UNORM;
+    case VGPUTextureFormat_RGBA8UnormSrgb:  return DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+    case VGPUTextureFormat_RGBA8SNorm:      return DXGI_FORMAT_R8G8B8A8_SNORM;
+    case VGPUTextureFormat_RGBA8UInt:       return DXGI_FORMAT_R8G8B8A8_UINT;
+    case VGPUTextureFormat_RGBA8SInt:       return DXGI_FORMAT_R8G8B8A8_SINT;
+    case VGPUTextureFormat_BGRA8Unorm:      return DXGI_FORMAT_B8G8R8A8_UNORM;
+    case VGPUTextureFormat_BGRA8UnormSrgb:  return DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
+        // Packed 32-Bit formats.
+    case VGPUTextureFormat_RGB10A2Unorm:    return DXGI_FORMAT_R10G10B10A2_UNORM;
+    case VGPUTextureFormat_RG11B10Float:    return DXGI_FORMAT_R11G11B10_FLOAT;
+    case VGPUTextureFormat_RGB9E5Float:     return DXGI_FORMAT_R9G9B9E5_SHAREDEXP;
+        // 64-Bit formats.
+    case VGPUTextureFormat_RG32UInt:        return DXGI_FORMAT_R32G32_UINT;
+    case VGPUTextureFormat_RG32SInt:        return DXGI_FORMAT_R32G32_SINT;
+    case VGPUTextureFormat_RG32Float:       return DXGI_FORMAT_R32G32_FLOAT;
+    case VGPUTextureFormat_RGBA16UNorm:     return DXGI_FORMAT_R16G16B16A16_UNORM;
+    case VGPUTextureFormat_RGBA16SNorm:     return DXGI_FORMAT_R16G16B16A16_SNORM;
+    case VGPUTextureFormat_RGBA16UInt:      return DXGI_FORMAT_R16G16B16A16_UINT;
+    case VGPUTextureFormat_RGBA16SInt:      return DXGI_FORMAT_R16G16B16A16_SINT;
+    case VGPUTextureFormat_RGBA16Float:     return DXGI_FORMAT_R16G16B16A16_FLOAT;
+        // 128-Bit formats.
+    case VGPUTextureFormat_RGBA32UInt:      return DXGI_FORMAT_R32G32B32A32_UINT;
+    case VGPUTextureFormat_RGBA32SInt:      return DXGI_FORMAT_R32G32B32A32_SINT;
+    case VGPUTextureFormat_RGBA32Float:     return DXGI_FORMAT_R32G32B32A32_FLOAT;
         // Depth-stencil formats.
-    case VGPUTextureFormat_Depth16UNorm:
-        return DXGI_FORMAT_D16_UNORM;
-    case VGPUTextureFormat_Depth32Float:
-        return DXGI_FORMAT_D32_FLOAT;
-    case VGPUTextureFormat_Depth24UnormStencil8:
-        return DXGI_FORMAT_D24_UNORM_S8_UINT;
-    case VGPUTextureFormat_Depth32FloatStencil8:
-        return DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
+    case VGPUTextureFormat_Depth16UNorm:            return DXGI_FORMAT_D16_UNORM;
+    case VGPUTextureFormat_Depth32Float:            return DXGI_FORMAT_D32_FLOAT;
+    case VGPUTextureFormat_Depth24UnormStencil8:    return DXGI_FORMAT_D24_UNORM_S8_UINT;
+    case VGPUTextureFormat_Depth32FloatStencil8:    return DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
         // Compressed BC formats.
     case VGPU_TEXTURE_FORMAT_BC1:
         return DXGI_FORMAT_BC1_UNORM;
@@ -202,15 +188,13 @@ static inline DXGI_FORMAT _vgpu_d3d_format_with_usage(VGPUTextureFormat format, 
 }
 
 
-static inline UINT _vgpu_d3d_sync_interval(vgpu_present_mode mode) {
+static inline UINT _vgpu_d3d_sync_interval(VGPUPresentMode mode) {
     switch (mode) {
-    case VGPU_PRESENT_MODE_MAILBOX:
-        return 2;
-
-    case VGPU_PRESENT_MODE_IMMEDIATE:
+    case VGPUPresentMode_Immediate:
         return 0;
 
-    case VGPU_PRESENT_MODE_FIFO:
+    case VGPUPresentMode_Mailbox:
+    case VGPUPresentMode_Fifo:
     default:
         return 1;
     }
@@ -222,15 +206,15 @@ static inline DXGI_FORMAT vgpu_d3d_swapchain_format(VGPUTextureFormat format)
     case VGPUTextureFormat_RGBA16Float:
         return DXGI_FORMAT_R16G16B16A16_FLOAT;
 
-    case VGPU_TEXTURE_FORMAT_BGRA8:
-    case VGPU_TEXTURE_FORMAT_BGRA8_SRGB:
+    case VGPUTextureFormat_BGRA8Unorm:
+    case VGPUTextureFormat_BGRA8UnormSrgb:
         return DXGI_FORMAT_B8G8R8A8_UNORM;
 
-    case VGPU_TEXTURE_FORMAT_RGBA8:
-    case VGPU_TEXTURE_FORMAT_RGBA8_SRGB:
+    case VGPUTextureFormat_RGBA8Unorm:
+    case VGPUTextureFormat_RGBA8UnormSrgb:
         return DXGI_FORMAT_R8G8B8A8_UNORM;
 
-    case VGPU_TEXTURE_FORMAT_RGB10A2:
+    case VGPUTextureFormat_RGB10A2Unorm:
         return DXGI_FORMAT_R10G10B10A2_UNORM;
     }
 
@@ -317,6 +301,6 @@ static inline IDXGISwapChain1* vgpu_d3d_create_swapchain(
 #endif
 
     return result;
-}
+    }
 
 #endif /* defined(VGPU_DRIVER_D3D11) || defined(VGPU_DRIVER_D3D12) */

@@ -48,7 +48,7 @@
 // GLFW3 Error Callback, runs on GLFW3 error
 static void glfwErrorCallback(int error, const char* description)
 {
-    vgpu_log_format(VGPU_LOG_LEVEL_ERROR, "[GLFW3 Error] Code: %d Decription: %s", error, description);
+    vgpuLogError("[GLFW3 Error] Code: %d Decription: %s", error, description);
 }
 #endif
 
@@ -58,7 +58,7 @@ static void vgpu_log_fn(void* user_data, vgpu_log_level level, const char* messa
 
 int main(int argc, char** argv)
 {
-    vgpu_set_log_callback_function(vgpu_log_fn, NULL);
+    vgpuSetLogCallback(vgpu_log_fn, NULL);
 
 #ifdef USE_GLFW
     glfwSetErrorCallback(glfwErrorCallback);
@@ -99,44 +99,42 @@ int main(int argc, char** argv)
     int width, height;
     glfwGetWindowSize(window, &width, &height);
 
-    VGPUColor clearColor = { 1.0f, 0.0f, 0.0f, 1.0f };
 
-    vgpu_device_info gpu_desc = {
-        .swapchain = &(VGPUSwapChainDescriptor) {
-#if defined(_WIN32) || defined(_WIN64)
-            .nativeHandle = (void*)glfwGetWin32Window(window),
-#elif defined(__linux__)
-#elif defined(__APPLE__)
+    VGPUDeviceDescriptor deviceDesc = {
+#ifdef _DEBUG
+        .flags = VGPUDeviceFlags_Debug,
 #endif
+        .swapchain = {
             .width = width,
             .height = height,
-            .format = VGPU_TEXTURE_FORMAT_BGRA8,
-            .presentMode = VGPUPresentMode_Fifo
-      },
+            .colorFormat = VGPUTextureFormat_BGRA8Unorm,
+#if defined(_WIN32) || defined(_WIN64)
+            .window_handle = (void*)glfwGetWin32Window(window)
+#endif
+        }
     };
 
-#ifdef _DEBUG
-    gpu_desc.flags |= VGPU_CONFIG_FLAGS_VALIDATION;
-#endif
-
-    vgpu_device device = vgpu_device_create(VGPU_BACKEND_TYPE_DEFAULT, &gpu_desc);
+    VGPUDevice device = vgpuCreateDevice(VGPUBackendType_D3D11, &deviceDesc);
     if (!device) {
         return EXIT_FAILURE;
     }
 
+    VGPUColor clearColor = { 0.392156899f, 0.584313750f, 0.929411829f, 1.0f };
     while (!glfwWindowShouldClose(window))
     {
         if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         {
-            glfwSetWindowShouldClose(window, true);
+            glfwSetWindowShouldClose(window, GLFW_TRUE);
         }
 
-        vgpuBeginFrame(device);
+        if (!vgpuBeginFrame(device)) {
+            return;
+        }
 
         /* Begin default render pass and change its clear color */
         VGPURenderPassDescriptor renderPass;
         memset(&renderPass, 0, sizeof(VGPURenderPassDescriptor));
-        renderPass.colorAttachments[0].texture = vgpuGetCurrentTexture(device);
+        renderPass.colorAttachments[0].texture = vgpuGetBackbufferTexture(device);
         renderPass.colorAttachments[0].mipLevel = 0;
         renderPass.colorAttachments[0].slice = 0;
         renderPass.colorAttachments[0].loadOp = VGPULoadOp_Clear;

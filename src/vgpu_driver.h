@@ -100,7 +100,7 @@ typedef struct VGPUDeviceImpl {
     void (*samplerDestroy)(vgpu_renderer driverData, VGPUSampler handle);
 
     /* Commands */
-    void (*cmdBeginRenderPass)(vgpu_renderer driverData, const VGPURenderPassDescription* desc);
+    void (*cmdBeginRenderPass)(vgpu_renderer driverData, const VGPURenderPassDescriptor* desc);
     void (*cmdEndRenderPass)(vgpu_renderer driverData);
 
     /* Opaque pointer for the renderer. */
@@ -108,9 +108,9 @@ typedef struct VGPUDeviceImpl {
 } VGPUDeviceImpl;
 
 typedef struct VGPU_Driver {
-    vgpu_backend_type backendType;
+    VGPUBackendType backendType;
     bool(*is_supported)(void);
-    VGPUDeviceImpl*(*createDevice)(const vgpu_device_info* info);
+    VGPUDeviceImpl*(*createDevice)(const VGPUDeviceDescriptor* descriptor);
 } VGPU_Driver;
 
 _VGPU_EXTERN VGPU_Driver D3D12_Driver;

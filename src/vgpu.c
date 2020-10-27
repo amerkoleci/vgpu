@@ -123,21 +123,23 @@ static const VGPU_Driver* drivers[] = {
     NULL
 };
 
-VGPUDevice vgpuCreateDevice(vgpu_backend_type preferred_backend, const vgpu_device_info* info)
+VGPUDevice vgpuCreateDevice(VGPUBackendType preferredBackend, const VGPUDeviceDescriptor* descriptor)
 {
+    VGPU_ASSERT(descriptor);
+
     VGPUDevice device = NULL;
-    if (preferred_backend == VGPU_BACKEND_TYPE_COUNT) {
+    if (preferredBackend == VGPUBackendType_Count) {
         for (uint32_t i = 0; _vgpu_count_of(drivers); i++) {
             if (drivers[i]->is_supported()) {
-                device = drivers[i]->createDevice(info);
+                device = drivers[i]->createDevice(descriptor);
                 break;
             }
         }
 }
     else {
         for (uint32_t i = 0; _vgpu_count_of(drivers); i++) {
-            if (drivers[i]->backendType == preferred_backend && drivers[i]->is_supported()) {
-                device = drivers[i]->createDevice(info);
+            if (drivers[i]->backendType == preferredBackend && drivers[i]->is_supported()) {
+                device = drivers[i]->createDevice(descriptor);
                 break;
             }
         }
@@ -191,7 +193,7 @@ static VGPUTextureDescription _vgpu_texture_desc_defaults(const VGPUTextureDescr
     def.width = _vgpu_def(desc->width, 1u);
     def.height = _vgpu_def(desc->height, 1u);
     def.depth = _vgpu_def(desc->depth, 1u);
-    def.format = _vgpu_def(def.format, VGPU_TEXTURE_FORMAT_RGBA8);
+    def.format = _vgpu_def(def.format, VGPUTextureFormat_RGBA8Unorm);
     def.mipLevelCount = _vgpu_def(def.mipLevelCount, 1);
     def.sampleCount = _vgpu_def(def.sampleCount, 1);
     return def;
@@ -243,9 +245,11 @@ void vgpuDestroySampler(VGPUDevice device, VGPUSampler sampler)
 }
 
 /* Commands */
-void vgpuCmdBeginRenderPass(VGPUDevice device, const VGPURenderPassDescription* desc)
+void vgpuCmdBeginRenderPass(VGPUDevice device, const VGPURenderPassDescriptor* descriptor)
 {
-    device->cmdBeginRenderPass(device->renderer, desc);
+    VGPU_ASSERT(descriptor);
+
+    device->cmdBeginRenderPass(device->renderer, descriptor);
 }
 
 void vgpuCmdEndRenderPass(VGPUDevice device) {
@@ -307,34 +311,33 @@ const VgpuPixelFormatDesc FormatDesc[] =
     { VGPUTextureFormat_R32UInt,                VGPUTextureFormatType_Uint,         32,         {1, 1, 4, 1, 1},        {0, 0, 32, 0, 0, 0}},
     { VGPUTextureFormat_R32SInt,                VGPUTextureFormatType_Sint,         32,         {1, 1, 4, 1, 1},        {0, 0, 32, 0, 0, 0}},
     { VGPUTextureFormat_R32Float,                VGPUTextureFormatType_Float,        32,         {1, 1, 4, 1, 1},        {0, 0, 32, 0, 0, 0}},
-    //{ VGPUTextureFormat_RG16Unorm,                VGPUTextureFormatType_Unorm,        32,         {1, 1, 4, 1, 1},        {0, 0, 16, 16, 0, 0}},
-    //{ VGPUTextureFormat_RG16Snorm,               VGPUTextureFormatType_Snorm,        32,         {1, 1, 4, 1, 1},        {0, 0, 16, 16, 0, 0}},
+    { VGPUTextureFormat_RG16UNorm,                VGPUTextureFormatType_Unorm,        32,         {1, 1, 4, 1, 1},        {0, 0, 16, 16, 0, 0}},
+    { VGPUTextureFormat_RG16SNorm,               VGPUTextureFormatType_Snorm,        32,         {1, 1, 4, 1, 1},        {0, 0, 16, 16, 0, 0}},
     { VGPUTextureFormat_RG16UInt,                VGPUTextureFormatType_Uint,         32,         {1, 1, 4, 1, 1},        {0, 0, 16, 16, 0, 0}},
     { VGPUTextureFormat_RG16SInt,                VGPUTextureFormatType_Sint,         32,         {1, 1, 4, 1, 1},        {0, 0, 16, 16, 0, 0}},
     { VGPUTextureFormat_RG16Float,                VGPUTextureFormatType_Float,        32,         {1, 1, 4, 1, 1},        {0, 0, 16, 16, 0, 0}},
-    { VGPU_TEXTURE_FORMAT_RGBA8,                VGPUTextureFormatType_Unorm,        32,         {1, 1, 4, 1, 1},        {0, 0, 8, 8, 8, 8}},
-    { VGPU_TEXTURE_FORMAT_RGBA8_SRGB,            VGPUTextureFormatType_UnormSrgb,    32,         {1, 1, 4, 1, 1},        {0, 0, 8, 8, 8, 8}},
+    { VGPUTextureFormat_RGBA8Unorm,                VGPUTextureFormatType_Unorm,        32,         {1, 1, 4, 1, 1},        {0, 0, 8, 8, 8, 8}},
+    { VGPUTextureFormat_RGBA8UnormSrgb,            VGPUTextureFormatType_UnormSrgb,    32,         {1, 1, 4, 1, 1},        {0, 0, 8, 8, 8, 8}},
     { VGPUTextureFormat_RGBA8SNorm,               VGPUTextureFormatType_Snorm,        32,         {1, 1, 4, 1, 1},        {0, 0, 8, 8, 8, 8}},
     { VGPUTextureFormat_RGBA8UInt,               VGPUTextureFormatType_Uint,         32,         {1, 1, 4, 1, 1},        {0, 0, 8, 8, 8, 8}},
     { VGPUTextureFormat_RGBA8SInt,               VGPUTextureFormatType_Sint,         32,         {1, 1, 4, 1, 1},        {0, 0, 8, 8, 8, 8}},
-    { VGPU_TEXTURE_FORMAT_BGRA8,                VGPUTextureFormatType_Unorm,        32,         {1, 1, 4, 1, 1},        {0, 0, 8, 8, 8, 8}},
-    { VGPU_TEXTURE_FORMAT_BGRA8_SRGB,            VGPUTextureFormatType_UnormSrgb,    32,         {1, 1, 4, 1, 1},        {0, 0, 8, 8, 8, 8}},
+    { VGPUTextureFormat_BGRA8Unorm,                VGPUTextureFormatType_Unorm,        32,         {1, 1, 4, 1, 1},        {0, 0, 8, 8, 8, 8}},
+    { VGPUTextureFormat_BGRA8UnormSrgb,            VGPUTextureFormatType_UnormSrgb,    32,         {1, 1, 4, 1, 1},        {0, 0, 8, 8, 8, 8}},
 
-    // Packed 32-Bit Pixel formats
-    { VGPU_TEXTURE_FORMAT_RGB10A2,            VGPUTextureFormatType_Unorm,       32,         {1, 1, 4, 1, 1},        {0, 0, 10, 10, 10, 2}},
-    //{ VGPU_PIXEL_FORMAT_RGB10A2_UINT,        VGPUTextureFormatType_Uint,        32,         {1, 1, 4, 1, 1},        {0, 0, 10, 10, 10, 2}},
-    { VGPU_TEXTURE_FORMAT_RG11B10F,           VGPUTextureFormatType_Float,       32,         {1, 1, 4, 1, 1},        {0, 0, 11, 11, 10, 0}},
-    //{ VGPU_PIXEL_FORMAT_RGB9E5_FLOAT,        VGPUTextureFormatType_Float,       32,         {1, 1, 4, 1, 1},        {0, 0, 9, 9, 9, 5}},
+    // Packed 32-Bit formats
+    { VGPUTextureFormat_RGB10A2Unorm,       VGPUTextureFormatType_Unorm,       32,         {1, 1, 4, 1, 1},        {0, 0, 10, 10, 10, 2}},
+    { VGPUTextureFormat_RG11B10Float,       VGPUTextureFormatType_Float,       32,         {1, 1, 4, 1, 1},        {0, 0, 11, 11, 10, 0}},
+    { VGPUTextureFormat_RGB9E5Float,        VGPUTextureFormatType_Float,       32,         {1, 1, 4, 1, 1},        {0, 0, 9, 9, 9, 5}},
 
     // 64-Bit Pixel Formats
-    { VGPUTextureFormat_RG32UInt,                 VGPUTextureFormatType_Uint,        64,         {1, 1, 8, 1, 1},        {0, 0, 32, 32, 0, 0}},
-    { VGPUTextureFormat_RG32SInt,                 VGPUTextureFormatType_Sint,        64,         {1, 1, 8, 1, 1},        {0, 0, 32, 32, 0, 0}},
-    { VGPUTextureFormat_RG32Float,                VGPUTextureFormatType_Float,       64,         {1, 1, 8, 1, 1},        {0, 0, 32, 32, 0, 0}},
-    //{ VGPU_PIXEL_FORMAT_RGBA16_UNORM,           VGPUTextureFormatType_Unorm,       64,         {1, 1, 8, 1, 1},        {0, 0, 16, 16, 16, 16}},
-    //{ VGPU_PIXEL_FORMAT_RGBA16_SNORM,           VGPUTextureFormatType_Snorm,       64,         {1, 1, 8, 1, 1},        {0, 0, 16, 16, 16, 16}},
-    { VGPUTextureFormat_RGBA16UInt,                 VGPUTextureFormatType_Uint,        64,         {1, 1, 8, 1, 1},        {0, 0, 16, 16, 16, 16}},
-    { VGPUTextureFormat_RGBA16SInt,                 VGPUTextureFormatType_Sint,        64,         {1, 1, 8, 1, 1},        {0, 0, 16, 16, 16, 16}},
-    { VGPUTextureFormat_RGBA16Float,             VGPUTextureFormatType_Float,       64,         {1, 1, 8, 1, 1},        {0, 0, 16, 16, 16, 16}},
+    { VGPUTextureFormat_RG32UInt,           VGPUTextureFormatType_Uint,        64,         {1, 1, 8, 1, 1},        {0, 0, 32, 32, 0, 0}},
+    { VGPUTextureFormat_RG32SInt,           VGPUTextureFormatType_Sint,        64,         {1, 1, 8, 1, 1},        {0, 0, 32, 32, 0, 0}},
+    { VGPUTextureFormat_RG32Float,          VGPUTextureFormatType_Float,       64,         {1, 1, 8, 1, 1},        {0, 0, 32, 32, 0, 0}},
+    { VGPUTextureFormat_RGBA16UNorm,        VGPUTextureFormatType_Unorm,       64,         {1, 1, 8, 1, 1},        {0, 0, 16, 16, 16, 16}},
+    { VGPUTextureFormat_RGBA16SNorm,        VGPUTextureFormatType_Snorm,       64,         {1, 1, 8, 1, 1},        {0, 0, 16, 16, 16, 16}},
+    { VGPUTextureFormat_RGBA16UInt,         VGPUTextureFormatType_Uint,        64,         {1, 1, 8, 1, 1},        {0, 0, 16, 16, 16, 16}},
+    { VGPUTextureFormat_RGBA16SInt,         VGPUTextureFormatType_Sint,        64,         {1, 1, 8, 1, 1},        {0, 0, 16, 16, 16, 16}},
+    { VGPUTextureFormat_RGBA16Float,        VGPUTextureFormatType_Float,       64,         {1, 1, 8, 1, 1},        {0, 0, 16, 16, 16, 16}},
 
     // 128-Bit Pixel Formats
     { VGPUTextureFormat_RGBA32UInt,               VGPUTextureFormatType_Uint,        128,        {1, 1, 16, 1, 1},       {0, 0, 32, 32, 32, 32}},

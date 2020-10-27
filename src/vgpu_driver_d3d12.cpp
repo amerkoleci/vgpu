@@ -62,7 +62,8 @@ typedef struct D3D12Swapchain {
 typedef struct D3D12Renderer {
     VGPUDeviceCaps caps;
 
-    bool validation;
+    bool debug;
+    bool gpuBasedValidation;
     UINT dxgiFactoryFlags;
     IDXGIFactory4* factory;
     uint32_t factory_caps;
@@ -122,18 +123,27 @@ static struct {
 #endif
 
 /* Device functions */
-static bool d3d12_CreateFactory(D3D12Renderer* renderer)
+static bool _vgpu_d3d12_createFactory(D3D12Renderer* renderer)
 {
     SAFE_RELEASE(renderer->factory);
     HRESULT hr = S_OK;
 
 #if defined(_DEBUG)
-    if (renderer->validation)
+    if (renderer->debug || renderer->gpuBasedValidation)
     {
-        ID3D12Debug* debugController;
-        if (SUCCEEDED(_vgpu_D3D12GetDebugInterface(__uuidof(ID3D12Debug), (void**)&debugController)))
+        ID3D12Debug* d3d12Debug;
+        if (SUCCEEDED(_vgpu_D3D12GetDebugInterface(__uuidof(ID3D12Debug), (void**)&d3d12Debug)))
         {
-            debugController->EnableDebugLayer();
+            d3d12Debug->EnableDebugLayer();
+
+            ID3D12Debug1* d3d12Debug1;
+            if (SUCCEEDED(d3d12Debug->QueryInterface(__uuidof(ID3D12Debug1), (void**)&d3d12Debug1)))
+            {
+                d3d12Debug1->SetEnableGPUBasedValidation(renderer->gpuBasedValidation);
+                d3d12Debug1->Release();
+            }
+
+            d3d12Debug->Release();
         }
         else
         {
@@ -197,7 +207,7 @@ static bool d3d12_CreateFactory(D3D12Renderer* renderer)
 
     return true;
 }
-static IDXGIAdapter1* d3d12_GetAdapter(D3D12Renderer* renderer, VGPUPowerPreference powerPreference)
+static IDXGIAdapter1* d3d12_GetAdapter(D3D12Renderer* renderer, VGPUAdapterType adapterType)
 {
     /* Detect adapter now. */
     IDXGIAdapter1* adapter = NULL;
@@ -210,7 +220,7 @@ static IDXGIAdapter1* d3d12_GetAdapter(D3D12Renderer* renderer, VGPUPowerPrefere
         {
             // By default prefer high performance
             DXGI_GPU_PREFERENCE gpuPreference = DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE;
-            if (powerPreference == VGPUPowerPreference_LowPower)
+            if (adapterType == VGPUAdapterType_IntegratedGPU)
             {
                 gpuPreference = DXGI_GPU_PREFERENCE_MINIMUM_POWER;
             }
@@ -393,7 +403,7 @@ static void d3d12_frame_end(vgpu_renderer driverData) {
         // Output information is cached on the DXGI Factory. If it is stale we need to create a new factory.
         if (!renderer->factory->IsCurrent())
         {
-            d3d12_CreateFactory(renderer);
+            _vgpu_d3d12_createFactory(renderer);
         }
     }
 }
@@ -533,7 +543,7 @@ static void d3d12_swapchain_present(D3D12Renderer* renderer, D3D12Swapchain* swa
 }
 
 /* Commands */
-static void d3d12_cmdBeginRenderPass(vgpu_renderer driverData, const VGPURenderPassDescription* desc)
+static void d3d12_cmdBeginRenderPass(vgpu_renderer driverData, const VGPURenderPassDescriptor* desc)
 {
     D3D12Renderer* renderer = (D3D12Renderer*)driverData;
 
@@ -640,26 +650,25 @@ static bool d3d12_is_supported(void) {
     return true;
 };
 
-static VGPUDeviceImpl* d3d12_create_device(const vgpu_device_info* info) {
+static VGPUDeviceImpl* d3d12_create_device(const VGPUDeviceDescriptor* info) {
     /* Allocate and zero out the renderer */
     D3D12Renderer* renderer = VGPU_ALLOC_HANDLE(D3D12Renderer);
-    renderer->validation = info->debug;
+    renderer->debug = (info->flags & VGPUDeviceFlags_Debug) != 0;
+    renderer->gpuBasedValidation = (info->flags & VGPUDeviceFlags_GPUBasedValidation) != 0;
 
-    if (!d3d12_CreateFactory(renderer)) {
+    if (!_vgpu_d3d12_createFactory(renderer)) {
         return nullptr;
     }
 
-
     /* Setup present flags. */
-    renderer->sync_interval = _vgpu_d3d_sync_interval(info->swapchain.present_mode);
+    renderer->sync_interval = _vgpu_d3d_sync_interval(info->swapchain.presentMode);
     renderer->present_flags = 0;
-    if (info->swapchain.present_mode == VGPU_PRESENT_MODE_IMMEDIATE
-        && renderer->factory_caps & DXGIFACTORY_CAPS_TEARING) {
+    if (!renderer->sync_interval && renderer->factory_caps & DXGIFACTORY_CAPS_TEARING) {
         renderer->present_flags |= DXGI_PRESENT_ALLOW_TEARING;
     }
 
     /* Get DXGI adapter and create D3D12 device */
-    IDXGIAdapter1* dxgiAdapter = d3d12_GetAdapter(renderer, info->powerPreference);
+    IDXGIAdapter1* dxgiAdapter = d3d12_GetAdapter(renderer, info->adapterPreference);
     {
         HRESULT hr = _vgpu_D3D12CreateDevice(dxgiAdapter, D3D_FEATURE_LEVEL_11_1, __uuidof(ID3D12Device), (void**)&renderer->device);
 
@@ -709,7 +718,7 @@ static VGPUDeviceImpl* d3d12_create_device(const vgpu_device_info* info) {
         vgpu_log_info("vgpu driver: D3D12");
         vgpu_log_info("Direct3D Adapter: VID:%04X, PID:%04X - %ls", adapterDesc.VendorId, adapterDesc.DeviceId, adapterDesc.Description);
 
-        renderer->caps.backendType = VGPU_BACKEND_TYPE_D3D12;
+        renderer->caps.backendType = VGPUBackendType_D3D12;
         renderer->caps.vendorId = adapterDesc.VendorId;
         renderer->caps.adapterId = adapterDesc.DeviceId;
         _vgpu_StringConvert(adapterDesc.Description, renderer->caps.adapterName);
@@ -891,7 +900,7 @@ static VGPUDeviceImpl* d3d12_create_device(const vgpu_device_info* info) {
 }
 
 VGPU_Driver D3D12_Driver = {
-    VGPU_BACKEND_TYPE_D3D12,
+    VGPUBackendType_D3D12,
     d3d12_is_supported,
     d3d12_create_device
 };
