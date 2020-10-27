@@ -67,7 +67,7 @@ typedef struct D3D11_ShaderModule {
     };
 } D3D11_ShaderModule;
 
-typedef struct D3D11Swapchain {
+typedef struct D3D11_SwapChain {
     VGPUTextureFormat colorFormat;
     VGPUTextureFormat depthStencilFormat;
     IDXGISwapChain1* handle;
@@ -75,7 +75,7 @@ typedef struct D3D11Swapchain {
     uint32_t height;
     VGPUTexture backbuffer;
     VGPUTexture depthStencilTexture;
-} D3D11Swapchain;
+} D3D11_SwapChain;
 
 typedef struct D3D11Renderer {
     VGPUDeviceCaps caps;
@@ -105,7 +105,7 @@ typedef struct D3D11Renderer {
 
     VGPUDevice gpuDevice;
 
-    D3D11Swapchain swapchains[8];
+    D3D11_SwapChain swapchains[8];
 } D3D11Renderer;
 
 /* Global data */
@@ -291,8 +291,8 @@ static IDXGIAdapter1* d3d11_getAdapter(D3D11Renderer* renderer, VGPUAdapterType 
     return adapter;
 }
 
-static void d3d11_destroySwapChain(D3D11Renderer* renderer, D3D11Swapchain* swapchain);
-static void d3d11_swapchain_present(D3D11Renderer* renderer, D3D11Swapchain* swapchain);
+static void d3d11_destroySwapChain(D3D11Renderer* renderer, D3D11_SwapChain* swapchain);
+static void d3d11_presentSwapChain(D3D11Renderer* renderer, D3D11_SwapChain* swapchain);
 
 static void d3d11_destroy(VGPUDevice device) {
     D3D11Renderer* renderer = (D3D11Renderer*)device->renderer;
@@ -375,7 +375,7 @@ static void d3d11_frame_end(vgpu_renderer driverData) {
         if (!renderer->swapchains[i].handle)
             continue;
 
-        d3d11_swapchain_present(renderer, &renderer->swapchains[i]);
+        d3d11_presentSwapChain(renderer, &renderer->swapchains[i]);
     }
 
     if (!renderer->is_lost)
@@ -395,7 +395,8 @@ static VGPUTexture d3d11_getBackbufferTexture(vgpu_renderer driverData, uint32_t
 
 
 /* Swapchain */
-static void d3d11_swapchain_update(D3D11Renderer* renderer, D3D11Swapchain* swapchain) {
+static void d3d11_swapchain_update(D3D11Renderer* renderer, D3D11_SwapChain* swapchain)
+{
     DXGI_SWAP_CHAIN_DESC1 swapchain_desc;
     VHR(swapchain->handle->GetDesc1(&swapchain_desc));
     swapchain->width = swapchain_desc.Width;
@@ -422,7 +423,8 @@ static void d3d11_swapchain_update(D3D11Renderer* renderer, D3D11Swapchain* swap
     }
 }
 
-static void d3d11_swapchain_create(D3D11Renderer* renderer, D3D11Swapchain* swapchain, const vgpu_swapchain_info* info) {
+static void d3d11_createSwapChain(D3D11Renderer* renderer, D3D11_SwapChain* swapchain, const vgpu_swapchain_info* info)
+{
     swapchain->handle = vgpu_d3d_create_swapchain(
         renderer->factory,
         renderer->factory_caps,
@@ -938,17 +940,17 @@ static void d3d11_destroyShaderModule(vgpu_renderer driverData, VGPUShaderModule
 }
 
 /* SwapChain */
-static void d3d11_destroySwapChain(D3D11Renderer* renderer, D3D11Swapchain* swapchain) {
-    //vgpu_framebuffer_destroy(swapchain->framebuffer);
+static void d3d11_destroySwapChain(D3D11Renderer* renderer, D3D11_SwapChain* swapchain)
+{
     vgpuDestroyTexture(renderer->gpuDevice, swapchain->backbuffer);
     if (swapchain->depthStencilTexture) {
         vgpuDestroyTexture(renderer->gpuDevice, swapchain->depthStencilTexture);
     }
     SAFE_RELEASE(swapchain->handle);
-    //VGPU_FREE(swapchain);
 }
 
-static void d3d11_swapchain_present(D3D11Renderer* renderer, D3D11Swapchain* swapchain) {
+static void d3d11_presentSwapChain(D3D11Renderer* renderer, D3D11_SwapChain* swapchain)
+{
     HRESULT hr = swapchain->handle->Present(renderer->sync_interval, renderer->present_flags);
     if (hr == DXGI_ERROR_DEVICE_REMOVED
         || hr == DXGI_ERROR_DEVICE_HUNG
@@ -1379,8 +1381,9 @@ static VGPUDeviceImpl* d3d11_create_device(const VGPUDeviceDescriptor* info) {
     ASSIGN_DRIVER(d3d11);
     renderer->gpuDevice = device;
 
-    if (info->swapchain.window_handle) {
-        d3d11_swapchain_create(renderer, &renderer->swapchains[0], &info->swapchain);
+    if (info->swapchain.window_handle)
+    {
+        d3d11_createSwapChain(renderer, &renderer->swapchains[0], &info->swapchain);
     }
 
     return device;
