@@ -514,10 +514,11 @@ typedef struct VgpuVertexDescriptor {
 } VgpuVertexDescriptor;
 
 typedef struct VGPUShaderModuleDescriptor {
-    const void* code;
-    size_t size;
-    const char* entry;
-    const char* label;
+    VGPUShaderStage stage;
+    const void*     code;
+    size_t          size;
+    const char*     entry;
+    const char*     label;
 } VGPUShaderModuleDescriptor;
 
 typedef struct VGPURenderPipelineDescriptor {

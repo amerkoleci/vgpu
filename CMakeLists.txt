@@ -212,6 +212,26 @@ if (VGPU_INSTALL)
     )
 endif()
 
+if (WIN32)
+    # Shader compiler
+    set(SHADERC_SOURCE_FILES
+        tools/vgpu_shader.h
+        tools/vgpu_shader.cpp
+    )
+
+    add_library (vgpu_shader ${SHADERC_SOURCE_FILES})
+    target_compile_definitions(vgpu_shader PRIVATE VGPU_SHADER_IMPLEMENTATION)
+    
+    target_include_directories(vgpu_shader PUBLIC
+        "$<BUILD_INTERFACE:${VGPU_ROOT_DIR}/tools>"
+        "$<INSTALL_INTERFACE:${CMAKE_INSTALL_FULL_INCLUDEDIR}>"
+    )
+
+    if (BUILD_SHARED_LIBS)
+        target_compile_definitions(vgpu_shader PRIVATE VGPU_SHARED_LIBRARY)
+    endif ()
+endif ()
+
 # samples
 if (BUILD_EXAMPLES)
     add_subdirectory(samples)

@@ -29,6 +29,10 @@ function(add_sample name)
 
     target_link_libraries(${target_name} PRIVATE vgpu)
 
+    if (WIN32)
+        target_link_libraries(${target_name} PRIVATE vgpu_shader)
+    endif ()
+
     if (NOT (EMSCRIPTEN OR ANDROID))
         target_link_libraries(${target_name} PRIVATE glfw)
     endif ()

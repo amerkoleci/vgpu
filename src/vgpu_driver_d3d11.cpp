@@ -58,6 +58,15 @@ typedef struct D3D11Buffer {
     ID3D11Buffer* handle;
 } D3D11Buffer;
 
+typedef struct D3D11_ShaderModule {
+    union {
+        ID3D11DeviceChild* handle;
+        ID3D11VertexShader* vertex;
+        ID3D11PixelShader* fragment;
+        ID3D11ComputeShader* compute;
+    };
+} D3D11_ShaderModule;
+
 typedef struct D3D11Swapchain {
     VGPUTextureFormat colorFormat;
     VGPUTextureFormat depthStencilFormat;
@@ -892,12 +901,40 @@ static void d3d11_destroySampler(vgpu_renderer driverData, VGPUSampler handle)
 /* Shader */
 static VGPUShaderModule d3d11_createShaderModule(vgpu_renderer driverData, const VGPUShaderModuleDescriptor* desc)
 {
-    return nullptr;
+    D3D11Renderer* renderer = (D3D11Renderer*)driverData;
+    D3D11_ShaderModule* shader = VGPU_ALLOC_HANDLE(D3D11_ShaderModule);
+
+    HRESULT hr = S_OK;
+    switch (desc->stage)
+    {
+    case VGPUShaderStage_Vertex:
+        hr = renderer->device->CreateVertexShader(desc->code, desc->size, nullptr, &shader->vertex);
+        break;
+
+    case VGPUShaderStage_Fragment:
+        hr = renderer->device->CreatePixelShader(desc->code, desc->size, nullptr, &shader->fragment);
+        break;
+
+    default:
+        VGPU_UNREACHABLE();
+        break;
+    }
+
+    if (FAILED(hr))
+    {
+        vgpuLogError("Direct3D11: Failed to create shader module");
+        VGPU_FREE(shader);
+        return nullptr;
+    }
+
+    return (VGPUShaderModule)shader;
 }
 
 static void d3d11_destroyShaderModule(vgpu_renderer driverData, VGPUShaderModule handle)
 {
-
+    D3D11_ShaderModule* shader = (D3D11_ShaderModule*)handle;
+    SAFE_RELEASE(shader->handle);
+    VGPU_FREE(shader);
 }
 
 /* SwapChain */

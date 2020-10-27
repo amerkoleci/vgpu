@@ -20,7 +20,6 @@
 // THE SOFTWARE.
 //
 
-#include <vgpu/vgpu.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -44,6 +43,11 @@
 #   define GLFW_EXPOSE_NATIVE_COCOA
 #endif
 #include <GLFW/glfw3native.h>
+#include <vgpu/vgpu.h>
+
+#if defined(_WIN32)
+#include <vgpu_shader.h>
+#endif
 
 // GLFW3 Error Callback, runs on GLFW3 error
 static void glfwErrorCallback(int error, const char* description)
@@ -90,11 +94,11 @@ int main(int argc, char** argv)
     }*/
 
     GLFWwindow* window = glfwCreateWindow(1280, 720, "01 - triangle", 0, 0);
-   /* if (preferredBackend == VGPUBackendType_OpenGL)
-    {
-        glfwMakeContextCurrent(window);
-        glfwSwapInterval(1);
-    }*/
+    /* if (preferredBackend == VGPUBackendType_OpenGL)
+     {
+         glfwMakeContextCurrent(window);
+         glfwSwapInterval(1);
+     }*/
 
     int width, height;
     glfwGetWindowSize(window, &width, &height);
@@ -128,30 +132,50 @@ int main(int argc, char** argv)
 
     VGPUBuffer vertexBuffer = vgpuCreateBuffer(device, &(VGPUBufferDescriptor) {
         .usage = VGPUBufferUsage_Vertex,
-        .size = sizeof(vertices),
-        .content = vertices
+            .size = sizeof(vertices),
+            .content = vertices
     });
 
-    VGPUShader shader = vgpuCreateShader(device, &(VGPUShaderDescriptor){
-        .vertex.code = "struct vs_in {\n"
-            "  float4 pos: POS;\n"
-            "  float4 color: COLOR;\n"
-            "};\n"
-            "struct vs_out {\n"
-            "  float4 color: COLOR0;\n"
-            "  float4 pos: SV_Position;\n"
-            "};\n"
-            "vs_out main(vs_in inp) {\n"
-            "  vs_out outp;\n"
-            "  outp.pos = inp.pos;\n"
-            "  outp.color = inp.color;\n"
-            "  return outp;\n"
-            "}\n",
-        .fragment.code =
-            "float4 main(float4 color: COLOR0): SV_Target0 {\n"
-            "  return color;\n"
-            "}\n"
+    VGPUShaderModule vertexShader = NULL;
+    VGPUShaderModule fragmentShader = NULL;
+
+#if defined(_WIN32)
+    const char* vertex_shader_source = "struct vs_in {\n"
+        "  float4 pos: POS;\n"
+        "  float4 color: COLOR;\n"
+        "};\n"
+        "struct vs_out {\n"
+        "  float4 color: COLOR0;\n"
+        "  float4 pos: SV_Position;\n"
+        "};\n"
+        "vs_out main(vs_in inp) {\n"
+        "  vs_out outp;\n"
+        "  outp.pos = inp.pos;\n"
+        "  outp.color = inp.color;\n"
+        "  return outp;\n"
+        "}\n";
+
+    const char* fragment_shader_source = "float4 main(float4 color: COLOR0): SV_Target0 {\n"
+        "  return color;\n"
+        "}\n";
+
+    vgpu_shader_blob_t vertex_shader_blob = vgpu_compile_shader(vertex_shader_source, "main", 0, VGPU_SHADER_STAGE_VERTEX);
+    vgpu_shader_blob_t fragment_shader_blob = vgpu_compile_shader(fragment_shader_source, "main", 0, VGPU_SHADER_STAGE_FRAGMENT);
+
+    vertexShader = vgpuCreateShaderModule(device, &(VGPUShaderModuleDescriptor){
+        .stage = VGPUShaderStage_Vertex,
+        .code = vertex_shader_blob.data,
+        .size = vertex_shader_blob.size,
+        .entry = "main"
     });
+
+    fragmentShader = vgpuCreateShaderModule(device, &(VGPUShaderModuleDescriptor){
+        .stage = VGPUShaderStage_Fragment,
+        .code = fragment_shader_blob.data,
+        .size = fragment_shader_blob.size,
+        .entry = "main"
+    });
+#endif
 
     VGPUColor clearColor = { 0.392156899f, 0.584313750f, 0.929411829f, 1.0f };
     while (!glfwWindowShouldClose(window))
@@ -181,6 +205,9 @@ int main(int argc, char** argv)
     }
 
     vgpuDestroyBuffer(device, vertexBuffer);
+    vgpuDestroyShaderModule(device, vertexShader);
+    vgpuDestroyShaderModule(device, fragmentShader);
+
     vgpuDestroyDevice(device);
     glfwTerminate();
 
