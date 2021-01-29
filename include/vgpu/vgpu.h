@@ -69,12 +69,12 @@ typedef enum VGPULogLevel {
 } VGPULogLevel;
 
 typedef enum VGPUBackendType {
-    VGPUBackendType_NULL,
-    VGPUBackendType_D3D11,
-    VGPUBackendType_D3D12,
-    VGPUBackendType_Vulkan,
-    VGPUBackendType_Count,
-    _VGPUBackendType_Force32 = 0x7FFFFFFF
+    VGPU_BACKEND_TYPE_DEFAULT,
+    VGPU_BACKEND_TYPE_VULKAN,
+    VGPU_BACKEND_TYPE_D3D12,
+    VGPU_BACKEND_TYPE_D3D11,
+    _VGPU_BACKEND_TYPE_COUNT,
+    _VGPU_BACKEND_TYPE_FORCE_U32 = 0x7FFFFFFF
 } VGPUBackendType;
 
 typedef enum VGPUDeviceFlags {
@@ -540,6 +540,7 @@ typedef struct vgpu_swapchain_info {
 } vgpu_swapchain_info;
 
 typedef struct VGPUDeviceDescriptor {
+    VGPUBackendType     preferredBackend;
     VGPUDeviceFlags     flags;
     VGPUAdapterType     adapterPreference;
     vgpu_swapchain_info swapchain;
@@ -557,7 +558,7 @@ VGPU_API void vgpuLogError(const char* format, ...);
 VGPU_API void vgpuLogInfo(const char* format, ...);
 
 /* Device */
-VGPU_API VGPUDevice vgpuCreateDevice(VGPUBackendType preferredBackend, const VGPUDeviceDescriptor* descriptor);
+VGPU_API VGPUDevice vgpuCreateDevice(const VGPUDeviceDescriptor* descriptor);
 VGPU_API void vgpuDestroyDevice(VGPUDevice device);
 VGPU_API void vgpuGetDeviceCaps(VGPUDevice device, VGPUDeviceCaps* caps);
 VGPU_API VGPUTextureFormat vgpuGetDefaultDepthFormat(VGPUDevice device);

@@ -31,7 +31,7 @@ static VGPUDeviceImpl* Vulkan_CreateDevice(const VGPUDeviceDescriptor* info) {
 }
 
 VGPU_Driver Vulkan_Driver = {
-    VGPUBackendType_Vulkan,
+    VGPU_BACKEND_TYPE_VULKAN,
     Vulkan_IsSupported,
     Vulkan_CreateDevice
 };

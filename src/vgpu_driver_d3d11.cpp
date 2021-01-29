@@ -1242,7 +1242,7 @@ static VGPUDeviceImpl* d3d11_create_device(const VGPUDeviceDescriptor* info) {
         vgpuLogInfo("VGPU driver: D3D11");
         vgpuLogInfo("Direct3D Adapter: VID:%04X, PID:%04X - %ls", adapterDesc.VendorId, adapterDesc.DeviceId, adapterDesc.Description);
 
-        renderer->caps.backendType = VGPUBackendType_D3D11;
+        renderer->caps.backendType = VGPU_BACKEND_TYPE_D3D11;
         renderer->caps.vendorId = adapterDesc.VendorId;
         renderer->caps.adapterId = adapterDesc.DeviceId;
         _vgpu_StringConvert(adapterDesc.Description, renderer->caps.adapterName);
@@ -1371,7 +1371,7 @@ static VGPUDeviceImpl* d3d11_create_device(const VGPUDeviceDescriptor* info) {
 }
 
 VGPU_Driver D3D11_Driver = {
-    VGPUBackendType_D3D11,
+    VGPU_BACKEND_TYPE_D3D11,
     d3d11_is_supported,
     d3d11_create_device
 };

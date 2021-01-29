@@ -118,7 +118,7 @@ int main(int argc, char** argv)
         }
     };
 
-    VGPUDevice device = vgpuCreateDevice(VGPUBackendType_D3D11, &deviceDesc);
+    VGPUDevice device = vgpuCreateDevice(&deviceDesc);
     if (!device) {
         return EXIT_FAILURE;
     }

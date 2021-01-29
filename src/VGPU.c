@@ -104,12 +104,11 @@ static const VGPU_Driver* drivers[] = {
     NULL
 };
 
-VGPUDevice vgpuCreateDevice(VGPUBackendType preferredBackend, const VGPUDeviceDescriptor* descriptor)
-{
+VGPUDevice vgpuCreateDevice(const VGPUDeviceDescriptor* descriptor) {
     VGPU_ASSERT(descriptor);
 
     VGPUDevice device = NULL;
-    if (preferredBackend == VGPUBackendType_Count) {
+    if (descriptor->preferredBackend == VGPU_BACKEND_TYPE_DEFAULT || descriptor->preferredBackend == _VGPU_BACKEND_TYPE_COUNT) {
         for (uint32_t i = 0; _vgpu_count_of(drivers); i++) {
             if (drivers[i]->is_supported()) {
                 device = drivers[i]->createDevice(descriptor);
@@ -119,7 +118,7 @@ VGPUDevice vgpuCreateDevice(VGPUBackendType preferredBackend, const VGPUDeviceDe
     }
     else {
         for (uint32_t i = 0; _vgpu_count_of(drivers); i++) {
-            if (drivers[i]->backendType == preferredBackend && drivers[i]->is_supported()) {
+            if (drivers[i]->backendType == descriptor->preferredBackend && drivers[i]->is_supported()) {
                 device = drivers[i]->createDevice(descriptor);
                 break;
             }
