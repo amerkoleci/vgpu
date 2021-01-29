@@ -1,1 +1,9 @@
-cmake -E make_directory "build" && cmake -E chdir "build" cmake -G "Visual Studio 16 2019" -A "x64" -DCMAKE_INSTALL_PREFIX="vortice-sdk-windows" ..
+@echo off
+if not exist build\win64 (
+    mkdir build\win64
+)
+cd build\win64
+cmake ..\..\ -G "Visual Studio 16 2019" -A x64 -DCMAKE_INSTALL_PREFIX="SDK"
+cmake --build .
+cd ..\..\
+pause

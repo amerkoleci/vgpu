@@ -1,26 +1,42 @@
-//
-// Copyright (c) 2019-2020 Amer Koleci.
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-// THE SOFTWARE.
-//
+// Copyright (c) Amer Koleci.
+// Distributed under the MIT license. See the LICENSE file in the project root for more information.
 
-#include "vgpu_backend.h"
+#if defined(VGPU_DRIVER_VULKAN)
+#include "vgpu_driver.h"
+
+#ifndef VULKAN_H_
+#define VULKAN_H_ 1
+#endif
+#define VKBIND_IMPLEMENTATION
+#include "vk/vkbind.h"
+
+static struct {
+    bool available_initialized;
+    bool available;
+} vk;
+
+static bool Vulkan_IsSupported(void) {
+    if (vk.available_initialized) {
+        return vk.available;
+    }
+
+    vk.available_initialized = true;
+
+    vk.available = true;
+    return true;
+};
+
+static VGPUDeviceImpl* Vulkan_CreateDevice(const VGPUDeviceDescriptor* info) {
+    return NULL;
+}
+
+VGPU_Driver Vulkan_Driver = {
+    VGPUBackendType_Vulkan,
+    Vulkan_IsSupported,
+    Vulkan_CreateDevice
+};
+
+#if TODO
 #include "stb_ds.h"
 
 #if defined(_WIN32) || defined(_WIN64)
@@ -46,11 +62,7 @@
 #   define   VK_USE_PLATFORM_XCB_KHR
 #endif
 
-#ifndef VULKAN_H_
-#define VULKAN_H_ 1
-#endif
-#define VKBIND_IMPLEMENTATION
-#include "vk/vkbind.h"
+
 #define VMA_IMPLEMENTATION
 #include "vk/vk_mem_alloc.h"
 
@@ -2556,3 +2568,7 @@ VGPUDevice vk_create_device(void) {
 
     return device;
 }
+#endif // TODO
+
+
+#endif /* defined(VGPU_DRIVER_VULKAN)  */

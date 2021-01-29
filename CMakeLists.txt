@@ -1,25 +1,3 @@
-#
-# Copyright (c) 2019 Amer Koleci.
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-# THE SOFTWARE.
-#
-
 # CMake version
 cmake_minimum_required(VERSION 3.10)
 project(vgpu)
@@ -45,22 +23,22 @@ set (CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${VGPU_BUILD_DIR}/lib")
 
 # Options
 if (${CMAKE_SYSTEM_NAME} STREQUAL "Windows")
-    option(VGPU_BACKEND_D3D11 "Include Direct3D12 backend" ON)
-    option(VGPU_BACKEND_D3D12 "Include Direct3D12 backend" ON)
-    option(VGPU_BACKEND_OPENGL "Include OpenGL backend" ON)
-    option(VGPU_BACKEND_VULKAN "Include Vulkan backend" ON)
+	option(VGPU_BACKEND_D3D11 "Include Direct3D12 backend" ON)
+	option(VGPU_BACKEND_D3D12 "Include Direct3D12 backend" ON)
+	option(VGPU_BACKEND_OPENGL "Include OpenGL backend" ON)
+	option(VGPU_BACKEND_VULKAN "Include Vulkan backend" ON)
 elseif (${CMAKE_SYSTEM_NAME} STREQUAL "WindowsStore")
-    option(VGPU_BACKEND_D3D11 "Include Direct3D12 backend" ON)
-    option(VGPU_BACKEND_D3D12 "Include Direct3D12 backend" ON)
+	option(VGPU_BACKEND_D3D11 "Include Direct3D12 backend" ON)
+	option(VGPU_BACKEND_D3D12 "Include Direct3D12 backend" ON)
 elseif (${CMAKE_SYSTEM_NAME} STREQUAL "Durango")
-    # XboxOne
-    option(VGPU_BACKEND_D3D11 "Include Direct3D12 backend" ON)
-    option(VGPU_BACKEND_D3D12 "Include Direct3D12 backend" ON)
+	# XboxOne
+	option(VGPU_BACKEND_D3D11 "Include Direct3D12 backend" ON)
+	option(VGPU_BACKEND_D3D12 "Include Direct3D12 backend" ON)
 elseif (${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
-    set(VGPU_BACKEND_VULKAN ON CACHE BOOL "Include Vulkan renderer")
+	set(VGPU_BACKEND_VULKAN ON CACHE BOOL "Include Vulkan renderer")
 else()
-    set(VGPU_BACKEND_OPENGL ON CACHE BOOL "Include OpenGL renderer")
-    set(VGPU_BACKEND_OPENGL ON CACHE BOOL "Include OpenGL renderer")
+	set(VGPU_BACKEND_OPENGL ON CACHE BOOL "Include OpenGL renderer")
+	set(VGPU_BACKEND_OPENGL ON CACHE BOOL "Include OpenGL renderer")
 endif ()
 
 # Platform Flags
@@ -72,26 +50,26 @@ elseif(WIN32)
 	# "vgpu.dll", not "vgpu.dll"
 	set(CMAKE_SHARED_LIBRARY_PREFIX "")
 
-    option(ALIMER_USE_STATIC_CRT "Link against the static runtime libraries." ON)
+	option(ALIMER_USE_STATIC_CRT "Link against the static runtime libraries." ON)
 
-    # Select static/dynamic runtime library
+	# Select static/dynamic runtime library
 	if (ALIMER_USE_STATIC_CRT)
-        string(REGEX REPLACE "/MDd" "/MTd" CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG}")
+		string(REGEX REPLACE "/MDd" "/MTd" CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG}")
 		string(REGEX REPLACE "/MDd" "/MTd" CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
-        string(REGEX REPLACE "/MD" "/MT" CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE}")
+		string(REGEX REPLACE "/MD" "/MT" CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE}")
 		string(REGEX REPLACE "/MD" "/MT" CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
 	else()
-        string(REGEX REPLACE "/MTd" "/MDd" CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG}")
+		string(REGEX REPLACE "/MTd" "/MDd" CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG}")
 		string(REGEX REPLACE "/MTd" "/MDd" CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
-        string(REGEX REPLACE "/MT" "/MD" CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE}")
+		string(REGEX REPLACE "/MT" "/MD" CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE}")
 		string(REGEX REPLACE "/MT" "/MD" CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
 	endif()
 endif()
 
 if (ANDROID OR IOS)
-    set(BUILD_EXAMPLES OFF CACHE INTERNAL "Build examples" FORCE)
+	set(BUILD_EXAMPLES OFF CACHE INTERNAL "Build examples" FORCE)
 else ()
-    option (BUILD_EXAMPLES "Build the vgpu samples" ON)
+	option (BUILD_EXAMPLES "Build the vgpu samples" ON)
 endif ()
 
 option(VGPU_INSTALL "Generate installation target" ON)
@@ -101,77 +79,71 @@ option(BUILD_SHARED_LIBS "Build shared library" ON)
 
 # GLFW
 if (BUILD_EXAMPLES AND NOT (EMSCRIPTEN OR ANDROID))
-    set (GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-    set (GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
-    set (GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-    set (GLFW_INSTALL OFF CACHE BOOL "" FORCE)
-    set(BUILD_SHARED_LIBS OFF CACHE BOOL "")
-    #set (GLFW_USE_WAYLAND ${VGPU_USE_WAYLAND} CACHE BOOL "" FORCE)
-    add_subdirectory(third_party/glfw)
-    set_property(TARGET "glfw" PROPERTY FOLDER "third_party")
-    unset (LIB_SUFFIX CACHE)
+	set (GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+	set (GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+	set (GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+	set (GLFW_INSTALL OFF CACHE BOOL "" FORCE)
+	set(BUILD_SHARED_LIBS OFF CACHE BOOL "")
+	#set (GLFW_USE_WAYLAND ${VGPU_USE_WAYLAND} CACHE BOOL "" FORCE)
+	add_subdirectory(third_party/glfw)
+	set_property(TARGET "glfw" PROPERTY FOLDER "third_party")
+	unset (LIB_SUFFIX CACHE)
 endif ()
 
 # vgpu
 set(SOURCE_FILES
-    # Public Headers
-    include/vgpu/vgpu.h
-    # Internal Headers
-    src/stb_ds.h
-    src/vgpu_driver.h
-    src/vgpu_d3d_common.h
-    # Source Files
-    src/vgpu.c
-    src/vgpu_driver_d3d11.cpp
-    src/vgpu_driver_d3d12.cpp
+	# Public Headers
+	include/vgpu/vgpu.h
+	# Internal Headers
+	src/stb_ds.h
+	src/VGPU_Driver.h
+	src/vgpu_d3d_common.h
+	# Source Files
+	src/VGPU.c
+	src/VGPU_Driver_Vulkan.c
+	src/vgpu_driver_d3d11.cpp
+	src/vgpu_driver_d3d12.cpp
 )
 
 add_library (vgpu ${SOURCE_FILES})
 target_compile_definitions(vgpu PRIVATE VGPU_IMPLEMENTATION)
 
 if (BUILD_SHARED_LIBS)
-    target_compile_definitions(vgpu PRIVATE VGPU_SHARED_LIBRARY)
+	target_compile_definitions(vgpu PRIVATE VGPU_SHARED_LIBRARY)
 endif ()
 
 if (VGPU_BACKEND_D3D11)
-    target_compile_definitions(vgpu PRIVATE VGPU_DRIVER_D3D11)
+	target_compile_definitions(vgpu PRIVATE VGPU_DRIVER_D3D11)
 endif ()
 
 if (VGPU_BACKEND_D3D12)
-    target_sources(vgpu PRIVATE
-        src/d3d12/D3D12MemAlloc.h
-        src/d3d12/D3D12MemAlloc.cpp
-    )
+	#target_sources(vgpu PRIVATE
+	#	src/d3d12/D3D12MemAlloc.h
+	#	src/d3d12/D3D12MemAlloc.cpp
+	#)
 
-    if (MSVC)
-        target_sources(vgpu PRIVATE
-            src/d3d12/D3D12MemAlloc.natvis
-        )
-    endif ()
+	#if (MSVC)
+	#	target_sources(vgpu PRIVATE
+	#		src/d3d12/D3D12MemAlloc.natvis
+	#	)
+	#endif ()
 
-    target_compile_definitions(vgpu PRIVATE VGPU_DRIVER_D3D12)
+	#target_compile_definitions(vgpu PRIVATE VGPU_DRIVER_D3D12)
 
-    target_include_directories(vgpu PUBLIC
-        "$<BUILD_INTERFACE:${VGPU_ROOT_DIR}/src/d3d12>"
-    )
+	#target_include_directories(vgpu PUBLIC
+	#	"$<BUILD_INTERFACE:${VGPU_ROOT_DIR}/src/d3d12>"
+	#)
 
 endif ()
 
 if (VGPU_BACKEND_VULKAN)
-    #target_sources(vgpu PRIVATE
-    #    src/vk/vkbind.h
-    #    src/vk/vk_mem_alloc.h
-    #    src/vgpu_vk.cpp
-    #)
+	target_sources(vgpu PRIVATE
+		src/vk/vkbind.h
+		src/vk/vk_mem_alloc.h
+		
+	)
 
-    #if (MSVC)
-    #    target_sources(vgpu PRIVATE
-    #        src/vk/vk_mem_alloc.natvis
-    #    )
-    #endif ()
-
-    #target_compile_definitions(vgpu PRIVATE VGPU_VULKAN)
-    #target_link_libraries(vgpu PRIVATE vulkan)
+	target_compile_definitions(vgpu PRIVATE VGPU_DRIVER_VULKAN)
 endif ()
 
 # Build flags
@@ -185,66 +157,66 @@ if (MINGW)
 endif()
 
 set_target_properties(vgpu PROPERTIES
-    OUTPUT_NAME "vgpu"
-    VERSION ${VGPU_VERSION}
-    SOVERSION ${VGPU_VERSION_MAJOR}
+	OUTPUT_NAME "vgpu"
+	VERSION ${VGPU_VERSION}
+	SOVERSION ${VGPU_VERSION_MAJOR}
 )
 
 target_include_directories(vgpu PUBLIC
-    "$<BUILD_INTERFACE:${VGPU_ROOT_DIR}/include>"
-    "$<INSTALL_INTERFACE:${CMAKE_INSTALL_FULL_INCLUDEDIR}>"
+	"$<BUILD_INTERFACE:${VGPU_ROOT_DIR}/include>"
+	"$<INSTALL_INTERFACE:${CMAKE_INSTALL_FULL_INCLUDEDIR}>"
 )
 
 if (MSVC)
-    # Set warning level 3 and treat all other warnings as errors
+	# Set warning level 3 and treat all other warnings as errors
 	target_compile_options(vgpu PRIVATE
-        /W3
-        /WX
-    )
+		/W3
+		/WX
+	)
 endif ()
 
 if (VGPU_INSTALL)
-    install(TARGETS vgpu
-        EXPORT vgpu
-        RUNTIME DESTINATION "bin"
-        ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-        LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-    )
+	install(TARGETS vgpu
+		EXPORT vgpu
+		RUNTIME DESTINATION "bin"
+		ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+		LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+	)
 endif()
 
 if (WIN32)
-    # Shader compiler
-    set(SHADERC_SOURCE_FILES
-        tools/vgpu_shader.h
-        tools/vgpu_shader.cpp
-    )
+	# Shader compiler
+	set(SHADERC_SOURCE_FILES
+		tools/vgpu_shader.h
+		tools/vgpu_shader.cpp
+	)
 
-    add_library (vgpu_shader ${SHADERC_SOURCE_FILES})
-    target_compile_definitions(vgpu_shader PRIVATE VGPU_SHADER_IMPLEMENTATION)
-    
-    target_include_directories(vgpu_shader PUBLIC
-        "$<BUILD_INTERFACE:${VGPU_ROOT_DIR}/tools>"
-        "$<INSTALL_INTERFACE:${CMAKE_INSTALL_FULL_INCLUDEDIR}>"
-    )
+	add_library (vgpu_shader ${SHADERC_SOURCE_FILES})
+	target_compile_definitions(vgpu_shader PRIVATE VGPU_SHADER_IMPLEMENTATION)
+	
+	target_include_directories(vgpu_shader PUBLIC
+		"$<BUILD_INTERFACE:${VGPU_ROOT_DIR}/tools>"
+		"$<INSTALL_INTERFACE:${CMAKE_INSTALL_FULL_INCLUDEDIR}>"
+	)
 
-    if (BUILD_SHARED_LIBS)
-        target_compile_definitions(vgpu_shader PRIVATE VGPU_SHARED_LIBRARY)
-    endif ()
+	if (BUILD_SHARED_LIBS)
+		target_compile_definitions(vgpu_shader PRIVATE VGPU_SHARED_LIBRARY)
+	endif ()
 endif ()
 
 # samples
 if (BUILD_EXAMPLES)
-    add_subdirectory(samples)
+	add_subdirectory(samples)
 endif ()
 
 if (VGPU_INSTALL)
-    install(DIRECTORY include/vgpu DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} FILES_MATCHING PATTERN vgpu.h)
+	install(DIRECTORY include/vgpu DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} FILES_MATCHING PATTERN vgpu.h)
 endif ()
 
 # Print current build configuration
 message(STATUS "Build Configuration:")
 if (BUILD_SHARED_LIBS)
-    message(STATUS "  Library         SHARED")
+	message(STATUS "  Library         SHARED")
 else ()
-    message(STATUS "  Library         STATIC")
+	message(STATUS "  Library         STATIC")
 endif ()
