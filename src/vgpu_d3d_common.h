@@ -151,18 +151,6 @@ static inline DXGI_FORMAT _vgpu_d3d_format_with_usage(VGPUTextureFormat format, 
 }
 
 
-static inline UINT _vgpu_d3d_sync_interval(VGPUPresentMode mode) {
-    switch (mode) {
-    case VGPUPresentMode_Immediate:
-        return 0;
-
-    case VGPUPresentMode_Mailbox:
-    case VGPUPresentMode_Fifo:
-    default:
-        return 1;
-    }
-}
-
 static inline DXGI_FORMAT vgpu_d3d_swapchain_format(VGPUTextureFormat format)
 {
     switch (format) {
@@ -196,7 +184,7 @@ static inline IDXGISwapChain1* vgpu_d3d_create_swapchain(
 #if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
     HWND window = (HWND)window_handle;
     if (!IsWindow(window)) {
-        vgpuLogError("Invalid HWND handle");
+        vgpu_log_error("Invalid HWND handle");
         return NULL;
     }
 #else

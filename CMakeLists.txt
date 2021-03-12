@@ -95,11 +95,10 @@ set(SOURCE_FILES
 	# Public Headers
 	include/vgpu/vgpu.h
 	# Internal Headers
-	src/stb_ds.h
-	src/VGPU_Driver.h
+	src/vgpu_driver.h
 	src/vgpu_d3d_common.h
 	# Source Files
-	src/VGPU.c
+	src/vgpu.cpp
 	src/vgpu_driver_vulkan.cpp
 	src/vgpu_driver_d3d11.cpp
 	src/vgpu_driver_d3d12.cpp

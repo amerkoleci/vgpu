@@ -52,24 +52,24 @@
 // GLFW3 Error Callback, runs on GLFW3 error
 static void glfwErrorCallback(int error, const char* description)
 {
-    vgpuLogError("[GLFW3 Error] Code: %d Decription: %s", error, description);
+    vgpu_log_error("[GLFW3 Error] Code: %d Decription: %s", error, description);
 }
 #endif
 
-static void vgpu_log_fn(void* user_data, VGPULogLevel level, const char* message)
+static void vgpu_log_fn(void* user_data, vgpu_log_level level, const char* message)
 {
 }
 
 int main(int argc, char** argv)
 {
-    vgpuSetLogCallback(vgpu_log_fn, NULL);
+    vgpu_set_log_callback(vgpu_log_fn, NULL);
 
 #ifdef USE_GLFW
     glfwSetErrorCallback(glfwErrorCallback);
 
     if (!glfwInit())
     {
-        vgpuLogError("Failed to initialize GLFW");
+        vgpu_log_error("Failed to initialize GLFW");
         return EXIT_FAILURE;
     }
 
@@ -118,7 +118,7 @@ int main(int argc, char** argv)
         }
     };
 
-    VGPUDevice device = vgpuCreateDevice(&deviceDesc);
+    VGPUDevice device = vgpuCreateDevice(VGPU_BACKEND_TYPE_DEFAULT, &deviceDesc);
     if (!device) {
         return EXIT_FAILURE;
     }

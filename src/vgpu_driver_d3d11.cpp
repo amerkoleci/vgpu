@@ -5,7 +5,6 @@
 #define D3D11_NO_HELPERS
 #include <d3d11_1.h>
 #include "vgpu_d3d_common.h"
-#include "stb_ds.h"
 #include <stdio.h>
 
 #ifdef _DEBUG
@@ -293,7 +292,7 @@ static void d3d11_destroy(VGPUDevice device) {
     ULONG refCount = renderer->device->Release();
     if (refCount > 0)
     {
-        vgpuLogError("Direct3D11: There are %d unreleased references left on the device", refCount);
+        vgpu_log_error("Direct3D11: There are %d unreleased references left on the device", refCount);
 
         ID3D11Debug* d3d11_debug = NULL;
         if (SUCCEEDED(renderer->device->QueryInterface(__uuidof(ID3D11Debug), (void**)&d3d11_debug)))
@@ -539,7 +538,7 @@ static ID3D11RenderTargetView* _vgpu_d3d11_createRTV(D3D11Renderer* renderer, ID
     HRESULT hr = renderer->device->CreateRenderTargetView(resource, &rtvDesc, &view);
     if (FAILED(hr))
     {
-        vgpuLogError("Direct3D11: Failed to create RTV");
+        vgpu_log_error("Direct3D11: Failed to create RTV");
         return nullptr;
     }
 
@@ -634,7 +633,7 @@ static ID3D11DepthStencilView* _vgpu_d3d11_createDSV(D3D11Renderer* renderer, ID
 
     case D3D11_RESOURCE_DIMENSION_BUFFER:
     case D3D11_RESOURCE_DIMENSION_TEXTURE3D:
-        vgpuLogError("Cannot create DepthStencilView for 3D texture");
+        vgpu_log_error("Cannot create DepthStencilView for 3D texture");
         VGPU_UNREACHABLE();
         return nullptr;
 
@@ -647,7 +646,7 @@ static ID3D11DepthStencilView* _vgpu_d3d11_createDSV(D3D11Renderer* renderer, ID
     HRESULT hr = renderer->device->CreateDepthStencilView(resource, &dsvDesc, &view);
     if (FAILED(hr))
     {
-        vgpuLogError("Direct3D11: Failed to create DSV");
+        vgpu_log_error("Direct3D11: Failed to create DSV");
         return nullptr;
     }
 
@@ -789,7 +788,7 @@ static VGPUBuffer d3d11_createBuffer(vgpu_renderer driverData, const VGPUBufferD
 
     if (sizeInBytes > c_maxBytes)
     {
-        //vgpuLogError("Direct3D11: Resource size too large for DirectX 11 (size {})", sizeInBytes);
+        //vgpu_log_error("Direct3D11: Resource size too large for DirectX 11 (size {})", sizeInBytes);
         return nullptr;
     }
 
@@ -854,7 +853,7 @@ static VGPUBuffer d3d11_createBuffer(vgpu_renderer driverData, const VGPUBufferD
     HRESULT hr = renderer->device->CreateBuffer(&desc, initialDataPtr, &handle);
     if (FAILED(hr))
     {
-        vgpuLogError("Direct3D11: Failed to create buffer");
+        vgpu_log_error("Direct3D11: Failed to create buffer");
         return nullptr;
     }
 
@@ -905,7 +904,7 @@ static VGPUShaderModule d3d11_createShaderModule(vgpu_renderer driverData, const
 
     if (FAILED(hr))
     {
-        vgpuLogError("Direct3D11: Failed to create shader module");
+        vgpu_log_error("Direct3D11: Failed to create shader module");
         VGPU_FREE(shader);
         return nullptr;
     }
@@ -1100,7 +1099,7 @@ static VGPUDeviceImpl* d3d11_create_device(const VGPUDeviceDescriptor* info) {
     IDXGIAdapter1* dxgi_adapter = d3d11_getAdapter(renderer, info->power_preference);
 
     /* Setup present flags. */
-    renderer->sync_interval = _vgpu_d3d_sync_interval(info->swapchain.presentMode);
+    renderer->sync_interval = info->swapchain.vsync ? 1 : 0;
     renderer->present_flags = 0;
     if (!renderer->sync_interval && renderer->factory_caps & DXGIFACTORY_CAPS_TEARING)
     {
@@ -1154,7 +1153,7 @@ static VGPUDeviceImpl* d3d11_create_device(const VGPUDeviceDescriptor* info) {
 #if defined(NDEBUG)
         else
         {
-            vgpuLogError("No Direct3D hardware device found");
+            vgpu_log_error("No Direct3D hardware device found");
             VGPU_UNREACHABLE();
         }
 #else
@@ -1239,10 +1238,10 @@ static VGPUDeviceImpl* d3d11_create_device(const VGPUDeviceDescriptor* info) {
         VHR(dxgi_adapter->GetDesc1(&adapterDesc));
 
         /* Log some info */
-        vgpuLogInfo("VGPU driver: D3D11");
-        vgpuLogInfo("Direct3D Adapter: VID:%04X, PID:%04X - %ls", adapterDesc.VendorId, adapterDesc.DeviceId, adapterDesc.Description);
+        vgpu_log_info("VGPU driver: D3D11");
+        vgpu_log_info("Direct3D Adapter: VID:%04X, PID:%04X - %ls", adapterDesc.VendorId, adapterDesc.DeviceId, adapterDesc.Description);
 
-        renderer->caps.backendType = VGPU_BACKEND_TYPE_D3D11;
+        renderer->caps.backendType = VGPU_BACKEND_TYPE_DIRECT3D11;
         renderer->caps.vendorId = adapterDesc.VendorId;
         renderer->caps.adapterId = adapterDesc.DeviceId;
         _vgpu_StringConvert(adapterDesc.Description, renderer->caps.adapterName);
@@ -1371,7 +1370,7 @@ static VGPUDeviceImpl* d3d11_create_device(const VGPUDeviceDescriptor* info) {
 }
 
 VGPU_Driver D3D11_Driver = {
-    VGPU_BACKEND_TYPE_D3D11,
+    VGPU_BACKEND_TYPE_DIRECT3D11,
     d3d11_is_supported,
     d3d11_create_device
 };

@@ -93,7 +93,7 @@ typedef struct VGPUDeviceImpl {
 } VGPUDeviceImpl;
 
 typedef struct VGPU_Driver {
-    VGPUBackendType backendType;
+    vgpu_backend_type type;
     bool(*is_supported)(void);
     VGPUDeviceImpl*(*createDevice)(const VGPUDeviceDescriptor* descriptor);
 } VGPU_Driver;

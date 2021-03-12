@@ -25,6 +25,11 @@ static bool Vulkan_IsSupported(void) {
 
     vk.available_initialized = true;
 
+    VkResult result = vkbInit(nullptr);
+    if (result != VK_SUCCESS) {
+        return false;
+    }
+
     vk.available = true;
     return true;
 };

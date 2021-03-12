@@ -61,21 +61,21 @@ typedef struct VGPUShaderModuleImpl* VGPUShaderModule;
 typedef struct VGPUPipelineImpl* VGPUPipeline;
 
 /* Enums */
-typedef enum VGPULogLevel {
-    VGPULogLevel_Error = 0,
-    VGPULogLevel_Warn = 1,
-    VGPULogLevel_Info = 2,
-    _VGPULogLevel_Force32 = 0x7FFFFFFF
-} VGPULogLevel;
+typedef enum vgpu_log_level {
+    VGPU_LOG_LEVEL_ERROR = 0,
+    VGPU_LOG_LEVEL_WARN = 1,
+    VGPU_LOG_LEVEL_INFO = 2,
+    _VGPU_LOG_LEVEL_FORCE_U32 = 0x7FFFFFFF
+} vgpu_log_level;
 
-typedef enum VGPUBackendType {
+typedef enum vgpu_backend_type {
     VGPU_BACKEND_TYPE_DEFAULT,
     VGPU_BACKEND_TYPE_VULKAN,
-    VGPU_BACKEND_TYPE_D3D12,
-    VGPU_BACKEND_TYPE_D3D11,
+    VGPU_BACKEND_TYPE_DIRECT3D12,
+    VGPU_BACKEND_TYPE_DIRECT3D11,
     _VGPU_BACKEND_TYPE_COUNT,
     _VGPU_BACKEND_TYPE_FORCE_U32 = 0x7FFFFFFF
-} VGPUBackendType;
+} vgpu_backend_type;
 
 typedef enum VGPUDeviceFlags {
     VGPUDeviceFlags_None = 0x00000000,
@@ -98,13 +98,6 @@ typedef enum VGPUAdapterType {
     VGPUAdapterType_Unknown,
     _VGPUAdapterType_Force32 = 0x7FFFFFFF
 } VGPUAdapterType;
-
-typedef enum VGPUPresentMode {
-    VGPUPresentMode_Immediate = 0x00000000,
-    VGPUPresentMode_Mailbox = 0x00000001,
-    VGPUPresentMode_Fifo = 0x00000002,
-    _VGPUPresentMode_Force32 = 0x7FFFFFFF
-} VGPUPresentMode;
 
 /// Defines pixel format.
 typedef enum VGPUTextureFormat {
@@ -346,7 +339,7 @@ typedef enum VGPUStoreOp {
 } VGPUStoreOp;
 
 /* Callbacks */
-typedef void(VGPU_CALL* vgpu_log_callback)(void* user_data, VGPULogLevel level, const char* message);
+typedef void(VGPU_CALL* vgpu_log_callback)(void* user_data, vgpu_log_level level, const char* message);
 
 /* Structs */
 typedef struct VGPUExtent3D {
@@ -431,7 +424,7 @@ typedef struct VGPUDeviceLimits {
 } VGPUDeviceLimits;
 
 typedef struct VGPUDeviceCaps {
-    VGPUBackendType     backendType;
+    vgpu_backend_type   backendType;
     uint32_t            vendorId;
     uint32_t            adapterId;
     VGPUAdapterType     adapterType;
@@ -540,13 +533,12 @@ typedef struct vgpu_swapchain_info {
     VGPUTextureFormat colorFormat;
     uint32_t width;
     uint32_t height;
-    VGPUPresentMode presentMode;
+    vgpu_bool vsync;
     vgpu_bool fullscreen;
     const char* label;
 } vgpu_swapchain_info;
 
 typedef struct VGPUDeviceDescriptor {
-    VGPUBackendType     preferredBackend;
     VGPUDeviceFlags     flags;
     vgpu_power_preference   power_preference;
     vgpu_swapchain_info swapchain;
@@ -558,13 +550,14 @@ typedef struct VGPUDeviceDescriptor {
 VGPU_API void vgpuSetAllocationCallbacks(const vgpu_allocation_callbacks* callbacks);
 
 /* Log functions */
-VGPU_API void vgpuSetLogCallback(vgpu_log_callback callback, void* user_data);
-VGPU_API void vgpuLog(VGPULogLevel level, const char* format, ...);
-VGPU_API void vgpuLogError(const char* format, ...);
-VGPU_API void vgpuLogInfo(const char* format, ...);
+VGPU_API void vgpu_set_log_callback(vgpu_log_callback callback, void* user_data);
+VGPU_API void vgpu_log_error(const char* format, ...);
+VGPU_API void vgpu_log_warn(const char* format, ...);
+VGPU_API void vgpu_log_info(const char* format, ...);
 
 /* Device */
-VGPU_API VGPUDevice vgpuCreateDevice(const VGPUDeviceDescriptor* descriptor);
+VGPU_API vgpu_bool vgpu_is_backend_supported(vgpu_backend_type type);
+VGPU_API VGPUDevice vgpuCreateDevice(vgpu_backend_type preferred_backend, const VGPUDeviceDescriptor* descriptor);
 VGPU_API void vgpuDestroyDevice(VGPUDevice device);
 VGPU_API void vgpuGetDeviceCaps(VGPUDevice device, VGPUDeviceCaps* caps);
 VGPU_API VGPUTextureFormat vgpuGetDefaultDepthFormat(VGPUDevice device);

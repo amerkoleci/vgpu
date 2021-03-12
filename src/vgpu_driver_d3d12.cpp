@@ -19,7 +19,33 @@
 static struct {
     bool available_initialized;
     bool available;
+
+
+#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
+    struct
+    {
+        HMODULE instance;
+        PFN_CREATE_DXGI_FACTORY2 CreateDXGIFactory2;
+        PFN_GET_DXGI_DEBUG_INTERFACE1 DXGIGetDebugInterface1;
+    } dxgi;
+
+    HMODULE instance;
+    PFN_D3D12_GET_DEBUG_INTERFACE D3D12GetDebugInterface;
+    PFN_D3D12_CREATE_DEVICE D3D12CreateDevice;
+#endif
 } d3d12;
+
+#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
+#   define _vgpu_DXGIGetDebugInterface1 d3d12.dxgi.DXGIGetDebugInterface1
+#   define _vgpu_CreateDXGIFactory2 d3d12.dxgi.CreateDXGIFactory2
+#   define _vgpu_D3D12GetDebugInterface d3d12.D3D12GetDebugInterface
+#   define _vgpu_D3D12CreateDevice d3d12.D3D12CreateDevice
+#else
+#   define _vgpu_DXGIGetDebugInterface1 DXGIGetDebugInterface1
+#   define _vgpu_CreateDXGIFactory2 CreateDXGIFactory2
+#   define _vgpu_D3D12GetDebugInterface D3D12GetDebugInterface
+#   define _vgpu_D3D12CreateDevice D3D12CreateDevice
+#endif
 
 static bool D3D12_IsSupported(void) {
     if (d3d12.available_initialized) {
@@ -28,8 +54,40 @@ static bool D3D12_IsSupported(void) {
 
     d3d12.available_initialized = true;
 
-    d3d12.available = true;
-    return true;
+#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP) 
+    d3d12.dxgi.instance = LoadLibraryW(L"dxgi.dll");
+    if (!d3d12.dxgi.instance) {
+        return false;
+    }
+
+    d3d12.dxgi.CreateDXGIFactory2 = (PFN_CREATE_DXGI_FACTORY2)GetProcAddress(d3d12.dxgi.instance, "CreateDXGIFactory2");
+    if (!d3d12.dxgi.CreateDXGIFactory2)
+    {
+        return false;
+    }
+    d3d12.dxgi.DXGIGetDebugInterface1 = (PFN_GET_DXGI_DEBUG_INTERFACE1)GetProcAddress(d3d12.dxgi.instance, "DXGIGetDebugInterface1");
+
+    d3d12.instance = LoadLibraryW(L"d3d12.dll");
+    if (!d3d12.instance) {
+        return false;
+    }
+
+    d3d12.D3D12GetDebugInterface = (PFN_D3D12_GET_DEBUG_INTERFACE)GetProcAddress(d3d12.instance, "D3D12GetDebugInterface");
+    d3d12.D3D12CreateDevice = (PFN_D3D12_CREATE_DEVICE)GetProcAddress(d3d12.instance, "D3D12CreateDevice");
+    if (!d3d12.D3D12CreateDevice) {
+        return false;
+    }
+#endif
+
+    HRESULT hr = _vgpu_D3D12CreateDevice(nullptr, D3D_FEATURE_LEVEL_11_0, _uuidof(ID3D12Device), nullptr);
+
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    d3d12.available = false;
+    return d3d12.available;
 };
 
 static VGPUDeviceImpl* D3D12_CreateDevice(const VGPUDeviceDescriptor* info) {
@@ -37,7 +95,7 @@ static VGPUDeviceImpl* D3D12_CreateDevice(const VGPUDeviceDescriptor* info) {
 }
 
 VGPU_Driver D3D12_Driver = {
-    VGPU_BACKEND_TYPE_D3D12,
+    VGPU_BACKEND_TYPE_DIRECT3D12,
     D3D12_IsSupported,
     D3D12_CreateDevice
 };
@@ -106,36 +164,7 @@ typedef struct D3D12Renderer {
     D3D12Swapchain swapchains[8];
 } D3D12Renderer;
 
-/* Global data */
-static struct {
-    bool available_initialized;
-    bool available;
 
-#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
-    struct
-    {
-        HMODULE instance;
-        PFN_CREATE_DXGI_FACTORY2 CreateDXGIFactory2;
-        PFN_GET_DXGI_DEBUG_INTERFACE1 DXGIGetDebugInterface1;
-    } dxgi;
-
-    HMODULE instance;
-    PFN_D3D12_GET_DEBUG_INTERFACE D3D12GetDebugInterface;
-    PFN_D3D12_CREATE_DEVICE D3D12CreateDevice;
-#endif
-} d3d12;
-
-#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
-#   define _vgpu_DXGIGetDebugInterface1 d3d12.dxgi.DXGIGetDebugInterface1
-#   define _vgpu_CreateDXGIFactory2 d3d12.dxgi.CreateDXGIFactory2
-#   define _vgpu_D3D12GetDebugInterface d3d12.D3D12GetDebugInterface
-#   define _vgpu_D3D12CreateDevice d3d12.D3D12CreateDevice
-#else
-#   define _vgpu_DXGIGetDebugInterface1 DXGIGetDebugInterface1
-#   define _vgpu_CreateDXGIFactory2 CreateDXGIFactory2
-#   define _vgpu_D3D12GetDebugInterface D3D12GetDebugInterface
-#   define _vgpu_D3D12CreateDevice D3D12CreateDevice
-#endif
 
 /* Device functions */
 static bool _vgpu_d3d12_createFactory(D3D12Renderer* renderer)
@@ -663,48 +692,6 @@ static void d3d12_cmdEndRenderPass(vgpu_renderer driverData)
 }
 
 /* Driver functions */
-static bool d3d12_is_supported(void) {
-    if (d3d12.available_initialized) {
-        return d3d12.available;
-    }
-
-    d3d12.available_initialized = true;
-
-#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP) 
-    d3d12.dxgi.instance = LoadLibraryA("dxgi.dll");
-    if (!d3d12.dxgi.instance) {
-        return false;
-    }
-
-    d3d12.dxgi.CreateDXGIFactory2 = (PFN_CREATE_DXGI_FACTORY2)GetProcAddress(d3d12.dxgi.instance, "CreateDXGIFactory2");
-    if (!d3d12.dxgi.CreateDXGIFactory2)
-    {
-        return false;
-    }
-    d3d12.dxgi.DXGIGetDebugInterface1 = (PFN_GET_DXGI_DEBUG_INTERFACE1)GetProcAddress(d3d12.dxgi.instance, "DXGIGetDebugInterface1");
-
-    d3d12.instance = LoadLibraryA("d3d12.dll");
-    if (!d3d12.instance) {
-        return false;
-    }
-
-    d3d12.D3D12GetDebugInterface = (PFN_D3D12_GET_DEBUG_INTERFACE)GetProcAddress(d3d12.instance, "D3D12GetDebugInterface");
-    d3d12.D3D12CreateDevice = (PFN_D3D12_CREATE_DEVICE)GetProcAddress(d3d12.instance, "D3D12CreateDevice");
-    if (!d3d12.D3D12CreateDevice) {
-        return false;
-    }
-#endif
-
-    HRESULT hr = _vgpu_D3D12CreateDevice(nullptr, D3D_FEATURE_LEVEL_11_0, _uuidof(ID3D12Device), nullptr);
-
-    if (FAILED(hr))
-    {
-        return false;
-    }
-
-    d3d12.available = true;
-    return true;
-};
 
 static VGPUDeviceImpl* d3d12_create_device(const VGPUDeviceDescriptor* info) {
     /* Allocate and zero out the renderer */
@@ -954,12 +941,6 @@ static VGPUDeviceImpl* d3d12_create_device(const VGPUDeviceDescriptor* info) {
 
     return device;
 }
-
-VGPU_Driver D3D12_Driver = {
-    VGPUBackendType_D3D12,
-    d3d12_is_supported,
-    d3d12_create_device
-};
 #endif // TODO
 
 #endif /* defined(VGPU_DRIVER_D3D12)  */

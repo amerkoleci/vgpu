@@ -5,8 +5,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
-#define STB_DS_IMPLEMENTATION
-#include "stb_ds.h"
 
 /* Allocation */
 void* vgpu_default_allocate_memory(void* user_data, size_t size) {
@@ -49,12 +47,12 @@ void vgpuSetAllocationCallbacks(const vgpu_allocation_callbacks* callbacks) {
 static vgpu_log_callback s_log_function = NULL;
 static void* s_log_user_data = NULL;
 
-void vgpuSetLogCallback(vgpu_log_callback callback, void* user_data) {
+void vgpu_set_log_callback(vgpu_log_callback callback, void* user_data) {
     s_log_function = callback;
     s_log_user_data = user_data;
 }
 
-void vgpuLog(VGPULogLevel level, const char* format, ...) {
+void vgpuLog(vgpu_log_level level, const char* format, ...) {
     if (s_log_function) {
         va_list args;
         va_start(args, format);
@@ -65,24 +63,35 @@ void vgpuLog(VGPULogLevel level, const char* format, ...) {
     }
 }
 
-void vgpuLogError(const char* format, ...) {
+void vgpu_log_error(const char* format, ...) {
     if (s_log_function) {
         va_list args;
         va_start(args, format);
         char message[VGPU_MAX_LOG_MESSAGE];
         vsnprintf(message, VGPU_MAX_LOG_MESSAGE, format, args);
-        s_log_function(s_log_user_data, VGPULogLevel_Error, message);
+        s_log_function(s_log_user_data, VGPU_LOG_LEVEL_ERROR, message);
         va_end(args);
     }
 }
 
-void vgpuLogInfo(const char* format, ...) {
+void vgpu_log_warn(const char* format, ...) {
     if (s_log_function) {
         va_list args;
         va_start(args, format);
         char message[VGPU_MAX_LOG_MESSAGE];
         vsnprintf(message, VGPU_MAX_LOG_MESSAGE, format, args);
-        s_log_function(s_log_user_data, VGPULogLevel_Info, message);
+        s_log_function(s_log_user_data, VGPU_LOG_LEVEL_WARN, message);
+        va_end(args);
+    }
+}
+
+void vgpu_log_info(const char* format, ...) {
+    if (s_log_function) {
+        va_list args;
+        va_start(args, format);
+        char message[VGPU_MAX_LOG_MESSAGE];
+        vsnprintf(message, VGPU_MAX_LOG_MESSAGE, format, args);
+        s_log_function(s_log_user_data, VGPU_LOG_LEVEL_INFO, message);
         va_end(args);
     }
 }
@@ -104,11 +113,21 @@ static const VGPU_Driver* drivers[] = {
     NULL
 };
 
-VGPUDevice vgpuCreateDevice(const VGPUDeviceDescriptor* descriptor) {
+vgpu_bool vgpu_is_backend_supported(vgpu_backend_type type) {
+    for (uint32_t i = 0; _vgpu_count_of(drivers); i++) {
+        if (drivers[i]->type == type) {
+            return drivers[i]->is_supported();
+        }
+    }
+
+    return false;
+}
+
+VGPUDevice vgpuCreateDevice(vgpu_backend_type preferred_backend, const VGPUDeviceDescriptor* descriptor) {
     VGPU_ASSERT(descriptor);
 
     VGPUDevice device = NULL;
-    if (descriptor->preferredBackend == VGPU_BACKEND_TYPE_DEFAULT || descriptor->preferredBackend == _VGPU_BACKEND_TYPE_COUNT) {
+    if (preferred_backend == VGPU_BACKEND_TYPE_DEFAULT || preferred_backend == _VGPU_BACKEND_TYPE_COUNT) {
         for (uint32_t i = 0; _vgpu_count_of(drivers); i++) {
             if (drivers[i]->is_supported()) {
                 device = drivers[i]->createDevice(descriptor);
@@ -118,7 +137,7 @@ VGPUDevice vgpuCreateDevice(const VGPUDeviceDescriptor* descriptor) {
     }
     else {
         for (uint32_t i = 0; _vgpu_count_of(drivers); i++) {
-            if (drivers[i]->backendType == descriptor->preferredBackend && drivers[i]->is_supported()) {
+            if (drivers[i]->type == preferred_backend && drivers[i]->is_supported()) {
                 device = drivers[i]->createDevice(descriptor);
                 break;
             }
