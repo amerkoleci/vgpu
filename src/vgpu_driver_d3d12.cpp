@@ -1,24 +1,6 @@
-//
-// Copyright (c) 2019-2020 Amer Koleci.
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-// THE SOFTWARE.
-//
+// Copyright (c) Amer Koleci.
+// Distributed under the MIT license. See the LICENSE file in the project root for more information.
+
 
 #if defined(VGPU_DRIVER_D3D12)
 
@@ -28,13 +10,39 @@
 #   include <dxgi1_5.h>
 #endif
 
-#include "d3dx12.h"
+#include "d3d12/d3d12.h"
 #define D3D12MA_D3D12_HEADERS_ALREADY_INCLUDED
-#include "D3D12MemAlloc.h"
+#include "d3d12/D3D12MemAlloc.h"
 #include "vgpu_d3d_common.h"
-#include "stb_ds.h"
 #include <stdio.h>
 
+static struct {
+    bool available_initialized;
+    bool available;
+} d3d12;
+
+static bool D3D12_IsSupported(void) {
+    if (d3d12.available_initialized) {
+        return d3d12.available;
+    }
+
+    d3d12.available_initialized = true;
+
+    d3d12.available = true;
+    return true;
+};
+
+static VGPUDeviceImpl* D3D12_CreateDevice(const VGPUDeviceDescriptor* info) {
+    return NULL;
+}
+
+VGPU_Driver D3D12_Driver = {
+    VGPU_BACKEND_TYPE_D3D12,
+    D3D12_IsSupported,
+    D3D12_CreateDevice
+};
+
+#if TODO
 typedef struct D3D12Texture {
     ID3D12Resource* handle;
     D3D12MA::Allocation* allocation;
@@ -952,5 +960,6 @@ VGPU_Driver D3D12_Driver = {
     d3d12_is_supported,
     d3d12_create_device
 };
+#endif // TODO
 
 #endif /* defined(VGPU_DRIVER_D3D12)  */

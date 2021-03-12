@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2019-2020 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -24,9 +24,9 @@
 
 /** \mainpage D3D12 Memory Allocator
 
-<b>Version 2.0.0-development</b> (2020-07-16)
+<b>Version 2.0.0-development</b> (2021-03-11)
 
-Copyright (c) 2019-2020 Advanced Micro Devices, Inc. All rights reserved. \n
+Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved. \n
 License: MIT
 
 Documentation of all members: D3D12MemAlloc.h
@@ -38,6 +38,7 @@ Documentation of all members: D3D12MemAlloc.h
         - [Project setup](@ref quick_start_project_setup)
         - [Creating resources](@ref quick_start_creating_resources)
         - [Mapping memory](@ref quick_start_mapping_memory)
+    - \subpage custom_pools
     - \subpage resource_aliasing
     - \subpage reserving_memory
     - \subpage virtual_allocator
@@ -236,6 +237,66 @@ memcpy(mappedPtr, bufData, bufSize);
 
 resource->Unmap(0, NULL);
 \endcode
+
+
+\page custom_pools Custom memory pools
+
+A "pool" is a collection of memory blocks that share certain properties.
+Allocator creates 3 default pools: for `D3D12_HEAP_TYPE_DEFAULT`, `UPLOAD`, `READBACK`.
+A default pool automatically grows in size. Size of allocated blocks is also variable and managed automatically.
+Typical allocations are created in these pools. You can also create custom pools.
+
+\section custom_pools_usage Usage
+
+To create a custom pool, fill in structure D3D12MA::POOL_DESC and call function D3D12MA::Allocator::CreatePool
+to obtain object D3D12MA::Pool. Example:
+
+\code
+POOL_DESC poolDesc = {};
+poolDesc.HeapProperties.Type = D3D12_HEAP_TYPE_DEFAULT;
+
+Pool* pool;
+HRESULT hr = allocator->CreatePool(&poolDesc, &pool);
+\endcode
+
+To allocate resources out of a custom pool, only set member D3D12MA::ALLOCATION_DESC::CustomPool.
+Other members of this structure are then ignored. Example:
+
+\code
+ALLOCATION_DESC allocDesc = {};
+allocDesc.CustomPool = pool;
+
+D3D12_RESOURCE_DESC resDesc = ...
+Allocation* alloc;
+hr = allocator->CreateResource(&allocDesc, &resDesc,
+    D3D12_RESOURCE_STATE_GENERIC_READ, NULL, &alloc, IID_NULL, NULL);
+\endcode
+
+Currently all allocations from custom pools are created as Placed, never as Committed.
+
+All allocations must be released before releasing the pool.
+The pool must be released before relasing the allocator.
+
+\code
+alloc->Release();
+pool->Release();
+\endcode
+
+\section custom_pools_features_and_benefits Features and benefits
+
+While it is recommended to use default pools whenever possible for simplicity and to give the allocator
+more opportunities for internal optimizations, custom pools may be useful in following cases:
+
+- To keep some resources separate from others in memory.
+- To use specific size of a memory block (`ID3D12Heap`). To set it, use member D3D12MA::POOL_DESC::BlockSize.
+  When set to 0, the library uses automatically determined, increasing block sizes.
+- To reserve some minimum amount of memory allocated. To use it, set member D3D12MA::POOL_DESC::MinBlockCount.
+- To limit maximum amount of memory allocated. To use it, set member D3D12MA::POOL_DESC::MaxBlockCount.
+- To use extended parameters of the D3D12 memory allocation. While resources created from default pools
+  can only specify `D3D12_HEAP_TYPE_DEFAULT`, `UPLOAD`, `READBACK`, a custom pool may use non-standard
+  `D3D12_HEAP_PROPERTIES` (member D3D12MA::POOL_DESC::HeapProperties) and `D3D12_HEAP_FLAGS`
+  (D3D12MA::POOL_DESC::HeapFlags), which is useful e.g. for cross-adapter sharing or UMA
+  (see also D3D12MA::Allocator::IsUMA).
 
 
 \page resource_aliasing Resource aliasing (overlap)
@@ -637,16 +698,20 @@ Features deliberately excluded from the scope of this library:
   are not going to be included into this repository.
 */
 
-// Define this macro to 0 to disable usage of DXGI 1.4 (needed for IDXGIAdapter3 and query for memory budget).
-#ifndef D3D12MA_DXGI_1_4
-    #define D3D12MA_DXGI_1_4 1
-#endif
-
-// If using this library on a platform different than Windows PC, you should
-// include D3D12-compatible header before this library on your own and define this macro.
+// If using this library on a platform different than Windows PC or want to use different version of DXGI,
+// you should include D3D12-compatible headers before this library on your own and define this macro.
 #ifndef D3D12MA_D3D12_HEADERS_ALREADY_INCLUDED
     #include <d3d12.h>
-    #include <dxgi.h>
+    #include <dxgi1_4.h>
+#endif
+
+// Define this macro to 0 to disable usage of DXGI 1.4 (needed for IDXGIAdapter3 and query for memory budget).
+#ifndef D3D12MA_DXGI_1_4
+    #ifdef __IDXGIAdapter3_INTERFACE_DEFINED__
+        #define D3D12MA_DXGI_1_4 1
+    #else
+        #define D3D12MA_DXGI_1_4 0
+    #endif
 #endif
 
 /*
@@ -798,7 +863,7 @@ The object remembers size and some other information.
 To retrieve this information, use methods of this class.
 
 The object also remembers `ID3D12Resource` and "owns" a reference to it,
-so it calls `Release()` on the resource when destroyed.
+so it calls `%Release()` on the resource when destroyed.
 */
 class Allocation
 {
@@ -812,13 +877,21 @@ public:
 
     /** \brief Returns offset in bytes from the start of memory heap.
 
+    You usually don't need to use this offset. If you create a buffer or a texture together with the allocation using function
+    D3D12MA::Allocator::CreateResource, functions that operate on that resource refer to the beginning of the resource,
+    not entire memory heap.
+
     If the Allocation represents committed resource with implicit heap, returns 0.
     */
     UINT64 GetOffset() const;
 
-    /** \brief Returns size in bytes of the resource.
+    /** \brief Returns size in bytes of the allocation.
 
-    Works also with committed resources.
+    - If you created a buffer or a texture together with the allocation using function D3D12MA::Allocator::CreateResource,
+      this is the size of the resource returned by `ID3D12Device::GetResourceAllocationInfo`.
+    - For allocations made out of bigger memory blocks, this also is the size of the memory region assigned exclusively to this allocation.
+    - For resources created as committed, this value may not be accurate. DirectX implementation may optimize memory usage internally
+      so that you may even observe regions of `ID3D12Resource::GetGPUVirtualAddress()` + Allocation::GetSize() to overlap in memory and still work correctly.
     */
     UINT64 GetSize() const { return m_Size; }
 
@@ -874,6 +947,7 @@ private:
     friend class AllocatorPimpl;
     friend class BlockVector;
     friend class JsonWriter;
+    friend struct CommittedAllocationListItemTraits;
     template<typename T> friend void D3D12MA_DELETE(const ALLOCATION_CALLBACKS&, T*);
     template<typename T> friend class PoolAllocator;
 
@@ -896,6 +970,8 @@ private:
         struct
         {
             D3D12_HEAP_TYPE heapType;
+            Allocation* prev;
+            Allocation* next;
         } m_Committed;
 
         struct
@@ -906,7 +982,10 @@ private:
 
         struct
         {
+            // Beginning must be compatible with m_Committed.
             D3D12_HEAP_TYPE heapType;
+            Allocation* prev;
+            Allocation* next;
             ID3D12Heap* heap;
         } m_Heap;
     };
@@ -942,7 +1021,8 @@ private:
     void InitCommitted(D3D12_HEAP_TYPE heapType);
     void InitPlaced(UINT64 offset, UINT64 alignment, NormalBlock* block);
     void InitHeap(D3D12_HEAP_TYPE heapType, ID3D12Heap* heap);
-    void SetResource(ID3D12Resource* resource, const D3D12_RESOURCE_DESC* pResourceDesc);
+    template<typename D3D12_RESOURCE_DESC_T>
+    void SetResource(ID3D12Resource* resource, const D3D12_RESOURCE_DESC_T* pResourceDesc);
     void FreeName();
 
     D3D12MA_CLASS_NO_COPY(Allocation)
@@ -951,11 +1031,12 @@ private:
 /// \brief Parameters of created D3D12MA::Pool object. To be used with D3D12MA::Allocator::CreatePool.
 struct POOL_DESC
 {
-    /** \brief The type of memory heap where allocations of this pool should be placed.
+    /** \brief The parameters of memory heap where allocations of this pool should be placed.
 
-    It must be one of: `D3D12_HEAP_TYPE_DEFAULT`, `D3D12_HEAP_TYPE_UPLOAD`, `D3D12_HEAP_TYPE_READBACK`.
+    In the simplest case, just fill it with zeros and set `Type` to one of: `D3D12_HEAP_TYPE_DEFAULT`,
+    `D3D12_HEAP_TYPE_UPLOAD`, `D3D12_HEAP_TYPE_READBACK`. Additional parameters can be used e.g. to utilize UMA.
     */
-    D3D12_HEAP_TYPE HeapType;
+    D3D12_HEAP_PROPERTIES HeapProperties;
     /** \brief Heap flags to be used when allocating heaps of this pool.
 
     It should contain one of these values, depending on type of resources you are going to create in this heap:
@@ -1089,7 +1170,7 @@ struct ALLOCATOR_DESC
     
     /** \brief Preferred size of a single `ID3D12Heap` block to be allocated.
     
-    Set to 0 to use default, which is currently 256 MiB.
+    Set to 0 to use default, which is currently 64 MiB.
     */
     UINT64 PreferredBlockSize;
     
@@ -1109,7 +1190,7 @@ struct ALLOCATOR_DESC
 /**
 \brief Number of D3D12 memory heap types supported.
 */
-const UINT HEAP_TYPE_COUNT = 3;
+const UINT HEAP_TYPE_COUNT = 4;
 
 /**
 \brief Calculated statistics of memory usage in entire allocator.
@@ -1143,7 +1224,7 @@ struct Stats
     StatInfo Total;
     /**
     One StatInfo for each type of heap located at the following indices:
-    0 - DEFAULT, 1 - UPLOAD, 2 - READBACK.
+    0 - DEFAULT, 1 - UPLOAD, 2 - READBACK, 3 - CUSTOM.
     */
     StatInfo HeapType[HEAP_TYPE_COUNT];
 };
@@ -1207,6 +1288,22 @@ public:
     
     /// Returns cached options retrieved from D3D12 device.
     const D3D12_FEATURE_DATA_D3D12_OPTIONS& GetD3D12Options() const;
+    /** \brief Returns true if `D3D12_FEATURE_DATA_ARCHITECTURE1::UMA` was found to be true.
+    
+    For more information about how to use it, see articles in Microsoft Docs:
+    - https://docs.microsoft.com/en-us/windows/win32/direct3d12/default-texture-mapping
+    - https://docs.microsoft.com/en-us/windows/win32/api/d3d12/ns-d3d12-d3d12_feature_data_architecture
+    - https://docs.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12device-getcustomheapproperties
+    */
+    BOOL IsUMA() const;
+    /** \brief Returns true if `D3D12_FEATURE_DATA_ARCHITECTURE1::CacheCoherentUMA` was found to be true.
+
+    For more information about how to use it, see articles in Microsoft Docs:
+    - https://docs.microsoft.com/en-us/windows/win32/direct3d12/default-texture-mapping
+    - https://docs.microsoft.com/en-us/windows/win32/api/d3d12/ns-d3d12-d3d12_feature_data_architecture
+    - https://docs.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12device-getcustomheapproperties
+    */
+    BOOL IsCacheCoherentUMA() const;
 
     /** \brief Allocates memory and creates a D3D12 resource (buffer or texture). This is the main allocation function.
 
@@ -1216,11 +1313,11 @@ public:
     whole library.
 
     If `ppvResource` is null, you receive only `ppAllocation` object from this function.
-    It holds pointer to `ID3D12Resource` that can be queried using function D3D12::Allocation::GetResource().
+    It holds pointer to `ID3D12Resource` that can be queried using function D3D12MA::Allocation::GetResource().
     Reference count of the resource object is 1.
     It is automatically destroyed when you destroy the allocation object.
 
-    If 'ppvResource` is not null, you receive pointer to the resource next to allocation object.
+    If `ppvResource` is not null, you receive pointer to the resource next to allocation object.
     Reference count of the resource object is then increased by calling `QueryInterface`, so you need to manually `Release` it
     along with the allocation.
 
@@ -1231,6 +1328,10 @@ public:
     \param[out] ppAllocation   Filled with pointer to new allocation object created.
     \param riidResource   IID of a resource to be returned via `ppvResource`.
     \param[out] ppvResource   Optional. If not null, filled with pointer to new resouce created.
+
+    \note This function creates a new resource. Sub-allocation of parts of one large buffer,
+    although recommended as a good practice, is out of scope of this library and could be implemented
+    by the user as a higher-level logic on top of it, e.g. using the \ref virtual_allocator feature.
     */
     HRESULT CreateResource(
         const ALLOCATION_DESC* pAllocDesc,
@@ -1240,6 +1341,43 @@ public:
         Allocation** ppAllocation,
         REFIID riidResource,
         void** ppvResource);
+
+#ifdef __ID3D12Device4_INTERFACE_DEFINED__
+    /** \brief Similar to Allocator::CreateResource, but supports additional parameter `pProtectedSession`.
+    
+    If `pProtectedSession` is not null, current implementation always creates the resource as committed
+    using `ID3D12Device4::CreateCommittedResource1`.
+
+    To work correctly, `ID3D12Device4` interface must be available in the current system. Otherwise, `E_NOINTERFACE` is returned.
+    */
+    HRESULT CreateResource1(
+        const ALLOCATION_DESC* pAllocDesc,
+        const D3D12_RESOURCE_DESC* pResourceDesc,
+        D3D12_RESOURCE_STATES InitialResourceState,
+        const D3D12_CLEAR_VALUE *pOptimizedClearValue,
+        ID3D12ProtectedResourceSession *pProtectedSession,
+        Allocation** ppAllocation,
+        REFIID riidResource,
+        void** ppvResource);
+#endif // #ifdef __ID3D12Device4_INTERFACE_DEFINED__
+
+#ifdef __ID3D12Device8_INTERFACE_DEFINED__
+    /** \brief Similar to Allocator::CreateResource1, but supports new structure `D3D12_RESOURCE_DESC1`.
+    
+    It internally uses `ID3D12Device8::CreateCommittedResource2` or `ID3D12Device8::CreatePlacedResource1`.
+
+    To work correctly, `ID3D12Device8` interface must be available in the current system. Otherwise, `E_NOINTERFACE` is returned.
+    */
+    HRESULT CreateResource2(
+        const ALLOCATION_DESC* pAllocDesc,
+        const D3D12_RESOURCE_DESC1* pResourceDesc,
+        D3D12_RESOURCE_STATES InitialResourceState,
+        const D3D12_CLEAR_VALUE *pOptimizedClearValue,
+        ID3D12ProtectedResourceSession *pProtectedSession,
+        Allocation** ppAllocation,
+        REFIID riidResource,
+        void** ppvResource);
+#endif // #ifdef __ID3D12Device4_INTERFACE_DEFINED__
 
     /** \brief Allocates memory without creating any resource placed in it.
 
@@ -1264,6 +1402,21 @@ public:
         const ALLOCATION_DESC* pAllocDesc,
         const D3D12_RESOURCE_ALLOCATION_INFO* pAllocInfo,
         Allocation** ppAllocation);
+
+#ifdef __ID3D12Device4_INTERFACE_DEFINED__
+    /** \brief Similar to Allocator::AllocateMemory, but supports additional parameter `pProtectedSession`.
+    
+    If `pProtectedSession` is not null, current implementation always creates separate heap
+    using `ID3D12Device4::CreateHeap1`.
+
+    To work correctly, `ID3D12Device4` interface must be available in the current system. Otherwise, `E_NOINTERFACE` is returned.
+    */
+    HRESULT AllocateMemory1(
+        const ALLOCATION_DESC* pAllocDesc,
+        const D3D12_RESOURCE_ALLOCATION_INFO* pAllocInfo,
+        ID3D12ProtectedResourceSession *pProtectedSession,
+        Allocation** ppAllocation);
+#endif // #ifdef __ID3D12Device4_INTERFACE_DEFINED__
 
     /** \brief Creates a new resource in place of an existing allocation. This is useful for memory aliasing.
 

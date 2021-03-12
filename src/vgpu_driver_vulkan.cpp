@@ -4,11 +4,14 @@
 #if defined(VGPU_DRIVER_VULKAN)
 #include "vgpu_driver.h"
 
+#define NOMINMAX
 #ifndef VULKAN_H_
 #define VULKAN_H_ 1
 #endif
 #define VKBIND_IMPLEMENTATION
 #include "vk/vkbind.h"
+#define VMA_IMPLEMENTATION
+#include "vk/vk_mem_alloc.h"
 
 static struct {
     bool available_initialized;

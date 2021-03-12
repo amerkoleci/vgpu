@@ -211,7 +211,7 @@ static bool _vgpu_d3d11_createFactory(D3D11Renderer* renderer)
 
     return true;
 }
-static IDXGIAdapter1* d3d11_getAdapter(D3D11Renderer* renderer, VGPUAdapterType adapterType)
+static IDXGIAdapter1* d3d11_getAdapter(D3D11Renderer* renderer, vgpu_power_preference preference)
 {
     /* Detect adapter now. */
     IDXGIAdapter1* adapter = NULL;
@@ -224,7 +224,7 @@ static IDXGIAdapter1* d3d11_getAdapter(D3D11Renderer* renderer, VGPUAdapterType 
         {
             // By default prefer high performance
             DXGI_GPU_PREFERENCE gpuPreference = DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE;
-            if (adapterType == VGPUAdapterType_IntegratedGPU)
+            if (preference == VGPU_POWER_PREFERENCE_LOW_POWER)
             {
                 gpuPreference = DXGI_GPU_PREFERENCE_MINIMUM_POWER;
             }
@@ -1097,7 +1097,7 @@ static VGPUDeviceImpl* d3d11_create_device(const VGPUDeviceDescriptor* info) {
         return NULL;
     }
 
-    IDXGIAdapter1* dxgi_adapter = d3d11_getAdapter(renderer, info->adapterPreference);
+    IDXGIAdapter1* dxgi_adapter = d3d11_getAdapter(renderer, info->power_preference);
 
     /* Setup present flags. */
     renderer->sync_interval = _vgpu_d3d_sync_interval(info->swapchain.presentMode);

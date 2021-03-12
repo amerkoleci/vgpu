@@ -85,6 +85,12 @@ typedef enum VGPUDeviceFlags {
     _VGPUDeviceFlags_Force32 = 0x7FFFFFFF
 } VGPUDeviceFlags;
 
+typedef enum vgpu_power_preference {
+    VGPU_POWER_PREFERENCE_LOW_POWER = 0,
+    VGPU_POWER_PREFERENCE_HIGH_PERFORMANCE = 1,
+    _VGPU_POWER_PREFERENCE_FORCE_U32 = 0x7FFFFFFF
+} vgpu_power_preference;
+
 typedef enum VGPUAdapterType {
     VGPUAdapterType_DiscreteGPU,
     VGPUAdapterType_IntegratedGPU,
@@ -542,7 +548,7 @@ typedef struct vgpu_swapchain_info {
 typedef struct VGPUDeviceDescriptor {
     VGPUBackendType     preferredBackend;
     VGPUDeviceFlags     flags;
-    VGPUAdapterType     adapterPreference;
+    vgpu_power_preference   power_preference;
     vgpu_swapchain_info swapchain;
 } VGPUDeviceDescriptor;
 
