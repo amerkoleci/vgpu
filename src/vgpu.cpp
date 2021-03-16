@@ -123,14 +123,18 @@ vgpu_bool vgpu_is_backend_supported(vgpu_backend_type type) {
     return false;
 }
 
-VGPUDevice vgpuCreateDevice(vgpu_backend_type preferred_backend, const VGPUDeviceDescriptor* descriptor) {
-    VGPU_ASSERT(descriptor);
+static vgpu_renderer_t* s_renderer = nullptr;
 
-    VGPUDevice device = NULL;
+vgpu_bool vgpu_init(vgpu_backend_type preferred_backend, const vgpu_info* info) {
+    VGPU_ASSERT(info);
+
+    if (s_renderer != nullptr)
+        return true;
+
     if (preferred_backend == VGPU_BACKEND_TYPE_DEFAULT || preferred_backend == _VGPU_BACKEND_TYPE_COUNT) {
         for (uint32_t i = 0; _vgpu_count_of(drivers); i++) {
             if (drivers[i]->is_supported()) {
-                device = drivers[i]->createDevice(descriptor);
+                s_renderer = drivers[i]->init_renderer();
                 break;
             }
         }
@@ -138,51 +142,54 @@ VGPUDevice vgpuCreateDevice(vgpu_backend_type preferred_backend, const VGPUDevic
     else {
         for (uint32_t i = 0; _vgpu_count_of(drivers); i++) {
             if (drivers[i]->type == preferred_backend && drivers[i]->is_supported()) {
-                device = drivers[i]->createDevice(descriptor);
+                s_renderer = drivers[i]->init_renderer();
                 break;
             }
         }
     }
 
-    return device;
+    if (s_renderer == nullptr || !s_renderer->init(info)) {
+        s_renderer = nullptr;
+        return false;
+    }
+
+    return true;
 }
 
-void vgpuDestroyDevice(VGPUDevice device) {
-    if (device == NULL) {
+void vgpu_shutdown(void) {
+    if (s_renderer == nullptr) {
         return;
     }
 
-    device->destroy(device);
+    s_renderer->shutdown();
+    s_renderer = nullptr;
 }
 
-void vgpuGetDeviceCaps(VGPUDevice device, VGPUDeviceCaps* caps)
+void vgpu_get_caps(VGPUDeviceCaps* caps)
 {
-    VGPU_ASSERT(device);
-    device->get_caps(device->renderer, caps);
+    s_renderer->get_caps(caps);
 }
 
-VGPUTextureFormat vgpuGetDefaultDepthFormat(VGPUDevice device)
+VGPUTextureFormat vgpu_get_default_depth_format(void)
 {
-    VGPU_ASSERT(device);
-    return device->getDefaultDepthFormat(device->renderer);
+    return s_renderer->getDefaultDepthFormat();
 }
 
-VGPUTextureFormat vgpuGetDefaultDepthStencilFormat(VGPUDevice device)
+VGPUTextureFormat vgpu_get_default_depth_stencil_format(void)
 {
-    VGPU_ASSERT(device);
-    return device->getDefaultDepthStencilFormat(device->renderer);
+    return s_renderer->getDefaultDepthStencilFormat();
 }
 
-vgpu_bool vgpuBeginFrame(VGPUDevice device) {
-    return device->frame_begin(device->renderer);
+vgpu_bool vgpu_begin_frame(void) {
+    return s_renderer->frame_begin();
 }
 
-void vgpuEndFrame(VGPUDevice device) {
-    device->frame_end(device->renderer);
+void vgpu_end_frame(void) {
+    s_renderer->frame_end();
 }
 
-VGPUTexture vgpuGetBackbufferTexture(VGPUDevice device) {
-    return device->getBackbufferTexture(device->renderer, 0);
+VGPUTexture vgpuGetBackbufferTexture(void) {
+    return s_renderer->getBackbufferTexture(0);
 }
 
 /* Texture */
@@ -198,99 +205,89 @@ static VGPUTextureDescription _vgpu_texture_desc_defaults(const VGPUTextureDescr
     return def;
 }
 
-VGPUTexture vgpuCreateTexture(VGPUDevice device, const VGPUTextureDescription* descriptor)
+VGPUTexture vgpuCreateTexture(const VGPUTextureDescription* descriptor)
 {
-    VGPU_ASSERT(device);
     VGPU_ASSERT(descriptor);
 
     VGPUTextureDescription desc_def = _vgpu_texture_desc_defaults(descriptor);
-    return device->createTexture(device->renderer, &desc_def);
+    return s_renderer->createTexture(&desc_def);
 }
 
-void vgpuDestroyTexture(VGPUDevice device, VGPUTexture texture)
+void vgpuDestroyTexture(VGPUTexture texture)
 {
-    VGPU_ASSERT(device);
     VGPU_ASSERT(texture);
 
-    device->destroyTexture(device->renderer, texture);
+    s_renderer->destroyTexture(texture);
 }
 
 /* Buffer */
-VGPUBuffer vgpuCreateBuffer(VGPUDevice device, const VGPUBufferDescriptor* descriptor)
+VGPUBuffer vgpuCreateBuffer(const VGPUBufferDescriptor* descriptor)
 {
-
-    VGPU_ASSERT(device);
     VGPU_ASSERT(descriptor);
 
-    return device->createBuffer(device->renderer, descriptor);
+    return s_renderer->createBuffer(descriptor);
 }
 
-void vgpuDestroyBuffer(VGPUDevice device, VGPUBuffer buffer)
+void vgpuDestroyBuffer(VGPUBuffer buffer)
 {
-    device->destroyBuffer(device->renderer, buffer);
+    s_renderer->destroyBuffer(buffer);
 }
 
 /* Sampler */
-VGPUSampler vgpuCreateSampler(VGPUDevice device, const VGPUSamplerDescriptor* descriptor)
+VGPUSampler vgpuCreateSampler(const VGPUSamplerDescriptor* descriptor)
 {
-    VGPU_ASSERT(device);
     VGPU_ASSERT(descriptor);
 
-    return device->createSampler(device->renderer, descriptor);
+    return s_renderer->createSampler(descriptor);
 }
 
-void vgpuDestroySampler(VGPUDevice device, VGPUSampler sampler)
+void vgpuDestroySampler(VGPUSampler sampler)
 {
-    VGPU_ASSERT(device);
     VGPU_ASSERT(sampler);
 
-    device->destroySampler(device->renderer, sampler);
+    s_renderer->destroySampler(sampler);
 }
 
 /* Shader */
-VGPUShaderModule vgpuCreateShaderModule(VGPUDevice device, const VGPUShaderModuleDescriptor* descriptor)
+VGPUShaderModule vgpuCreateShaderModule(const VGPUShaderModuleDescriptor* descriptor)
 {
-    VGPU_ASSERT(device);
     VGPU_ASSERT(descriptor);
 
-    return device->createShaderModule(device->renderer, descriptor);
+    return s_renderer->createShaderModule(descriptor);
 }
 
-void vgpuDestroyShaderModule(VGPUDevice device, VGPUShaderModule shader)
+void vgpuDestroyShaderModule(VGPUShaderModule shader)
 {
-    VGPU_ASSERT(device);
     VGPU_ASSERT(shader);
 
-    device->destroyShaderModule(device->renderer, shader);
+    s_renderer->destroyShaderModule(shader);
 }
 
 /* Pipeline */
-VGPUPipeline vgpuCreateRenderPipeline(VGPUDevice device, const VGPURenderPipelineDescriptor* descriptor)
+VGPUPipeline vgpuCreateRenderPipeline(const VGPURenderPipelineDescriptor* descriptor)
 {
-    VGPU_ASSERT(device);
     VGPU_ASSERT(descriptor);
 
-    return NULL;
+    return nullptr;
 }
 
-VGPU_API void vgpuDestroyPipeline(VGPUDevice device, VGPUPipeline pipeline)
+VGPU_API void vgpuDestroyPipeline(VGPUPipeline pipeline)
 {
-    VGPU_ASSERT(device);
     VGPU_ASSERT(pipeline);
 
     //device->destroyPipeline(device->renderer, pipeline);
 }
 
 /* Commands */
-void vgpuCmdBeginRenderPass(VGPUDevice device, const VGPURenderPassDescriptor* descriptor)
+void vgpuCmdBeginRenderPass(const VGPURenderPassDescriptor* descriptor)
 {
     VGPU_ASSERT(descriptor);
 
-    device->cmdBeginRenderPass(device->renderer, descriptor);
+    s_renderer->cmdBeginRenderPass(descriptor);
 }
 
-void vgpuCmdEndRenderPass(VGPUDevice device) {
-    device->cmdEndRenderPass(device->renderer);
+void vgpuCmdEndRenderPass(void) {
+    s_renderer->cmdEndRenderPass();
 }
 
 /* Pixel Format */
@@ -449,42 +446,42 @@ uint32_t vgpuGetFormatBlockHeight(VGPUTextureFormat format)
     return FormatDesc[(uint32_t)format].compression.blockHeight;
 }
 
-VGPUTextureFormatType vgpuGetFormatType(VGPUTextureFormat format)
+VGPUTextureFormatType vgpu_get_format_type(VGPUTextureFormat format)
 {
     assert(FormatDesc[(uint32_t)format].format == format);
     return FormatDesc[(uint32_t)format].type;
 }
 
-vgpu_bool vgpuIsDepthFormat(VGPUTextureFormat format)
+vgpu_bool vgpu_is_depth_format(VGPUTextureFormat format)
 {
     VGPU_ASSERT(FormatDesc[format].format == format);
     return FormatDesc[format].bits.depth > 0;
 }
 
-vgpu_bool vgpuIsStencilFormat(VGPUTextureFormat format)
+vgpu_bool vgpu_is_stencil_format(VGPUTextureFormat format)
 {
     VGPU_ASSERT(FormatDesc[format].format == format);
     return FormatDesc[format].bits.stencil > 0;
 }
 
-vgpu_bool vgpuIsDepthStencilFormat(VGPUTextureFormat format)
+vgpu_bool vgpu_is_depth_stencil_format(VGPUTextureFormat format)
 {
-    return vgpuIsDepthFormat(format) || vgpuIsStencilFormat(format);
+    return vgpu_is_depth_format(format) || vgpu_is_stencil_format(format);
 }
 
-vgpu_bool vgpuIsCompressedFormat(VGPUTextureFormat format)
+vgpu_bool vgpu_is_compressed_format(VGPUTextureFormat format)
 {
     VGPU_ASSERT(FormatDesc[format].format == format);
     return format >= VGPUTextureFormat_BC1RGBAUnorm && format <= VGPUTextureFormat_BC7RGBAUnormSrgb;
 }
 
-vgpu_bool vgpuIsSrgbFormat(VGPUTextureFormat format)
+vgpu_bool vgpu_is_srgb_format(VGPUTextureFormat format)
 {
     VGPU_ASSERT(FormatDesc[format].format == format);
     return FormatDesc[(uint32_t)format].type == VGPUTextureFormatType_UnormSrgb;
 }
 
-VGPUTextureFormat vgpuSRGBToLinearFormat(VGPUTextureFormat format)
+VGPUTextureFormat vgpu_srgb_to_linear_format(VGPUTextureFormat format)
 {
     switch (format)
     {
@@ -501,7 +498,7 @@ VGPUTextureFormat vgpuSRGBToLinearFormat(VGPUTextureFormat format)
     case VGPUTextureFormat_BC7RGBAUnormSrgb:
         return VGPUTextureFormat_BC7RGBAUnorm;
     default:
-        VGPU_ASSERT(vgpuIsSrgbFormat(format) == false);
+        VGPU_ASSERT(vgpu_is_srgb_format(format) == false);
         return format;
     }
 }

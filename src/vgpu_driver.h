@@ -56,55 +56,52 @@ extern void __cdecl __debugbreak(void);
 #define _vgpu_clamp(v,v0,v1) ((v<v0)?(v0):((v>v1)?(v1):(v)))
 #define _vgpu_count_of(x) (sizeof(x) / sizeof(x[0]))
 
-typedef struct vgpu_renderer_t* vgpu_renderer;
+typedef struct vgpu_renderer_t {
+    bool(*init)(const vgpu_info* info);
+    void(*shutdown)(void);
+    void(*get_caps)(VGPUDeviceCaps* caps);
+    VGPUTextureFormat(*getDefaultDepthFormat)(void);
+    VGPUTextureFormat(*getDefaultDepthStencilFormat)(void);
 
-typedef struct VGPUDeviceImpl {
-    void(*destroy)(VGPUDevice device);
-    void(*get_caps)(vgpu_renderer driver_data, VGPUDeviceCaps* caps);
-    VGPUTextureFormat(*getDefaultDepthFormat)(vgpu_renderer driverData);
-    VGPUTextureFormat(*getDefaultDepthStencilFormat)(vgpu_renderer driverData);
-
-    vgpu_bool(*frame_begin)(vgpu_renderer driverData);
-    void (*frame_end)(vgpu_renderer driverData);
-    VGPUTexture (*getBackbufferTexture)(vgpu_renderer driverData, uint32_t swapchain);
+    vgpu_bool(*frame_begin)(void);
+    void (*frame_end)(void);
+    VGPUTexture (*getBackbufferTexture)(uint32_t swapchain);
 
     /* Texture */
-    VGPUTexture(*createTexture)(vgpu_renderer driverData, const VGPUTextureDescription* desc);
-    void (*destroyTexture)(vgpu_renderer driverData, VGPUTexture handle);
+    VGPUTexture(*createTexture)(const VGPUTextureDescription* desc);
+    void (*destroyTexture)(VGPUTexture handle);
 
     /* Buffer */
-    VGPUBuffer(*createBuffer)(vgpu_renderer driverData, const VGPUBufferDescriptor* desc);
-    void (*destroyBuffer)(vgpu_renderer driverData, VGPUBuffer handle);
+    VGPUBuffer(*createBuffer)(const VGPUBufferDescriptor* desc);
+    void (*destroyBuffer)(VGPUBuffer handle);
    
     /* Sampler */
-    VGPUSampler(*createSampler)(vgpu_renderer driverData, const VGPUSamplerDescriptor* desc);
-    void (*destroySampler)(vgpu_renderer driverData, VGPUSampler handle);
+    VGPUSampler(*createSampler)(const VGPUSamplerDescriptor* desc);
+    void (*destroySampler)(VGPUSampler handle);
 
     /* Shader */
-    VGPUShaderModule(*createShaderModule)(vgpu_renderer driverData, const VGPUShaderModuleDescriptor* desc);
-    void (*destroyShaderModule)(vgpu_renderer driverData, VGPUShaderModule handle);
+    VGPUShaderModule(*createShaderModule)(const VGPUShaderModuleDescriptor* desc);
+    void (*destroyShaderModule)(VGPUShaderModule handle);
 
     /* Commands */
-    void (*cmdBeginRenderPass)(vgpu_renderer driverData, const VGPURenderPassDescriptor* desc);
-    void (*cmdEndRenderPass)(vgpu_renderer driverData);
-
-    /* Opaque pointer for the renderer. */
-    vgpu_renderer renderer;
-} VGPUDeviceImpl;
+    void (*cmdBeginRenderPass)(const VGPURenderPassDescriptor* desc);
+    void (*cmdEndRenderPass)(void);
+} vgpu_renderer_t;
 
 typedef struct VGPU_Driver {
     vgpu_backend_type type;
     bool(*is_supported)(void);
-    VGPUDeviceImpl*(*createDevice)(const VGPUDeviceDescriptor* descriptor);
+    vgpu_renderer_t*(*init_renderer)(void);
 } VGPU_Driver;
 
 _VGPU_EXTERN VGPU_Driver Vulkan_Driver;
 _VGPU_EXTERN VGPU_Driver D3D12_Driver;
 _VGPU_EXTERN VGPU_Driver D3D11_Driver;
 
-#define ASSIGN_DRIVER_FUNC(func, name) device->func = name##_##func;
+#define ASSIGN_DRIVER_FUNC(func, name) renderer.func = name##_##func;
 #define ASSIGN_DRIVER(name) \
-ASSIGN_DRIVER_FUNC(destroy, name)\
+ASSIGN_DRIVER_FUNC(init, name)\
+ASSIGN_DRIVER_FUNC(shutdown, name)\
 ASSIGN_DRIVER_FUNC(get_caps, name)\
 ASSIGN_DRIVER_FUNC(getDefaultDepthFormat, name)\
 ASSIGN_DRIVER_FUNC(getDefaultDepthStencilFormat, name)\

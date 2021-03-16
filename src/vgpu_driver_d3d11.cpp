@@ -57,7 +57,25 @@ typedef struct D3D11_SwapChain {
     VGPUTexture depthStencilTexture;
 } D3D11_SwapChain;
 
-typedef struct D3D11Renderer {
+
+/* Global data */
+static struct {
+    bool available_initialized;
+    bool available;
+
+#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
+    struct
+    {
+        HMODULE instance;
+        PFN_CREATE_DXGI_FACTORY1 CreateDXGIFactory1;
+        PFN_CREATE_DXGI_FACTORY2 CreateDXGIFactory2;
+        PFN_GET_DXGI_DEBUG_INTERFACE1 DXGIGetDebugInterface1;
+    } dxgi;
+
+    HMODULE instance;
+    PFN_D3D11_CREATE_DEVICE D3D11CreateDevice;
+#endif
+
     VGPUDeviceCaps caps;
 
     bool validation;
@@ -83,28 +101,7 @@ typedef struct D3D11Renderer {
     /* Data for unset */
     ID3D11RenderTargetView* zero_rtvs[VGPU_MAX_COLOR_ATTACHMENTS];
 
-    VGPUDevice gpuDevice;
-
     D3D11_SwapChain swapchains[8];
-} D3D11Renderer;
-
-/* Global data */
-static struct {
-    bool available_initialized;
-    bool available;
-
-#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
-    struct
-    {
-        HMODULE instance;
-        PFN_CREATE_DXGI_FACTORY1 CreateDXGIFactory1;
-        PFN_CREATE_DXGI_FACTORY2 CreateDXGIFactory2;
-        PFN_GET_DXGI_DEBUG_INTERFACE1 DXGIGetDebugInterface1;
-    } dxgi;
-
-    HMODULE instance;
-    PFN_D3D11_CREATE_DEVICE D3D11CreateDevice;
-#endif
 } d3d11;
 
 #if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
@@ -118,15 +115,15 @@ static struct {
 #endif
 
 /* Device functions */
-static bool _vgpu_d3d11_createFactory(D3D11Renderer* renderer)
+static bool _vgpu_d3d11_createFactory(void)
 {
-    SAFE_RELEASE(renderer->factory);
+    SAFE_RELEASE(d3d11.factory);
     HRESULT hr = S_OK;
 
 #if defined(_DEBUG)
     bool debugDXGI = false;
 
-    if (renderer->validation)
+    if (d3d11.validation)
     {
         IDXGIInfoQueue* dxgi_info_queue;
 #if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
@@ -137,7 +134,7 @@ static bool _vgpu_d3d11_createFactory(D3D11Renderer* renderer)
 #endif
         {
             debugDXGI = true;
-            hr = _vgpu_CreateDXGIFactory2(DXGI_CREATE_FACTORY_DEBUG, __uuidof(IDXGIFactory2), (void**)&renderer->factory);
+            hr = _vgpu_CreateDXGIFactory2(DXGI_CREATE_FACTORY_DEBUG, __uuidof(IDXGIFactory2), (void**)&d3d11.factory);
             if (FAILED(hr)) {
                 return false;
             }
@@ -163,23 +160,23 @@ static bool _vgpu_d3d11_createFactory(D3D11Renderer* renderer)
     if (!debugDXGI)
 #endif
     {
-        hr = _vgpu_CreateDXGIFactory1(__uuidof(IDXGIFactory2), (void**)&renderer->factory);
+        hr = _vgpu_CreateDXGIFactory1(__uuidof(IDXGIFactory2), (void**)&d3d11.factory);
         if (FAILED(hr)) {
             return false;
         }
     }
 
-    renderer->factory_caps = 0;
+    d3d11.factory_caps = 0;
 
     // Disable FLIP if not on a supporting OS
-    renderer->factory_caps |= DXGIFACTORY_CAPS_FLIP_PRESENT;
+    d3d11.factory_caps |= DXGIFACTORY_CAPS_FLIP_PRESENT;
 #if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
     {
         IDXGIFactory4* factory4;
-        HRESULT hr = renderer->factory->QueryInterface(__uuidof(IDXGIFactory4), (void**)&factory4);
+        HRESULT hr = d3d11.factory->QueryInterface(__uuidof(IDXGIFactory4), (void**)&factory4);
         if (FAILED(hr))
         {
-            renderer->factory_caps &= DXGIFACTORY_CAPS_FLIP_PRESENT;
+            d3d11.factory_caps &= DXGIFACTORY_CAPS_FLIP_PRESENT;
         }
         factory4->Release();
     }
@@ -189,7 +186,7 @@ static bool _vgpu_d3d11_createFactory(D3D11Renderer* renderer)
     {
         BOOL allowTearing = FALSE;
         IDXGIFactory5* factory5;
-        HRESULT hr = renderer->factory->QueryInterface(__uuidof(IDXGIFactory5), (void**)&factory5);
+        HRESULT hr = d3d11.factory->QueryInterface(__uuidof(IDXGIFactory5), (void**)&factory5);
         if (SUCCEEDED(hr))
         {
             hr = factory5->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &allowTearing, sizeof(allowTearing));
@@ -204,13 +201,13 @@ static bool _vgpu_d3d11_createFactory(D3D11Renderer* renderer)
         }
         else
         {
-            renderer->factory_caps |= DXGIFACTORY_CAPS_TEARING;
+            d3d11.factory_caps |= DXGIFACTORY_CAPS_TEARING;
         }
     }
 
     return true;
 }
-static IDXGIAdapter1* d3d11_getAdapter(D3D11Renderer* renderer, vgpu_power_preference preference)
+static IDXGIAdapter1* d3d11_getAdapter(vgpu_power_preference preference)
 {
     /* Detect adapter now. */
     IDXGIAdapter1* adapter = NULL;
@@ -218,7 +215,7 @@ static IDXGIAdapter1* d3d11_getAdapter(D3D11Renderer* renderer, vgpu_power_prefe
 #if defined(__dxgi1_6_h__) && defined(NTDDI_WIN10_RS4)
     {
         IDXGIFactory6* factory6;
-        HRESULT hr = renderer->factory->QueryInterface(__uuidof(IDXGIFactory6), (void**)&factory6);
+        HRESULT hr = d3d11.factory->QueryInterface(__uuidof(IDXGIFactory6), (void**)&factory6);
         if (SUCCEEDED(hr))
         {
             // By default prefer high performance
@@ -251,7 +248,7 @@ static IDXGIAdapter1* d3d11_getAdapter(D3D11Renderer* renderer, vgpu_power_prefe
 
     if (!adapter)
     {
-        for (uint32_t i = 0; DXGI_ERROR_NOT_FOUND != renderer->factory->EnumAdapters1(i, &adapter); i++)
+        for (uint32_t i = 0; DXGI_ERROR_NOT_FOUND != d3d11.factory->EnumAdapters1(i, &adapter); i++)
         {
             DXGI_ADAPTER_DESC1 desc;
             VHR(adapter->GetDesc1(&desc));
@@ -271,42 +268,334 @@ static IDXGIAdapter1* d3d11_getAdapter(D3D11Renderer* renderer, vgpu_power_prefe
     return adapter;
 }
 
-static void d3d11_destroySwapChain(D3D11Renderer* renderer, D3D11_SwapChain* swapchain);
-static void d3d11_presentSwapChain(D3D11Renderer* renderer, D3D11_SwapChain* swapchain);
+static void d3d11_createSwapChain(D3D11_SwapChain* swapchain, const vgpu_swapchain_info* info);
+static void d3d11_destroySwapChain(D3D11_SwapChain* swapchain);
+static void d3d11_presentSwapChain(D3D11_SwapChain* swapchain);
 
-static void d3d11_destroy(VGPUDevice device) {
-    D3D11Renderer* renderer = (D3D11Renderer*)device->renderer;
 
-    for (uint32_t i = 0; i < _vgpu_count_of(renderer->swapchains); i++)
-    {
-        if (!renderer->swapchains[i].handle)
-            continue;
+static bool _vgpu_d3d11_sdk_layers_available() {
+    HRESULT hr = _vgpu_D3D11CreateDevice(
+        NULL,
+        D3D_DRIVER_TYPE_NULL,
+        NULL,
+        D3D11_CREATE_DEVICE_DEBUG,
+        NULL,
+        0,
+        D3D11_SDK_VERSION,
+        NULL,
+        NULL,
+        NULL
+    );
 
-        d3d11_destroySwapChain(renderer, &renderer->swapchains[i]);
+    return SUCCEEDED(hr);
+}
+
+static bool d3d11_init(const vgpu_info* info) {
+    /* Allocate and zero out the renderer */
+    d3d11.validation = (info->flags | VGPUDeviceFlags_Debug) || (info->flags | VGPUDeviceFlags_GPUBasedValidation);
+
+    if (!_vgpu_d3d11_createFactory()) {
+        return NULL;
     }
 
-    SAFE_RELEASE(renderer->context);
-    SAFE_RELEASE(renderer->d3d_annotation);
+    IDXGIAdapter1* dxgi_adapter = d3d11_getAdapter(info->power_preference);
+
+    /* Setup present flags. */
+    d3d11.sync_interval = info->swapchain.vsync ? 1 : 0;
+    d3d11.present_flags = 0;
+    if (!d3d11.sync_interval && d3d11.factory_caps & DXGIFACTORY_CAPS_TEARING)
+    {
+        d3d11.present_flags |= DXGI_PRESENT_ALLOW_TEARING;
+    }
+
+    /* Create d3d11 device */
+    {
+        UINT creation_flags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
+
+        if (d3d11.validation && _vgpu_d3d11_sdk_layers_available())
+        {
+            // If the project is in a debug build, enable debugging via SDK Layers with this flag.
+            creation_flags |= D3D11_CREATE_DEVICE_DEBUG;
+        }
+#if defined(_DEBUG)
+        else
+        {
+            OutputDebugStringA("WARNING: Direct3D Debug Device is not available\n");
+        }
+#endif
+
+        static const D3D_FEATURE_LEVEL s_featureLevels[] =
+        {
+            D3D_FEATURE_LEVEL_12_1,
+            D3D_FEATURE_LEVEL_12_0,
+            D3D_FEATURE_LEVEL_11_1,
+            D3D_FEATURE_LEVEL_11_0
+        };
+
+        // Create the Direct3D 11 API device object and a corresponding context.
+        ID3D11Device* temp_d3d_device;
+        ID3D11DeviceContext* temp_d3d_context;
+
+        HRESULT hr = E_FAIL;
+        if (dxgi_adapter)
+        {
+            hr = _vgpu_D3D11CreateDevice(
+                (IDXGIAdapter*)dxgi_adapter,
+                D3D_DRIVER_TYPE_UNKNOWN,
+                NULL,
+                creation_flags,
+                s_featureLevels,
+                _countof(s_featureLevels),
+                D3D11_SDK_VERSION,
+                &temp_d3d_device,
+                &d3d11.feature_level,
+                &temp_d3d_context
+            );
+        }
+#if defined(NDEBUG)
+        else
+        {
+            vgpu_log_error("No Direct3D hardware device found");
+            VGPU_UNREACHABLE();
+        }
+#else
+        if (FAILED(hr))
+        {
+            // If the initialization fails, fall back to the WARP device.
+            // For more information on WARP, see:
+            // http://go.microsoft.com/fwlink/?LinkId=286690
+            hr = _vgpu_D3D11CreateDevice(
+                NULL,
+                D3D_DRIVER_TYPE_WARP, // Create a WARP device instead of a hardware device.
+                NULL,
+                creation_flags,
+                s_featureLevels,
+                _countof(s_featureLevels),
+                D3D11_SDK_VERSION,
+                &temp_d3d_device,
+                &d3d11.feature_level,
+                &temp_d3d_context
+            );
+
+            if (SUCCEEDED(hr))
+            {
+                OutputDebugStringA("Direct3D Adapter - WARP\n");
+            }
+        }
+#endif
+
+        if (FAILED(hr)) {
+            return false;
+        }
+
+#ifndef NDEBUG
+        ID3D11Debug* d3d_debug;
+        if (SUCCEEDED(temp_d3d_device->QueryInterface(__uuidof(ID3D11Debug), (void**)&d3d_debug)))
+        {
+            ID3D11InfoQueue* d3d_info_queue;
+            if (SUCCEEDED(d3d_debug->QueryInterface(__uuidof(ID3D11InfoQueue), (void**)&d3d_info_queue)))
+            {
+#ifdef _DEBUG
+                d3d_info_queue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_CORRUPTION, TRUE);
+                d3d_info_queue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_ERROR, TRUE);
+#endif
+                D3D11_MESSAGE_ID hide[] =
+                {
+                    D3D11_MESSAGE_ID_SETPRIVATEDATA_CHANGINGPARAMS,
+                };
+                D3D11_INFO_QUEUE_FILTER filter;
+                memset(&filter, 0, sizeof(D3D11_INFO_QUEUE_FILTER));
+                filter.DenyList.NumIDs = _countof(hide);
+                filter.DenyList.pIDList = hide;
+                d3d_info_queue->AddStorageFilterEntries(&filter);
+                d3d_info_queue->Release();
+            }
+
+            d3d_debug->Release();
+        }
+#endif
+
+#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
+        {
+            IDXGIDevice1* dxgiDevice1;
+            if (SUCCEEDED(temp_d3d_device->QueryInterface(__uuidof(IDXGIDevice1), (void**)&dxgiDevice1)))
+            {
+                /* Default to 3. */
+                VHR(dxgiDevice1->SetMaximumFrameLatency(VGPU_MAX_INFLIGHT_FRAMES));
+                dxgiDevice1->Release();
+            }
+        }
+#endif
+
+        VHR(temp_d3d_device->QueryInterface(__uuidof(ID3D11Device1), (void**)&d3d11.device));
+        VHR(temp_d3d_context->QueryInterface(__uuidof(ID3D11DeviceContext1), (void**)&d3d11.context));
+        VHR(temp_d3d_context->QueryInterface(__uuidof(ID3DUserDefinedAnnotation), (void**)&d3d11.d3d_annotation));
+        SAFE_RELEASE(temp_d3d_context);
+        SAFE_RELEASE(temp_d3d_device);
+    }
+
+    /* Init caps first. */
+    {
+        DXGI_ADAPTER_DESC1 adapterDesc;
+        VHR(dxgi_adapter->GetDesc1(&adapterDesc));
+
+        /* Log some info */
+        vgpu_log_info("VGPU driver: D3D11");
+        vgpu_log_info("Direct3D Adapter: VID:%04X, PID:%04X - %ls", adapterDesc.VendorId, adapterDesc.DeviceId, adapterDesc.Description);
+
+        d3d11.caps.backendType = VGPU_BACKEND_TYPE_DIRECT3D11;
+        d3d11.caps.vendorId = adapterDesc.VendorId;
+        d3d11.caps.adapterId = adapterDesc.DeviceId;
+        _vgpu_StringConvert(adapterDesc.Description, d3d11.caps.adapterName);
+
+        // Detect adapter type.
+        if (adapterDesc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)
+        {
+            d3d11.caps.adapterType = VGPUAdapterType_CPU;
+        }
+        else
+        {
+            d3d11.caps.adapterType = VGPUAdapterType_IntegratedGPU;
+        }
+
+        d3d11.caps.features.independentBlend = (d3d11.feature_level >= D3D_FEATURE_LEVEL_10_0);
+        d3d11.caps.features.computeShader = (d3d11.feature_level >= D3D_FEATURE_LEVEL_10_0);
+        d3d11.caps.features.tessellationShader = (d3d11.feature_level >= D3D_FEATURE_LEVEL_11_0);
+        d3d11.caps.features.multiViewport = true;
+        d3d11.caps.features.indexUInt32 = true;
+        d3d11.caps.features.multiDrawIndirect = (d3d11.feature_level >= D3D_FEATURE_LEVEL_11_0);
+        d3d11.caps.features.fillModeNonSolid = true;
+        d3d11.caps.features.samplerAnisotropy = true;
+        d3d11.caps.features.textureCompressionETC2 = false;
+        d3d11.caps.features.textureCompressionASTC_LDR = false;
+        d3d11.caps.features.textureCompressionBC = true;
+        d3d11.caps.features.textureCubeArray = (d3d11.feature_level >= D3D_FEATURE_LEVEL_10_1);
+        d3d11.caps.features.raytracing = false;
+
+        // Limits
+        d3d11.caps.limits.maxVertexAttributes = VGPU_MAX_VERTEX_ATTRIBUTES;
+        d3d11.caps.limits.maxVertexBindings = VGPU_MAX_VERTEX_ATTRIBUTES;
+        d3d11.caps.limits.maxVertexAttributeOffset = VGPU_MAX_VERTEX_ATTRIBUTE_OFFSET;
+        d3d11.caps.limits.maxVertexBindingStride = VGPU_MAX_VERTEX_BUFFER_STRIDE;
+
+        d3d11.caps.limits.maxTextureDimension2D = D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION;
+        d3d11.caps.limits.maxTextureDimension3D = D3D11_REQ_TEXTURE3D_U_V_OR_W_DIMENSION;
+        d3d11.caps.limits.maxTextureDimensionCube = D3D11_REQ_TEXTURECUBE_DIMENSION;
+        d3d11.caps.limits.maxTextureArrayLayers = D3D11_REQ_TEXTURE2D_ARRAY_AXIS_DIMENSION;
+        d3d11.caps.limits.maxColorAttachments = D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT;
+        d3d11.caps.limits.maxUniformBufferRange = D3D11_REQ_CONSTANT_BUFFER_ELEMENT_COUNT * 16;
+        d3d11.caps.limits.maxStorageBufferRange = UINT32_MAX;
+        d3d11.caps.limits.minUniformBufferOffsetAlignment = 256u;
+        d3d11.caps.limits.minStorageBufferOffsetAlignment = 32u;
+        d3d11.caps.limits.maxSamplerAnisotropy = D3D11_MAX_MAXANISOTROPY;
+        d3d11.caps.limits.maxViewports = D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE;
+        d3d11.caps.limits.maxViewportWidth = D3D11_VIEWPORT_BOUNDS_MAX;
+        d3d11.caps.limits.maxViewportHeight = D3D11_VIEWPORT_BOUNDS_MAX;
+        d3d11.caps.limits.maxTessellationPatchSize = D3D11_IA_PATCH_MAX_CONTROL_POINT_COUNT;
+        d3d11.caps.limits.maxComputeSharedMemorySize = D3D11_CS_THREAD_LOCAL_TEMP_REGISTER_POOL;
+        d3d11.caps.limits.maxComputeWorkGroupCountX = D3D11_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION;
+        d3d11.caps.limits.maxComputeWorkGroupCountY = D3D11_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION;
+        d3d11.caps.limits.maxComputeWorkGroupCountZ = D3D11_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION;
+        d3d11.caps.limits.maxComputeWorkGroupInvocations = D3D11_CS_THREAD_GROUP_MAX_THREADS_PER_GROUP;
+        d3d11.caps.limits.maxComputeWorkGroupSizeX = D3D11_CS_THREAD_GROUP_MAX_X;
+        d3d11.caps.limits.maxComputeWorkGroupSizeY = D3D11_CS_THREAD_GROUP_MAX_Y;
+        d3d11.caps.limits.maxComputeWorkGroupSizeZ = D3D11_CS_THREAD_GROUP_MAX_Z;
+
+        /* see: https://docs.microsoft.com/en-us/windows/win32/api/d3d11/ne-d3d11-d3d11_format_support */
+        UINT dxgiFormatCaps = 0;
+        for (uint32_t format = (VGPU_TEXTURE_FORMAT_UNDEFINED + 1); format < VGPUTextureFormat_Count; format++)
+        {
+            DXGI_FORMAT dxgiFormat = _vgpu_to_dxgi_format((VGPUTextureFormat)format);
+            if (dxgiFormat == DXGI_FORMAT_UNKNOWN)
+                continue;
+
+            HRESULT hr = d3d11.device->CheckFormatSupport(dxgiFormat, &dxgiFormatCaps);
+            VGPU_ASSERT(SUCCEEDED(hr));
+            /*sg_pixelformat_info* info = &_sg.formats[fmt];
+            info->sample = 0 != (dxgi_fmt_caps & D3D11_FORMAT_SUPPORT_TEXTURE2D);
+            info->filter = 0 != (dxgi_fmt_caps & D3D11_FORMAT_SUPPORT_SHADER_SAMPLE);
+            info->render = 0 != (dxgi_fmt_caps & D3D11_FORMAT_SUPPORT_RENDER_TARGET);
+            info->blend = 0 != (dxgi_fmt_caps & D3D11_FORMAT_SUPPORT_BLENDABLE);
+            info->msaa = 0 != (dxgi_fmt_caps & D3D11_FORMAT_SUPPORT_MULTISAMPLE_RENDERTARGET);
+            info->depth = 0 != (dxgi_fmt_caps & D3D11_FORMAT_SUPPORT_DEPTH_STENCIL);
+            if (info->depth) {
+                info->render = true;
+            }*/
+        }
+
+        // Detect default depth format first.
+        VHR(d3d11.device->CheckFormatSupport(_vgpu_to_dxgi_format(VGPUTextureFormat_Depth32Float), &dxgiFormatCaps));
+        if (dxgiFormatCaps & D3D11_FORMAT_SUPPORT_DEPTH_STENCIL)
+        {
+            d3d11.defaultDepthFormat = VGPUTextureFormat_Depth32Float;
+        }
+        else
+        {
+            VHR(d3d11.device->CheckFormatSupport(_vgpu_to_dxgi_format(VGPUTextureFormat_Depth16Unorm), &dxgiFormatCaps));
+            if (dxgiFormatCaps & D3D11_FORMAT_SUPPORT_DEPTH_STENCIL)
+            {
+                d3d11.defaultDepthFormat = VGPUTextureFormat_Depth16Unorm;
+            }
+        }
+
+        // Detect default depth stencil format.
+        VHR(d3d11.device->CheckFormatSupport(_vgpu_to_dxgi_format(VGPUTextureFormat_Depth24UnormStencil8), &dxgiFormatCaps));
+        if (dxgiFormatCaps & D3D11_FORMAT_SUPPORT_DEPTH_STENCIL)
+        {
+            d3d11.defaultDepthStencilFormat = VGPUTextureFormat_Depth24UnormStencil8;
+        }
+        else
+        {
+            VHR(d3d11.device->CheckFormatSupport(_vgpu_to_dxgi_format(VGPUTextureFormat_Depth32FloatStencil8), &dxgiFormatCaps));
+            if (dxgiFormatCaps & D3D11_FORMAT_SUPPORT_DEPTH_STENCIL)
+            {
+                d3d11.defaultDepthStencilFormat = VGPUTextureFormat_Depth32FloatStencil8;
+            }
+        }
+    }
+
+    /* Release adapter */
+    dxgi_adapter->Release();
+
+    if (info->swapchain.window_handle)
+    {
+        d3d11_createSwapChain(&d3d11.swapchains[0], &info->swapchain);
+    }
+
+    return true;
+}
+
+static void d3d11_shutdown(void) {
+    for (uint32_t i = 0; i < _vgpu_count_of(d3d11.swapchains); i++)
+    {
+        if (!d3d11.swapchains[i].handle)
+            continue;
+
+        d3d11_destroySwapChain(&d3d11.swapchains[i]);
+    }
+
+    SAFE_RELEASE(d3d11.context);
+    SAFE_RELEASE(d3d11.d3d_annotation);
 
 #if !defined(NDEBUG)
-    ULONG refCount = renderer->device->Release();
+    ULONG refCount = d3d11.device->Release();
     if (refCount > 0)
     {
         vgpu_log_error("Direct3D11: There are %d unreleased references left on the device", refCount);
 
         ID3D11Debug* d3d11_debug = NULL;
-        if (SUCCEEDED(renderer->device->QueryInterface(__uuidof(ID3D11Debug), (void**)&d3d11_debug)))
+        if (SUCCEEDED(d3d11.device->QueryInterface(__uuidof(ID3D11Debug), (void**)&d3d11_debug)))
         {
             d3d11_debug->ReportLiveDeviceObjects(D3D11_RLDO_DETAIL | D3D11_RLDO_IGNORE_INTERNAL);
             d3d11_debug->Release();
         }
     }
 #else
-    renderer->device->Release();
+    d3d11.device->Release();
 #endif
-    renderer->device = nullptr;
+    d3d11.device = nullptr;
 
-    SAFE_RELEASE(renderer->factory);
+    SAFE_RELEASE(d3d11.factory);
 
 #ifdef _DEBUG
     IDXGIDebug1* dxgi_debug1;
@@ -321,61 +610,52 @@ static void d3d11_destroy(VGPUDevice device) {
         dxgi_debug1->Release();
     }
 #endif
-
-    VGPU_FREE(renderer);
-    VGPU_FREE(device);
 }
 
-static void d3d11_get_caps(vgpu_renderer driver_data, VGPUDeviceCaps* caps)
+static void d3d11_get_caps(VGPUDeviceCaps* caps)
 {
-    D3D11Renderer* renderer = (D3D11Renderer*)driver_data;
-    *caps = renderer->caps;
+    *caps = d3d11.caps;
 }
 
-static VGPUTextureFormat d3d11_getDefaultDepthFormat(vgpu_renderer driverData)
+static VGPUTextureFormat d3d11_getDefaultDepthFormat(void)
 {
-    D3D11Renderer* renderer = (D3D11Renderer*)driverData;
-    return renderer->defaultDepthFormat;
+    return d3d11.defaultDepthFormat;
 }
 
-static VGPUTextureFormat d3d11_getDefaultDepthStencilFormat(vgpu_renderer driverData)
+static VGPUTextureFormat d3d11_getDefaultDepthStencilFormat(void)
 {
-    D3D11Renderer* renderer = (D3D11Renderer*)driverData;
-    return renderer->defaultDepthStencilFormat;
+    return d3d11.defaultDepthStencilFormat;
 }
 
-static vgpu_bool d3d11_frame_begin(vgpu_renderer driverData) {
-    VGPU_UNUSED(driverData);
+static vgpu_bool d3d11_frame_begin(void) {
     return true;
 }
 
-static void d3d11_frame_end(vgpu_renderer driverData) {
-    D3D11Renderer* renderer = (D3D11Renderer*)driverData;
-    for (uint32_t i = 0; i < _vgpu_count_of(renderer->swapchains); i++) {
-        if (!renderer->swapchains[i].handle)
+static void d3d11_frame_end(void) {
+    for (uint32_t i = 0; i < _vgpu_count_of(d3d11.swapchains); i++) {
+        if (!d3d11.swapchains[i].handle)
             continue;
 
-        d3d11_presentSwapChain(renderer, &renderer->swapchains[i]);
+        d3d11_presentSwapChain(&d3d11.swapchains[i]);
     }
 
-    if (!renderer->is_lost)
+    if (!d3d11.is_lost)
     {
         // Output information is cached on the DXGI Factory. If it is stale we need to create a new factory.
-        if (!renderer->factory->IsCurrent())
+        if (!d3d11.factory->IsCurrent())
         {
-            _vgpu_d3d11_createFactory(renderer);
+            _vgpu_d3d11_createFactory();
         }
     }
 }
 
-static VGPUTexture d3d11_getBackbufferTexture(vgpu_renderer driverData, uint32_t swapchain) {
-    D3D11Renderer* renderer = (D3D11Renderer*)driverData;
-    return renderer->swapchains[swapchain].backbuffer;
+static VGPUTexture d3d11_getBackbufferTexture(uint32_t swapchain) {
+    return d3d11.swapchains[swapchain].backbuffer;
 }
 
 
 /* Swapchain */
-static void d3d11_swapchain_update(D3D11Renderer* renderer, D3D11_SwapChain* swapchain)
+static void d3d11_swapchain_update(D3D11_SwapChain* swapchain)
 {
     DXGI_SWAP_CHAIN_DESC1 swapchain_desc;
     VHR(swapchain->handle->GetDesc1(&swapchain_desc));
@@ -397,18 +677,18 @@ static void d3d11_swapchain_update(D3D11Renderer* renderer, D3D11_SwapChain* swa
         textureDesc.usage = VGPUTextureUsage_RenderTarget;
         textureDesc.sampleCount = 1u;
         textureDesc.externalHandle = backbuffer;
-        swapchain->backbuffer = vgpuCreateTexture(renderer->gpuDevice, &textureDesc);
+        swapchain->backbuffer = vgpuCreateTexture(&textureDesc);
 
         backbuffer->Release();
     }
 }
 
-static void d3d11_createSwapChain(D3D11Renderer* renderer, D3D11_SwapChain* swapchain, const vgpu_swapchain_info* info)
+static void d3d11_createSwapChain(D3D11_SwapChain* swapchain, const vgpu_swapchain_info* info)
 {
     swapchain->handle = vgpu_d3d_create_swapchain(
-        renderer->factory,
-        renderer->factory_caps,
-        renderer->device,
+        d3d11.factory,
+        d3d11.factory_caps,
+        d3d11.device,
         info->window_handle,
         info->width, info->height,
         info->colorFormat,
@@ -418,11 +698,11 @@ static void d3d11_createSwapChain(D3D11Renderer* renderer, D3D11_SwapChain* swap
 
     swapchain->colorFormat = info->colorFormat;
 
-    d3d11_swapchain_update(renderer, swapchain);
+    d3d11_swapchain_update(swapchain);
 }
 
 /* Texture */
-static ID3D11RenderTargetView* _vgpu_d3d11_createRTV(D3D11Renderer* renderer, ID3D11Resource* resource, DXGI_FORMAT format, uint32_t mipSlice, uint32_t arraySlice)
+static ID3D11RenderTargetView* _vgpu_d3d11_createRTV(ID3D11Resource* resource, DXGI_FORMAT format, uint32_t mipSlice, uint32_t arraySlice)
 {
     D3D11_RESOURCE_DIMENSION dimension;
     resource->GetType(&dimension);
@@ -535,7 +815,7 @@ static ID3D11RenderTargetView* _vgpu_d3d11_createRTV(D3D11Renderer* renderer, ID
     };
 
     ID3D11RenderTargetView* view;
-    HRESULT hr = renderer->device->CreateRenderTargetView(resource, &rtvDesc, &view);
+    HRESULT hr = d3d11.device->CreateRenderTargetView(resource, &rtvDesc, &view);
     if (FAILED(hr))
     {
         vgpu_log_error("Direct3D11: Failed to create RTV");
@@ -545,7 +825,7 @@ static ID3D11RenderTargetView* _vgpu_d3d11_createRTV(D3D11Renderer* renderer, ID
     return view;
 }
 
-static ID3D11DepthStencilView* _vgpu_d3d11_createDSV(D3D11Renderer* renderer, ID3D11Resource* resource, DXGI_FORMAT format, uint32_t mipSlice, uint32_t arraySlice)
+static ID3D11DepthStencilView* _vgpu_d3d11_createDSV(ID3D11Resource* resource, DXGI_FORMAT format, uint32_t mipSlice, uint32_t arraySlice)
 {
     D3D11_RESOURCE_DIMENSION dimension;
     resource->GetType(&dimension);
@@ -643,7 +923,7 @@ static ID3D11DepthStencilView* _vgpu_d3d11_createDSV(D3D11Renderer* renderer, ID
     };
 
     ID3D11DepthStencilView* view;
-    HRESULT hr = renderer->device->CreateDepthStencilView(resource, &dsvDesc, &view);
+    HRESULT hr = d3d11.device->CreateDepthStencilView(resource, &dsvDesc, &view);
     if (FAILED(hr))
     {
         vgpu_log_error("Direct3D11: Failed to create DSV");
@@ -653,9 +933,8 @@ static ID3D11DepthStencilView* _vgpu_d3d11_createDSV(D3D11Renderer* renderer, ID
     return view;
 }
 
-static VGPUTexture d3d11_createTexture(vgpu_renderer driverData, const VGPUTextureDescription* desc)
+static VGPUTexture d3d11_createTexture(const VGPUTextureDescription* desc)
 {
-    D3D11Renderer* renderer = (D3D11Renderer*)driverData;
     D3D11Texture* texture = VGPU_ALLOC_HANDLE(D3D11Texture);
     texture->type = desc->type;
     texture->width = desc->width;
@@ -697,7 +976,7 @@ static VGPUTexture d3d11_createTexture(vgpu_renderer driverData, const VGPUTextu
 
         if (desc->usage & VGPUTextureUsage_RenderTarget)
         {
-            if (vgpuIsDepthStencilFormat(desc->format))
+            if (vgpu_is_depth_stencil_format(desc->format))
             {
                 bindFlags |= D3D11_BIND_DEPTH_STENCIL;
             }
@@ -728,7 +1007,7 @@ static VGPUTexture d3d11_createTexture(vgpu_renderer driverData, const VGPUTextu
             d3d11_desc.CPUAccessFlags = CPUAccessFlags;
             d3d11_desc.MiscFlags = miscFlags;
 
-            hr = renderer->device->CreateTexture2D(
+            hr = d3d11.device->CreateTexture2D(
                 &d3d11_desc,
                 NULL,
                 (ID3D11Texture2D**)&texture->handle
@@ -746,7 +1025,7 @@ static VGPUTexture d3d11_createTexture(vgpu_renderer driverData, const VGPUTextu
             d3d11_desc.CPUAccessFlags = CPUAccessFlags;
             d3d11_desc.MiscFlags = miscFlags;
 
-            hr = renderer->device->CreateTexture3D(
+            hr = d3d11.device->CreateTexture3D(
                 &d3d11_desc,
                 NULL,
                 (ID3D11Texture3D**)&texture->handle
@@ -756,20 +1035,20 @@ static VGPUTexture d3d11_createTexture(vgpu_renderer driverData, const VGPUTextu
 
     if (desc->usage & VGPUTextureUsage_RenderTarget)
     {
-        if (vgpuIsDepthStencilFormat(desc->format))
+        if (vgpu_is_depth_stencil_format(desc->format))
         {
-            texture->dsv = _vgpu_d3d11_createDSV(renderer, texture->handle, texture->dxgi_format, 0, -1);
+            texture->dsv = _vgpu_d3d11_createDSV(texture->handle, texture->dxgi_format, 0, -1);
         }
         else
         {
-            texture->rtv = _vgpu_d3d11_createRTV(renderer, texture->handle, texture->dxgi_format, 0, -1);
+            texture->rtv = _vgpu_d3d11_createRTV(texture->handle, texture->dxgi_format, 0, -1);
         }
     }
 
     return (VGPUTexture)texture;
 }
 
-static void d3d11_destroyTexture(vgpu_renderer driverData, VGPUTexture handle)
+static void d3d11_destroyTexture(VGPUTexture handle)
 {
     D3D11Texture* texture = (D3D11Texture*)handle;
     SAFE_RELEASE(texture->handle);
@@ -778,7 +1057,7 @@ static void d3d11_destroyTexture(vgpu_renderer driverData, VGPUTexture handle)
 }
 
 /* Buffer */
-static VGPUBuffer d3d11_createBuffer(vgpu_renderer driverData, const VGPUBufferDescriptor* descriptor)
+static VGPUBuffer d3d11_createBuffer(const VGPUBufferDescriptor* descriptor)
 {
     /* Verify resource limits first. */
     static constexpr uint64_t c_maxBytes = D3D11_REQ_RESOURCE_SIZE_IN_MEGABYTES_EXPRESSION_A_TERM * 1024u * 1024u;
@@ -791,8 +1070,6 @@ static VGPUBuffer d3d11_createBuffer(vgpu_renderer driverData, const VGPUBufferD
         //vgpu_log_error("Direct3D11: Resource size too large for DirectX 11 (size {})", sizeInBytes);
         return nullptr;
     }
-
-    D3D11Renderer* renderer = (D3D11Renderer*)driverData;
 
     D3D11_BUFFER_DESC desc = {};
     desc.ByteWidth = static_cast<UINT>(sizeInBytes);
@@ -850,7 +1127,7 @@ static VGPUBuffer d3d11_createBuffer(vgpu_renderer driverData, const VGPUBufferD
     }
 
     ID3D11Buffer* handle;
-    HRESULT hr = renderer->device->CreateBuffer(&desc, initialDataPtr, &handle);
+    HRESULT hr = d3d11.device->CreateBuffer(&desc, initialDataPtr, &handle);
     if (FAILED(hr))
     {
         vgpu_log_error("Direct3D11: Failed to create buffer");
@@ -862,7 +1139,7 @@ static VGPUBuffer d3d11_createBuffer(vgpu_renderer driverData, const VGPUBufferD
     return (VGPUBuffer)buffer;
 }
 
-static void d3d11_destroyBuffer(vgpu_renderer driverData, VGPUBuffer handle)
+static void d3d11_destroyBuffer(VGPUBuffer handle)
 {
     D3D11Buffer* buffer = (D3D11Buffer*)handle;
     SAFE_RELEASE(buffer->handle);
@@ -870,31 +1147,30 @@ static void d3d11_destroyBuffer(vgpu_renderer driverData, VGPUBuffer handle)
 }
 
 /* Sampler */
-static VGPUSampler d3d11_createSampler(vgpu_renderer driverData, const VGPUSamplerDescriptor* desc)
+static VGPUSampler d3d11_createSampler(const VGPUSamplerDescriptor* desc)
 {
     return nullptr;
 }
 
-static void d3d11_destroySampler(vgpu_renderer driverData, VGPUSampler handle)
+static void d3d11_destroySampler(VGPUSampler handle)
 {
 
 }
 
 /* Shader */
-static VGPUShaderModule d3d11_createShaderModule(vgpu_renderer driverData, const VGPUShaderModuleDescriptor* desc)
+static VGPUShaderModule d3d11_createShaderModule(const VGPUShaderModuleDescriptor* desc)
 {
-    D3D11Renderer* renderer = (D3D11Renderer*)driverData;
     D3D11_ShaderModule* shader = VGPU_ALLOC_HANDLE(D3D11_ShaderModule);
 
     HRESULT hr = S_OK;
     switch (desc->stage)
     {
     case VGPUShaderStage_Vertex:
-        hr = renderer->device->CreateVertexShader(desc->code, desc->size, nullptr, &shader->vertex);
+        hr = d3d11.device->CreateVertexShader(desc->code, desc->size, nullptr, &shader->vertex);
         break;
 
     case VGPUShaderStage_Fragment:
-        hr = renderer->device->CreatePixelShader(desc->code, desc->size, nullptr, &shader->fragment);
+        hr = d3d11.device->CreatePixelShader(desc->code, desc->size, nullptr, &shader->fragment);
         break;
 
     default:
@@ -912,7 +1188,7 @@ static VGPUShaderModule d3d11_createShaderModule(vgpu_renderer driverData, const
     return (VGPUShaderModule)shader;
 }
 
-static void d3d11_destroyShaderModule(vgpu_renderer driverData, VGPUShaderModule handle)
+static void d3d11_destroyShaderModule(VGPUShaderModule handle)
 {
     D3D11_ShaderModule* shader = (D3D11_ShaderModule*)handle;
     SAFE_RELEASE(shader->handle);
@@ -920,34 +1196,32 @@ static void d3d11_destroyShaderModule(vgpu_renderer driverData, VGPUShaderModule
 }
 
 /* SwapChain */
-static void d3d11_destroySwapChain(D3D11Renderer* renderer, D3D11_SwapChain* swapchain)
+static void d3d11_destroySwapChain(D3D11_SwapChain* swapchain)
 {
-    vgpuDestroyTexture(renderer->gpuDevice, swapchain->backbuffer);
+    vgpuDestroyTexture(swapchain->backbuffer);
     if (swapchain->depthStencilTexture) {
-        vgpuDestroyTexture(renderer->gpuDevice, swapchain->depthStencilTexture);
+        vgpuDestroyTexture(swapchain->depthStencilTexture);
     }
     SAFE_RELEASE(swapchain->handle);
 }
 
-static void d3d11_presentSwapChain(D3D11Renderer* renderer, D3D11_SwapChain* swapchain)
+static void d3d11_presentSwapChain(D3D11_SwapChain* swapchain)
 {
-    HRESULT hr = swapchain->handle->Present(renderer->sync_interval, renderer->present_flags);
+    HRESULT hr = swapchain->handle->Present(d3d11.sync_interval, d3d11.present_flags);
     if (hr == DXGI_ERROR_DEVICE_REMOVED
         || hr == DXGI_ERROR_DEVICE_HUNG
         || hr == DXGI_ERROR_DEVICE_RESET
         || hr == DXGI_ERROR_DRIVER_INTERNAL_ERROR
         || hr == DXGI_ERROR_NOT_CURRENTLY_AVAILABLE)
     {
-        renderer->is_lost = true;
+        d3d11.is_lost = true;
     }
 }
 
 /* Commands */
-static void d3d11_cmdBeginRenderPass(vgpu_renderer driverData, const VGPURenderPassDescriptor* desc)
+static void d3d11_cmdBeginRenderPass(const VGPURenderPassDescriptor* desc)
 {
-    D3D11Renderer* renderer = (D3D11Renderer*)driverData;
-
-    renderer->rtvs_count = 0;
+    d3d11.rtvs_count = 0;
     for (uint32_t i = 0; i < VGPU_MAX_COLOR_ATTACHMENTS; i++)
     {
         if (!desc->colorAttachments[i].texture)
@@ -957,19 +1231,19 @@ static void d3d11_cmdBeginRenderPass(vgpu_renderer driverData, const VGPURenderP
 
         if (desc->colorAttachments[i].loadOp == VGPULoadOp_Clear)
         {
-            renderer->context->ClearRenderTargetView(texture->rtv, &desc->colorAttachments[i].clearColor.r);
+            d3d11.context->ClearRenderTargetView(texture->rtv, &desc->colorAttachments[i].clearColor.r);
         }
 
-        renderer->cur_rtvs[renderer->rtvs_count++] = texture->rtv;
+        d3d11.cur_rtvs[d3d11.rtvs_count++] = texture->rtv;
     }
 
     if (desc->depthStencilAttachment.texture)
     {
         D3D11Texture* texture = (D3D11Texture*)desc->depthStencilAttachment.texture;
-        renderer->cur_dsv = texture->dsv;
+        d3d11.cur_dsv = texture->dsv;
 
-        const bool hasDepth = vgpuIsDepthFormat(texture->format);
-        const bool hasStencil = vgpuIsStencilFormat(texture->format);
+        const bool hasDepth = vgpu_is_depth_format(texture->format);
+        const bool hasStencil = vgpu_is_stencil_format(texture->format);
 
         UINT clearFlags = 0;
         if (hasDepth && desc->depthStencilAttachment.depthLoadOp == VGPULoadOp_Clear)
@@ -982,7 +1256,7 @@ static void d3d11_cmdBeginRenderPass(vgpu_renderer driverData, const VGPURenderP
             clearFlags |= D3D11_CLEAR_STENCIL;
         }
 
-        renderer->context->ClearDepthStencilView(
+        d3d11.context->ClearDepthStencilView(
             texture->dsv,
             clearFlags,
             desc->depthStencilAttachment.clearDepth,
@@ -990,40 +1264,22 @@ static void d3d11_cmdBeginRenderPass(vgpu_renderer driverData, const VGPURenderP
         );
     }
 
-    renderer->context->OMSetRenderTargets(renderer->rtvs_count, renderer->cur_rtvs, renderer->cur_dsv);
+    d3d11.context->OMSetRenderTargets(d3d11.rtvs_count, d3d11.cur_rtvs, d3d11.cur_dsv);
 }
 
-static void d3d11_cmdEndRenderPass(vgpu_renderer driverData)
+static void d3d11_cmdEndRenderPass(void)
 {
-    D3D11Renderer* renderer = (D3D11Renderer*)driverData;
-    renderer->context->OMSetRenderTargets(VGPU_MAX_COLOR_ATTACHMENTS, renderer->zero_rtvs, nullptr);
+    d3d11.context->OMSetRenderTargets(VGPU_MAX_COLOR_ATTACHMENTS, d3d11.zero_rtvs, nullptr);
 
-    for (uint32_t i = 0; i < renderer->rtvs_count; i++) {
-        renderer->cur_rtvs[i] = nullptr;
+    for (uint32_t i = 0; i < d3d11.rtvs_count; i++) {
+        d3d11.cur_rtvs[i] = nullptr;
     }
 
-    renderer->rtvs_count = 0;
-    renderer->cur_dsv = nullptr;
+    d3d11.rtvs_count = 0;
+    d3d11.cur_dsv = nullptr;
 }
 
 /* Driver functions */
-static bool _vgpu_d3d11_sdk_layers_available() {
-    HRESULT hr = _vgpu_D3D11CreateDevice(
-        NULL,
-        D3D_DRIVER_TYPE_NULL,
-        NULL,
-        D3D11_CREATE_DEVICE_DEBUG,
-        NULL,
-        0,
-        D3D11_SDK_VERSION,
-        NULL,
-        NULL,
-        NULL
-    );
-
-    return SUCCEEDED(hr);
-}
-
 static bool d3d11_is_supported(void) {
     if (d3d11.available_initialized) {
         return d3d11.available;
@@ -1087,292 +1343,16 @@ static bool d3d11_is_supported(void) {
     return true;
 };
 
-static VGPUDeviceImpl* d3d11_create_device(const VGPUDeviceDescriptor* info) {
-    /* Allocate and zero out the renderer */
-    D3D11Renderer* renderer = VGPU_ALLOC_HANDLE(D3D11Renderer);
-    renderer->validation = (info->flags | VGPUDeviceFlags_Debug) || (info->flags | VGPUDeviceFlags_GPUBasedValidation);
-
-    if (!_vgpu_d3d11_createFactory(renderer)) {
-        return NULL;
-    }
-
-    IDXGIAdapter1* dxgi_adapter = d3d11_getAdapter(renderer, info->power_preference);
-
-    /* Setup present flags. */
-    renderer->sync_interval = info->swapchain.vsync ? 1 : 0;
-    renderer->present_flags = 0;
-    if (!renderer->sync_interval && renderer->factory_caps & DXGIFACTORY_CAPS_TEARING)
-    {
-        renderer->present_flags |= DXGI_PRESENT_ALLOW_TEARING;
-    }
-
-    /* Create d3d11 device */
-    {
-        UINT creation_flags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
-
-        if (renderer->validation && _vgpu_d3d11_sdk_layers_available())
-        {
-            // If the project is in a debug build, enable debugging via SDK Layers with this flag.
-            creation_flags |= D3D11_CREATE_DEVICE_DEBUG;
-        }
-#if defined(_DEBUG)
-        else
-        {
-            OutputDebugStringA("WARNING: Direct3D Debug Device is not available\n");
-        }
-#endif
-
-        static const D3D_FEATURE_LEVEL s_featureLevels[] =
-        {
-            D3D_FEATURE_LEVEL_12_1,
-            D3D_FEATURE_LEVEL_12_0,
-            D3D_FEATURE_LEVEL_11_1,
-            D3D_FEATURE_LEVEL_11_0
-        };
-
-        // Create the Direct3D 11 API device object and a corresponding context.
-        ID3D11Device* temp_d3d_device;
-        ID3D11DeviceContext* temp_d3d_context;
-
-        HRESULT hr = E_FAIL;
-        if (dxgi_adapter)
-        {
-            hr = _vgpu_D3D11CreateDevice(
-                (IDXGIAdapter*)dxgi_adapter,
-                D3D_DRIVER_TYPE_UNKNOWN,
-                NULL,
-                creation_flags,
-                s_featureLevels,
-                _countof(s_featureLevels),
-                D3D11_SDK_VERSION,
-                &temp_d3d_device,
-                &renderer->feature_level,
-                &temp_d3d_context
-            );
-        }
-#if defined(NDEBUG)
-        else
-        {
-            vgpu_log_error("No Direct3D hardware device found");
-            VGPU_UNREACHABLE();
-        }
-#else
-        if (FAILED(hr))
-        {
-            // If the initialization fails, fall back to the WARP device.
-            // For more information on WARP, see:
-            // http://go.microsoft.com/fwlink/?LinkId=286690
-            hr = _vgpu_D3D11CreateDevice(
-                NULL,
-                D3D_DRIVER_TYPE_WARP, // Create a WARP device instead of a hardware device.
-                NULL,
-                creation_flags,
-                s_featureLevels,
-                _countof(s_featureLevels),
-                D3D11_SDK_VERSION,
-                &temp_d3d_device,
-                &renderer->feature_level,
-                &temp_d3d_context
-            );
-
-            if (SUCCEEDED(hr))
-            {
-                OutputDebugStringA("Direct3D Adapter - WARP\n");
-            }
-        }
-#endif
-
-        if (FAILED(hr)) {
-            return false;
-        }
-
-#ifndef NDEBUG
-        ID3D11Debug* d3d_debug;
-        if (SUCCEEDED(temp_d3d_device->QueryInterface(__uuidof(ID3D11Debug), (void**)&d3d_debug)))
-        {
-            ID3D11InfoQueue* d3d_info_queue;
-            if (SUCCEEDED(d3d_debug->QueryInterface(__uuidof(ID3D11InfoQueue), (void**)&d3d_info_queue)))
-            {
-#ifdef _DEBUG
-                d3d_info_queue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_CORRUPTION, TRUE);
-                d3d_info_queue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_ERROR, TRUE);
-#endif
-                D3D11_MESSAGE_ID hide[] =
-                {
-                    D3D11_MESSAGE_ID_SETPRIVATEDATA_CHANGINGPARAMS,
-                };
-                D3D11_INFO_QUEUE_FILTER filter;
-                memset(&filter, 0, sizeof(D3D11_INFO_QUEUE_FILTER));
-                filter.DenyList.NumIDs = _countof(hide);
-                filter.DenyList.pIDList = hide;
-                d3d_info_queue->AddStorageFilterEntries(&filter);
-                d3d_info_queue->Release();
-            }
-
-            d3d_debug->Release();
-        }
-#endif
-
-#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
-        {
-            IDXGIDevice1* dxgiDevice1;
-            if (SUCCEEDED(temp_d3d_device->QueryInterface(__uuidof(IDXGIDevice1), (void**)&dxgiDevice1)))
-            {
-                /* Default to 3. */
-                VHR(dxgiDevice1->SetMaximumFrameLatency(VGPU_MAX_INFLIGHT_FRAMES));
-                dxgiDevice1->Release();
-            }
-        }
-#endif
-
-        VHR(temp_d3d_device->QueryInterface(__uuidof(ID3D11Device1), (void**)&renderer->device));
-        VHR(temp_d3d_context->QueryInterface(__uuidof(ID3D11DeviceContext1), (void**)&renderer->context));
-        VHR(temp_d3d_context->QueryInterface(__uuidof(ID3DUserDefinedAnnotation), (void**)&renderer->d3d_annotation));
-        SAFE_RELEASE(temp_d3d_context);
-        SAFE_RELEASE(temp_d3d_device);
-    }
-
-    /* Init caps first. */
-    {
-        DXGI_ADAPTER_DESC1 adapterDesc;
-        VHR(dxgi_adapter->GetDesc1(&adapterDesc));
-
-        /* Log some info */
-        vgpu_log_info("VGPU driver: D3D11");
-        vgpu_log_info("Direct3D Adapter: VID:%04X, PID:%04X - %ls", adapterDesc.VendorId, adapterDesc.DeviceId, adapterDesc.Description);
-
-        renderer->caps.backendType = VGPU_BACKEND_TYPE_DIRECT3D11;
-        renderer->caps.vendorId = adapterDesc.VendorId;
-        renderer->caps.adapterId = adapterDesc.DeviceId;
-        _vgpu_StringConvert(adapterDesc.Description, renderer->caps.adapterName);
-
-        // Detect adapter type.
-        if (adapterDesc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)
-        {
-            renderer->caps.adapterType = VGPUAdapterType_CPU;
-        }
-        else
-        {
-            renderer->caps.adapterType = VGPUAdapterType_IntegratedGPU;
-        }
-
-        renderer->caps.features.independentBlend = (renderer->feature_level >= D3D_FEATURE_LEVEL_10_0);
-        renderer->caps.features.computeShader = (renderer->feature_level >= D3D_FEATURE_LEVEL_10_0);
-        renderer->caps.features.tessellationShader = (renderer->feature_level >= D3D_FEATURE_LEVEL_11_0);
-        renderer->caps.features.multiViewport = true;
-        renderer->caps.features.indexUInt32 = true;
-        renderer->caps.features.multiDrawIndirect = (renderer->feature_level >= D3D_FEATURE_LEVEL_11_0);
-        renderer->caps.features.fillModeNonSolid = true;
-        renderer->caps.features.samplerAnisotropy = true;
-        renderer->caps.features.textureCompressionETC2 = false;
-        renderer->caps.features.textureCompressionASTC_LDR = false;
-        renderer->caps.features.textureCompressionBC = true;
-        renderer->caps.features.textureCubeArray = (renderer->feature_level >= D3D_FEATURE_LEVEL_10_1);
-        renderer->caps.features.raytracing = false;
-
-        // Limits
-        renderer->caps.limits.maxVertexAttributes = VGPU_MAX_VERTEX_ATTRIBUTES;
-        renderer->caps.limits.maxVertexBindings = VGPU_MAX_VERTEX_ATTRIBUTES;
-        renderer->caps.limits.maxVertexAttributeOffset = VGPU_MAX_VERTEX_ATTRIBUTE_OFFSET;
-        renderer->caps.limits.maxVertexBindingStride = VGPU_MAX_VERTEX_BUFFER_STRIDE;
-
-        renderer->caps.limits.maxTextureDimension2D = D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION;
-        renderer->caps.limits.maxTextureDimension3D = D3D11_REQ_TEXTURE3D_U_V_OR_W_DIMENSION;
-        renderer->caps.limits.maxTextureDimensionCube = D3D11_REQ_TEXTURECUBE_DIMENSION;
-        renderer->caps.limits.maxTextureArrayLayers = D3D11_REQ_TEXTURE2D_ARRAY_AXIS_DIMENSION;
-        renderer->caps.limits.maxColorAttachments = D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT;
-        renderer->caps.limits.maxUniformBufferRange = D3D11_REQ_CONSTANT_BUFFER_ELEMENT_COUNT * 16;
-        renderer->caps.limits.maxStorageBufferRange = UINT32_MAX;
-        renderer->caps.limits.minUniformBufferOffsetAlignment = 256u;
-        renderer->caps.limits.minStorageBufferOffsetAlignment = 32u;
-        renderer->caps.limits.maxSamplerAnisotropy = D3D11_MAX_MAXANISOTROPY;
-        renderer->caps.limits.maxViewports = D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE;
-        renderer->caps.limits.maxViewportWidth = D3D11_VIEWPORT_BOUNDS_MAX;
-        renderer->caps.limits.maxViewportHeight = D3D11_VIEWPORT_BOUNDS_MAX;
-        renderer->caps.limits.maxTessellationPatchSize = D3D11_IA_PATCH_MAX_CONTROL_POINT_COUNT;
-        renderer->caps.limits.maxComputeSharedMemorySize = D3D11_CS_THREAD_LOCAL_TEMP_REGISTER_POOL;
-        renderer->caps.limits.maxComputeWorkGroupCountX = D3D11_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION;
-        renderer->caps.limits.maxComputeWorkGroupCountY = D3D11_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION;
-        renderer->caps.limits.maxComputeWorkGroupCountZ = D3D11_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION;
-        renderer->caps.limits.maxComputeWorkGroupInvocations = D3D11_CS_THREAD_GROUP_MAX_THREADS_PER_GROUP;
-        renderer->caps.limits.maxComputeWorkGroupSizeX = D3D11_CS_THREAD_GROUP_MAX_X;
-        renderer->caps.limits.maxComputeWorkGroupSizeY = D3D11_CS_THREAD_GROUP_MAX_Y;
-        renderer->caps.limits.maxComputeWorkGroupSizeZ = D3D11_CS_THREAD_GROUP_MAX_Z;
-
-        /* see: https://docs.microsoft.com/en-us/windows/win32/api/d3d11/ne-d3d11-d3d11_format_support */
-        UINT dxgiFormatCaps = 0;
-        for (uint32_t format = (VGPU_TEXTURE_FORMAT_UNDEFINED + 1); format < VGPUTextureFormat_Count; format++)
-        {
-            DXGI_FORMAT dxgiFormat = _vgpu_to_dxgi_format((VGPUTextureFormat)format);
-            if (dxgiFormat == DXGI_FORMAT_UNKNOWN)
-                continue;
-
-            HRESULT hr = renderer->device->CheckFormatSupport(dxgiFormat, &dxgiFormatCaps);
-            VGPU_ASSERT(SUCCEEDED(hr));
-            /*sg_pixelformat_info* info = &_sg.formats[fmt];
-            info->sample = 0 != (dxgi_fmt_caps & D3D11_FORMAT_SUPPORT_TEXTURE2D);
-            info->filter = 0 != (dxgi_fmt_caps & D3D11_FORMAT_SUPPORT_SHADER_SAMPLE);
-            info->render = 0 != (dxgi_fmt_caps & D3D11_FORMAT_SUPPORT_RENDER_TARGET);
-            info->blend = 0 != (dxgi_fmt_caps & D3D11_FORMAT_SUPPORT_BLENDABLE);
-            info->msaa = 0 != (dxgi_fmt_caps & D3D11_FORMAT_SUPPORT_MULTISAMPLE_RENDERTARGET);
-            info->depth = 0 != (dxgi_fmt_caps & D3D11_FORMAT_SUPPORT_DEPTH_STENCIL);
-            if (info->depth) {
-                info->render = true;
-            }*/
-        }
-
-        // Detect default depth format first.
-        VHR(renderer->device->CheckFormatSupport(_vgpu_to_dxgi_format(VGPUTextureFormat_Depth32Float), &dxgiFormatCaps));
-        if (dxgiFormatCaps & D3D11_FORMAT_SUPPORT_DEPTH_STENCIL)
-        {
-            renderer->defaultDepthFormat = VGPUTextureFormat_Depth32Float;
-        }
-        else
-        {
-            VHR(renderer->device->CheckFormatSupport(_vgpu_to_dxgi_format(VGPUTextureFormat_Depth16Unorm), &dxgiFormatCaps));
-            if (dxgiFormatCaps & D3D11_FORMAT_SUPPORT_DEPTH_STENCIL)
-            {
-                renderer->defaultDepthFormat = VGPUTextureFormat_Depth16Unorm;
-            }
-        }
-
-        // Detect default depth stencil format.
-        VHR(renderer->device->CheckFormatSupport(_vgpu_to_dxgi_format(VGPUTextureFormat_Depth24UnormStencil8), &dxgiFormatCaps));
-        if (dxgiFormatCaps & D3D11_FORMAT_SUPPORT_DEPTH_STENCIL)
-        {
-            renderer->defaultDepthStencilFormat = VGPUTextureFormat_Depth24UnormStencil8;
-        }
-        else
-        {
-            VHR(renderer->device->CheckFormatSupport(_vgpu_to_dxgi_format(VGPUTextureFormat_Depth32FloatStencil8), &dxgiFormatCaps));
-            if (dxgiFormatCaps & D3D11_FORMAT_SUPPORT_DEPTH_STENCIL)
-            {
-                renderer->defaultDepthStencilFormat = VGPUTextureFormat_Depth32FloatStencil8;
-            }
-        }
-    }
-
-    /* Release adapter */
-    dxgi_adapter->Release();
-
-    /* Allocate device as we use it swap chain logic */
-    VGPUDeviceImpl* device = VGPU_ALLOC(VGPUDeviceImpl);
-    device->renderer = (vgpu_renderer)renderer;
+static vgpu_renderer_t* d3d11_init_renderer(void) {
+    static vgpu_renderer_t renderer = { nullptr };
     ASSIGN_DRIVER(d3d11);
-    renderer->gpuDevice = device;
-
-    if (info->swapchain.window_handle)
-    {
-        d3d11_createSwapChain(renderer, &renderer->swapchains[0], &info->swapchain);
-    }
-
-    return device;
+    return &renderer;
 }
 
 VGPU_Driver D3D11_Driver = {
     VGPU_BACKEND_TYPE_DIRECT3D11,
     d3d11_is_supported,
-    d3d11_create_device
+    d3d11_init_renderer
 };
 
 #endif /* defined(VGPU_DRIVER_D3D11)  */

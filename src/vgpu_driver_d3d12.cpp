@@ -90,14 +90,14 @@ static bool D3D12_IsSupported(void) {
     return d3d12.available;
 };
 
-static VGPUDeviceImpl* D3D12_CreateDevice(const VGPUDeviceDescriptor* info) {
-    return NULL;
+static vgpu_renderer_t* d3d12_init_renderer(void) {
+    return nullptr;
 }
 
 VGPU_Driver D3D12_Driver = {
     VGPU_BACKEND_TYPE_DIRECT3D12,
     D3D12_IsSupported,
-    D3D12_CreateDevice
+    d3d12_init_renderer
 };
 
 #if TODO

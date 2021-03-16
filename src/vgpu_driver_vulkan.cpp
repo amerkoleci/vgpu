@@ -34,14 +34,14 @@ static bool Vulkan_IsSupported(void) {
     return true;
 };
 
-static VGPUDeviceImpl* Vulkan_CreateDevice(const VGPUDeviceDescriptor* info) {
-    return NULL;
+static vgpu_renderer_t* vulkan_init_renderer(void) {
+    return nullptr;
 }
 
 VGPU_Driver Vulkan_Driver = {
     VGPU_BACKEND_TYPE_VULKAN,
     Vulkan_IsSupported,
-    Vulkan_CreateDevice
+    vulkan_init_renderer
 };
 
 #if TODO

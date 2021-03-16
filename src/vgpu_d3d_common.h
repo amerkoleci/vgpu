@@ -133,7 +133,7 @@ static inline DXGI_FORMAT _vgpu_d3d_typeless_from_depth_format(VGPUTextureFormat
     case VGPUTextureFormat_Depth32FloatStencil8:    return DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS;
 
     default:
-        VGPU_ASSERT(vgpuIsDepthFormat(format) == false);
+        VGPU_ASSERT(vgpu_is_depth_format(format) == false);
         return _vgpu_to_dxgi_format(format);
     }
 }
@@ -141,8 +141,8 @@ static inline DXGI_FORMAT _vgpu_d3d_typeless_from_depth_format(VGPUTextureFormat
 static inline DXGI_FORMAT _vgpu_d3d_format_with_usage(VGPUTextureFormat format, VGPUTextureUsageFlags usage)
 {
     // If depth and either ua or sr, set to typeless
-    if (vgpuIsDepthStencilFormat(format)
-        && ((usage & (VGPUTextureUsage_Sampled | VGPUTextureUsage_Storage)) != 0))
+    if (vgpu_is_depth_stencil_format(format) &&
+        ((usage & (VGPUTextureUsage_Sampled | VGPUTextureUsage_Storage)) != 0))
     {
         return _vgpu_d3d_typeless_from_depth_format(format);
     }

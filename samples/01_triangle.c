@@ -1,24 +1,5 @@
-//
-// Copyright (c) 2019-2020 Amer Koleci.
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-// THE SOFTWARE.
-//
+// Copyright (c) Amer Koleci.
+// Distributed under the MIT license. See the LICENSE file in the project root for more information.
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -104,7 +85,7 @@ int main(int argc, char** argv)
     glfwGetWindowSize(window, &width, &height);
 
 
-    VGPUDeviceDescriptor deviceDesc = {
+    vgpu_info gpu_config = {
 #ifdef _DEBUG
         .flags = VGPUDeviceFlags_Debug,
 #endif
@@ -118,8 +99,7 @@ int main(int argc, char** argv)
         }
     };
 
-    VGPUDevice device = vgpuCreateDevice(VGPU_BACKEND_TYPE_DEFAULT, &deviceDesc);
-    if (!device) {
+    if (!vgpu_init(VGPU_BACKEND_TYPE_DEFAULT, &gpu_config)) {
         return EXIT_FAILURE;
     }
 
@@ -130,7 +110,7 @@ int main(int argc, char** argv)
         -0.5f, -0.5f, 0.5f,     0.0f, 0.0f, 1.0f, 1.0f
     };
 
-    VGPUBuffer vertexBuffer = vgpuCreateBuffer(device, &(VGPUBufferDescriptor) {
+    VGPUBuffer vertexBuffer = vgpuCreateBuffer(&(VGPUBufferDescriptor) {
         .usage = VGPUBufferUsage_Vertex,
             .size = sizeof(vertices),
             .content = vertices
@@ -162,14 +142,14 @@ int main(int argc, char** argv)
     vgpu_shader_blob_t vertex_shader_blob = vgpu_compile_shader(vertex_shader_source, "main", 0, VGPU_SHADER_STAGE_VERTEX);
     vgpu_shader_blob_t fragment_shader_blob = vgpu_compile_shader(fragment_shader_source, "main", 0, VGPU_SHADER_STAGE_FRAGMENT);
 
-    vertexShader = vgpuCreateShaderModule(device, &(VGPUShaderModuleDescriptor){
+    vertexShader = vgpuCreateShaderModule(&(VGPUShaderModuleDescriptor){
         .stage = VGPUShaderStage_Vertex,
         .code = vertex_shader_blob.data,
         .size = vertex_shader_blob.size,
         .entry = "main"
     });
 
-    fragmentShader = vgpuCreateShaderModule(device, &(VGPUShaderModuleDescriptor){
+    fragmentShader = vgpuCreateShaderModule(&(VGPUShaderModuleDescriptor){
         .stage = VGPUShaderStage_Fragment,
         .code = fragment_shader_blob.data,
         .size = fragment_shader_blob.size,
@@ -185,30 +165,30 @@ int main(int argc, char** argv)
             glfwSetWindowShouldClose(window, GLFW_TRUE);
         }
 
-        if (!vgpuBeginFrame(device)) {
+        if (!vgpu_begin_frame()) {
             return;
         }
 
         /* Begin default render pass and change its clear color */
         VGPURenderPassDescriptor renderPass;
         memset(&renderPass, 0, sizeof(VGPURenderPassDescriptor));
-        renderPass.colorAttachments[0].texture = vgpuGetBackbufferTexture(device);
+        renderPass.colorAttachments[0].texture = vgpuGetBackbufferTexture();
         renderPass.colorAttachments[0].mipLevel = 0;
         renderPass.colorAttachments[0].slice = 0;
         renderPass.colorAttachments[0].loadOp = VGPULoadOp_Clear;
         renderPass.colorAttachments[0].clearColor = clearColor;
 
-        vgpuCmdBeginRenderPass(device, &renderPass);
-        vgpuCmdEndRenderPass(device);
-        vgpuEndFrame(device);
+        vgpuCmdBeginRenderPass(&renderPass);
+        vgpuCmdEndRenderPass();
+        vgpu_end_frame();
         glfwPollEvents();
     }
 
-    vgpuDestroyBuffer(device, vertexBuffer);
-    vgpuDestroyShaderModule(device, vertexShader);
-    vgpuDestroyShaderModule(device, fragmentShader);
+    vgpuDestroyBuffer(vertexBuffer);
+    vgpuDestroyShaderModule(vertexShader);
+    vgpuDestroyShaderModule(fragmentShader);
 
-    vgpuDestroyDevice(device);
+    vgpu_shutdown();
     glfwTerminate();
 
 #elif defined(__ANDROID__)
