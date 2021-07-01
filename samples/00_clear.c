@@ -96,7 +96,8 @@ int main(int argc, char** argv)
       }
     };
 
-    if (!vgpu_init(VGPU_BACKEND_TYPE_DEFAULT, &gpu_config)) {
+    VGPUDevice* device = vgpuCreateDevice(VGPU_BACKEND_TYPE_DEFAULT, &gpu_config);
+    if (!device) {
         return EXIT_FAILURE;
     }
 
@@ -143,7 +144,7 @@ int main(int argc, char** argv)
     }
 
     vgpuDestroyTexture(depthTexture);
-    vgpu_shutdown();
+    vgpuDestroyDevice(device);
     glfwTerminate();
 
 #elif defined(__ANDROID__)

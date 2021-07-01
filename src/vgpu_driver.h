@@ -56,9 +56,8 @@ extern void __cdecl __debugbreak(void);
 #define _vgpu_clamp(v,v0,v1) ((v<v0)?(v0):((v>v1)?(v1):(v)))
 #define _vgpu_count_of(x) (sizeof(x) / sizeof(x[0]))
 
-typedef struct vgpu_renderer_t {
-    bool(*init)(const vgpu_info* info);
-    void(*shutdown)(void);
+typedef struct VGPUDevice {
+    void(*Destroy)(VGPUDevice* device);
     void(*get_caps)(VGPUDeviceCaps* caps);
     VGPUTextureFormat(*getDefaultDepthFormat)(void);
     VGPUTextureFormat(*getDefaultDepthStencilFormat)(void);
@@ -86,38 +85,20 @@ typedef struct vgpu_renderer_t {
     /* Commands */
     void (*cmdBeginRenderPass)(const VGPURenderPassDescriptor* desc);
     void (*cmdEndRenderPass)(void);
-} vgpu_renderer_t;
+} VGPUDevice;
 
 typedef struct VGPU_Driver {
     vgpu_backend_type type;
     bool(*is_supported)(void);
-    vgpu_renderer_t*(*init_renderer)(void);
+    VGPUDevice*(*createDevice)(VGPUDeviceFlags flags);
 } VGPU_Driver;
 
-_VGPU_EXTERN VGPU_Driver Vulkan_Driver;
 _VGPU_EXTERN VGPU_Driver D3D12_Driver;
-_VGPU_EXTERN VGPU_Driver D3D11_Driver;
+_VGPU_EXTERN VGPU_Driver Vulkan_Driver;
 
-#define ASSIGN_DRIVER_FUNC(func, name) renderer.func = name##_##func;
+#define ASSIGN_DRIVER_FUNC(func, name) device->func = name##_##func;
 #define ASSIGN_DRIVER(name) \
-ASSIGN_DRIVER_FUNC(init, name)\
-ASSIGN_DRIVER_FUNC(shutdown, name)\
-ASSIGN_DRIVER_FUNC(get_caps, name)\
-ASSIGN_DRIVER_FUNC(getDefaultDepthFormat, name)\
-ASSIGN_DRIVER_FUNC(getDefaultDepthStencilFormat, name)\
-ASSIGN_DRIVER_FUNC(frame_begin, name)\
-ASSIGN_DRIVER_FUNC(frame_end, name)\
-ASSIGN_DRIVER_FUNC(getBackbufferTexture, name)\
-ASSIGN_DRIVER_FUNC(createTexture, name)\
-ASSIGN_DRIVER_FUNC(destroyTexture, name)\
-ASSIGN_DRIVER_FUNC(createBuffer, name)\
-ASSIGN_DRIVER_FUNC(destroyBuffer, name)\
-ASSIGN_DRIVER_FUNC(createSampler, name)\
-ASSIGN_DRIVER_FUNC(destroySampler, name)\
-ASSIGN_DRIVER_FUNC(createShaderModule, name)\
-ASSIGN_DRIVER_FUNC(destroyShaderModule, name)\
-ASSIGN_DRIVER_FUNC(cmdBeginRenderPass, name)\
-ASSIGN_DRIVER_FUNC(cmdEndRenderPass, name)
+ASSIGN_DRIVER_FUNC(Destroy, name)
 
 
 #endif /* VGPU_DRIVER_H */

@@ -207,7 +207,7 @@ static bool _vgpu_d3d11_createFactory(void)
 
     return true;
 }
-static IDXGIAdapter1* d3d11_getAdapter(vgpu_power_preference preference)
+static IDXGIAdapter1* d3d11_getAdapter(bool lowPower = false)
 {
     /* Detect adapter now. */
     IDXGIAdapter1* adapter = NULL;
@@ -220,7 +220,7 @@ static IDXGIAdapter1* d3d11_getAdapter(vgpu_power_preference preference)
         {
             // By default prefer high performance
             DXGI_GPU_PREFERENCE gpuPreference = DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE;
-            if (preference == VGPU_POWER_PREFERENCE_LOW_POWER)
+            if (lowPower)
             {
                 gpuPreference = DXGI_GPU_PREFERENCE_MINIMUM_POWER;
             }
@@ -298,7 +298,7 @@ static bool d3d11_init(const vgpu_info* info) {
         return NULL;
     }
 
-    IDXGIAdapter1* dxgi_adapter = d3d11_getAdapter(info->power_preference);
+    IDXGIAdapter1* dxgi_adapter = d3d11_getAdapter(false);
 
     /* Setup present flags. */
     d3d11.sync_interval = info->swapchain.vsync ? 1 : 0;
@@ -1343,16 +1343,16 @@ static bool d3d11_is_supported(void) {
     return true;
 };
 
-static vgpu_renderer_t* d3d11_init_renderer(void) {
-    static vgpu_renderer_t renderer = { nullptr };
-    ASSIGN_DRIVER(d3d11);
-    return &renderer;
+static VGPUDevice* d3d11_createDevice(VGPUDeviceFlags flags) {
+    VGPUDevice* device = new VGPUDevice();
+    //ASSIGN_DRIVER(d3d11);
+    return device;
 }
 
 VGPU_Driver D3D11_Driver = {
     VGPU_BACKEND_TYPE_DIRECT3D11,
     d3d11_is_supported,
-    d3d11_init_renderer
+    d3d11_createDevice
 };
 
 #endif /* defined(VGPU_DRIVER_D3D11)  */

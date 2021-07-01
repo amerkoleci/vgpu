@@ -4,12 +4,7 @@
 
 #if defined(VGPU_DRIVER_D3D12)
 
-#if defined(NTDDI_WIN10_RS2)
-#   include <dxgi1_6.h>
-#else
-#   include <dxgi1_5.h>
-#endif
-
+#include <dxgi1_6.h>
 #include "d3d12/d3d12.h"
 #define D3D12MA_D3D12_HEADERS_ALREADY_INCLUDED
 #include "d3d12/D3D12MemAlloc.h"
@@ -90,14 +85,15 @@ static bool D3D12_IsSupported(void) {
     return d3d12.available;
 };
 
-static vgpu_renderer_t* d3d12_init_renderer(void) {
-    return nullptr;
+static VGPUDevice* d3d12_createDevice(VGPUDeviceFlags flags) {
+    VGPUDevice* device = new VGPUDevice();
+    return device;
 }
 
 VGPU_Driver D3D12_Driver = {
     VGPU_BACKEND_TYPE_DIRECT3D12,
     D3D12_IsSupported,
-    d3d12_init_renderer
+    d3d12_createDevice
 };
 
 #if TODO

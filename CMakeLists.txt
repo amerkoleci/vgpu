@@ -23,22 +23,17 @@ set (CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${VGPU_BUILD_DIR}/lib")
 
 # Options
 if (${CMAKE_SYSTEM_NAME} STREQUAL "Windows")
-	option(VGPU_BACKEND_D3D11 "Include Direct3D12 backend" ON)
 	option(VGPU_BACKEND_D3D12 "Include Direct3D12 backend" ON)
-	option(VGPU_BACKEND_OPENGL "Include OpenGL backend" ON)
 	option(VGPU_BACKEND_VULKAN "Include Vulkan backend" ON)
 elseif (${CMAKE_SYSTEM_NAME} STREQUAL "WindowsStore")
-	option(VGPU_BACKEND_D3D11 "Include Direct3D12 backend" ON)
 	option(VGPU_BACKEND_D3D12 "Include Direct3D12 backend" ON)
 elseif (${CMAKE_SYSTEM_NAME} STREQUAL "Durango")
 	# XboxOne
-	option(VGPU_BACKEND_D3D11 "Include Direct3D12 backend" ON)
 	option(VGPU_BACKEND_D3D12 "Include Direct3D12 backend" ON)
 elseif (${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
 	set(VGPU_BACKEND_VULKAN ON CACHE BOOL "Include Vulkan renderer")
 else()
-	set(VGPU_BACKEND_OPENGL ON CACHE BOOL "Include OpenGL renderer")
-	set(VGPU_BACKEND_OPENGL ON CACHE BOOL "Include OpenGL renderer")
+	set(VGPU_BACKEND_VULKAN ON CACHE BOOL "Include Vulkan renderer")
 endif ()
 
 # Platform Flags
@@ -100,7 +95,6 @@ set(SOURCE_FILES
 	# Source Files
 	src/vgpu.cpp
 	src/vgpu_driver_vulkan.cpp
-	src/vgpu_driver_d3d11.cpp
 	src/vgpu_driver_d3d12.cpp
 )
 
@@ -109,10 +103,6 @@ target_compile_definitions(vgpu PRIVATE VGPU_IMPLEMENTATION)
 
 if (BUILD_SHARED_LIBS)
 	target_compile_definitions(vgpu PRIVATE VGPU_SHARED_LIBRARY)
-endif ()
-
-if (VGPU_BACKEND_D3D11)
-	target_compile_definitions(vgpu PRIVATE VGPU_DRIVER_D3D11)
 endif ()
 
 if (VGPU_BACKEND_D3D12)

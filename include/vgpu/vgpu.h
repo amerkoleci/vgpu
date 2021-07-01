@@ -53,6 +53,7 @@ enum {
 };
 
 /* Handles */
+typedef struct VGPUDevice VGPUDevice;
 typedef struct VGPUTextureImpl* VGPUTexture;
 typedef struct VGPUBufferImpl* VGPUBuffer;
 typedef struct VGPUSamplerImpl* VGPUSampler;
@@ -83,12 +84,6 @@ typedef enum VGPUDeviceFlags {
     VGPUDeviceFlags_RenderDoc = 0x00000004,
     _VGPUDeviceFlags_Force32 = 0x7FFFFFFF
 } VGPUDeviceFlags;
-
-typedef enum vgpu_power_preference {
-    VGPU_POWER_PREFERENCE_LOW_POWER = 0,
-    VGPU_POWER_PREFERENCE_HIGH_PERFORMANCE = 1,
-    _VGPU_POWER_PREFERENCE_FORCE_U32 = 0x7FFFFFFF
-} vgpu_power_preference;
 
 typedef enum VGPUAdapterType {
     VGPUAdapterType_DiscreteGPU,
@@ -539,7 +534,6 @@ typedef struct vgpu_swapchain_info {
 
 typedef struct vgpu_info {
     VGPUDeviceFlags     flags;
-    vgpu_power_preference   power_preference;
     vgpu_swapchain_info swapchain;
 } vgpu_info;
 
@@ -555,9 +549,9 @@ VGPU_API void vgpu_log_warn(const char* format, ...);
 VGPU_API void vgpu_log_info(const char* format, ...);
 
 /* Device */
-VGPU_API vgpu_bool vgpu_is_backend_supported(vgpu_backend_type type);
-VGPU_API vgpu_bool vgpu_init(vgpu_backend_type preferred_backend, const vgpu_info* info);
-VGPU_API void vgpu_shutdown(void);
+VGPU_API vgpu_bool vgpuIsBackendSupported(vgpu_backend_type type);
+VGPU_API VGPUDevice* vgpuCreateDevice(vgpu_backend_type preferred_backend, const vgpu_info* info);
+VGPU_API void vgpuDestroyDevice(VGPUDevice* device);
 VGPU_API void vgpu_get_caps(VGPUDeviceCaps* caps);
 VGPU_API VGPUTextureFormat vgpu_get_default_depth_format(void);
 VGPU_API VGPUTextureFormat vgpu_get_default_depth_stencil_format(void);

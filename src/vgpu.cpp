@@ -100,9 +100,6 @@ static const VGPU_Driver* drivers[] = {
 #if defined(VGPU_DRIVER_D3D12)
     &D3D12_Driver,
 #endif
-#if defined(VGPU_DRIVER_D3D11) 
-    &D3D11_Driver,
-#endif
 
 #if defined(VGPU_DRIVER_VULKAN)
     &Vulkan_Driver,
@@ -113,7 +110,7 @@ static const VGPU_Driver* drivers[] = {
     NULL
 };
 
-vgpu_bool vgpu_is_backend_supported(vgpu_backend_type type) {
+vgpu_bool vgpuIsBackendSupported(vgpu_backend_type type) {
     for (uint32_t i = 0; _vgpu_count_of(drivers); i++) {
         if (drivers[i]->type == type) {
             return drivers[i]->is_supported();
@@ -123,73 +120,63 @@ vgpu_bool vgpu_is_backend_supported(vgpu_backend_type type) {
     return false;
 }
 
-static vgpu_renderer_t* s_renderer = nullptr;
-
-vgpu_bool vgpu_init(vgpu_backend_type preferred_backend, const vgpu_info* info) {
+VGPUDevice* vgpuCreateDevice(vgpu_backend_type preferred_backend, const vgpu_info* info) {
     VGPU_ASSERT(info);
-
-    if (s_renderer != nullptr)
-        return true;
 
     if (preferred_backend == VGPU_BACKEND_TYPE_DEFAULT || preferred_backend == _VGPU_BACKEND_TYPE_COUNT) {
         for (uint32_t i = 0; _vgpu_count_of(drivers); i++) {
             if (drivers[i]->is_supported()) {
-                s_renderer = drivers[i]->init_renderer();
-                break;
+                return drivers[i]->createDevice(info->flags);
             }
         }
     }
     else {
         for (uint32_t i = 0; _vgpu_count_of(drivers); i++) {
             if (drivers[i]->type == preferred_backend && drivers[i]->is_supported()) {
-                s_renderer = drivers[i]->init_renderer();
+                return drivers[i]->createDevice(info->flags);
                 break;
             }
         }
     }
 
-    if (s_renderer == nullptr || !s_renderer->init(info)) {
-        s_renderer = nullptr;
-        return false;
-    }
-
-    return true;
+    return nullptr;
 }
 
-void vgpu_shutdown(void) {
-    if (s_renderer == nullptr) {
+void vgpuDestroyDevice(VGPUDevice* device) {
+    if (device == nullptr) {
         return;
     }
-
-    s_renderer->shutdown();
-    s_renderer = nullptr;
+    
+    device->Destroy(device);
 }
 
 void vgpu_get_caps(VGPUDeviceCaps* caps)
 {
-    s_renderer->get_caps(caps);
+    //s_renderer->get_caps(caps);
 }
 
 VGPUTextureFormat vgpu_get_default_depth_format(void)
 {
-    return s_renderer->getDefaultDepthFormat();
+    return VGPU_TEXTURE_FORMAT_UNDEFINED; // s_renderer->getDefaultDepthFormat();
 }
 
 VGPUTextureFormat vgpu_get_default_depth_stencil_format(void)
 {
-    return s_renderer->getDefaultDepthStencilFormat();
+    return VGPU_TEXTURE_FORMAT_UNDEFINED; //return s_renderer->getDefaultDepthStencilFormat();
 }
 
 vgpu_bool vgpu_begin_frame(void) {
-    return s_renderer->frame_begin();
+    return true;
+    //return s_renderer->frame_begin();
 }
 
 void vgpu_end_frame(void) {
-    s_renderer->frame_end();
+    //s_renderer->frame_end();
 }
 
 VGPUTexture vgpuGetBackbufferTexture(void) {
-    return s_renderer->getBackbufferTexture(0);
+    //return s_renderer->getBackbufferTexture(0);
+    return nullptr;
 }
 
 /* Texture */
@@ -210,57 +197,57 @@ VGPUTexture vgpuCreateTexture(const VGPUTextureDescription* descriptor)
     VGPU_ASSERT(descriptor);
 
     VGPUTextureDescription desc_def = _vgpu_texture_desc_defaults(descriptor);
-    return s_renderer->createTexture(&desc_def);
+    //return s_renderer->createTexture(&desc_def);
+    return nullptr;
 }
 
 void vgpuDestroyTexture(VGPUTexture texture)
 {
-    VGPU_ASSERT(texture);
-
-    s_renderer->destroyTexture(texture);
+    //VGPU_ASSERT(texture);
+    //s_renderer->destroyTexture(texture);
 }
 
 /* Buffer */
 VGPUBuffer vgpuCreateBuffer(const VGPUBufferDescriptor* descriptor)
 {
     VGPU_ASSERT(descriptor);
-
-    return s_renderer->createBuffer(descriptor);
+    return nullptr;
+    //return s_renderer->createBuffer(descriptor);
 }
 
 void vgpuDestroyBuffer(VGPUBuffer buffer)
 {
-    s_renderer->destroyBuffer(buffer);
+    //s_renderer->destroyBuffer(buffer);
 }
 
 /* Sampler */
 VGPUSampler vgpuCreateSampler(const VGPUSamplerDescriptor* descriptor)
 {
     VGPU_ASSERT(descriptor);
-
-    return s_renderer->createSampler(descriptor);
+    return nullptr;
+    //return s_renderer->createSampler(descriptor);
 }
 
 void vgpuDestroySampler(VGPUSampler sampler)
 {
     VGPU_ASSERT(sampler);
 
-    s_renderer->destroySampler(sampler);
+    //s_renderer->destroySampler(sampler);
 }
 
 /* Shader */
 VGPUShaderModule vgpuCreateShaderModule(const VGPUShaderModuleDescriptor* descriptor)
 {
     VGPU_ASSERT(descriptor);
-
-    return s_renderer->createShaderModule(descriptor);
+    return nullptr;
+    //return s_renderer->createShaderModule(descriptor);
 }
 
 void vgpuDestroyShaderModule(VGPUShaderModule shader)
 {
     VGPU_ASSERT(shader);
 
-    s_renderer->destroyShaderModule(shader);
+    //s_renderer->destroyShaderModule(shader);
 }
 
 /* Pipeline */
@@ -283,11 +270,11 @@ void vgpuCmdBeginRenderPass(const VGPURenderPassDescriptor* descriptor)
 {
     VGPU_ASSERT(descriptor);
 
-    s_renderer->cmdBeginRenderPass(descriptor);
+    //s_renderer->cmdBeginRenderPass(descriptor);
 }
 
 void vgpuCmdEndRenderPass(void) {
-    s_renderer->cmdEndRenderPass();
+    // s_renderer->cmdEndRenderPass();
 }
 
 /* Pixel Format */
