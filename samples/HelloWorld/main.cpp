@@ -16,7 +16,12 @@ gfxDevice device = nullptr;
 
 void init_gfx(GLFWwindow* window)
 {
-    device = vgfxCreateDevice();
+    VGFXDeviceInfo deviceInfo{};
+#ifdef _DEBUG
+    deviceInfo.validationMode = VGFX_VALIDATION_MODE_ENABLED;
+#endif
+
+    device = vgfxCreateDevice(&deviceInfo);
 }
 
 void draw_frame()
@@ -31,7 +36,7 @@ int main(int argc, char** argv)
     }
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    GLFWwindow* window = glfwCreateWindow(1920, 1080, "Hello World", NULL, NULL);
+    GLFWwindow* window = glfwCreateWindow(1280, 720, "Hello World", NULL, NULL);
     init_gfx(window);
 
     while (!glfwWindowShouldClose(window))

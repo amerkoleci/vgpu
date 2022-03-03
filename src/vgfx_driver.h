@@ -41,9 +41,9 @@
 #define VGFX_ENABLE_WARNINGS() __pragma(warning(pop))
 #endif
 
-extern void vgfxLogInfo(const char* format, ...);
-extern void vgfxLogWarn(const char* format, ...);
-extern void vgfxLogError(const char* format, ...);
+_VGFX_EXTERN void vgfxLogInfo(const char* format, ...);
+_VGFX_EXTERN void vgfxLogWarn(const char* format, ...);
+_VGFX_EXTERN void vgfxLogError(const char* format, ...);
 
 typedef struct gfxRenderer gfxRenderer;
 
@@ -63,7 +63,7 @@ struct gfxDevice_T
 typedef struct gfxDriver
 {
     VGFXAPI api;
-    gfxDevice (*createDevice)(void);
+    gfxDevice (*createDevice)(const VGFXDeviceInfo* info);
 } gfxDriver;
 
 _VGFX_EXTERN gfxDriver vulkan_driver;

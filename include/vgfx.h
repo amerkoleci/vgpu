@@ -61,6 +61,21 @@ typedef enum VGFXAPI
     _VGFX_API_FORCE_U32 = 0x7FFFFFFF
 } VGFXAPI;
 
+typedef enum VGFXValidationMode
+{
+    /// No validation is enabled.
+    VGFX_VALIDATION_MODE_DISABLED = 0,
+    /// Print warnings and errors
+    VGFX_VALIDATION_MODE_ENABLED,
+    /// Print all warnings, errors and info messages
+    VGFX_VALIDATION_MODE_VERBOSE,
+    /// Enable GPU-based validation
+    VGFX_VALIDATION_MODE_GPU,
+
+    _VGFX_VALIDATION_MODE_COUNT,
+    _VGFX_VALIDATION_MODE_FORCE_U32 = 0x7FFFFFFF
+} VGFXValidationMode;
+
 typedef enum VGFXPresentMode
 {
     VGFX_PRESENT_MODE_IMMEDIATE = 0,
@@ -71,10 +86,15 @@ typedef enum VGFXPresentMode
     _VGFX_PRESENT_MODE_FORCE_U32 = 0x7FFFFFFF
 } VGFXPresentMode;
 
+typedef struct VGFXDeviceInfo
+{
+    VGFXValidationMode validationMode;
+} VGFXDeviceInfo;
+
 typedef void (VGFX_CALL* vgfxLogFunc)(VGFXLogLevel level, const char* message);
 VGFX_API void vgfxSetLogFunc(vgfxLogFunc func);
 
-VGFX_API gfxDevice vgfxCreateDevice(void);
+VGFX_API gfxDevice vgfxCreateDevice(const VGFXDeviceInfo* info);
 VGFX_API void vgfxDestroyDevice(gfxDevice device);
 
 #endif /* _VGFX_H */

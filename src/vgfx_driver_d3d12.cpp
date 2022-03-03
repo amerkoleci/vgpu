@@ -36,8 +36,10 @@ static void d3d12_destroyDevice(gfxDevice device)
     VGPU_FREE(device);
 }
 
-static gfxDevice d3d12CreateDevice(void)
+static gfxDevice d3d12CreateDevice(const VGFXDeviceInfo* info)
 {
+    _VGFX_UNUSED(info);
+
     gfxD3D12Renderer* renderer = new gfxD3D12Renderer();
     gfxDevice_T* device = (gfxDevice_T*)VGPU_MALLOC(sizeof(gfxDevice_T));
     ASSIGN_DRIVER(d3d12);

@@ -59,10 +59,11 @@ static const gfxDriver* drivers[] = {
 };
 
 #define NULL_RETURN(name) if (name == NULL) { return; }
+#define NULL_RETURN_NULL(name) if (name == NULL) { return NULL; }
 
-gfxDevice vgfxCreateDevice(void)
+gfxDevice vgfxCreateDevice(const VGFXDeviceInfo* info)
 {
-    return drivers[1]->createDevice();
+    return drivers[1]->createDevice(info);
 }
 
  void vgfxDestroyDevice(gfxDevice device)
