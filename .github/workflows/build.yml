@@ -15,7 +15,7 @@ on:
 env:
   # Indicates the CMake build directory where project files and binaries are being produced.
   CMAKE_BUILD_DIR: ${{ github.workspace }}/build/
-  VGPU_SAMPLES: ON
+  VGFX_SAMPLES: ON
 
 jobs:
   windows:
