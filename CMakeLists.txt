@@ -6,13 +6,14 @@ if (${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
 	return()
 endif()
 
+# Configure CMake global variables
+set(CMAKE_INSTALL_MESSAGE LAZY)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
+
 # Use solution folders to organize projects
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
-
-# Configure CMake global variables
-set (CMAKE_CXX_STANDARD 14)
-set (CMAKE_CXX_STANDARD_REQUIRED ON)
-set (CMAKE_CXX_EXTENSIONS OFF)
 
 # Project declaration
 project (vgfx C CXX)
@@ -83,9 +84,21 @@ else ()
     )
 endif ()
 
-# Install directories
-set (INSTALL_BASE_INCLUDE_DIR include)
-set (INSTALL_INCLUDE_DIR ${INSTALL_BASE_INCLUDE_DIR}/vgfx)
+# Print current build configuration
+message(STATUS "VGPU version ${VGPU_VERSION}")
+message(STATUS "GIT Revision ID: ${VGPU_REVISION_ID}")
+message(STATUS "GIT Short ChangeSet: ${VGPU_SHORT_CHANGE_SET}")
+message(STATUS "GIT ChangeSet: ${VGPU_CHANGE_SET}")
+message(STATUS "GIT ChangeSet Date: ${VGPU_CHANGE_SET_DATE}")
+
+if (VGFX_BUILD_SHARED)
+  message(STATUS "  Library         SHARED")
+else ()
+  message(STATUS "  Library         STATIC")
+endif ()
+
+# Third party
+add_subdirectory(third_party)
 
 # Setup library
 set(SOURCE_FILES
@@ -132,6 +145,7 @@ endif ()
 
 if (VGFX_VULKAN_DRIVER)
     target_compile_definitions(${PROJECT_NAME} PRIVATE VGFX_VULKAN_DRIVER=1)
+    target_link_libraries(${PROJECT_NAME} PRIVATE volk vma spirv-reflect)
 endif ()
 
 if (VGFX_D3D12_DRIVER)
@@ -142,7 +156,7 @@ endif ()
 target_include_directories(${PROJECT_NAME} PUBLIC
 	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
 	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
-    $<INSTALL_INTERFACE:${INSTALL_BASE_INCLUDE_DIR}>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>
 )
 
 # Soname
@@ -152,17 +166,9 @@ set_target_properties(vgfx PROPERTIES
 	SOVERSION ${VGPU_VERSION_MAJOR}
 )
 
-# Print current build configuration
-message(STATUS "VGPU version ${VGPU_VERSION}")
-message(STATUS "GIT Revision ID: ${VGPU_REVISION_ID}")
-message(STATUS "GIT Short ChangeSet: ${VGPU_SHORT_CHANGE_SET}")
-message(STATUS "GIT ChangeSet: ${VGPU_CHANGE_SET}")
-message(STATUS "GIT ChangeSet Date: ${VGPU_CHANGE_SET_DATE}")
-
-if (VGFX_BUILD_SHARED)
-  message(STATUS "  Library         SHARED")
-else ()
-  message(STATUS "  Library         STATIC")
+# Samples
+if (VGFX_SAMPLES)
+    add_subdirectory(samples)
 endif ()
 
 # Install

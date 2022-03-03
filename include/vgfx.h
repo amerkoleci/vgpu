@@ -72,9 +72,9 @@ typedef enum VGFXPresentMode
 } VGFXPresentMode;
 
 typedef void (VGFX_CALL* vgfxLogFunc)(VGFXLogLevel level, const char* message);
-VGFX_API void gfxSetLogFunc(vgfxLogFunc func);
+VGFX_API void vgfxSetLogFunc(vgfxLogFunc func);
 
-VGFX_API gfxDevice gfxCreateDevice(void);
-VGFX_API void gfxDestroyDevice(gfxDevice device);
+VGFX_API gfxDevice vgfxCreateDevice(void);
+VGFX_API void vgfxDestroyDevice(gfxDevice device);
 
 #endif /* _VGFX_H */

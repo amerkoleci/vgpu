@@ -43,7 +43,7 @@ void vgfxLogError(const char* format, ...)
     s_LogFunc(VGFX_LOG_LEVEL_ERROR, msg);
 }
 
-void gfxSetLogFunc(vgfxLogFunc func)
+void vgfxSetLogFunc(vgfxLogFunc func)
 {
     s_LogFunc = func;
 }
@@ -60,12 +60,12 @@ static const gfxDriver* drivers[] = {
 
 #define NULL_RETURN(name) if (name == NULL) { return; }
 
-gfxDevice gfxCreateDevice(void)
+gfxDevice vgfxCreateDevice(void)
 {
     return drivers[1]->createDevice();
 }
 
- void gfxDestroyDevice(gfxDevice device)
+ void vgfxDestroyDevice(gfxDevice device)
  {
      NULL_RETURN(device);
      device->destroyDevice(device);

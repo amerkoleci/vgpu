@@ -4,6 +4,12 @@
 #if defined(VGFX_VULKAN_DRIVER)
 
 #include "vgfx_driver.h"
+VGFX_DISABLE_WARNINGS()
+#include "volk.h"
+#define VMA_IMPLEMENTATION
+#include "vk_mem_alloc.h"
+#include <spirv_reflect.h>
+VGFX_ENABLE_WARNINGS()
 
 static gfxDevice vulkanCreateDevice(void)
 {
