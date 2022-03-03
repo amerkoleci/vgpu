@@ -8,6 +8,8 @@
 #   define GLFW_EXPOSE_NATIVE_WIN32
 #endif
 #include "GLFW/glfw3native.h"
+#include <cstdio>
+#include <cstdlib>
 #include <vgfx.h>
 
 gfxDevice device = nullptr;

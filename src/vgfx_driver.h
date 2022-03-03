@@ -8,6 +8,12 @@
 #include <stdio.h>
 #include <stdarg.h>
 
+#ifndef VGPU_MALLOC
+#   include <stdlib.h>
+#   define VGPU_MALLOC(s) malloc(s)
+#   define VGPU_FREE(p) free(p)
+#endif
+
 #ifndef _VGFX_UNUSED
 #define _VGFX_UNUSED(x) (void)(x)
 #endif
@@ -20,8 +26,7 @@
 	_Pragma("clang diagnostic ignored \"-Wextra\"") \
 	_Pragma("clang diagnostic ignored \"-Wtautological-compare\"")
 
-#define VGFX_ENABLE_WARNINGS() \
-	_Pragma("clang diagnostic pop")
+#define VGFX_ENABLE_WARNINGS() _Pragma("clang diagnostic pop")
 #elif defined(__GNUC__) || defined(__GNUG__)
 // GCC ENABLE/DISABLE WARNING DEFINITION
 #	define VGFX_DISABLE_WARNINGS() \
@@ -30,8 +35,7 @@
 	_Pragma("clang diagnostic ignored \"-Wextra\"") \
 	_Pragma("clang diagnostic ignored \"-Wtautological-compare\"")
 
-#define VGFX_ENABLE_WARNINGS() \
-	_Pragma("GCC diagnostic pop")
+#define VGFX_ENABLE_WARNINGS() _Pragma("GCC diagnostic pop")
 #elif defined(_MSC_VER)
 #define VGFX_DISABLE_WARNINGS() __pragma(warning(push, 0))
 #define VGFX_ENABLE_WARNINGS() __pragma(warning(pop))
@@ -52,7 +56,7 @@ struct gfxDevice_T
 };
 
 #define ASSIGN_DRIVER_FUNC(func, name) \
-	result->func = name##_##func;
+	device->func = name##_##func;
 #define ASSIGN_DRIVER(name) \
 	ASSIGN_DRIVER_FUNC(destroyDevice, name) \
 

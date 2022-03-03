@@ -11,9 +11,33 @@ VGFX_DISABLE_WARNINGS()
 #include <spirv_reflect.h>
 VGFX_ENABLE_WARNINGS()
 
+struct gfxVulkanRenderer
+{
+    VkInstance instance;
+};
+
+static void vulkan_destroyDevice(gfxDevice device)
+{
+    gfxVulkanRenderer* renderer = (gfxVulkanRenderer*)device->driverData;
+
+    delete renderer;
+    VGPU_FREE(device);
+}
+
 static gfxDevice vulkanCreateDevice(void)
 {
-    return nullptr;
+    VkResult result = volkInitialize();
+    if (result != VK_SUCCESS)
+    {
+        return nullptr;
+    }
+
+    gfxVulkanRenderer* renderer = new gfxVulkanRenderer();
+    gfxDevice_T* device = (gfxDevice_T*)VGPU_MALLOC(sizeof(gfxDevice_T));
+    ASSIGN_DRIVER(vulkan);
+
+    device->driverData = (gfxRenderer*)renderer;
+    return device;
 }
 
 gfxDriver vulkan_driver = {

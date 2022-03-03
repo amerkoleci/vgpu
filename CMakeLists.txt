@@ -121,7 +121,7 @@ endif ()
 
 # Build flags
 if(NOT MSVC)
-    set_property(TARGET ${PROJECT_NAME} PROPERTY COMPILE_FLAGS "-std=gnu99 -Wall -Wno-strict-aliasing -pedantic")
+    set_property(TARGET ${PROJECT_NAME} PROPERTY COMPILE_FLAGS "-std=gnu99 -Wall -Wno-strict-aliasing")
 endif()
 
 # MinGW builds should statically link libgcc
