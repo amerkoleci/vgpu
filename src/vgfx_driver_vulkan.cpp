@@ -5,4 +5,14 @@
 
 #include "vgfx_driver.h"
 
+static gfxDevice vulkanCreateDevice(void)
+{
+    return nullptr;
+}
+
+gfxDriver vulkan_driver = {
+    VGFX_API_VULKAN,
+    vulkanCreateDevice
+};
+
 #endif /* VGFX_VULKAN_DRIVER */

@@ -4,44 +4,77 @@
 #ifndef _VGFX_H
 #define _VGFX_H
 
-#include <stddef.h>
+#if defined(VGFX_SHARED_LIBRARY)
+#    if defined(_WIN32)
+#        if defined(VGFX_IMPLEMENTATION)
+#            define _VGFX_EXPORT __declspec(dllexport)
+#        else
+#            define _VGFX_EXPORT __declspec(dllimport)
+#        endif
+#    else 
+#        if defined(VGFX_IMPLEMENTATION)
+#            define _VGFX_EXPORT __attribute__((visibility("default")))
+#        else
+#            define _VGFX_EXPORT
+#        endif
+#    endif
+#else
+#    define _VGFX_EXPORT
+#endif
+
+#ifdef __cplusplus
+#    define _VGFX_EXTERN extern "C"
+#else
+#    define _VGFX_EXTERN extern
+#endif
+
+#define VGFX_API _VGFX_EXTERN _VGFX_EXPORT
+
 #include <stdint.h>
+#include <stddef.h>
+#include <stdbool.h>
 
 #ifdef _WIN32
-#define REFRESHAPI __declspec(dllexport)
-#define REFRESHCALL __cdecl
+#   define VGFX_CALL __cdecl
 #else
-#define REFRESHAPI
-#define REFRESHCALL
+#   define VGFX_CALL
 #endif
 
-#if defined(VGFX_SHARED_LIBRARY_BUILD)
-#   if defined(_MSC_VER)
-#       define VGFX_API __declspec(dllexport)
-#   elif defined(__GNUC__)
-#       define VGFX_API __attribute__((visibility("default")))
-#   else
-#       define VGFX_API
-#       pragma warning "Unknown dynamic link import/export semantics."
-#   endif
-#elif defined(VGFX_SHARED_LIBRARY_INCLUDE)
-#   if defined(VGFX_API)
-#       define VGFX_API __declspec(dllimport)
-#   else
-#       define VGFX_API
-#   endif
-#else
-#   define VGFX_API
-#endif
+typedef struct gfxDevice_T* gfxDevice;
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
+typedef enum VGFXLogLevel
+{
+    VGFX_LOG_LEVEL_INFO = 0,
+    VGFX_LOG_LEVEL_WARN,
+    VGFX_LOG_LEVEL_ERROR,
 
-    typedef struct gfx_device_t* gfx_device;
+    _VGFX_LOG_LEVEL_COUNT,
+    _VGFX_LOG_LEVEL_FORCE_U32 = 0x7FFFFFFF
+} VGFXLogLevel;
 
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
+typedef enum VGFXAPI
+{
+    VGFX_API_VULKAN = 0,
+    VGFX_API_D3D12,
+
+    _VGFX_API_COUNT,
+    _VGFX_API_FORCE_U32 = 0x7FFFFFFF
+} VGFXAPI;
+
+typedef enum VGFXPresentMode
+{
+    VGFX_PRESENT_MODE_IMMEDIATE = 0,
+    VGFX_PRESENT_MODE_MAILBOX,
+    VGFX_PRESENT_MODE_FIFO,
+
+    _VGFX_PRESENT_MODE_COUNT,
+    _VGFX_PRESENT_MODE_FORCE_U32 = 0x7FFFFFFF
+} VGFXPresentMode;
+
+typedef void (VGFX_CALL* vgfxLogFunc)(VGFXLogLevel level, const char* message);
+VGFX_API void gfxSetLogFunc(vgfxLogFunc func);
+
+VGFX_API gfxDevice gfxCreateDevice(void);
+VGFX_API void gfxDestroyDevice(gfxDevice device);
 
 #endif /* _VGFX_H */

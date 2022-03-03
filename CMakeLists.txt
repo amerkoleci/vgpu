@@ -99,8 +99,8 @@ set(SOURCE_FILES
 if (VGFX_BUILD_SHARED)
     add_library(${PROJECT_NAME} SHARED ${SOURCE_FILES})
     target_compile_definitions(${PROJECT_NAME}
-        PRIVATE VGFX_SHARED_LIBRARY_BUILD=1
-        PUBLIC VGFX_SHARED_LIBRARY_INCLUDE=1
+        PUBLIC VGFX_SHARED_LIBRARY=1
+        PRIVATE VGFX_IMPLEMENTATION=1
     )
 else()
     add_library(${PROJECT_NAME} STATIC ${SOURCE_FILES})
@@ -117,6 +117,15 @@ if(MINGW)
 endif()
 
 if(MSVC)
+     # Use fast floating point model
+    target_compile_options(${PROJECT_NAME} PRIVATE /fp:fast)
+
+    # Set warning level 4
+    target_compile_options(${PROJECT_NAME} PRIVATE /W4)
+
+    # Warnings as Errors Enabled
+    target_compile_options(${PROJECT_NAME} PRIVATE /WX)
+
     # Multiprocessor compiler
     target_compile_options(${PROJECT_NAME} PRIVATE /MP)
 endif ()
