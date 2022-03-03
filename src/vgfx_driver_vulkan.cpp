@@ -177,7 +177,7 @@ static void vulkan_destroyDevice(gfxDevice device)
     }
 
     delete renderer;
-    VGPU_FREE(device);
+    VGFX_FREE(device);
 }
 
 static gfxDevice vulkanCreateDevice(const VGFXDeviceInfo* info)

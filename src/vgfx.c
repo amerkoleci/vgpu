@@ -63,7 +63,7 @@ static const gfxDriver* drivers[] = {
 
 gfxDevice vgfxCreateDevice(const VGFXDeviceInfo* info)
 {
-    return drivers[1]->createDevice(info);
+    return drivers[0]->createDevice(info);
 }
 
  void vgfxDestroyDevice(gfxDevice device)

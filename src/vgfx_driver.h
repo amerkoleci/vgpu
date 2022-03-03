@@ -11,7 +11,12 @@
 #ifndef VGPU_MALLOC
 #   include <stdlib.h>
 #   define VGPU_MALLOC(s) malloc(s)
-#   define VGPU_FREE(p) free(p)
+#   define VGFX_FREE(p) free(p)
+#endif
+
+#ifndef VGFX_ASSERT
+#   include <assert.h>
+#   define VGFX_ASSERT(c) assert(c)
 #endif
 
 #ifndef _VGFX_UNUSED
