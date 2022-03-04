@@ -226,3 +226,9 @@ void vgfxFrame(VGFXDevice device)
     NULL_RETURN(device);
     device->frame(device->driverData);
 }
+
+void vgfxWaitIdle(VGFXDevice device)
+{
+    NULL_RETURN(device);
+    device->waitIdle(device->driverData);
+}

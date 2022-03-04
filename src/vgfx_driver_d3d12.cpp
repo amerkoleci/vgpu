@@ -23,6 +23,8 @@
 #include <dxgi1_6.h>
 #include <wrl/client.h>
 #include <vector>
+#include <deque>
+#include <mutex>
 
 #define D3D12MA_D3D12_HEADERS_ALREADY_INCLUDED
 #include "D3D12MemAlloc.h"
@@ -92,24 +94,106 @@ struct VGFXD3D12SwapChain {
 struct VGFXD3D12Renderer
 {
     ComPtr<IDXGIFactory4> factory;
-    bool tearingSupported;
-    ID3D12Device5* device;
-    D3D_FEATURE_LEVEL featureLevel;
-    D3D12MA::Allocator* allocator;
-    ID3D12CommandQueue* graphicsQueue;
+    bool tearingSupported = false;
+    ID3D12Device5* device = nullptr;
+    D3D_FEATURE_LEVEL featureLevel{};
+
+    ID3D12Fence* frameFence = nullptr;
+    HANDLE frameFenceEvent = INVALID_HANDLE_VALUE;
+
+    D3D12MA::Allocator* allocator = nullptr;
+    ID3D12CommandQueue* graphicsQueue = nullptr;
 
     ID3D12GraphicsCommandList4* graphicsCommandList = nullptr;
     ID3D12CommandAllocator* commandAllocators[VGFX_MAX_INFLIGHT_FRAMES] = {};
 
     VGFXD3D12SwapChain swapChains[64];
-    VGFXD3D12SwapChain* currentSwapChain;
+    VGFXD3D12SwapChain* currentSwapChain = nullptr;
+
+    uint32_t frameIndex = 0;
+    uint64_t frameCount = 0;
+    uint64_t GPUFrameCount = 0;
+
+    bool shuttingDown = false;
+    std::mutex destroyMutex;
+    std::deque<std::pair<D3D12MA::Allocation*, uint64_t>> deferredAllocations;
+    std::deque<std::pair<IUnknown*, uint64_t>> deferredReleases;
 };
+
+static void d3d12_DeferDestroy(VGFXD3D12Renderer* renderer, IUnknown* resource, D3D12MA::Allocation* allocation)
+{
+    if (resource == nullptr)
+    {
+        return;
+    }
+
+    renderer->destroyMutex.lock();
+
+    if (renderer->shuttingDown)
+    {
+        resource->Release();
+        SafeRelease(allocation);
+
+        renderer->destroyMutex.unlock();
+        return;
+    }
+
+    renderer->deferredReleases.push_back(std::make_pair(resource, renderer->frameCount));
+    if (allocation != nullptr)
+    {
+        renderer->deferredAllocations.push_back(std::make_pair(allocation, renderer->frameCount));
+    }
+    renderer->destroyMutex.unlock();
+}
+
+static void d3d12_ProcessDeletionQueue(VGFXD3D12Renderer* renderer)
+{
+    renderer->destroyMutex.lock();
+
+    while (!renderer->deferredAllocations.empty())
+    {
+        if (renderer->deferredAllocations.front().second + VGFX_MAX_INFLIGHT_FRAMES < renderer->frameCount)
+        {
+            auto item = renderer->deferredAllocations.front();
+            renderer->deferredAllocations.pop_front();
+            item.first->Release();
+        }
+        else
+        {
+            break;
+        }
+    }
+
+    while (!renderer->deferredReleases.empty())
+    {
+        if (renderer->deferredReleases.front().second + VGFX_MAX_INFLIGHT_FRAMES < renderer->frameCount)
+        {
+            auto item = renderer->deferredReleases.front();
+            renderer->deferredReleases.pop_front();
+            item.first->Release();
+        }
+        else
+        {
+            break;
+        }
+    }
+
+    renderer->destroyMutex.unlock();
+}
 
 static void d3d12_destroyDevice(VGFXDevice device)
 {
+    // Wait idle
+    vgfxWaitIdle(device);
+
     VGFXD3D12Renderer* renderer = (VGFXD3D12Renderer*)device->driverData;
 
-    // TODO: Wait idle
+    VGFX_ASSERT(renderer->frameCount == renderer->GPUFrameCount);
+    renderer->shuttingDown = true;
+
+    // Frame fence
+    SafeRelease(renderer->frameFence);
+    CloseHandle(renderer->frameFenceEvent);
 
     for (VGFXD3D12SwapChain& swapChain : renderer->swapChains)
     {
@@ -153,14 +237,14 @@ static void d3d12_destroyDevice(VGFXDevice device)
             if (SUCCEEDED(renderer->device->QueryInterface(debugDevice.GetAddressOf())))
             {
                 debugDevice->ReportLiveDeviceObjects(D3D12_RLDO_DETAIL | D3D12_RLDO_IGNORE_INTERNAL);
-            }
-
         }
+
+    }
 #else
         (void)refCount; // avoid warning
 #endif
         renderer->device = nullptr;
-    }
+}
 
     renderer->factory.Reset();
 
@@ -245,9 +329,20 @@ static bool d3d12_createSwapchain(VGFXD3D12Renderer* renderer, VGFXSurface surfa
 
 static void d3d12_frame(VGFXRenderer* driverData)
 {
+    HRESULT hr = S_OK;
     VGFXD3D12Renderer* renderer = (VGFXD3D12Renderer*)driverData;
 
-    HRESULT hr = S_OK;
+    hr = renderer->graphicsCommandList->Close();
+    if (FAILED(hr))
+    {
+        vgfxLogError("Failed to close command list");
+        return;
+    }
+
+    ID3D12CommandList* commandLists[] = { renderer->graphicsCommandList };
+    renderer->graphicsQueue->ExecuteCommandLists(_countof(commandLists), commandLists);
+
+    // Present secondary windows without vertical sync
     uint32_t syncInterval = 0;
     uint32_t presentFlags = renderer->tearingSupported ? DXGI_PRESENT_ALLOW_TEARING : 0;
 
@@ -281,9 +376,67 @@ static void d3d12_frame(VGFXRenderer* driverData)
     }
     else
     {
+        if (FAILED(hr))
+        {
+            vgfxLogError("Failed to process frame");
+            return;
+        }
+
+        renderer->frameCount++;
+
+        // Signal the fence with the current frame number, so that we can check back on it
+        hr = renderer->graphicsQueue->Signal(renderer->frameFence, renderer->frameCount);
+        if (FAILED(hr))
+        {
+            vgfxLogError("Failed to signal frame");
+            return;
+        }
+
+        // Wait for the GPU to catch up before we stomp an executing command buffer
+        const uint64_t gpuLag = renderer->frameCount - renderer->GPUFrameCount;
+        VGFX_ASSERT(gpuLag <= VGFX_MAX_INFLIGHT_FRAMES);
+        if (gpuLag >= VGFX_MAX_INFLIGHT_FRAMES)
+        {
+            // Make sure that the previous frame is finished
+            const uint64_t signalValue = renderer->GPUFrameCount + 1;
+            if (renderer->frameFence->GetCompletedValue() < signalValue)
+            {
+                renderer->frameFence->SetEventOnCompletion(signalValue, renderer->frameFenceEvent);
+                WaitForSingleObjectEx(renderer->frameFenceEvent, INFINITE, FALSE);
+            }
+            renderer->GPUFrameCount++;
+        }
+
+        renderer->frameIndex = renderer->frameCount % VGFX_MAX_INFLIGHT_FRAMES;
+
+        // Prepare the command buffers to be used for the next frame
+        renderer->commandAllocators[renderer->frameIndex]->Reset();
+        renderer->graphicsCommandList->Reset(renderer->commandAllocators[renderer->frameIndex], nullptr);
+
+        // Safe delete deferred destroys
+        d3d12_ProcessDeletionQueue(renderer);
+    }
+}
+
+static void d3d12_waitIdle(VGFXRenderer* driverData)
+{
+    VGFXD3D12Renderer* renderer = (VGFXD3D12Renderer*)driverData;
+
+    // Wait for the GPU to fully catch up with the CPU
+    VGFX_ASSERT(renderer->frameCount >= renderer->GPUFrameCount);
+    if (renderer->frameCount > renderer->GPUFrameCount)
+    {
+        if (renderer->frameFence->GetCompletedValue() < renderer->frameCount)
+        {
+            renderer->frameFence->SetEventOnCompletion(renderer->frameCount, renderer->frameFenceEvent);
+            WaitForSingleObjectEx(renderer->frameFenceEvent, INFINITE, FALSE);
+        }
+
+        renderer->GPUFrameCount = renderer->frameCount;
     }
 
-    _VGFX_UNUSED(renderer);
+    // Safe delete deferred destroys
+    d3d12_ProcessDeletionQueue(renderer);
 }
 
 static bool d3d12_isSupported(void)
@@ -433,8 +586,8 @@ static VGFXDevice d3d12_createDevice(VGFXSurface surface, const VGFXDeviceInfo* 
     {
         BOOL allowTearing = FALSE;
 
-        IDXGIFactory5* dxgiFactory5 = nullptr;
-        HRESULT hr = renderer->factory->QueryInterface(&dxgiFactory5);
+        ComPtr<IDXGIFactory5> dxgiFactory5;
+        HRESULT hr = renderer->factory.As(&dxgiFactory5);
         if (SUCCEEDED(hr))
         {
             hr = dxgiFactory5->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &allowTearing, sizeof(allowTearing));
@@ -451,12 +604,11 @@ static VGFXDevice d3d12_createDevice(VGFXSurface surface, const VGFXDeviceInfo* 
         {
             renderer->tearingSupported = true;
         }
-        SafeRelease(dxgiFactory5);
     }
 
     {
-        IDXGIFactory6* dxgiFactory6 = nullptr;
-        const bool queryByPreference = SUCCEEDED(renderer->factory->QueryInterface(&dxgiFactory6));
+        ComPtr<IDXGIFactory6> dxgiFactory6;
+        const bool queryByPreference = SUCCEEDED(renderer->factory.As(&dxgiFactory6));
         auto NextAdapter = [&](uint32_t index, IDXGIAdapter1** ppAdapter)
         {
             if (queryByPreference)
@@ -531,7 +683,7 @@ static VGFXDevice d3d12_createDevice(VGFXSurface surface, const VGFXDeviceInfo* 
                 {
                     // Verbose only filters
                     enabledSeverities.push_back(D3D12_MESSAGE_SEVERITY_INFO);
-                }
+            }
 
 #if defined (VGFX_DX12_USE_PIPELINE_LIBRARY)
                 disabledMessages.push_back(D3D12_MESSAGE_ID_LOADPIPELINE_NAMENOTFOUND);
@@ -557,8 +709,8 @@ static VGFXDevice d3d12_createDevice(VGFXSurface surface, const VGFXDeviceInfo* 
 
                 infoQueue->AddStorageFilterEntries(&filter);
                 infoQueue->AddApplicationMessage(D3D12_MESSAGE_SEVERITY_MESSAGE, "D3D12 Debug Filters setup");
-            }
         }
+    }
 
         // Create allocator
         D3D12MA::ALLOCATOR_DESC allocatorDesc = {};
@@ -593,7 +745,7 @@ static VGFXDevice d3d12_createDevice(VGFXSurface surface, const VGFXDeviceInfo* 
 
         vgfxLogInfo("vgfx driver: D3D12");
         vgfxLogInfo("D3D12 Adapter: %S", adapterDesc.Description);
-    }
+}
 
     // Create command queues
     {
@@ -609,6 +761,19 @@ static VGFXDevice d3d12_createDevice(VGFXSurface surface, const VGFXDeviceInfo* 
 
     // Create frame data
     {
+        HRESULT hr = renderer->device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&renderer->frameFence));
+        if (FAILED(hr))
+        {
+            delete renderer;
+            return nullptr;
+        }
+        renderer->frameFenceEvent = CreateEventEx(nullptr, nullptr, 0, EVENT_MODIFY_STATE | SYNCHRONIZE);
+        if (renderer->frameFence == INVALID_HANDLE_VALUE)
+        {
+            delete renderer;
+            return nullptr;
+        }
+
         for (uint32_t i = 0; i < VGFX_MAX_INFLIGHT_FRAMES; ++i)
         {
             if (!SUCCEEDED(renderer->device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&renderer->commandAllocators[i]))))
@@ -619,10 +784,11 @@ static VGFXDevice d3d12_createDevice(VGFXSurface surface, const VGFXDeviceInfo* 
             }
         }
 
-        HRESULT hr = renderer->device->CreateCommandList1(
+        hr = renderer->device->CreateCommandList(
             0,
             D3D12_COMMAND_LIST_TYPE_DIRECT,
-            D3D12_COMMAND_LIST_FLAG_NONE,
+            renderer->commandAllocators[0],
+            nullptr,
             IID_PPV_ARGS(&renderer->graphicsCommandList)
         );
         if (FAILED(hr))
@@ -640,11 +806,8 @@ static VGFXDevice d3d12_createDevice(VGFXSurface surface, const VGFXDeviceInfo* 
     }
     renderer->currentSwapChain = &renderer->swapChains[0];
 
-    _VGFX_UNUSED(surface);
-
     VGFXDevice_T* device = (VGFXDevice_T*)VGFX_MALLOC(sizeof(VGFXDevice_T));
     ASSIGN_DRIVER(d3d12);
-
     device->driverData = (VGFXRenderer*)renderer;
     return device;
 }

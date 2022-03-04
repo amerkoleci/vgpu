@@ -126,5 +126,6 @@ VGFX_API bool vgfxIsSupported(VGFXAPI api);
 VGFX_API VGFXDevice vgfxCreateDevice(VGFXSurface surface, const VGFXDeviceInfo* info);
 VGFX_API void vgfxDestroyDevice(VGFXDevice device);
 VGFX_API void vgfxFrame(VGFXDevice device);
+VGFX_API void vgfxWaitIdle(VGFXDevice device);
 
 #endif /* _VGFX_H */

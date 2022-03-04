@@ -144,6 +144,12 @@ static void d3d11_frame(VGFXRenderer* driverData)
     _VGFX_UNUSED(renderer);
 }
 
+static void d3d11_waitIdle(VGFXRenderer* driverData)
+{
+    gfxD3D11Renderer* renderer = (gfxD3D11Renderer*)driverData;
+    _VGFX_UNUSED(renderer);
+}
+
 static bool d3d11_isSupported(void)
 {
     static bool available_initialized = false;

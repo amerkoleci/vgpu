@@ -186,6 +186,12 @@ static void vulkan_frame(VGFXRenderer* driverData)
     _VGFX_UNUSED(renderer);
 }
 
+static void vulkan_waitIdle(VGFXRenderer* driverData)
+{
+    gfxVulkanRenderer* renderer = (gfxVulkanRenderer*)driverData;
+    _VGFX_UNUSED(renderer);
+}
+
 static bool vulkan_isSupported(void)
 {
     static bool available_initialized = false;

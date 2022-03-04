@@ -127,6 +127,7 @@ int main()
         glfwPollEvents();
     }
 
+    vgfxWaitIdle(device);
     vgfxDestroyDevice(device);
     vgfxDestroySurface(surface);
     glfwDestroyWindow(window);

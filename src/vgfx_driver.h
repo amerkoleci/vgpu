@@ -82,6 +82,7 @@ typedef struct VGFXDevice_T
 {
     void (*destroyDevice)(VGFXDevice device);
     void (*frame)(VGFXRenderer* driverData);
+    void (*waitIdle)(VGFXRenderer* driverData);
 
     /* Opaque pointer for the Driver */
     VGFXRenderer* driverData;
@@ -92,6 +93,7 @@ typedef struct VGFXDevice_T
 #define ASSIGN_DRIVER(name) \
 	ASSIGN_DRIVER_FUNC(destroyDevice, name) \
     ASSIGN_DRIVER_FUNC(frame, name) \
+    ASSIGN_DRIVER_FUNC(waitIdle, name) \
 
 typedef struct VGFXDriver
 {
