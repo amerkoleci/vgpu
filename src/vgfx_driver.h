@@ -8,6 +8,11 @@
 #include <stdio.h>
 #include <stdarg.h>
 
+#if defined(_WIN32)
+typedef struct HINSTANCE__* HINSTANCE;
+typedef struct HWND__* HWND;
+#endif
+
 #ifndef VGFX_MALLOC
 #   include <stdlib.h>
 #   define VGFX_MALLOC(s) malloc(s)
@@ -22,6 +27,8 @@
 #ifndef _VGFX_UNUSED
 #define _VGFX_UNUSED(x) (void)(x)
 #endif
+
+#define _VGFX_COUNT_OF(arr) (sizeof(arr) / sizeof((arr)[0]))
 
 #if defined(__clang__)
 // CLANG ENABLE/DISABLE WARNING DEFINITION
@@ -52,6 +59,25 @@ _VGFX_EXTERN void vgfxLogError(const char* format, ...);
 
 typedef struct gfxRenderer gfxRenderer;
 
+typedef struct gfxSurface_T
+{
+    VGFXSurfaceType type;
+    uint32_t width;
+    uint32_t height;
+#if defined(_WIN32)
+    HINSTANCE hinstance;
+    HWND hwnd;
+#elif defined(__EMSCRIPTEN__)
+    const char* selector;
+#elif defined(__ANDROID__)
+    struct ANativeWindow* window;
+#elif defined(__linux__)
+    void* display;
+    uint32_t window;
+#endif
+
+} gfxSurface_T;
+
 struct gfxDevice_T
 {
     void (*destroyDevice)(gfxDevice device);
@@ -70,7 +96,8 @@ struct gfxDevice_T
 typedef struct gfxDriver
 {
     VGFXAPI api;
-    gfxDevice (*createDevice)(const VGFXDeviceInfo* info);
+    bool (*isSupported)(void);
+    gfxDevice (*createDevice)(VGFXSurface surface, const VGFXDeviceInfo* info);
 } gfxDriver;
 
 _VGFX_EXTERN gfxDriver vulkan_driver;

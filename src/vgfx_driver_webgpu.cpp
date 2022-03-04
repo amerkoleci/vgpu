@@ -51,9 +51,9 @@ static void webgpu_frame(gfxRenderer* driverData)
     colorDesc.view = backbufferView;
     colorDesc.loadOp = WGPULoadOp_Clear;
     colorDesc.storeOp = WGPUStoreOp_Store;
-    colorDesc.clearColor.r = 1.0f;
-    colorDesc.clearColor.g = 0.0f;
-    colorDesc.clearColor.b = 0.0f;
+    colorDesc.clearColor.r = 0.3f;
+    colorDesc.clearColor.g = 0.3f;
+    colorDesc.clearColor.b = 0.3f;
     colorDesc.clearColor.a = 1.0f;
 
     WGPURenderPassDescriptor renderPass = {};
@@ -63,23 +63,27 @@ static void webgpu_frame(gfxRenderer* driverData)
     WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(renderer->device, nullptr);	// create encoder
     WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, &renderPass);	// create pass
 
-    wgpuRenderPassEncoderEndPass(pass);
+    wgpuRenderPassEncoderEnd(pass);
     wgpuRenderPassEncoderRelease(pass);														// release pass
     WGPUCommandBuffer commands = wgpuCommandEncoderFinish(encoder, nullptr);				// create commands
     wgpuCommandEncoderRelease(encoder);														// release encoder
 
     wgpuQueueSubmit(renderer->queue, 1, &commands);
     wgpuCommandBufferRelease(commands);														// release commands
-#ifndef __EMSCRIPTEN__
-    /// TODO: wgpuSwapChainPresent is unsupported in Emscripten
     wgpuSwapChainPresent(renderer->swapchain);
-#endif
     // Release backbuffer View
     wgpuTextureViewRelease(backbufferView);
 }
 
-static gfxDevice webgpu_createDevice(const VGFXDeviceInfo* info)
+static bool webgpu_isSupported(void)
 {
+    return true;
+}
+
+static gfxDevice webgpu_createDevice(VGFXSurface surface, const VGFXDeviceInfo* info)
+{
+    VGFX_ASSERT(surface->type == VGFX_SURFACE_TYPE_WEB);
+
     gfxWebGPURenderer* renderer = new gfxWebGPURenderer();
 #if defined(__EMSCRIPTEN__)
     renderer->device = emscripten_webgpu_get_device();
@@ -98,10 +102,10 @@ static gfxDevice webgpu_createDevice(const VGFXDeviceInfo* info)
     // Create surface first.
     WGPUSurfaceDescriptorFromCanvasHTMLSelector canvDesc = {};
     canvDesc.chain.sType = WGPUSType_SurfaceDescriptorFromCanvasHTMLSelector;
-    canvDesc.selector = "canvas";
+    canvDesc.selector = surface->selector;
     WGPUSurfaceDescriptor surfDesc = {};
     surfDesc.nextInChain = reinterpret_cast<WGPUChainedStruct*>(&canvDesc);
-    WGPUSurface surface = wgpuInstanceCreateSurface(nullptr, &surfDesc);
+    WGPUSurface wgpuSurface = wgpuInstanceCreateSurface(nullptr, &surfDesc);
 
     WGPUSwapChainDescriptor swapDesc = {};
     swapDesc.usage = WGPUTextureUsage_RenderAttachment;
@@ -109,7 +113,7 @@ static gfxDevice webgpu_createDevice(const VGFXDeviceInfo* info)
     swapDesc.width = 800;
     swapDesc.height = 450;
     swapDesc.presentMode = WGPUPresentMode_Fifo;
-    renderer->swapchain = wgpuDeviceCreateSwapChain(renderer->device, surface, &swapDesc);
+    renderer->swapchain = wgpuDeviceCreateSwapChain(renderer->device, wgpuSurface, &swapDesc);
 #else
 
 #endif
@@ -125,6 +129,7 @@ static gfxDevice webgpu_createDevice(const VGFXDeviceInfo* info)
 
 gfxDriver webgpu_driver = {
     VGFX_API_WEBGPU,
+    webgpu_isSupported,
     webgpu_createDevice
 };
 

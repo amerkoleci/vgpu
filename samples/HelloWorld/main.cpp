@@ -20,6 +20,7 @@
 #include <cstdlib>
 #include <vgfx.h>
 
+VGFXSurface surface = nullptr;
 gfxDevice device = nullptr;
 
 #if defined(__EMSCRIPTEN__)
@@ -44,7 +45,24 @@ void init_gfx(GLFWwindow* window)
     deviceInfo.validationMode = VGFX_VALIDATION_MODE_ENABLED;
 #endif
 
-    device = vgfxCreateDevice(&deviceInfo);
+    //if (vgfxIsSupported(VGFX_API_VULKAN))
+    //{
+    //    deviceInfo.preferredApi = VGFX_API_VULKAN;
+    //}
+
+#if defined(__EMSCRIPTEN__)
+    surface = vgfxCreateSurfaceWeb("canvas");
+#elif defined(GLFW_EXPOSE_NATIVE_WIN32)
+    HINSTANCE hinstance = GetModuleHandle(NULL);
+    HWND hwnd = glfwGetWin32Window(window);
+    surface = vgfxCreateSurfaceWin32(hinstance, hwnd);
+#elif defined(GLFW_EXPOSE_NATIVE_X11)
+    Display* x11_display = glfwGetX11Display();
+    Window x11_window = glfwGetX11Window(window);
+    surface = vgfxCreateSurfaceXlib(x11_display, x11_window);
+#endif
+
+    device = vgfxCreateDevice(surface, &deviceInfo);
 }
 
 #if defined(__EMSCRIPTEN__)
@@ -85,6 +103,7 @@ KEEP_IN_MODULE void _glue_main_()
 
 void draw_frame()
 {
+    vgfxFrame(device);
 }
 
 int main()
@@ -109,7 +128,7 @@ int main()
     }
 
     vgfxDestroyDevice(device);
-
+    vgfxDestroySurface(surface);
     glfwDestroyWindow(window);
     glfwTerminate();
 #endif

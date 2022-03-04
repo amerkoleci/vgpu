@@ -40,6 +40,7 @@
 #   define VGFX_CALL
 #endif
 
+typedef struct gfxSurface_T* VGFXSurface;
 typedef struct gfxDevice_T* gfxDevice;
 
 typedef enum VGFXLogLevel
@@ -54,7 +55,8 @@ typedef enum VGFXLogLevel
 
 typedef enum VGFXAPI
 {
-    VGFX_API_VULKAN = 0,
+    VGFX_API_DEFAULT = 0,
+    VGFX_API_VULKAN,
     VGFX_API_D3D12,
     VGFX_API_D3D11,
     VGFX_API_WEBGPU,
@@ -78,6 +80,17 @@ typedef enum VGFXValidationMode
     _VGFX_VALIDATION_MODE_FORCE_U32 = 0x7FFFFFFF
 } VGFXValidationMode;
 
+typedef enum VGFXSurfaceType
+{
+    VGFX_SURFACE_TYPE_UNKNOWN = 0,
+    VGFX_SURFACE_TYPE_WIN32,
+    VGFX_SURFACE_TYPE_XLIB,
+    VGFX_SURFACE_TYPE_WEB,
+
+    _VGFX_SURFACE_TYPE_COUNT,
+    _VGFX_SURFACE_TYPE_FORCE_U32 = 0x7FFFFFFF
+} VGFXSurfaceType;
+
 typedef enum VGFXPresentMode
 {
     VGFX_PRESENT_MODE_IMMEDIATE = 0,
@@ -90,13 +103,21 @@ typedef enum VGFXPresentMode
 
 typedef struct VGFXDeviceInfo
 {
+    VGFXAPI preferredApi;
     VGFXValidationMode validationMode;
 } VGFXDeviceInfo;
 
 typedef void (VGFX_CALL* vgfxLogFunc)(VGFXLogLevel level, const char* message);
 VGFX_API void vgfxSetLogFunc(vgfxLogFunc func);
 
-VGFX_API gfxDevice vgfxCreateDevice(const VGFXDeviceInfo* info);
+VGFX_API VGFXSurface vgfxCreateSurfaceWin32(void* hinstance, void* hwnd);
+VGFX_API VGFXSurface vgfxCreateSurfaceXlib(void* display, uint32_t window);
+VGFX_API VGFXSurface vgfxCreateSurfaceWeb(const char* selector);
+VGFX_API void vgfxDestroySurface(VGFXSurface surface);
+VGFX_API VGFXSurfaceType vgfxGetSurfaceType(VGFXSurface surface);
+
+VGFX_API bool vgfxIsSupported(VGFXAPI api);
+VGFX_API gfxDevice vgfxCreateDevice(VGFXSurface surface, const VGFXDeviceInfo* info);
 VGFX_API void vgfxDestroyDevice(gfxDevice device);
 VGFX_API void vgfxFrame(gfxDevice device);
 

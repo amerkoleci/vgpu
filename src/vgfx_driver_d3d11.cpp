@@ -144,7 +144,7 @@ static void d3d11_frame(gfxRenderer* driverData)
     _VGFX_UNUSED(renderer);
 }
 
-static bool d3d11_isSupported()
+static bool d3d11_isSupported(void)
 {
     static bool available_initialized = false;
     static bool available = false;
@@ -221,13 +221,8 @@ static bool d3d11_isSupported()
     return true;
 }
 
-static gfxDevice d3d11CreateDevice(const VGFXDeviceInfo* info)
+static gfxDevice d3d11_createDevice(VGFXSurface surface, const VGFXDeviceInfo* info)
 {
-    if (!d3d11_isSupported())
-    {
-        return nullptr;
-    }
-
     gfxD3D11Renderer* renderer = new gfxD3D11Renderer();
 
     DWORD dxgiFactoryFlags = 0;
@@ -327,6 +322,10 @@ static gfxDevice d3d11CreateDevice(const VGFXDeviceInfo* info)
         dxgiAdapter->GetDesc1(&adapterDesc);
     }
 
+    _VGFX_UNUSED(surface);
+
+    vgfxLogInfo("vgfx driver: D3D11");
+
     gfxDevice_T* device = (gfxDevice_T*)VGFX_MALLOC(sizeof(gfxDevice_T));
     ASSIGN_DRIVER(d3d11);
 
@@ -336,7 +335,8 @@ static gfxDevice d3d11CreateDevice(const VGFXDeviceInfo* info)
 
 gfxDriver d3d11_driver = {
     VGFX_API_D3D11,
-    d3d11CreateDevice
+    d3d11_isSupported,
+    d3d11_createDevice
 };
 
 #endif /* VGFX_D3D11_DRIVER */

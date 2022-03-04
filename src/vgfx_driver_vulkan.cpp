@@ -186,14 +186,29 @@ static void vulkan_frame(gfxRenderer* driverData)
     _VGFX_UNUSED(renderer);
 }
 
-static gfxDevice vulkanCreateDevice(const VGFXDeviceInfo* info)
+static bool vulkan_isSupported(void)
 {
+    static bool available_initialized = false;
+    static bool available = false;
+
+    if (available_initialized) {
+        return available;
+    }
+
+    available_initialized = true;
+
     VkResult result = volkInitialize();
     if (result != VK_SUCCESS)
     {
-        return nullptr;
+        return false;
     }
 
+    available = true;
+    return true;
+}
+
+static gfxDevice vulkan_createDevice(VGFXSurface surface, const VGFXDeviceInfo* info)
+{
     gfxVulkanRenderer* renderer = new gfxVulkanRenderer();
 
     // Enumerate available layers and extensions:
@@ -323,7 +338,7 @@ static gfxDevice vulkanCreateDevice(const VGFXDeviceInfo* info)
         }
 #endif
 
-        result = vkCreateInstance(&createInfo, nullptr, &renderer->instance);
+        VkResult result = vkCreateInstance(&createInfo, nullptr, &renderer->instance);
         if (result != VK_SUCCESS)
         {
             VK_LOG_ERROR(result, "Failed to create Vulkan instance.");
@@ -367,6 +382,10 @@ static gfxDevice vulkanCreateDevice(const VGFXDeviceInfo* info)
 #endif
     }
 
+    _VGFX_UNUSED(surface);
+
+    vgfxLogInfo("vgfx driver: Vulkan");
+
     gfxDevice_T* device = (gfxDevice_T*)VGFX_MALLOC(sizeof(gfxDevice_T));
     ASSIGN_DRIVER(vulkan);
 
@@ -376,7 +395,8 @@ static gfxDevice vulkanCreateDevice(const VGFXDeviceInfo* info)
 
 gfxDriver vulkan_driver = {
     VGFX_API_VULKAN,
-    vulkanCreateDevice
+    vulkan_isSupported,
+    vulkan_createDevice
 };
 
 #endif /* VGFX_VULKAN_DRIVER */

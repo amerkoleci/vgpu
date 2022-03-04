@@ -21,6 +21,7 @@
 #   include <d3d12.h>
 #endif
 #include <dxgi1_6.h>
+#include <wrl/client.h>
 
 #ifdef USING_D3D12_AGILITY_SDK
 extern "C"
@@ -34,6 +35,8 @@ extern "C"
 #if defined(_DEBUG) && WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
 #   include <dxgidebug.h>
 #endif
+
+using Microsoft::WRL::ComPtr;
 
 namespace
 {
@@ -130,7 +133,7 @@ static void d3d12_frame(gfxRenderer* driverData)
     _VGFX_UNUSED(renderer);
 }
 
-static bool d3d12_isSupported()
+static bool d3d12_isSupported(void)
 {
     static bool available_initialized = false;
     static bool available = false;
@@ -215,13 +218,8 @@ static bool d3d12_isSupported()
     return false;
 }
 
-static gfxDevice d3d12CreateDevice(const VGFXDeviceInfo* info)
+static gfxDevice d3d12_createDevice(VGFXSurface surface, const VGFXDeviceInfo* info)
 {
-    if (!d3d12_isSupported())
-    {
-        return nullptr;
-    }
-
     gfxD3D12Renderer* renderer = new gfxD3D12Renderer();
 
     DWORD dxgiFactoryFlags = 0;
@@ -330,8 +328,8 @@ static gfxDevice d3d12CreateDevice(const VGFXDeviceInfo* info)
             D3D_FEATURE_LEVEL_11_0,
         };
 
-        IDXGIAdapter1* dxgiAdapter = nullptr;
-        for (uint32_t i = 0; NextAdapter(i, &dxgiAdapter) != DXGI_ERROR_NOT_FOUND; ++i)
+        ComPtr<IDXGIAdapter1> dxgiAdapter = nullptr;
+        for (uint32_t i = 0; NextAdapter(i, dxgiAdapter.ReleaseAndGetAddressOf()) != DXGI_ERROR_NOT_FOUND; ++i)
         {
             DXGI_ADAPTER_DESC1 adapterDesc;
             dxgiAdapter->GetDesc1(&adapterDesc);
@@ -339,13 +337,12 @@ static gfxDevice d3d12CreateDevice(const VGFXDeviceInfo* info)
             // Don't select the Basic Render Driver adapter.
             if (adapterDesc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)
             {
-                dxgiAdapter->Release();
                 continue;
             }
 
             for (auto& featurelevel : s_featureLevels)
             {
-                if (SUCCEEDED(vgfxD3D12CreateDevice(dxgiAdapter, featurelevel, IID_PPV_ARGS(&renderer->device))))
+                if (SUCCEEDED(vgfxD3D12CreateDevice(dxgiAdapter.Get(), featurelevel, IID_PPV_ARGS(&renderer->device))))
                 {
                     break;
                 }
@@ -369,9 +366,11 @@ static gfxDevice d3d12CreateDevice(const VGFXDeviceInfo* info)
         // Init capabilities.
         DXGI_ADAPTER_DESC1 adapterDesc;
         dxgiAdapter->GetDesc1(&adapterDesc);
-
-        SafeRelease(dxgiAdapter);
     }
+
+    _VGFX_UNUSED(surface);
+
+    vgfxLogInfo("vgfx driver: D3D12");
 
     gfxDevice_T* device = (gfxDevice_T*)VGFX_MALLOC(sizeof(gfxDevice_T));
     ASSIGN_DRIVER(d3d12);
@@ -382,7 +381,8 @@ static gfxDevice d3d12CreateDevice(const VGFXDeviceInfo* info)
 
 gfxDriver d3d12_driver = {
     VGFX_API_D3D12,
-    d3d12CreateDevice
+    d3d12_isSupported,
+    d3d12_createDevice
 };
 
 #endif /* VGFX_D3D12_DRIVER */
