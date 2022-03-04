@@ -57,6 +57,22 @@ _VGFX_EXTERN void vgfxLogInfo(const char* format, ...);
 _VGFX_EXTERN void vgfxLogWarn(const char* format, ...);
 _VGFX_EXTERN void vgfxLogError(const char* format, ...);
 
+#ifdef __cplusplus
+/// Round up to next power of two.
+constexpr uint64_t vgfxNextPowerOfTwo(uint64_t value)
+{
+    // http://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2
+    --value;
+    value |= value >> 1u;
+    value |= value >> 2u;
+    value |= value >> 4u;
+    value |= value >> 8u;
+    value |= value >> 16u;
+    value |= value >> 32u;
+    return ++value;
+}
+#endif /* __cplusplus */
+
 typedef struct VGFXRenderer VGFXRenderer;
 
 typedef struct VGFXSurface_T
@@ -83,6 +99,7 @@ typedef struct VGFXDevice_T
     void (*destroyDevice)(VGFXDevice device);
     void (*frame)(VGFXRenderer* driverData);
     void (*waitIdle)(VGFXRenderer* driverData);
+    bool (*queryFeature)(VGFXRenderer* driverData, VGFXFeature feature);
 
     /* Opaque pointer for the Driver */
     VGFXRenderer* driverData;
@@ -94,6 +111,7 @@ typedef struct VGFXDevice_T
 	ASSIGN_DRIVER_FUNC(destroyDevice, name) \
     ASSIGN_DRIVER_FUNC(frame, name) \
     ASSIGN_DRIVER_FUNC(waitIdle, name) \
+    ASSIGN_DRIVER_FUNC(queryFeature, name) \
 
 typedef struct VGFXDriver
 {

@@ -232,3 +232,12 @@ void vgfxWaitIdle(VGFXDevice device)
     NULL_RETURN(device);
     device->waitIdle(device->driverData);
 }
+
+bool vgfxQueryFeature(VGFXDevice device, VGFXFeature feature)
+{
+    if (device == NULL) {
+        return false;
+    }
+
+    return device->queryFeature(device->driverData, feature);
+}

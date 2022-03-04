@@ -81,7 +81,71 @@ namespace
 #define vgfxD3D12GetDebugInterface D3D12GetDebugInterface
 #endif
 
-struct VGFXD3D12SwapChain {
+struct VGFXD3D12DescriptorAllocator
+{
+    ID3D12Device* device = nullptr;
+    std::mutex locker;
+    D3D12_DESCRIPTOR_HEAP_DESC desc = {};
+    std::vector<ID3D12DescriptorHeap*> heaps;
+    uint32_t descriptorSize = 0;
+    std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> freelist;
+
+    void Init(ID3D12Device* device_, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32_t numDescriptorsPerBlock)
+    {
+        device = device_;
+
+        desc.Type = type;
+        desc.NumDescriptors = numDescriptorsPerBlock;
+        descriptorSize = device->GetDescriptorHandleIncrementSize(type);
+    }
+
+    void Shutdown()
+    {
+        for (auto heap : heaps)
+        {
+            heap->Release();
+        }
+        heaps.clear();
+    }
+
+    void BlockAllocate()
+    {
+        heaps.emplace_back();
+        HRESULT hr = device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&heaps.back()));
+        VGFX_ASSERT(SUCCEEDED(hr));
+        D3D12_CPU_DESCRIPTOR_HANDLE heap_start = heaps.back()->GetCPUDescriptorHandleForHeapStart();
+        for (UINT i = 0; i < desc.NumDescriptors; ++i)
+        {
+            D3D12_CPU_DESCRIPTOR_HANDLE handle = heap_start;
+            handle.ptr += i * descriptorSize;
+            freelist.push_back(handle);
+        }
+    }
+
+    D3D12_CPU_DESCRIPTOR_HANDLE Allocate()
+    {
+        locker.lock();
+        if (freelist.empty())
+        {
+            BlockAllocate();
+        }
+        VGFX_ASSERT(!freelist.empty());
+        D3D12_CPU_DESCRIPTOR_HANDLE handle = freelist.back();
+        freelist.pop_back();
+        locker.unlock();
+        return handle;
+    }
+
+    void Free(D3D12_CPU_DESCRIPTOR_HANDLE index)
+    {
+        locker.lock();
+        freelist.push_back(index);
+        locker.unlock();
+    }
+};
+
+struct VGFXD3D12SwapChain
+{
 #if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
     HWND window = nullptr;
 #else
@@ -89,6 +153,22 @@ struct VGFXD3D12SwapChain {
 #endif
 
     IDXGISwapChain3* handle = nullptr;
+    uint32_t width = 0;
+    uint32_t height = 0;
+    std::vector<ID3D12Resource*> backbufferTextures;
+    std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> backbufferViews;
+};
+
+struct VGFXD3D12UploadContext
+{
+    ID3D12CommandAllocator* commandAllocator = nullptr;
+    ID3D12GraphicsCommandList* commandList = nullptr;
+    ID3D12Fence* fence = nullptr;
+
+    uint64_t uploadBufferSize = 0;
+    ID3D12Resource* uploadBuffer = nullptr;
+    D3D12MA::Allocation* uploadBufferAllocation = nullptr;
+    void* uploadBufferData = nullptr;
 };
 
 struct VGFXD3D12Renderer
@@ -114,6 +194,15 @@ struct VGFXD3D12Renderer
     uint64_t frameCount = 0;
     uint64_t GPUFrameCount = 0;
 
+    ID3D12CommandQueue* copyQueue = nullptr;
+    std::mutex uploadLocker;
+    std::vector<VGFXD3D12UploadContext> uploadFreeList;
+
+    VGFXD3D12DescriptorAllocator resourceAllocator;
+    VGFXD3D12DescriptorAllocator samplerAllocator;
+    VGFXD3D12DescriptorAllocator rtvAllocator;
+    VGFXD3D12DescriptorAllocator dsvAllocator;
+
     bool shuttingDown = false;
     std::mutex destroyMutex;
     std::deque<std::pair<D3D12MA::Allocation*, uint64_t>> deferredAllocations;
@@ -129,7 +218,9 @@ static void d3d12_DeferDestroy(VGFXD3D12Renderer* renderer, IUnknown* resource, 
 
     renderer->destroyMutex.lock();
 
-    if (renderer->shuttingDown)
+    if ((renderer->frameCount == renderer->GPUFrameCount)
+        || renderer->shuttingDown
+        || renderer->device == nullptr)
     {
         resource->Release();
         SafeRelease(allocation);
@@ -181,6 +272,125 @@ static void d3d12_ProcessDeletionQueue(VGFXD3D12Renderer* renderer)
     renderer->destroyMutex.unlock();
 }
 
+static VGFXD3D12UploadContext d3d12_AllocateUpload(VGFXD3D12Renderer* renderer, uint64_t size)
+{
+    renderer->uploadLocker.lock();
+
+    HRESULT hr = S_OK;
+
+    // Create a new command list if there are no free ones.
+    if (renderer->uploadFreeList.empty())
+    {
+        VGFXD3D12UploadContext context;
+
+        hr = renderer->device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COPY, IID_PPV_ARGS(&context.commandAllocator));
+        VGFX_ASSERT(SUCCEEDED(hr));
+        hr = renderer->device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COPY, context.commandAllocator, nullptr, IID_PPV_ARGS(&context.commandList));
+        VGFX_ASSERT(SUCCEEDED(hr));
+        hr =context.commandList->Close();
+        VGFX_ASSERT(SUCCEEDED(hr));
+        hr = renderer->device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&context.fence));
+        VGFX_ASSERT(SUCCEEDED(hr));
+
+        renderer->uploadFreeList.push_back(context);
+    }
+
+    VGFXD3D12UploadContext context = renderer->uploadFreeList.back();
+    if (context.uploadBufferSize < size)
+    {
+        // Try to search for a staging buffer that can fit the request:
+        for (size_t i = 0; i < renderer->uploadFreeList.size(); ++i)
+        {
+            if (renderer->uploadFreeList[i].uploadBufferSize >= size)
+            {
+                context = renderer->uploadFreeList[i];
+                std::swap(renderer->uploadFreeList[i], renderer->uploadFreeList.back());
+                break;
+            }
+        }
+    }
+    renderer->uploadFreeList.pop_back();
+    renderer->uploadLocker.unlock();
+
+    // If no buffer was found that fits the data, create one:
+    if (context.uploadBufferSize < size)
+    {
+        // Release old one first
+        d3d12_DeferDestroy(renderer, context.uploadBuffer, context.uploadBufferAllocation);
+
+        uint64_t newSize = vgfxNextPowerOfTwo(size);
+
+        D3D12MA::ALLOCATION_DESC allocationDesc = {};
+        allocationDesc.HeapType = D3D12_HEAP_TYPE_UPLOAD;
+        D3D12_RESOURCE_DESC resourceDesc;
+        resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+        resourceDesc.Alignment = 0;
+        resourceDesc.Width = newSize;
+        resourceDesc.Height = 1;
+        resourceDesc.DepthOrArraySize = 1;
+        resourceDesc.MipLevels = 1;
+        resourceDesc.Format = DXGI_FORMAT_UNKNOWN;
+        resourceDesc.SampleDesc.Count = 1;
+        resourceDesc.SampleDesc.Quality = 0;
+        resourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+        resourceDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+        hr = renderer->allocator->CreateResource(
+            &allocationDesc,
+            &resourceDesc,
+            D3D12_RESOURCE_STATE_GENERIC_READ,
+            nullptr,
+            &context.uploadBufferAllocation,
+            IID_PPV_ARGS(&context.uploadBuffer)
+        );
+        VGFX_ASSERT(SUCCEEDED(hr));
+
+        D3D12_RANGE readRange = {};
+        hr = context.uploadBuffer->Map(0, &readRange, &context.uploadBufferData);
+        VGFX_ASSERT(SUCCEEDED(hr));
+    }
+
+    // Begin command list in valid state
+    hr = context.commandAllocator->Reset();
+    VGFX_ASSERT(SUCCEEDED(hr));
+    hr =context.commandList->Reset(context.commandAllocator, nullptr);
+    VGFX_ASSERT(SUCCEEDED(hr));
+
+    return context;
+}
+
+void d3d12_UploadSubmit(VGFXD3D12Renderer* renderer, VGFXD3D12UploadContext context)
+{
+    const uint32_t backbufferIndex = renderer->currentSwapChain->handle->GetCurrentBackBufferIndex();
+    D3D12_RESOURCE_BARRIER resource_barrier = {};
+    resource_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    resource_barrier.Transition.pResource = renderer->currentSwapChain->backbufferTextures[backbufferIndex];
+    resource_barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    resource_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
+    resource_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    context.commandList->ResourceBarrier(1, &resource_barrier);
+
+    HRESULT hr = context.commandList->Close();
+    VGFX_ASSERT(SUCCEEDED(hr));
+
+    ID3D12CommandList* commandlists[] = {
+        context.commandList
+    };
+    renderer->copyQueue->ExecuteCommandLists(1, commandlists);
+
+    hr = renderer->copyQueue->Signal(context.fence, 1);
+    VGFX_ASSERT(SUCCEEDED(hr));
+    hr = context.fence->SetEventOnCompletion(1, nullptr);
+    VGFX_ASSERT(SUCCEEDED(hr));
+    hr = context.fence->Signal(0);
+    VGFX_ASSERT(SUCCEEDED(hr));
+
+    renderer->uploadLocker.lock();
+    renderer->uploadFreeList.push_back(context);
+    renderer->uploadLocker.unlock();
+}
+
+
 static void d3d12_destroyDevice(VGFXDevice device)
 {
     // Wait idle
@@ -195,11 +405,48 @@ static void d3d12_destroyDevice(VGFXDevice device)
     SafeRelease(renderer->frameFence);
     CloseHandle(renderer->frameFenceEvent);
 
+    // Copy queue + allocations
+    {
+        ComPtr<ID3D12Fence> fence;
+        HRESULT hr = renderer->device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence));
+        VGFX_ASSERT(SUCCEEDED(hr));
+
+        hr = renderer->copyQueue->Signal(fence.Get(), 1);
+        VGFX_ASSERT(SUCCEEDED(hr));
+        hr = fence->SetEventOnCompletion(1, nullptr);
+        VGFX_ASSERT(SUCCEEDED(hr));
+
+        for (auto& item : renderer->uploadFreeList)
+        {
+            item.uploadBuffer->Release();
+            item.uploadBufferAllocation->Release();
+            item.commandAllocator->Release();
+            item.commandList->Release();
+            item.fence->Release();
+        }
+        renderer->uploadFreeList.clear();
+
+        SafeRelease(renderer->copyQueue);
+    }
+
+    // CPU descriptor allocators
+    {
+        renderer->resourceAllocator.Shutdown();
+        renderer->samplerAllocator.Shutdown();
+        renderer->rtvAllocator.Shutdown();
+        renderer->dsvAllocator.Shutdown();
+    }
+
     for (VGFXD3D12SwapChain& swapChain : renderer->swapChains)
     {
         if (!swapChain.handle)
             continue;
 
+        for (size_t i = 0, count = swapChain.backbufferTextures.size(); i < count; ++i)
+        {
+            SafeRelease(swapChain.backbufferTextures[i]);
+        }
+        swapChain.backbufferTextures.clear(),
         swapChain.handle->Release();
     }
 
@@ -237,14 +484,14 @@ static void d3d12_destroyDevice(VGFXDevice device)
             if (SUCCEEDED(renderer->device->QueryInterface(debugDevice.GetAddressOf())))
             {
                 debugDevice->ReportLiveDeviceObjects(D3D12_RLDO_DETAIL | D3D12_RLDO_IGNORE_INTERNAL);
-        }
+            }
 
-    }
+        }
 #else
         (void)refCount; // avoid warning
 #endif
         renderer->device = nullptr;
-}
+    }
 
     renderer->factory.Reset();
 
@@ -261,6 +508,36 @@ static void d3d12_destroyDevice(VGFXDevice device)
 
     delete renderer;
     VGFX_FREE(device);
+}
+
+static void d3d12_updateSwapChain(VGFXD3D12Renderer* renderer, VGFXD3D12SwapChain& swapChain)
+{
+    HRESULT hr = S_OK;
+
+    DXGI_SWAP_CHAIN_DESC1 swapChainDesc;
+    hr = swapChain.handle->GetDesc1(&swapChainDesc);
+    VGFX_ASSERT(SUCCEEDED(hr));
+
+    swapChain.width = swapChainDesc.Width;
+    swapChain.height = swapChainDesc.Height;
+    swapChain.backbufferTextures.resize(swapChainDesc.BufferCount);
+    swapChain.backbufferViews.resize(swapChainDesc.BufferCount);
+    for (uint32_t i = 0; i < swapChainDesc.BufferCount; ++i)
+    {
+        hr = swapChain.handle->GetBuffer(i, IID_PPV_ARGS(&swapChain.backbufferTextures[i]));
+        VGFX_ASSERT(SUCCEEDED(hr));
+
+        wchar_t name[25] = {};
+        swprintf_s(name, L"Render target %u", i);
+        swapChain.backbufferTextures[i]->SetName(name);
+
+        D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
+        rtvDesc.Format = swapChainDesc.Format;
+        rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
+
+        swapChain.backbufferViews[i] = renderer->rtvAllocator.Allocate();
+        renderer->device->CreateRenderTargetView(swapChain.backbufferTextures[i], &rtvDesc, swapChain.backbufferViews[i]);
+    }
 }
 
 static bool d3d12_createSwapchain(VGFXD3D12Renderer* renderer, VGFXSurface surface, VGFXD3D12SwapChain& swapChain)
@@ -304,7 +581,7 @@ static bool d3d12_createSwapchain(VGFXD3D12Renderer* renderer, VGFXSurface surfa
     if (FAILED(hr))
     {
         return false;
-    }
+}
 
 #else
     swapChainDesc.Scaling = DXGI_SCALING_ASPECT_RATIO_STRETCH;
@@ -323,6 +600,8 @@ static bool d3d12_createSwapchain(VGFXD3D12Renderer* renderer, VGFXSurface surfa
     {
         return false;
     }
+
+    d3d12_updateSwapChain(renderer, swapChain);
 
     return true;
 };
@@ -406,6 +685,12 @@ static void d3d12_frame(VGFXRenderer* driverData)
             }
             renderer->GPUFrameCount++;
         }
+    }
+
+    // Begin new frame
+    {
+        // Safe delete deferred destroys
+        d3d12_ProcessDeletionQueue(renderer);
 
         renderer->frameIndex = renderer->frameCount % VGFX_MAX_INFLIGHT_FRAMES;
 
@@ -413,8 +698,19 @@ static void d3d12_frame(VGFXRenderer* driverData)
         renderer->commandAllocators[renderer->frameIndex]->Reset();
         renderer->graphicsCommandList->Reset(renderer->commandAllocators[renderer->frameIndex], nullptr);
 
-        // Safe delete deferred destroys
-        d3d12_ProcessDeletionQueue(renderer);
+        const uint32_t backbufferIndex = renderer->currentSwapChain->handle->GetCurrentBackBufferIndex();
+        D3D12_RESOURCE_BARRIER resource_barrier = {};
+        resource_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        resource_barrier.Transition.pResource = renderer->currentSwapChain->backbufferTextures[backbufferIndex];
+        resource_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
+        resource_barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        resource_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        renderer->graphicsCommandList->ResourceBarrier(1, &resource_barrier);
+
+        auto rtvDescriptor = renderer->currentSwapChain->backbufferViews[backbufferIndex];
+        const float clearColor[4] = { 0.392156899f, 0.584313750f, 0.929411829f, 1.f };
+        renderer->graphicsCommandList->OMSetRenderTargets(1, &rtvDescriptor, FALSE, nullptr);
+        renderer->graphicsCommandList->ClearRenderTargetView(rtvDescriptor, clearColor, 0, nullptr);
     }
 }
 
@@ -437,6 +733,19 @@ static void d3d12_waitIdle(VGFXRenderer* driverData)
 
     // Safe delete deferred destroys
     d3d12_ProcessDeletionQueue(renderer);
+}
+
+static bool d3d12_queryFeature(VGFXRenderer* driverData, VGFXFeature feature)
+{
+    VGFXD3D12Renderer* renderer = (VGFXD3D12Renderer*)driverData;
+    switch (feature)
+    {
+        case VGFX_FEATURE_COMPUTE:
+            return true;
+
+        default:
+            return false;
+    }
 }
 
 static bool d3d12_isSupported(void)
@@ -683,7 +992,7 @@ static VGFXDevice d3d12_createDevice(VGFXSurface surface, const VGFXDeviceInfo* 
                 {
                     // Verbose only filters
                     enabledSeverities.push_back(D3D12_MESSAGE_SEVERITY_INFO);
-            }
+                }
 
 #if defined (VGFX_DX12_USE_PIPELINE_LIBRARY)
                 disabledMessages.push_back(D3D12_MESSAGE_ID_LOADPIPELINE_NAMENOTFOUND);
@@ -691,7 +1000,7 @@ static VGFXDevice d3d12_createDevice(VGFXSurface surface, const VGFXDeviceInfo* 
 #endif
 
                 disabledMessages.push_back(D3D12_MESSAGE_ID_CLEARRENDERTARGETVIEW_MISMATCHINGCLEARVALUE);
-                disabledMessages.push_back(D3D12_MESSAGE_ID_CLEARRENDERTARGETVIEW_MISMATCHINGCLEARVALUE);
+                disabledMessages.push_back(D3D12_MESSAGE_ID_CLEARDEPTHSTENCILVIEW_MISMATCHINGCLEARVALUE);
                 disabledMessages.push_back(D3D12_MESSAGE_ID_MAP_INVALID_NULLRANGE);
                 disabledMessages.push_back(D3D12_MESSAGE_ID_UNMAP_INVALID_NULLRANGE);
                 disabledMessages.push_back(D3D12_MESSAGE_ID_EXECUTECOMMANDLISTS_WRONGSWAPCHAINBUFFERREFERENCE);
@@ -709,8 +1018,8 @@ static VGFXDevice d3d12_createDevice(VGFXSurface surface, const VGFXDeviceInfo* 
 
                 infoQueue->AddStorageFilterEntries(&filter);
                 infoQueue->AddApplicationMessage(D3D12_MESSAGE_SEVERITY_MESSAGE, "D3D12 Debug Filters setup");
+            }
         }
-    }
 
         // Create allocator
         D3D12MA::ALLOCATOR_DESC allocatorDesc = {};
@@ -745,7 +1054,7 @@ static VGFXDevice d3d12_createDevice(VGFXSurface surface, const VGFXDeviceInfo* 
 
         vgfxLogInfo("vgfx driver: D3D12");
         vgfxLogInfo("D3D12 Adapter: %S", adapterDesc.Description);
-}
+    }
 
     // Create command queues
     {
@@ -757,7 +1066,22 @@ static VGFXDevice d3d12_createDevice(VGFXSurface surface, const VGFXDeviceInfo* 
             delete renderer;
             return nullptr;
         }
+        renderer->graphicsQueue->SetName(L"Graphics Queue");
+
+        queueDesc.Type = D3D12_COMMAND_LIST_TYPE_COPY;
+        if (FAILED(renderer->device->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&renderer->copyQueue))))
+        {
+            delete renderer;
+            return nullptr;
+        }
+        renderer->copyQueue->SetName(L"Copy Queue");
     }
+
+    // Init CPU descriptor allocators
+    renderer->resourceAllocator.Init(renderer->device, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 4096);
+    renderer->samplerAllocator.Init(renderer->device, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 256);
+    renderer->rtvAllocator.Init(renderer->device, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 512);
+    renderer->dsvAllocator.Init(renderer->device, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 128);
 
     // Create frame data
     {
@@ -805,6 +1129,21 @@ static VGFXDevice d3d12_createDevice(VGFXSurface surface, const VGFXDeviceInfo* 
         return nullptr;
     }
     renderer->currentSwapChain = &renderer->swapChains[0];
+
+    const uint32_t backbufferIndex = renderer->currentSwapChain->handle->GetCurrentBackBufferIndex();
+    D3D12_RESOURCE_BARRIER resource_barrier = {};
+    resource_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    resource_barrier.Transition.pResource = renderer->currentSwapChain->backbufferTextures[backbufferIndex];
+    resource_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
+    resource_barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    resource_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    renderer->graphicsCommandList->ResourceBarrier(1, &resource_barrier);
+
+    auto rtvDescriptor = renderer->currentSwapChain->backbufferViews[backbufferIndex];
+    const float clearColor[4] = { 0.392156899f, 0.584313750f, 0.929411829f, 1.f };
+    renderer->graphicsCommandList->OMSetRenderTargets(1, &rtvDescriptor, FALSE, nullptr);
+    renderer->graphicsCommandList->ClearRenderTargetView(rtvDescriptor, clearColor, 0, nullptr);
+    //renderer->graphicsCommandList->ClearDepthStencilView(dsvDescriptor, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
 
     VGFXDevice_T* device = (VGFXDevice_T*)VGFX_MALLOC(sizeof(VGFXDevice_T));
     ASSIGN_DRIVER(d3d12);

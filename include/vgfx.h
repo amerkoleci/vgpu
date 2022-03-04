@@ -107,6 +107,14 @@ typedef enum VGFXPresentMode
     _VGFX_PRESENT_MODE_FORCE_U32 = 0x7FFFFFFF
 } VGFXPresentMode;
 
+typedef enum VGFXFeature
+{
+    VGFX_FEATURE_COMPUTE = 0,
+
+    _VGFX_FEATURE_COUNT,
+    _VGFX_FEATURE_FORCE_U32 = 0x7FFFFFFF
+} VGFXFeature;
+
 typedef struct VGFXDeviceInfo
 {
     VGFXAPI preferredApi;
@@ -127,5 +135,6 @@ VGFX_API VGFXDevice vgfxCreateDevice(VGFXSurface surface, const VGFXDeviceInfo* 
 VGFX_API void vgfxDestroyDevice(VGFXDevice device);
 VGFX_API void vgfxFrame(VGFXDevice device);
 VGFX_API void vgfxWaitIdle(VGFXDevice device);
+VGFX_API bool vgfxQueryFeature(VGFXDevice device, VGFXFeature feature);
 
 #endif /* _VGFX_H */

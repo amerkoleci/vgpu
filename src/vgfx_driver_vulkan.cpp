@@ -192,6 +192,19 @@ static void vulkan_waitIdle(VGFXRenderer* driverData)
     _VGFX_UNUSED(renderer);
 }
 
+static bool vulkan_queryFeature(VGFXRenderer* driverData, VGFXFeature feature)
+{
+    gfxVulkanRenderer* renderer = (gfxVulkanRenderer*)driverData;
+    switch (feature)
+    {
+        case VGFX_FEATURE_COMPUTE:
+            return true;
+
+        default:
+            return false;
+    }
+}
+
 static bool vulkan_isSupported(void)
 {
     static bool available_initialized = false;

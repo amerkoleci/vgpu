@@ -87,7 +87,7 @@ namespace
 #define vgfxD3D11CreateDevice D3D11CreateDevice
 #endif
 
-struct gfxD3D11Renderer
+struct VGFXD3D11Renderer
 {
     IDXGIFactory4* factory;
     bool tearingSupported;
@@ -97,7 +97,7 @@ struct gfxD3D11Renderer
 
 static void d3d11_destroyDevice(VGFXDevice device)
 {
-    gfxD3D11Renderer* renderer = (gfxD3D11Renderer*)device->driverData;
+    VGFXD3D11Renderer* renderer = (VGFXD3D11Renderer*)device->driverData;
 
     if (renderer->device)
     {
@@ -140,14 +140,27 @@ static void d3d11_destroyDevice(VGFXDevice device)
 
 static void d3d11_frame(VGFXRenderer* driverData)
 {
-    gfxD3D11Renderer* renderer = (gfxD3D11Renderer*)driverData;
+    VGFXD3D11Renderer* renderer = (VGFXD3D11Renderer*)driverData;
     _VGFX_UNUSED(renderer);
 }
 
 static void d3d11_waitIdle(VGFXRenderer* driverData)
 {
-    gfxD3D11Renderer* renderer = (gfxD3D11Renderer*)driverData;
+    VGFXD3D11Renderer* renderer = (VGFXD3D11Renderer*)driverData;
     _VGFX_UNUSED(renderer);
+}
+
+static bool d3d11_queryFeature(VGFXRenderer* driverData, VGFXFeature feature)
+{
+    VGFXD3D11Renderer* renderer = (VGFXD3D11Renderer*)driverData;
+    switch (feature)
+    {
+        case VGFX_FEATURE_COMPUTE:
+            return true;
+
+        default:
+            return false;
+    }
 }
 
 static bool d3d11_isSupported(void)
@@ -230,7 +243,7 @@ static bool d3d11_isSupported(void)
 static VGFXDevice d3d11_createDevice(VGFXSurface surface, const VGFXDeviceInfo* info)
 {
     VGFX_ASSERT(info);
-    gfxD3D11Renderer* renderer = new gfxD3D11Renderer();
+    VGFXD3D11Renderer* renderer = new VGFXD3D11Renderer();
 
     DWORD dxgiFactoryFlags = 0;
     if (info->validationMode != VGFX_VALIDATION_MODE_DISABLED)

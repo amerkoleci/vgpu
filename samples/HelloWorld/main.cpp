@@ -29,7 +29,7 @@ namespace
     static EM_BOOL _app_emsc_frame(double time, void* userData)
     {
         //emscripten_log(EM_LOG_CONSOLE, "%s", "frame");
-        gfxDevice device = (gfxDevice)userData;
+        VGFXDevice device = (VGFXDevice)userData;
         vgfxFrame(device);
         return EM_TRUE;
     }

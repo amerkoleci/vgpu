@@ -11,7 +11,7 @@
 #error "Enable Dawn WebGPU implementation"
 #endif
 
-struct gfxWebGPURenderer
+struct VGFXWebGPURenderer
 {
     WGPUDevice device;
     WGPUQueue queue;
@@ -20,7 +20,7 @@ struct gfxWebGPURenderer
 
 static void webgpu_destroyDevice(VGFXDevice device)
 {
-    gfxWebGPURenderer* renderer = (gfxWebGPURenderer*)device->driverData;
+    VGFXWebGPURenderer* renderer = (VGFXWebGPURenderer*)device->driverData;
 
     if (renderer->device)
     {
@@ -40,7 +40,7 @@ static void webgpu_destroyDevice(VGFXDevice device)
 
 static void webgpu_frame(VGFXRenderer* driverData)
 {
-    gfxWebGPURenderer* renderer = (gfxWebGPURenderer*)driverData;
+    VGFXWebGPURenderer* renderer = (VGFXWebGPURenderer*)driverData;
 
     WGPUTextureView backbufferView = wgpuSwapChainGetCurrentTextureView(renderer->swapchain); // create textureView
 
@@ -48,9 +48,9 @@ static void webgpu_frame(VGFXRenderer* driverData)
     colorDesc.view = backbufferView;
     colorDesc.loadOp = WGPULoadOp_Clear;
     colorDesc.storeOp = WGPUStoreOp_Store;
-    colorDesc.clearColor.r = 0.3f;
-    colorDesc.clearColor.g = 0.3f;
-    colorDesc.clearColor.b = 0.3f;
+    colorDesc.clearColor.r = 1.0f;
+    colorDesc.clearColor.g = 0.0f;
+    colorDesc.clearColor.b = 0.0f;
     colorDesc.clearColor.a = 1.0f;
 
     WGPURenderPassDescriptor renderPass = {};
@@ -72,6 +72,26 @@ static void webgpu_frame(VGFXRenderer* driverData)
     wgpuTextureViewRelease(backbufferView);
 }
 
+static void webgpu_waitIdle(VGFXRenderer* driverData)
+{
+    VGFXWebGPURenderer* renderer = (VGFXWebGPURenderer*)driverData;
+    _VGFX_UNUSED(renderer);
+}
+
+static bool webgpu_queryFeature(VGFXRenderer* driverData, VGFXFeature feature)
+{
+    VGFXWebGPURenderer* renderer = (VGFXWebGPURenderer*)driverData;
+    _VGFX_UNUSED(renderer);
+    switch (feature)
+    {
+        case VGFX_FEATURE_COMPUTE:
+            return true;
+
+        default:
+            return false;
+    }
+}
+
 static bool webgpu_isSupported(void)
 {
     return true;
@@ -82,7 +102,7 @@ static VGFXDevice webgpu_createDevice(VGFXSurface surface, const VGFXDeviceInfo*
     VGFX_ASSERT(info);
     VGFX_ASSERT(surface->type == VGFX_SURFACE_TYPE_WEB);
 
-    gfxWebGPURenderer* renderer = new gfxWebGPURenderer();
+    VGFXWebGPURenderer* renderer = new VGFXWebGPURenderer();
 #if defined(__EMSCRIPTEN__)
     renderer->device = emscripten_webgpu_get_device();
 #else
@@ -118,7 +138,7 @@ static VGFXDevice webgpu_createDevice(VGFXSurface surface, const VGFXDeviceInfo*
 
     vgfxLogInfo("vgfx driver: WebGPU");
 
-    gfxDevice_T* device = (gfxDevice_T*)VGFX_MALLOC(sizeof(gfxDevice_T));
+    VGFXDevice_T* device = (VGFXDevice_T*)VGFX_MALLOC(sizeof(VGFXDevice_T));
     ASSIGN_DRIVER(webgpu);
 
     device->driverData = (VGFXRenderer*)renderer;
