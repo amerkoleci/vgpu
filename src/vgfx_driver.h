@@ -74,12 +74,20 @@ constexpr uint64_t vgfxNextPowerOfTwo(uint64_t value)
 #endif /* __cplusplus */
 
 typedef struct VGFXRenderer VGFXRenderer;
+typedef struct VGFXTextureImpl VGFXTextureImpl;
+typedef struct VGFXSwapChainImpl VGFXSwapChainImpl;
+
+typedef struct VGFXTexture_T
+{
+    void (*destroy)(VGFXTexture texture);
+
+    /* Opaque pointer for the implentation */
+    VGFXTextureImpl* driverData;
+} VGFXTexture_T;
 
 typedef struct VGFXSurface_T
 {
     VGFXSurfaceType type;
-    uint32_t width;
-    uint32_t height;
 #if defined(_WIN32)
     HINSTANCE hinstance;
     HWND window;
@@ -94,6 +102,18 @@ typedef struct VGFXSurface_T
 
 } VGFXSurface_T;
 
+typedef struct VGFXSwapChain_T
+{
+    void (*destroy)(VGFXSwapChain handle);
+    uint32_t(*getWidth)(VGFXSwapChainImpl* driverData);
+    uint32_t(*getHeight)(VGFXSwapChainImpl* driverData);
+    uint32_t(*getBackBufferIndex)(VGFXSwapChainImpl* driverData);
+    VGFXTexture(*getNextTexture)(VGFXSwapChainImpl* driverData);
+
+    /* Opaque pointer for the implentation */
+    VGFXSwapChainImpl* driverData;
+} VGFXSwapChain_T;
+
 typedef struct VGFXDevice_T
 {
     void (*destroyDevice)(VGFXDevice device);
@@ -101,9 +121,21 @@ typedef struct VGFXDevice_T
     void (*waitIdle)(VGFXRenderer* driverData);
     bool (*queryFeature)(VGFXRenderer* driverData, VGFXFeature feature);
 
+    VGFXSwapChain(*createSwapChain)(VGFXRenderer* driverData, VGFXSurface surface, const VGFXSwapChainInfo* info);
+
     /* Opaque pointer for the Driver */
     VGFXRenderer* driverData;
 } VGFXDevice_T;
+
+#define ASSIGN_TEXTURE(name) \
+    texture->destroy = name##_##TextureDestroy; \
+
+#define ASSIGN_SWAPCHAIN(name) \
+	swapChain->destroy = name##_##SwapChainDestroy; \
+    swapChain->getWidth = name##_##SwapChainGetWidth; \
+    swapChain->getHeight = name##_##SwapChainGetHeight; \
+    swapChain->getBackBufferIndex = name##_##SwapChainGetBackBufferIndex;\
+    swapChain->getNextTexture = name##_##SwapChainGetNextTexture;
 
 #define ASSIGN_DRIVER_FUNC(func, name) \
 	device->func = name##_##func;
@@ -112,6 +144,7 @@ typedef struct VGFXDevice_T
     ASSIGN_DRIVER_FUNC(frame, name) \
     ASSIGN_DRIVER_FUNC(waitIdle, name) \
     ASSIGN_DRIVER_FUNC(queryFeature, name) \
+    ASSIGN_DRIVER_FUNC(createSwapChain, name) \
 
 typedef struct VGFXDriver
 {

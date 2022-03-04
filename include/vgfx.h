@@ -48,6 +48,8 @@ enum {
 
 typedef struct VGFXSurface_T* VGFXSurface;
 typedef struct VGFXDevice_T* VGFXDevice;
+typedef struct VGFXSwapChain_T* VGFXSwapChain;
+typedef struct VGFXTexture_T* VGFXTexture;
 
 typedef enum VGFXLogLevel
 {
@@ -121,6 +123,12 @@ typedef struct VGFXDeviceInfo
     VGFXValidationMode validationMode;
 } VGFXDeviceInfo;
 
+typedef struct VGFXSwapChainInfo
+{
+    uint32_t width;
+    uint32_t height;
+} VGFXSwapChainInfo;
+
 typedef void (VGFX_CALL* vgfxLogFunc)(VGFXLogLevel level, const char* message);
 VGFX_API void vgfxSetLogFunc(vgfxLogFunc func);
 
@@ -136,5 +144,16 @@ VGFX_API void vgfxDestroyDevice(VGFXDevice device);
 VGFX_API void vgfxFrame(VGFXDevice device);
 VGFX_API void vgfxWaitIdle(VGFXDevice device);
 VGFX_API bool vgfxQueryFeature(VGFXDevice device, VGFXFeature feature);
+
+/* Texture */
+VGFX_API void vgfxDestroyTexture(VGFXTexture texture);
+
+/* SwapChain */
+VGFX_API VGFXSwapChain vgfxCreateSwapChain(VGFXDevice device, VGFXSurface surface, const VGFXSwapChainInfo* info);
+VGFX_API void vgfxDestroySwapChain(VGFXSwapChain swapChain);
+VGFX_API uint32_t vgfxSwapChainGetWidth(VGFXSwapChain swapChain);
+VGFX_API uint32_t vgfxSwapChainGetHeight(VGFXSwapChain swapChain);
+VGFX_API uint32_t vgfxSwapChainGetBackBufferIndex(VGFXSwapChain swapChain);
+VGFX_API VGFXTexture vgfxSwapChainGetNextTexture(VGFXSwapChain swapChain);
 
 #endif /* _VGFX_H */

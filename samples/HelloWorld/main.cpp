@@ -22,6 +22,7 @@
 
 VGFXSurface surface = nullptr;
 VGFXDevice device = nullptr;
+VGFXSwapChain swapChain = nullptr;
 
 #if defined(__EMSCRIPTEN__)
 namespace
@@ -63,6 +64,14 @@ void init_gfx(GLFWwindow* window)
 #endif
 
     device = vgfxCreateDevice(surface, &deviceInfo);
+
+    int width = 0;
+    int height = 0;
+    glfwGetWindowSize(window, &width, &height);
+    VGFXSwapChainInfo swapChainInfo{};
+    swapChainInfo.width = (uint32_t)width;
+    swapChainInfo.height = (uint32_t)height;
+    swapChain = vgfxCreateSwapChain(device, surface, &swapChainInfo);
 }
 
 #if defined(__EMSCRIPTEN__)
@@ -103,6 +112,11 @@ KEEP_IN_MODULE void _glue_main_()
 
 void draw_frame()
 {
+    uint32_t width = vgfxSwapChainGetWidth(swapChain);
+    uint32_t height = vgfxSwapChainGetHeight(swapChain);
+    uint32_t index = vgfxSwapChainGetBackBufferIndex(swapChain);
+    VGFXTexture backbufferTexture = vgfxSwapChainGetNextTexture(swapChain);
+
     vgfxFrame(device);
 }
 
@@ -128,6 +142,7 @@ int main()
     }
 
     vgfxWaitIdle(device);
+    vgfxDestroySwapChain(swapChain);
     vgfxDestroyDevice(device);
     vgfxDestroySurface(surface);
     glfwDestroyWindow(window);

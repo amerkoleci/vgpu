@@ -205,6 +205,15 @@ static bool vulkan_queryFeature(VGFXRenderer* driverData, VGFXFeature feature)
     }
 }
 
+static VGFXSwapChain vulkan_createSwapChain(VGFXRenderer* driverData, VGFXSurface surface, const VGFXSwapChainInfo* info)
+{
+    return nullptr;
+}
+
+static void vulkan_destroySwapChain(VGFXRenderer* driverData, VGFXSwapChain swapChain)
+{
+}
+
 static bool vulkan_isSupported(void)
 {
     static bool available_initialized = false;

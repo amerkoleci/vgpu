@@ -163,6 +163,15 @@ static bool d3d11_queryFeature(VGFXRenderer* driverData, VGFXFeature feature)
     }
 }
 
+static VGFXSwapChain d3d11_createSwapChain(VGFXRenderer* driverData, VGFXSurface surface, const VGFXSwapChainInfo* info)
+{
+    return nullptr;
+}
+
+static void d3d11_destroySwapChain(VGFXRenderer* driverData, VGFXSwapChain swapChain)
+{
+}
+
 static bool d3d11_isSupported(void)
 {
     static bool available_initialized = false;

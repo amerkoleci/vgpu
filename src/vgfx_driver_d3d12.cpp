@@ -144,18 +144,23 @@ struct VGFXD3D12DescriptorAllocator
     }
 };
 
+struct VGFXD3D12Renderer;
+
+struct VGFXD3D12Texture
+{
+    VGFXD3D12Renderer* renderer = nullptr;
+    ID3D12Resource* handle = nullptr;
+    D3D12MA::Allocation* allocation = nullptr;
+};
+
 struct VGFXD3D12SwapChain
 {
-#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
-    HWND window = nullptr;
-#else
-    IUnknown* window = nullptr;
-#endif
-
+    VGFXD3D12Renderer* renderer = nullptr;
     IDXGISwapChain3* handle = nullptr;
     uint32_t width = 0;
     uint32_t height = 0;
-    std::vector<ID3D12Resource*> backbufferTextures;
+    bool vsync = false;
+    std::vector<VGFXTexture> backbufferTextures;
     std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> backbufferViews;
 };
 
@@ -187,8 +192,7 @@ struct VGFXD3D12Renderer
     ID3D12GraphicsCommandList4* graphicsCommandList = nullptr;
     ID3D12CommandAllocator* commandAllocators[VGFX_MAX_INFLIGHT_FRAMES] = {};
 
-    VGFXD3D12SwapChain swapChains[64];
-    VGFXD3D12SwapChain* currentSwapChain = nullptr;
+    std::vector<VGFXD3D12SwapChain*> swapChains;
 
     uint32_t frameIndex = 0;
     uint64_t frameCount = 0;
@@ -208,6 +212,15 @@ struct VGFXD3D12Renderer
     std::deque<std::pair<D3D12MA::Allocation*, uint64_t>> deferredAllocations;
     std::deque<std::pair<IUnknown*, uint64_t>> deferredReleases;
 };
+
+static void d3d12_TextureDestroy(VGFXTexture texture);
+VGFXTexture vgfxD3D12AllocTexture(VGFXD3D12Texture* impl)
+{
+    VGFXTexture_T* texture = new VGFXTexture_T();
+    ASSIGN_TEXTURE(d3d12);
+    texture->driverData = (VGFXTextureImpl*)impl;
+    return texture;
+}
 
 static void d3d12_DeferDestroy(VGFXD3D12Renderer* renderer, IUnknown* resource, D3D12MA::Allocation* allocation)
 {
@@ -359,17 +372,8 @@ static VGFXD3D12UploadContext d3d12_AllocateUpload(VGFXD3D12Renderer* renderer, 
     return context;
 }
 
-void d3d12_UploadSubmit(VGFXD3D12Renderer* renderer, VGFXD3D12UploadContext context)
+static void d3d12_UploadSubmit(VGFXD3D12Renderer* renderer, VGFXD3D12UploadContext context)
 {
-    const uint32_t backbufferIndex = renderer->currentSwapChain->handle->GetCurrentBackBufferIndex();
-    D3D12_RESOURCE_BARRIER resource_barrier = {};
-    resource_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    resource_barrier.Transition.pResource = renderer->currentSwapChain->backbufferTextures[backbufferIndex];
-    resource_barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
-    resource_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
-    resource_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    context.commandList->ResourceBarrier(1, &resource_barrier);
-
     HRESULT hr = context.commandList->Close();
     VGFX_ASSERT(SUCCEEDED(hr));
 
@@ -389,7 +393,6 @@ void d3d12_UploadSubmit(VGFXD3D12Renderer* renderer, VGFXD3D12UploadContext cont
     renderer->uploadFreeList.push_back(context);
     renderer->uploadLocker.unlock();
 }
-
 
 static void d3d12_destroyDevice(VGFXDevice device)
 {
@@ -435,19 +438,6 @@ static void d3d12_destroyDevice(VGFXDevice device)
         renderer->samplerAllocator.Shutdown();
         renderer->rtvAllocator.Shutdown();
         renderer->dsvAllocator.Shutdown();
-    }
-
-    for (VGFXD3D12SwapChain& swapChain : renderer->swapChains)
-    {
-        if (!swapChain.handle)
-            continue;
-
-        for (size_t i = 0, count = swapChain.backbufferTextures.size(); i < count; ++i)
-        {
-            SafeRelease(swapChain.backbufferTextures[i]);
-        }
-        swapChain.backbufferTextures.clear(),
-        swapChain.handle->Release();
     }
 
     for (uint32_t i = 0; i < VGFX_MAX_INFLIGHT_FRAMES; ++i)
@@ -510,101 +500,41 @@ static void d3d12_destroyDevice(VGFXDevice device)
     VGFX_FREE(device);
 }
 
-static void d3d12_updateSwapChain(VGFXD3D12Renderer* renderer, VGFXD3D12SwapChain& swapChain)
+static void d3d12_updateSwapChain(VGFXD3D12Renderer* renderer, VGFXD3D12SwapChain* swapChain)
 {
     HRESULT hr = S_OK;
 
     DXGI_SWAP_CHAIN_DESC1 swapChainDesc;
-    hr = swapChain.handle->GetDesc1(&swapChainDesc);
+    hr = swapChain->handle->GetDesc1(&swapChainDesc);
     VGFX_ASSERT(SUCCEEDED(hr));
 
-    swapChain.width = swapChainDesc.Width;
-    swapChain.height = swapChainDesc.Height;
-    swapChain.backbufferTextures.resize(swapChainDesc.BufferCount);
-    swapChain.backbufferViews.resize(swapChainDesc.BufferCount);
+    swapChain->width = swapChainDesc.Width;
+    swapChain->height = swapChainDesc.Height;
+    swapChain->vsync = true;
+    swapChain->backbufferTextures.resize(swapChainDesc.BufferCount);
+    swapChain->backbufferViews.resize(swapChainDesc.BufferCount);
     for (uint32_t i = 0; i < swapChainDesc.BufferCount; ++i)
     {
-        hr = swapChain.handle->GetBuffer(i, IID_PPV_ARGS(&swapChain.backbufferTextures[i]));
+        VGFXD3D12Texture* texture = new VGFXD3D12Texture();
+        texture->renderer = renderer;
+
+        hr = swapChain->handle->GetBuffer(i, IID_PPV_ARGS(&texture->handle));
         VGFX_ASSERT(SUCCEEDED(hr));
 
         wchar_t name[25] = {};
         swprintf_s(name, L"Render target %u", i);
-        swapChain.backbufferTextures[i]->SetName(name);
+        texture->handle->SetName(name);
 
         D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
         rtvDesc.Format = swapChainDesc.Format;
         rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
 
-        swapChain.backbufferViews[i] = renderer->rtvAllocator.Allocate();
-        renderer->device->CreateRenderTargetView(swapChain.backbufferTextures[i], &rtvDesc, swapChain.backbufferViews[i]);
+        swapChain->backbufferViews[i] = renderer->rtvAllocator.Allocate();
+        renderer->device->CreateRenderTargetView(texture->handle, &rtvDesc, swapChain->backbufferViews[i]);
+
+        swapChain->backbufferTextures[i] = vgfxD3D12AllocTexture(texture);
     }
 }
-
-static bool d3d12_createSwapchain(VGFXD3D12Renderer* renderer, VGFXSurface surface, VGFXD3D12SwapChain& swapChain)
-{
-    DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
-    swapChainDesc.Width = surface->width;
-    swapChainDesc.Height = surface->height;
-    swapChainDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
-    swapChainDesc.Stereo = FALSE;
-    swapChainDesc.SampleDesc.Count = 1;
-    swapChainDesc.SampleDesc.Quality = 0;
-    swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    swapChainDesc.BufferCount = VGFX_MAX_INFLIGHT_FRAMES;
-    swapChainDesc.Scaling = DXGI_SCALING_STRETCH;
-    swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-    swapChainDesc.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
-    swapChainDesc.Flags = renderer->tearingSupported ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0u;
-
-    ComPtr<IDXGISwapChain1> tempSwapChain;
-#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
-    DXGI_SWAP_CHAIN_FULLSCREEN_DESC fsSwapChainDesc = {};
-    fsSwapChainDesc.Windowed = TRUE;
-
-    // Create a swap chain for the window.
-    HRESULT hr = renderer->factory->CreateSwapChainForHwnd(
-        renderer->graphicsQueue,
-        surface->window,
-        &swapChainDesc,
-        &fsSwapChainDesc,
-        nullptr,
-        tempSwapChain.GetAddressOf()
-    );
-
-    if (FAILED(hr))
-    {
-        return false;
-    }
-
-    // This class does not support exclusive full-screen mode and prevents DXGI from responding to the ALT+ENTER shortcut
-    hr = renderer->factory->MakeWindowAssociation(surface->window, DXGI_MWA_NO_ALT_ENTER);
-    if (FAILED(hr))
-    {
-        return false;
-}
-
-#else
-    swapChainDesc.Scaling = DXGI_SCALING_ASPECT_RATIO_STRETCH;
-
-    HRESULT hr = renderer->factory->CreateSwapChainForCoreWindow(
-        renderer->graphicsQueue,
-        surface->window,
-        &swapChainDesc,
-        nullptr,
-        tempSwapChain.GetAddressOf()
-    );
-#endif
-
-    hr = tempSwapChain->QueryInterface(&swapChain.handle);
-    if (FAILED(hr))
-    {
-        return false;
-    }
-
-    d3d12_updateSwapChain(renderer, swapChain);
-
-    return true;
-};
 
 static void d3d12_frame(VGFXRenderer* driverData)
 {
@@ -621,26 +551,23 @@ static void d3d12_frame(VGFXRenderer* driverData)
     ID3D12CommandList* commandLists[] = { renderer->graphicsCommandList };
     renderer->graphicsQueue->ExecuteCommandLists(_countof(commandLists), commandLists);
 
-    // Present secondary windows without vertical sync
-    uint32_t syncInterval = 0;
-    uint32_t presentFlags = renderer->tearingSupported ? DXGI_PRESENT_ALLOW_TEARING : 0;
-
-    for (uint32_t i = 1, count = _VGFX_COUNT_OF(renderer->swapChains); i < count && SUCCEEDED(hr); ++i)
+    // Present acquired SwapChains
+    for (size_t i = 0, count = renderer->swapChains.size(); i < count && SUCCEEDED(hr); ++i)
     {
-        VGFXD3D12SwapChain* swapChain = &renderer->swapChains[i];
+        VGFXD3D12SwapChain* swapChain = renderer->swapChains[i];
         if (!swapChain->handle)
             continue;
 
-        hr = swapChain->handle->Present(syncInterval, presentFlags);
+        if (swapChain->vsync)
+        {
+            hr = swapChain->handle->Present(1, 0);
+        }
+        else
+        {
+            hr = swapChain->handle->Present(0, renderer->tearingSupported ? DXGI_PRESENT_ALLOW_TEARING : 0);
+        }
     }
-
-    // Main SwapChain
-    syncInterval = 1;
-    presentFlags = 0;
-    if (renderer->swapChains[0].handle)
-    {
-        hr = renderer->swapChains[0].handle->Present(syncInterval, presentFlags);
-    }
+    renderer->swapChains.clear();
 
     // If the device was reset we must completely reinitialize the renderer.
     if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET)
@@ -697,20 +624,6 @@ static void d3d12_frame(VGFXRenderer* driverData)
         // Prepare the command buffers to be used for the next frame
         renderer->commandAllocators[renderer->frameIndex]->Reset();
         renderer->graphicsCommandList->Reset(renderer->commandAllocators[renderer->frameIndex], nullptr);
-
-        const uint32_t backbufferIndex = renderer->currentSwapChain->handle->GetCurrentBackBufferIndex();
-        D3D12_RESOURCE_BARRIER resource_barrier = {};
-        resource_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        resource_barrier.Transition.pResource = renderer->currentSwapChain->backbufferTextures[backbufferIndex];
-        resource_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
-        resource_barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
-        resource_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-        renderer->graphicsCommandList->ResourceBarrier(1, &resource_barrier);
-
-        auto rtvDescriptor = renderer->currentSwapChain->backbufferViews[backbufferIndex];
-        const float clearColor[4] = { 0.392156899f, 0.584313750f, 0.929411829f, 1.f };
-        renderer->graphicsCommandList->OMSetRenderTargets(1, &rtvDescriptor, FALSE, nullptr);
-        renderer->graphicsCommandList->ClearRenderTargetView(rtvDescriptor, clearColor, 0, nullptr);
     }
 }
 
@@ -746,6 +659,130 @@ static bool d3d12_queryFeature(VGFXRenderer* driverData, VGFXFeature feature)
         default:
             return false;
     }
+}
+
+/* Texture */
+static void d3d12_TextureDestroy(VGFXTexture texture)
+{
+    VGFXD3D12Texture* d3d12Texture = (VGFXD3D12Texture*)texture->driverData;
+    d3d12_DeferDestroy(d3d12Texture->renderer, d3d12Texture->handle, d3d12Texture->allocation);
+
+    delete texture;
+}
+
+/* SwapChain */
+static void d3d12_SwapChainDestroy(VGFXSwapChain swapChain)
+{
+    VGFXD3D12SwapChain* d3d12SwapChain = (VGFXD3D12SwapChain*)swapChain->driverData;
+
+    for (size_t i = 0, count = d3d12SwapChain->backbufferTextures.size(); i < count; ++i)
+    {
+        d3d12_TextureDestroy(d3d12SwapChain->backbufferTextures[i]);
+    }
+    d3d12SwapChain->backbufferTextures.clear();
+    d3d12SwapChain->handle->Release();
+
+    delete swapChain;
+}
+
+static uint32_t d3d12_SwapChainGetWidth(VGFXSwapChainImpl* driverData)
+{
+    VGFXD3D12SwapChain* d3d12SwapChain = (VGFXD3D12SwapChain*)driverData;
+    return d3d12SwapChain->width;
+}
+
+static uint32_t d3d12_SwapChainGetHeight(VGFXSwapChainImpl* driverData)
+{
+    VGFXD3D12SwapChain* d3d12SwapChain = (VGFXD3D12SwapChain*)driverData;
+    return d3d12SwapChain->height;
+}
+
+static uint32_t d3d12_SwapChainGetBackBufferIndex(VGFXSwapChainImpl* driverData)
+{
+    VGFXD3D12SwapChain* d3d12SwapChain = (VGFXD3D12SwapChain*)driverData;
+    return d3d12SwapChain->handle->GetCurrentBackBufferIndex();
+}
+
+static VGFXTexture d3d12_SwapChainGetNextTexture(VGFXSwapChainImpl* driverData)
+{
+    VGFXD3D12SwapChain* d3d12SwapChain = (VGFXD3D12SwapChain*)driverData;
+    d3d12SwapChain->renderer->swapChains.push_back(d3d12SwapChain);
+    return d3d12SwapChain->backbufferTextures[d3d12SwapChain->handle->GetCurrentBackBufferIndex()];
+}
+
+static VGFXSwapChain d3d12_createSwapChain(VGFXRenderer* driverData, VGFXSurface surface, const VGFXSwapChainInfo* info)
+{
+    VGFXD3D12Renderer* renderer = (VGFXD3D12Renderer*)driverData;
+
+    DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
+    swapChainDesc.Width = info->width;
+    swapChainDesc.Height = info->height;
+    swapChainDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+    swapChainDesc.Stereo = FALSE;
+    swapChainDesc.SampleDesc.Count = 1;
+    swapChainDesc.SampleDesc.Quality = 0;
+    swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+    swapChainDesc.BufferCount = VGFX_MAX_INFLIGHT_FRAMES;
+    swapChainDesc.Scaling = DXGI_SCALING_STRETCH;
+    swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+    swapChainDesc.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
+    swapChainDesc.Flags = renderer->tearingSupported ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0u;
+
+    ComPtr<IDXGISwapChain1> tempSwapChain;
+#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
+    DXGI_SWAP_CHAIN_FULLSCREEN_DESC fsSwapChainDesc = {};
+    fsSwapChainDesc.Windowed = TRUE;
+
+    // Create a swap chain for the window.
+    HRESULT hr = renderer->factory->CreateSwapChainForHwnd(
+        renderer->graphicsQueue,
+        surface->window,
+        &swapChainDesc,
+        &fsSwapChainDesc,
+        nullptr,
+        tempSwapChain.GetAddressOf()
+    );
+
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    // This class does not support exclusive full-screen mode and prevents DXGI from responding to the ALT+ENTER shortcut
+    hr = renderer->factory->MakeWindowAssociation(surface->window, DXGI_MWA_NO_ALT_ENTER);
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+#else
+    swapChainDesc.Scaling = DXGI_SCALING_ASPECT_RATIO_STRETCH;
+
+    HRESULT hr = renderer->factory->CreateSwapChainForCoreWindow(
+        renderer->graphicsQueue,
+        surface->window,
+        &swapChainDesc,
+        nullptr,
+        tempSwapChain.GetAddressOf()
+    );
+#endif
+
+    IDXGISwapChain3* handle = nullptr;
+    hr = tempSwapChain->QueryInterface(&handle);
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    VGFXD3D12SwapChain* impl = new VGFXD3D12SwapChain();
+    impl->renderer = renderer;
+    impl->handle = handle;
+    d3d12_updateSwapChain(renderer, impl);
+
+    VGFXSwapChain_T* swapChain = new VGFXSwapChain_T();
+    ASSIGN_SWAPCHAIN(d3d12);
+    swapChain->driverData = (VGFXSwapChainImpl*)impl;
+    return swapChain;
 }
 
 static bool d3d12_isSupported(void)
@@ -1121,29 +1158,6 @@ static VGFXDevice d3d12_createDevice(VGFXSurface surface, const VGFXDeviceInfo* 
             return nullptr;
         }
     }
-
-    // Create SwapChain
-    if (!d3d12_createSwapchain(renderer, surface, renderer->swapChains[0]))
-    {
-        delete renderer;
-        return nullptr;
-    }
-    renderer->currentSwapChain = &renderer->swapChains[0];
-
-    const uint32_t backbufferIndex = renderer->currentSwapChain->handle->GetCurrentBackBufferIndex();
-    D3D12_RESOURCE_BARRIER resource_barrier = {};
-    resource_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    resource_barrier.Transition.pResource = renderer->currentSwapChain->backbufferTextures[backbufferIndex];
-    resource_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
-    resource_barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
-    resource_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    renderer->graphicsCommandList->ResourceBarrier(1, &resource_barrier);
-
-    auto rtvDescriptor = renderer->currentSwapChain->backbufferViews[backbufferIndex];
-    const float clearColor[4] = { 0.392156899f, 0.584313750f, 0.929411829f, 1.f };
-    renderer->graphicsCommandList->OMSetRenderTargets(1, &rtvDescriptor, FALSE, nullptr);
-    renderer->graphicsCommandList->ClearRenderTargetView(rtvDescriptor, clearColor, 0, nullptr);
-    //renderer->graphicsCommandList->ClearDepthStencilView(dsvDescriptor, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
 
     VGFXDevice_T* device = (VGFXDevice_T*)VGFX_MALLOC(sizeof(VGFXDevice_T));
     ASSIGN_DRIVER(d3d12);

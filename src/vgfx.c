@@ -94,7 +94,7 @@ static const VGFXDriver* drivers[] = {
 #define NULL_RETURN_NULL(name) if (name == NULL) { return NULL; }
 
 VGFXSurface vgfxAllocSurface(VGFXSurfaceType type) {
-    VGFXSurface surface =(VGFXSurface_T*)VGFX_MALLOC(sizeof(VGFXSurface_T));
+    VGFXSurface surface = (VGFXSurface_T*)VGFX_MALLOC(sizeof(VGFXSurface_T));
     surface->type = type;
     return surface;
 }
@@ -109,11 +109,6 @@ VGFXSurface vgfxCreateSurfaceWin32(void* hinstance, void* hwnd) {
         VGFX_FREE(surface);
         return NULL;
     }
-
-    RECT window_rect;
-    GetClientRect(surface->window, &window_rect);
-    surface->width = window_rect.right - window_rect.left;
-    surface->height = window_rect.bottom - window_rect.top;
 #else
     _VGFX_UNUSED(hinstance);
     _VGFX_UNUSED(hwnd);
@@ -240,4 +235,53 @@ bool vgfxQueryFeature(VGFXDevice device, VGFXFeature feature)
     }
 
     return device->queryFeature(device->driverData, feature);
+}
+
+/* Texture */
+void vgfxDestroyTexture(VGFXTexture texture)
+{
+    NULL_RETURN(texture);
+    texture->destroy(texture);
+}
+
+/* SwapChain */
+VGFXSwapChain vgfxCreateSwapChain(VGFXDevice device, VGFXSurface surface, const VGFXSwapChainInfo* info)
+{
+    if (device == NULL)
+        return NULL;
+
+    if (surface == NULL)
+        return NULL;
+
+    if (info == NULL)
+        return NULL;
+
+    return device->createSwapChain(device->driverData, surface, info);
+}
+
+void vgfxDestroySwapChain(VGFXSwapChain swapChain)
+{
+    NULL_RETURN(swapChain);
+
+    swapChain->destroy(swapChain);
+}
+
+uint32_t vgfxSwapChainGetWidth(VGFXSwapChain swapChain)
+{
+    return swapChain->getWidth(swapChain->driverData);
+}
+
+uint32_t vgfxSwapChainGetHeight(VGFXSwapChain swapChain)
+{
+    return swapChain->getHeight(swapChain->driverData);
+}
+
+uint32_t vgfxSwapChainGetBackBufferIndex(VGFXSwapChain swapChain)
+{
+    return swapChain->getBackBufferIndex(swapChain->driverData);
+}
+
+VGFXTexture vgfxSwapChainGetNextTexture(VGFXSwapChain swapChain)
+{
+    return swapChain->getNextTexture(swapChain->driverData);
 }
