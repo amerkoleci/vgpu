@@ -107,7 +107,6 @@ typedef struct VGFXSwapChain_T
     void (*destroy)(VGFXSwapChain handle);
     uint32_t(*getWidth)(VGFXSwapChainImpl* driverData);
     uint32_t(*getHeight)(VGFXSwapChainImpl* driverData);
-    uint32_t(*getBackBufferIndex)(VGFXSwapChainImpl* driverData);
     VGFXTexture(*getNextTexture)(VGFXSwapChainImpl* driverData);
 
     /* Opaque pointer for the implentation */
@@ -123,6 +122,9 @@ typedef struct VGFXDevice_T
 
     VGFXSwapChain(*createSwapChain)(VGFXRenderer* driverData, VGFXSurface surface, const VGFXSwapChainInfo* info);
 
+    void (*beginRenderPass)(VGFXRenderer* driverData, const VGFXRenderPassInfo* info);
+    void (*endRenderPass)(VGFXRenderer* driverData);
+
     /* Opaque pointer for the Driver */
     VGFXRenderer* driverData;
 } VGFXDevice_T;
@@ -134,7 +136,6 @@ typedef struct VGFXDevice_T
 	swapChain->destroy = name##_##SwapChainDestroy; \
     swapChain->getWidth = name##_##SwapChainGetWidth; \
     swapChain->getHeight = name##_##SwapChainGetHeight; \
-    swapChain->getBackBufferIndex = name##_##SwapChainGetBackBufferIndex;\
     swapChain->getNextTexture = name##_##SwapChainGetNextTexture;
 
 #define ASSIGN_DRIVER_FUNC(func, name) \
@@ -145,6 +146,8 @@ typedef struct VGFXDevice_T
     ASSIGN_DRIVER_FUNC(waitIdle, name) \
     ASSIGN_DRIVER_FUNC(queryFeature, name) \
     ASSIGN_DRIVER_FUNC(createSwapChain, name) \
+    ASSIGN_DRIVER_FUNC(beginRenderPass, name) \
+    ASSIGN_DRIVER_FUNC(endRenderPass, name) \
 
 typedef struct VGFXDriver
 {

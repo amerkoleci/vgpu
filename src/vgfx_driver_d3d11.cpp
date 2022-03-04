@@ -168,8 +168,14 @@ static VGFXSwapChain d3d11_createSwapChain(VGFXRenderer* driverData, VGFXSurface
     return nullptr;
 }
 
-static void d3d11_destroySwapChain(VGFXRenderer* driverData, VGFXSwapChain swapChain)
+static void d3d11_beginRenderPass(VGFXRenderer* driverData, const VGFXRenderPassInfo* info)
 {
+    VGFXD3D11Renderer* renderer = (VGFXD3D11Renderer*)driverData;
+}
+
+static void d3d11_endRenderPass(VGFXRenderer* driverData)
+{
+    VGFXD3D11Renderer* renderer = (VGFXD3D11Renderer*)driverData;
 }
 
 static bool d3d11_isSupported(void)

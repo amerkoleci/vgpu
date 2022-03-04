@@ -71,6 +71,7 @@ void init_gfx(GLFWwindow* window)
     VGFXSwapChainInfo swapChainInfo{};
     swapChainInfo.width = (uint32_t)width;
     swapChainInfo.height = (uint32_t)height;
+    swapChainInfo.presentMode = VGFXPresentMode_Fifo;
     swapChain = vgfxCreateSwapChain(device, surface, &swapChainInfo);
 }
 
@@ -114,8 +115,21 @@ void draw_frame()
 {
     uint32_t width = vgfxSwapChainGetWidth(swapChain);
     uint32_t height = vgfxSwapChainGetHeight(swapChain);
-    uint32_t index = vgfxSwapChainGetBackBufferIndex(swapChain);
-    VGFXTexture backbufferTexture = vgfxSwapChainGetNextTexture(swapChain);
+
+    VGFXRenderPassColorAttachment colorAttachment = {};
+    colorAttachment.texture = vgfxSwapChainGetNextTexture(swapChain);
+    colorAttachment.loadOp = VGFXLoadOp_Clear;
+    colorAttachment.storeOp = VGFXStoreOp_Store;
+    colorAttachment.clearColor.r = 0.3f;
+    colorAttachment.clearColor.g = 0.3f;
+    colorAttachment.clearColor.b = 0.3f;
+    colorAttachment.clearColor.a = 1.0f;
+
+    VGFXRenderPassInfo renderPass{};
+    renderPass.colorAttachmentCount = 1u;
+    renderPass.colorAttachments = &colorAttachment;
+    vgfxBeginRenderPass(device, &renderPass);
+    vgfxEndRenderPass(device);
 
     vgfxFrame(device);
 }

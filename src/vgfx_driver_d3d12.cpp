@@ -151,6 +151,7 @@ struct VGFXD3D12Texture
     VGFXD3D12Renderer* renderer = nullptr;
     ID3D12Resource* handle = nullptr;
     D3D12MA::Allocation* allocation = nullptr;
+    D3D12_CPU_DESCRIPTOR_HANDLE rtv{};
 };
 
 struct VGFXD3D12SwapChain
@@ -161,7 +162,6 @@ struct VGFXD3D12SwapChain
     uint32_t height = 0;
     bool vsync = false;
     std::vector<VGFXTexture> backbufferTextures;
-    std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> backbufferViews;
 };
 
 struct VGFXD3D12UploadContext
@@ -510,9 +510,7 @@ static void d3d12_updateSwapChain(VGFXD3D12Renderer* renderer, VGFXD3D12SwapChai
 
     swapChain->width = swapChainDesc.Width;
     swapChain->height = swapChainDesc.Height;
-    swapChain->vsync = true;
     swapChain->backbufferTextures.resize(swapChainDesc.BufferCount);
-    swapChain->backbufferViews.resize(swapChainDesc.BufferCount);
     for (uint32_t i = 0; i < swapChainDesc.BufferCount; ++i)
     {
         VGFXD3D12Texture* texture = new VGFXD3D12Texture();
@@ -529,8 +527,8 @@ static void d3d12_updateSwapChain(VGFXD3D12Renderer* renderer, VGFXD3D12SwapChai
         rtvDesc.Format = swapChainDesc.Format;
         rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
 
-        swapChain->backbufferViews[i] = renderer->rtvAllocator.Allocate();
-        renderer->device->CreateRenderTargetView(texture->handle, &rtvDesc, swapChain->backbufferViews[i]);
+        texture->rtv = renderer->rtvAllocator.Allocate();
+        renderer->device->CreateRenderTargetView(texture->handle, &rtvDesc, texture->rtv);
 
         swapChain->backbufferTextures[i] = vgfxD3D12AllocTexture(texture);
     }
@@ -540,6 +538,21 @@ static void d3d12_frame(VGFXRenderer* driverData)
 {
     HRESULT hr = S_OK;
     VGFXD3D12Renderer* renderer = (VGFXD3D12Renderer*)driverData;
+
+    /* Transition SwapChain textures to present */
+    for (size_t i = 0, count = renderer->swapChains.size(); i < count; ++i)
+    {
+        VGFXD3D12SwapChain* swapChain = renderer->swapChains[i];
+        VGFXD3D12Texture* texture = (VGFXD3D12Texture*)swapChain->backbufferTextures[swapChain->handle->GetCurrentBackBufferIndex()]->driverData;
+
+        D3D12_RESOURCE_BARRIER barrier = {};
+        barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barrier.Transition.pResource = texture->handle;
+        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
+        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        renderer->graphicsCommandList->ResourceBarrier(1, &barrier);
+    }
 
     hr = renderer->graphicsCommandList->Close();
     if (FAILED(hr))
@@ -555,8 +568,6 @@ static void d3d12_frame(VGFXRenderer* driverData)
     for (size_t i = 0, count = renderer->swapChains.size(); i < count && SUCCEEDED(hr); ++i)
     {
         VGFXD3D12SwapChain* swapChain = renderer->swapChains[i];
-        if (!swapChain->handle)
-            continue;
 
         if (swapChain->vsync)
         {
@@ -697,12 +708,6 @@ static uint32_t d3d12_SwapChainGetHeight(VGFXSwapChainImpl* driverData)
     return d3d12SwapChain->height;
 }
 
-static uint32_t d3d12_SwapChainGetBackBufferIndex(VGFXSwapChainImpl* driverData)
-{
-    VGFXD3D12SwapChain* d3d12SwapChain = (VGFXD3D12SwapChain*)driverData;
-    return d3d12SwapChain->handle->GetCurrentBackBufferIndex();
-}
-
 static VGFXTexture d3d12_SwapChainGetNextTexture(VGFXSwapChainImpl* driverData)
 {
     VGFXD3D12SwapChain* d3d12SwapChain = (VGFXD3D12SwapChain*)driverData;
@@ -777,12 +782,52 @@ static VGFXSwapChain d3d12_createSwapChain(VGFXRenderer* driverData, VGFXSurface
     VGFXD3D12SwapChain* impl = new VGFXD3D12SwapChain();
     impl->renderer = renderer;
     impl->handle = handle;
+    impl->vsync = info->presentMode == VGFXPresentMode_Fifo;
     d3d12_updateSwapChain(renderer, impl);
 
     VGFXSwapChain_T* swapChain = new VGFXSwapChain_T();
     ASSIGN_SWAPCHAIN(d3d12);
     swapChain->driverData = (VGFXSwapChainImpl*)impl;
     return swapChain;
+}
+
+static void d3d12_beginRenderPass(VGFXRenderer* driverData, const VGFXRenderPassInfo* info)
+{
+    VGFXD3D12Renderer* renderer = (VGFXD3D12Renderer*)driverData;
+    D3D12_CPU_DESCRIPTOR_HANDLE rtvs[VGFX_MAX_COLOR_ATTACHMENTS] = {};
+
+    for (uint32_t i = 0; i < info->colorAttachmentCount; ++i)
+    {
+        VGFXRenderPassColorAttachment attachment = info->colorAttachments[i];
+        VGFXD3D12Texture* texture = (VGFXD3D12Texture*)attachment.texture->driverData;
+
+        D3D12_RESOURCE_BARRIER resource_barrier = {};
+        resource_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        resource_barrier.Transition.pResource = texture->handle;
+        resource_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
+        resource_barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        resource_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        renderer->graphicsCommandList->ResourceBarrier(1, &resource_barrier);
+
+        rtvs[i] = texture->rtv;
+
+        switch (attachment.loadOp)
+        {
+            case VGFXLoadOp_Clear:
+                renderer->graphicsCommandList->ClearRenderTargetView(rtvs[i], &attachment.clearColor.r, 0, nullptr);
+                break;
+
+            default:
+                break;
+        }
+    }
+
+    renderer->graphicsCommandList->OMSetRenderTargets(info->colorAttachmentCount, rtvs, FALSE, nullptr);
+}
+
+static void d3d12_endRenderPass(VGFXRenderer* driverData)
+{
+    VGFXD3D12Renderer* renderer = (VGFXD3D12Renderer*)driverData;
 }
 
 static bool d3d12_isSupported(void)

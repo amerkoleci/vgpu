@@ -153,7 +153,7 @@ namespace
 
 #define VK_LOG_ERROR(result, message) vgfxLogError("Vulkan: %s, error: %s", message, ToString(result));
 
-struct gfxVulkanRenderer
+struct VGFXVulkanRenderer
 {
     bool debugUtils;
     VkInstance instance;
@@ -162,7 +162,7 @@ struct gfxVulkanRenderer
 
 static void vulkan_destroyDevice(VGFXDevice device)
 {
-    gfxVulkanRenderer* renderer = (gfxVulkanRenderer*)device->driverData;
+    VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)device->driverData;
 
     if (renderer->debugUtilsMessenger != VK_NULL_HANDLE)
     {
@@ -182,19 +182,19 @@ static void vulkan_destroyDevice(VGFXDevice device)
 
 static void vulkan_frame(VGFXRenderer* driverData)
 {
-    gfxVulkanRenderer* renderer = (gfxVulkanRenderer*)driverData;
+    VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
     _VGFX_UNUSED(renderer);
 }
 
 static void vulkan_waitIdle(VGFXRenderer* driverData)
 {
-    gfxVulkanRenderer* renderer = (gfxVulkanRenderer*)driverData;
+    VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
     _VGFX_UNUSED(renderer);
 }
 
 static bool vulkan_queryFeature(VGFXRenderer* driverData, VGFXFeature feature)
 {
-    gfxVulkanRenderer* renderer = (gfxVulkanRenderer*)driverData;
+    VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
     switch (feature)
     {
         case VGFX_FEATURE_COMPUTE:
@@ -210,8 +210,14 @@ static VGFXSwapChain vulkan_createSwapChain(VGFXRenderer* driverData, VGFXSurfac
     return nullptr;
 }
 
-static void vulkan_destroySwapChain(VGFXRenderer* driverData, VGFXSwapChain swapChain)
+static void vulkan_beginRenderPass(VGFXRenderer* driverData, const VGFXRenderPassInfo* info)
 {
+    VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
+}
+
+static void vulkan_endRenderPass(VGFXRenderer* driverData)
+{
+    VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
 }
 
 static bool vulkan_isSupported(void)
@@ -237,7 +243,7 @@ static bool vulkan_isSupported(void)
 
 static VGFXDevice vulkan_createDevice(VGFXSurface surface, const VGFXDeviceInfo* info)
 {
-    gfxVulkanRenderer* renderer = new gfxVulkanRenderer();
+    VGFXVulkanRenderer* renderer = new VGFXVulkanRenderer();
 
     // Enumerate available layers and extensions:
     {

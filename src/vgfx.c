@@ -276,12 +276,23 @@ uint32_t vgfxSwapChainGetHeight(VGFXSwapChain swapChain)
     return swapChain->getHeight(swapChain->driverData);
 }
 
-uint32_t vgfxSwapChainGetBackBufferIndex(VGFXSwapChain swapChain)
-{
-    return swapChain->getBackBufferIndex(swapChain->driverData);
-}
-
 VGFXTexture vgfxSwapChainGetNextTexture(VGFXSwapChain swapChain)
 {
     return swapChain->getNextTexture(swapChain->driverData);
+}
+
+/* Commands */
+void vgfxBeginRenderPass(VGFXDevice device, const VGFXRenderPassInfo* info)
+{
+    NULL_RETURN(device);
+    NULL_RETURN(info);
+
+    device->beginRenderPass(device->driverData, info);
+}
+
+void vgfxEndRenderPass(VGFXDevice device)
+{
+    NULL_RETURN(device);
+
+    device->endRenderPass(device->driverData);
 }
