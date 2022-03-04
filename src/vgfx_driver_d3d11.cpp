@@ -1,7 +1,7 @@
 // Copyright © Amer Koleci and Contributors.
 // Licensed under the MIT License (MIT). See LICENSE in the repository root for more information.
 
-#if defined(VGFX_D3D12_DRIVER)
+#if defined(VGFX_D3D11_DRIVER)
 
 #include "vgfx_driver.h"
 
@@ -14,26 +14,17 @@
 #define NOHELP
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
-#ifdef USING_DIRECTX_HEADERS
-#   include <directx/dxgiformat.h>
-#   include <directx/d3d12.h>
-#else
-#   include <d3d12.h>
-#endif
-#include <dxgi1_6.h>
 
-#ifdef USING_D3D12_AGILITY_SDK
-extern "C"
-{
-    // Used to enable the "Agility SDK" components
-    __declspec(dllexport) extern const UINT D3D12SDKVersion = D3D12_SDK_VERSION;
-    __declspec(dllexport) extern const char* D3D12SDKPath = u8".\\D3D12\\";
-}
-#endif
+#define D3D11_NO_HELPERS
+#include <d3d11_1.h>
+#include <dxgi1_6.h>
+#include <wrl/client.h>
 
 #if defined(_DEBUG) && WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
 #   include <dxgidebug.h>
 #endif
+
+using Microsoft::WRL::ComPtr;
 
 namespace
 {
@@ -41,9 +32,7 @@ namespace
     using PFN_CREATE_DXGI_FACTORY2 = decltype(&CreateDXGIFactory2);
     static PFN_CREATE_DXGI_FACTORY2 vgfxCreateDXGIFactory2 = nullptr;
 
-    static PFN_D3D12_GET_DEBUG_INTERFACE vgfxD3D12GetDebugInterface = nullptr;
-    static PFN_D3D12_CREATE_DEVICE vgfxD3D12CreateDevice = nullptr;
-    static PFN_D3D12_SERIALIZE_VERSIONED_ROOT_SIGNATURE vgfxD3D12SerializeVersionedRootSignature = nullptr;
+    static PFN_D3D11_CREATE_DEVICE vgfxD3D11CreateDevice = nullptr;
 
 #if defined(_DEBUG)
     using PFN_DXGI_GET_DEBUG_INTERFACE1 = decltype(&DXGIGetDebugInterface1);
@@ -64,24 +53,51 @@ namespace
             resource = nullptr;
         }
     }
+
+    static constexpr D3D_FEATURE_LEVEL s_featureLevels[] =
+    {
+        D3D_FEATURE_LEVEL_11_1,
+        D3D_FEATURE_LEVEL_11_0,
+        D3D_FEATURE_LEVEL_10_1,
+        D3D_FEATURE_LEVEL_10_0,
+    };
+
+    // Check for SDK Layer support.
+    inline bool SdkLayersAvailable() noexcept
+    {
+        HRESULT hr = vgfxD3D11CreateDevice(
+            nullptr,
+            D3D_DRIVER_TYPE_NULL,       // There is no need to create a real hardware device.
+            nullptr,
+            D3D11_CREATE_DEVICE_DEBUG,  // Check for the SDK layers.
+            nullptr,                    // Any feature level will do.
+            0,
+            D3D11_SDK_VERSION,
+            nullptr,                    // No need to keep the D3D device reference.
+            nullptr,                    // No need to know the feature level.
+            nullptr                     // No need to keep the D3D device context reference.
+        );
+
+        return SUCCEEDED(hr);
+    }
 }
 
 #if !WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
 #define vgfxCreateDXGIFactory2 CreateDXGIFactory2
-#define vgfxD3D12CreateDevice D3D12CreateDevice
-#define vgfxD3D12GetDebugInterface D3D12GetDebugInterface
+#define vgfxD3D11CreateDevice D3D11CreateDevice
 #endif
 
-struct gfxD3D12Renderer
+struct gfxD3D11Renderer
 {
     IDXGIFactory4* factory;
     bool tearingSupported;
-    ID3D12Device5* device;
+    ID3D11Device1* device;
+    ID3D11DeviceContext1* context;
 };
 
-static void d3d12_destroyDevice(gfxDevice device)
+static void d3d11_destroyDevice(gfxDevice device)
 {
-    gfxD3D12Renderer* renderer = (gfxD3D12Renderer*)device->driverData;
+    gfxD3D11Renderer* renderer = (gfxD3D11Renderer*)device->driverData;
 
     if (renderer->device)
     {
@@ -92,11 +108,10 @@ static void d3d12_destroyDevice(gfxDevice device)
         {
             //DebugString("There are %d unreleased references left on the D3D device!", ref_count);
 
-            ID3D12DebugDevice* debugDevice = nullptr;
-            if (SUCCEEDED(renderer->device->QueryInterface(&debugDevice)))
+            ComPtr<ID3D11Debug> d3d11Debug;
+            if (SUCCEEDED(renderer->device->QueryInterface(d3d11Debug.GetAddressOf())))
             {
-                debugDevice->ReportLiveDeviceObjects(D3D12_RLDO_DETAIL | D3D12_RLDO_IGNORE_INTERNAL);
-                debugDevice->Release();
+                d3d11Debug->ReportLiveDeviceObjects(D3D11_RLDO_DETAIL | D3D11_RLDO_IGNORE_INTERNAL);
             }
 
         }
@@ -110,12 +125,11 @@ static void d3d12_destroyDevice(gfxDevice device)
 
 #if defined(_DEBUG) && WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
     {
-        IDXGIDebug1* dxgiDebug;
+        ComPtr<IDXGIDebug1> dxgiDebug;
         if (vgfxDXGIGetDebugInterface1 != nullptr
             && SUCCEEDED(vgfxDXGIGetDebugInterface1(0, IID_PPV_ARGS(&dxgiDebug))))
         {
             dxgiDebug->ReportLiveObjects(VGFX_DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_FLAGS(DXGI_DEBUG_RLO_SUMMARY | DXGI_DEBUG_RLO_IGNORE_INTERNAL));
-            dxgiDebug->Release();
         }
     }
 #endif
@@ -124,13 +138,13 @@ static void d3d12_destroyDevice(gfxDevice device)
     VGFX_FREE(device);
 }
 
-static void d3d12_frame(gfxRenderer* driverData)
+static void d3d11_frame(gfxRenderer* driverData)
 {
-    gfxD3D12Renderer* renderer = (gfxD3D12Renderer*)driverData;
+    gfxD3D11Renderer* renderer = (gfxD3D11Renderer*)driverData;
     _VGFX_UNUSED(renderer);
 }
 
-static bool d3d12_isSupported()
+static bool d3d11_isSupported()
 {
     static bool available_initialized = false;
     static bool available = false;
@@ -143,10 +157,10 @@ static bool d3d12_isSupported()
 
 #if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
     HMODULE dxgiDLL = LoadLibraryExW(L"dxgi.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
-    HMODULE d3d12DLL = LoadLibraryExW(L"d3d12.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    HMODULE d3d11DLL = LoadLibraryExW(L"d3d11.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
 
     if (dxgiDLL == nullptr ||
-        d3d12DLL == nullptr)
+        d3d11DLL == nullptr)
     {
         return false;
     }
@@ -161,104 +175,66 @@ static bool d3d12_isSupported()
     vgfxDXGIGetDebugInterface1 = (PFN_DXGI_GET_DEBUG_INTERFACE1)GetProcAddress(dxgiDLL, "DXGIGetDebugInterface1");
 #endif
 
-    vgfxD3D12GetDebugInterface = (PFN_D3D12_GET_DEBUG_INTERFACE)GetProcAddress(d3d12DLL, "D3D12GetDebugInterface");
-    vgfxD3D12CreateDevice = (PFN_D3D12_CREATE_DEVICE)GetProcAddress(d3d12DLL, "D3D12CreateDevice");
-    if (!vgfxD3D12CreateDevice)
+    vgfxD3D11CreateDevice = (PFN_D3D11_CREATE_DEVICE)GetProcAddress(d3d11DLL, "D3D12CreateDevice");
+    if (!vgfxD3D11CreateDevice)
     {
-        return false;
-    }
-
-    vgfxD3D12SerializeVersionedRootSignature = (PFN_D3D12_SERIALIZE_VERSIONED_ROOT_SIGNATURE)GetProcAddress(d3d12DLL, "D3D12SerializeVersionedRootSignature");
-    if (!vgfxD3D12SerializeVersionedRootSignature) {
         return false;
     }
 #endif
 
-    IDXGIFactory4* dxgiFactory = nullptr;
-    if (FAILED(vgfxCreateDXGIFactory2(0, IID_PPV_ARGS(&dxgiFactory))))
+    HRESULT hr = vgfxD3D11CreateDevice(
+        NULL,
+        D3D_DRIVER_TYPE_HARDWARE,
+        NULL,
+        D3D11_CREATE_DEVICE_BGRA_SUPPORT,
+        s_featureLevels,
+        _countof(s_featureLevels),
+        D3D11_SDK_VERSION,
+        NULL,
+        NULL,
+        NULL
+    );
+
+    if (FAILED(hr))
+    {
+        // D3D11.1 not available
+        hr = vgfxD3D11CreateDevice(
+            NULL,
+            D3D_DRIVER_TYPE_HARDWARE,
+            NULL,
+            D3D11_CREATE_DEVICE_BGRA_SUPPORT,
+            &s_featureLevels[1],
+            _countof(s_featureLevels) - 1,
+            D3D11_SDK_VERSION,
+            NULL,
+            NULL,
+            NULL
+        );
+    }
+
+    if (FAILED(hr))
     {
         return false;
     }
 
-    bool foundCompatibleDevice = true;
-    IDXGIAdapter1* dxgiAdapter = nullptr;
-    for (uint32_t i = 0; DXGI_ERROR_NOT_FOUND != dxgiFactory->EnumAdapters1(i, &dxgiAdapter); ++i)
-    {
-        DXGI_ADAPTER_DESC1 adapterDesc;
-        dxgiAdapter->GetDesc1(&adapterDesc);
-
-        // Don't select the Basic Render Driver adapter.
-        if (adapterDesc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)
-        {
-            dxgiAdapter->Release();
-            continue;
-        }
-
-        // Check to see if the adapter supports Direct3D 12,
-        // but don't create the actual device.
-        if (SUCCEEDED(vgfxD3D12CreateDevice(dxgiAdapter, D3D_FEATURE_LEVEL_12_0, _uuidof(ID3D12Device), nullptr)))
-        {
-            foundCompatibleDevice = true;
-            break;
-        }
-    }
-
-    SafeRelease(dxgiAdapter);
-    SafeRelease(dxgiFactory);
-
-    if (foundCompatibleDevice)
-    {
-        available = true;
-        return true;
-    }
-
-    return false;
+    available = true;
+    return true;
 }
 
-static gfxDevice d3d12CreateDevice(const VGFXDeviceInfo* info)
+static gfxDevice d3d11CreateDevice(const VGFXDeviceInfo* info)
 {
-    if (!d3d12_isSupported())
+    if (!d3d11_isSupported())
     {
         return nullptr;
     }
 
-    gfxD3D12Renderer* renderer = new gfxD3D12Renderer();
+    gfxD3D11Renderer* renderer = new gfxD3D11Renderer();
 
     DWORD dxgiFactoryFlags = 0;
     if (info->validationMode != VGFX_VALIDATION_MODE_DISABLED)
     {
-        ID3D12Debug* debugController;
-        if (SUCCEEDED(vgfxD3D12GetDebugInterface(IID_PPV_ARGS(&debugController))))
-        {
-            debugController->EnableDebugLayer();
-
-            if (info->validationMode == VGFX_VALIDATION_MODE_GPU)
-            {
-                ID3D12Debug1* debugController1;
-                if (SUCCEEDED(debugController->QueryInterface(&debugController1)))
-                {
-                    debugController1->SetEnableGPUBasedValidation(TRUE);
-                    debugController1->SetEnableSynchronizedCommandQueueValidation(TRUE);
-                    debugController1->Release();
-                }
-
-                ID3D12Debug2* debugController2;
-                if (SUCCEEDED(debugController->QueryInterface(&debugController2)))
-                {
-                    debugController2->SetGPUBasedValidationFlags(D3D12_GPU_BASED_VALIDATION_FLAGS_NONE);
-                    debugController2->Release();
-                }
-            }
-
-            debugController->Release();
-        }
-        else
-        {
-            OutputDebugStringA("WARNING: Direct3D Debug Device is not available\n");
-        }
-
 #ifdef _DEBUG
-        IDXGIInfoQueue* dxgiInfoQueue;
+        ComPtr<IDXGIInfoQueue> dxgiInfoQueue;
         if (SUCCEEDED(vgfxDXGIGetDebugInterface1(0, IID_PPV_ARGS(&dxgiInfoQueue))))
         {
             dxgiFactoryFlags = DXGI_CREATE_FACTORY_DEBUG;
@@ -274,7 +250,6 @@ static gfxDevice d3d12CreateDevice(const VGFXDeviceInfo* info)
             filter.DenyList.NumIDs = _countof(hide);
             filter.DenyList.pIDList = hide;
             dxgiInfoQueue->AddStorageFilterEntries(VGFX_DXGI_DEBUG_DXGI, &filter);
-            dxgiInfoQueue->Release();
         }
 #endif
     }
@@ -321,17 +296,8 @@ static gfxDevice d3d12CreateDevice(const VGFXDeviceInfo* info)
                 return renderer->factory->EnumAdapters1(index, ppAdapter);
         };
 
-        static constexpr D3D_FEATURE_LEVEL s_featureLevels[] =
-        {
-            D3D_FEATURE_LEVEL_12_2,
-            D3D_FEATURE_LEVEL_12_1,
-            D3D_FEATURE_LEVEL_12_0,
-            D3D_FEATURE_LEVEL_11_1,
-            D3D_FEATURE_LEVEL_11_0,
-        };
-
-        IDXGIAdapter1* dxgiAdapter = nullptr;
-        for (uint32_t i = 0; NextAdapter(i, &dxgiAdapter) != DXGI_ERROR_NOT_FOUND; ++i)
+        ComPtr<IDXGIAdapter1> dxgiAdapter = nullptr;
+        for (uint32_t i = 0; NextAdapter(i, dxgiAdapter.ReleaseAndGetAddressOf()) != DXGI_ERROR_NOT_FOUND; ++i)
         {
             DXGI_ADAPTER_DESC1 adapterDesc;
             dxgiAdapter->GetDesc1(&adapterDesc);
@@ -339,20 +305,10 @@ static gfxDevice d3d12CreateDevice(const VGFXDeviceInfo* info)
             // Don't select the Basic Render Driver adapter.
             if (adapterDesc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)
             {
-                dxgiAdapter->Release();
                 continue;
             }
 
-            for (auto& featurelevel : s_featureLevels)
-            {
-                if (SUCCEEDED(vgfxD3D12CreateDevice(dxgiAdapter, featurelevel, IID_PPV_ARGS(&renderer->device))))
-                {
-                    break;
-                }
-            }
-
-            if (renderer->device != nullptr)
-                break;
+            break;
         }
 
         VGFX_ASSERT(dxgiAdapter != nullptr);
@@ -364,25 +320,23 @@ static gfxDevice d3d12CreateDevice(const VGFXDeviceInfo* info)
         }
 
         // Create the DX12 API device object.
-        renderer->device->SetName(L"vgfx-device");
+        //renderer->device->SetName(L"vgfx-device");
 
         // Init capabilities.
         DXGI_ADAPTER_DESC1 adapterDesc;
         dxgiAdapter->GetDesc1(&adapterDesc);
-
-        SafeRelease(dxgiAdapter);
     }
 
     gfxDevice_T* device = (gfxDevice_T*)VGFX_MALLOC(sizeof(gfxDevice_T));
-    ASSIGN_DRIVER(d3d12);
+    ASSIGN_DRIVER(d3d11);
 
     device->driverData = (gfxRenderer*)renderer;
     return device;
 }
 
-gfxDriver d3d12_driver = {
-    VGFX_API_D3D12,
-    d3d12CreateDevice
+gfxDriver d3d11_driver = {
+    VGFX_API_D3D11,
+    d3d11CreateDevice
 };
 
-#endif /* VGFX_D3D12_DRIVER */
+#endif /* VGFX_D3D11_DRIVER */

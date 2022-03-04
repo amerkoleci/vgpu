@@ -2,13 +2,32 @@
 // Licensed under the MIT License (MIT). See LICENSE in the repository root for more information.
 
 #include "vgfx_driver.h"
+#if defined(__EMSCRIPTEN__)
+#include <emscripten.h>
+#endif
 
 #define MAX_MESSAGE_SIZE 1024
 
 static void gfxDefaultLogCallback(VGFXLogLevel level, const char* message)
 {
+#if defined(__EMSCRIPTEN__)
+    switch (level)
+    {
+        case VGFX_LOG_LEVEL_WARN:
+            emscripten_log(EM_LOG_CONSOLE | EM_LOG_WARN, "%s", message);
+            break;
+        case VGFX_LOG_LEVEL_ERROR:
+            emscripten_log(EM_LOG_CONSOLE | EM_LOG_ERROR, "%s", message);
+            break;
+        default:
+            emscripten_log(EM_LOG_CONSOLE, "%s", message);
+            break;
+    }
+    
+#else
     _VGFX_UNUSED(level);
     _VGFX_UNUSED(message);
+#endif
 }
 
 static vgfxLogFunc s_LogFunc = gfxDefaultLogCallback;
@@ -52,8 +71,14 @@ static const gfxDriver* drivers[] = {
 #if defined(VGFX_D3D12_DRIVER)
     &d3d12_driver,
 #endif
+#if defined(VGFX_D3D11_DRIVER)
+    &d3d11_driver,
+#endif
 #if defined(VGFX_VULKAN_DRIVER)
     &vulkan_driver,
+#endif
+#if defined(VGFX_WEBGPU_DRIVER)
+    &webgpu_driver,
 #endif
     NULL
 };
@@ -70,4 +95,10 @@ gfxDevice vgfxCreateDevice(const VGFXDeviceInfo* info)
  {
      NULL_RETURN(device);
      device->destroyDevice(device);
+ }
+
+ void vgfxFrame(gfxDevice device)
+ {
+     NULL_RETURN(device);
+     device->frame(device->driverData);
  }

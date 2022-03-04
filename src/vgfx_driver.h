@@ -8,9 +8,9 @@
 #include <stdio.h>
 #include <stdarg.h>
 
-#ifndef VGPU_MALLOC
+#ifndef VGFX_MALLOC
 #   include <stdlib.h>
-#   define VGPU_MALLOC(s) malloc(s)
+#   define VGFX_MALLOC(s) malloc(s)
 #   define VGFX_FREE(p) free(p)
 #endif
 
@@ -55,6 +55,7 @@ typedef struct gfxRenderer gfxRenderer;
 struct gfxDevice_T
 {
     void (*destroyDevice)(gfxDevice device);
+    void (*frame)(gfxRenderer* driverData);
 
     /* Opaque pointer for the Driver */
     gfxRenderer* driverData;
@@ -64,6 +65,7 @@ struct gfxDevice_T
 	device->func = name##_##func;
 #define ASSIGN_DRIVER(name) \
 	ASSIGN_DRIVER_FUNC(destroyDevice, name) \
+    ASSIGN_DRIVER_FUNC(frame, name) \
 
 typedef struct gfxDriver
 {
@@ -73,5 +75,7 @@ typedef struct gfxDriver
 
 _VGFX_EXTERN gfxDriver vulkan_driver;
 _VGFX_EXTERN gfxDriver d3d12_driver;
+_VGFX_EXTERN gfxDriver d3d11_driver;
+_VGFX_EXTERN gfxDriver webgpu_driver;
 
 #endif /* _VGFX_DRIVER_H_ */

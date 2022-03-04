@@ -56,6 +56,8 @@ typedef enum VGFXAPI
 {
     VGFX_API_VULKAN = 0,
     VGFX_API_D3D12,
+    VGFX_API_D3D11,
+    VGFX_API_WEBGPU,
 
     _VGFX_API_COUNT,
     _VGFX_API_FORCE_U32 = 0x7FFFFFFF
@@ -96,5 +98,6 @@ VGFX_API void vgfxSetLogFunc(vgfxLogFunc func);
 
 VGFX_API gfxDevice vgfxCreateDevice(const VGFXDeviceInfo* info);
 VGFX_API void vgfxDestroyDevice(gfxDevice device);
+VGFX_API void vgfxFrame(gfxDevice device);
 
 #endif /* _VGFX_H */

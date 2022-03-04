@@ -180,6 +180,12 @@ static void vulkan_destroyDevice(gfxDevice device)
     VGFX_FREE(device);
 }
 
+static void vulkan_frame(gfxRenderer* driverData)
+{
+    gfxVulkanRenderer* renderer = (gfxVulkanRenderer*)driverData;
+    _VGFX_UNUSED(renderer);
+}
+
 static gfxDevice vulkanCreateDevice(const VGFXDeviceInfo* info)
 {
     VkResult result = volkInitialize();
@@ -361,7 +367,7 @@ static gfxDevice vulkanCreateDevice(const VGFXDeviceInfo* info)
 #endif
     }
 
-    gfxDevice_T* device = (gfxDevice_T*)VGPU_MALLOC(sizeof(gfxDevice_T));
+    gfxDevice_T* device = (gfxDevice_T*)VGFX_MALLOC(sizeof(gfxDevice_T));
     ASSIGN_DRIVER(vulkan);
 
     device->driverData = (gfxRenderer*)renderer;
