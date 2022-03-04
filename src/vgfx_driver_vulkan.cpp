@@ -160,7 +160,7 @@ struct gfxVulkanRenderer
     VkDebugUtilsMessengerEXT debugUtilsMessenger;
 };
 
-static void vulkan_destroyDevice(gfxDevice device)
+static void vulkan_destroyDevice(VGFXDevice device)
 {
     gfxVulkanRenderer* renderer = (gfxVulkanRenderer*)device->driverData;
 
@@ -180,7 +180,7 @@ static void vulkan_destroyDevice(gfxDevice device)
     VGFX_FREE(device);
 }
 
-static void vulkan_frame(gfxRenderer* driverData)
+static void vulkan_frame(VGFXRenderer* driverData)
 {
     gfxVulkanRenderer* renderer = (gfxVulkanRenderer*)driverData;
     _VGFX_UNUSED(renderer);
@@ -207,7 +207,7 @@ static bool vulkan_isSupported(void)
     return true;
 }
 
-static gfxDevice vulkan_createDevice(VGFXSurface surface, const VGFXDeviceInfo* info)
+static VGFXDevice vulkan_createDevice(VGFXSurface surface, const VGFXDeviceInfo* info)
 {
     gfxVulkanRenderer* renderer = new gfxVulkanRenderer();
 
@@ -386,14 +386,14 @@ static gfxDevice vulkan_createDevice(VGFXSurface surface, const VGFXDeviceInfo* 
 
     vgfxLogInfo("vgfx driver: Vulkan");
 
-    gfxDevice_T* device = (gfxDevice_T*)VGFX_MALLOC(sizeof(gfxDevice_T));
+    VGFXDevice_T* device = (VGFXDevice_T*)VGFX_MALLOC(sizeof(VGFXDevice_T));
     ASSIGN_DRIVER(vulkan);
 
-    device->driverData = (gfxRenderer*)renderer;
+    device->driverData = (VGFXRenderer*)renderer;
     return device;
 }
 
-gfxDriver vulkan_driver = {
+VGFXDriver vulkan_driver = {
     VGFX_API_VULKAN,
     vulkan_isSupported,
     vulkan_createDevice

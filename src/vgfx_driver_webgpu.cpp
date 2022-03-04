@@ -10,9 +10,6 @@
 #else
 #error "Enable Dawn WebGPU implementation"
 #endif
-namespace
-{
-}
 
 struct gfxWebGPURenderer
 {
@@ -21,7 +18,7 @@ struct gfxWebGPURenderer
     WGPUSwapChain swapchain;
 };
 
-static void webgpu_destroyDevice(gfxDevice device)
+static void webgpu_destroyDevice(VGFXDevice device)
 {
     gfxWebGPURenderer* renderer = (gfxWebGPURenderer*)device->driverData;
 
@@ -41,7 +38,7 @@ static void webgpu_destroyDevice(gfxDevice device)
 }
 
 
-static void webgpu_frame(gfxRenderer* driverData)
+static void webgpu_frame(VGFXRenderer* driverData)
 {
     gfxWebGPURenderer* renderer = (gfxWebGPURenderer*)driverData;
 
@@ -80,8 +77,9 @@ static bool webgpu_isSupported(void)
     return true;
 }
 
-static gfxDevice webgpu_createDevice(VGFXSurface surface, const VGFXDeviceInfo* info)
+static VGFXDevice webgpu_createDevice(VGFXSurface surface, const VGFXDeviceInfo* info)
 {
+    VGFX_ASSERT(info);
     VGFX_ASSERT(surface->type == VGFX_SURFACE_TYPE_WEB);
 
     gfxWebGPURenderer* renderer = new gfxWebGPURenderer();
@@ -123,11 +121,11 @@ static gfxDevice webgpu_createDevice(VGFXSurface surface, const VGFXDeviceInfo* 
     gfxDevice_T* device = (gfxDevice_T*)VGFX_MALLOC(sizeof(gfxDevice_T));
     ASSIGN_DRIVER(webgpu);
 
-    device->driverData = (gfxRenderer*)renderer;
+    device->driverData = (VGFXRenderer*)renderer;
     return device;
 }
 
-gfxDriver webgpu_driver = {
+VGFXDriver webgpu_driver = {
     VGFX_API_WEBGPU,
     webgpu_isSupported,
     webgpu_createDevice

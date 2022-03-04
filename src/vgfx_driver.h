@@ -57,16 +57,16 @@ _VGFX_EXTERN void vgfxLogInfo(const char* format, ...);
 _VGFX_EXTERN void vgfxLogWarn(const char* format, ...);
 _VGFX_EXTERN void vgfxLogError(const char* format, ...);
 
-typedef struct gfxRenderer gfxRenderer;
+typedef struct VGFXRenderer VGFXRenderer;
 
-typedef struct gfxSurface_T
+typedef struct VGFXSurface_T
 {
     VGFXSurfaceType type;
     uint32_t width;
     uint32_t height;
 #if defined(_WIN32)
     HINSTANCE hinstance;
-    HWND hwnd;
+    HWND window;
 #elif defined(__EMSCRIPTEN__)
     const char* selector;
 #elif defined(__ANDROID__)
@@ -76,16 +76,16 @@ typedef struct gfxSurface_T
     uint32_t window;
 #endif
 
-} gfxSurface_T;
+} VGFXSurface_T;
 
-struct gfxDevice_T
+typedef struct VGFXDevice_T
 {
-    void (*destroyDevice)(gfxDevice device);
-    void (*frame)(gfxRenderer* driverData);
+    void (*destroyDevice)(VGFXDevice device);
+    void (*frame)(VGFXRenderer* driverData);
 
     /* Opaque pointer for the Driver */
-    gfxRenderer* driverData;
-};
+    VGFXRenderer* driverData;
+} VGFXDevice_T;
 
 #define ASSIGN_DRIVER_FUNC(func, name) \
 	device->func = name##_##func;
@@ -93,16 +93,16 @@ struct gfxDevice_T
 	ASSIGN_DRIVER_FUNC(destroyDevice, name) \
     ASSIGN_DRIVER_FUNC(frame, name) \
 
-typedef struct gfxDriver
+typedef struct VGFXDriver
 {
     VGFXAPI api;
     bool (*isSupported)(void);
-    gfxDevice (*createDevice)(VGFXSurface surface, const VGFXDeviceInfo* info);
-} gfxDriver;
+    VGFXDevice(*createDevice)(VGFXSurface surface, const VGFXDeviceInfo* info);
+} VGFXDriver;
 
-_VGFX_EXTERN gfxDriver vulkan_driver;
-_VGFX_EXTERN gfxDriver d3d12_driver;
-_VGFX_EXTERN gfxDriver d3d11_driver;
-_VGFX_EXTERN gfxDriver webgpu_driver;
+_VGFX_EXTERN VGFXDriver vulkan_driver;
+_VGFX_EXTERN VGFXDriver d3d12_driver;
+_VGFX_EXTERN VGFXDriver d3d11_driver;
+_VGFX_EXTERN VGFXDriver webgpu_driver;
 
 #endif /* _VGFX_DRIVER_H_ */

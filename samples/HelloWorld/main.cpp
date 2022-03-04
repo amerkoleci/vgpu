@@ -21,7 +21,7 @@
 #include <vgfx.h>
 
 VGFXSurface surface = nullptr;
-gfxDevice device = nullptr;
+VGFXDevice device = nullptr;
 
 #if defined(__EMSCRIPTEN__)
 namespace

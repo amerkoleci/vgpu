@@ -141,8 +141,8 @@ if(MSVC)
      # Use fast floating point model
     target_compile_options(${PROJECT_NAME} PRIVATE /fp:fast)
 
-    # Set warning level 4
-    target_compile_options(${PROJECT_NAME} PRIVATE /W4)
+    # Set warning level 3
+    target_compile_options(${PROJECT_NAME} PRIVATE /W3)
 
     # Warnings as Errors Enabled
     target_compile_options(${PROJECT_NAME} PRIVATE /WX)
@@ -157,6 +157,15 @@ if (VGFX_VULKAN_DRIVER)
 endif ()
 
 if (VGFX_D3D12_DRIVER)
+    target_sources(${PROJECT_NAME} PRIVATE
+        src/lib/D3D12MemoryAllocator/D3D12MemAlloc.cpp
+        src/lib/D3D12MemoryAllocator/D3D12MemAlloc.h
+    )
+
+    target_include_directories(${PROJECT_NAME} PRIVATE
+	    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/lib/D3D12MemoryAllocator>
+    )
+
     target_compile_definitions(${PROJECT_NAME} PRIVATE VGFX_D3D12_DRIVER=1)
 endif ()
 

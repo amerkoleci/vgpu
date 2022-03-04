@@ -74,7 +74,7 @@ void vgfxSetLogFunc(vgfxLogFunc func)
     s_LogFunc = func;
 }
 
-static const gfxDriver* drivers[] = {
+static const VGFXDriver* drivers[] = {
 #if defined(VGFX_D3D12_DRIVER)
     &d3d12_driver,
 #endif
@@ -93,20 +93,25 @@ static const gfxDriver* drivers[] = {
 #define NULL_RETURN(name) if (name == NULL) { return; }
 #define NULL_RETURN_NULL(name) if (name == NULL) { return NULL; }
 
+VGFXSurface vgfxAllocSurface(VGFXSurfaceType type) {
+    VGFXSurface surface =(VGFXSurface_T*)VGFX_MALLOC(sizeof(VGFXSurface_T));
+    surface->type = type;
+    return surface;
+}
+
 VGFXSurface vgfxCreateSurfaceWin32(void* hinstance, void* hwnd) {
-    gfxSurface_T* surface = (gfxSurface_T*)VGFX_MALLOC(sizeof(gfxSurface_T));
-    surface->type = VGFX_SURFACE_TYPE_WIN32;
+    VGFXSurface surface = vgfxAllocSurface(VGFX_SURFACE_TYPE_WIN32);
 #if defined(_WIN32)
     surface->hinstance = (HINSTANCE)hinstance;
-    surface->hwnd = (HWND)hwnd;
-    if (!IsWindow(surface->hwnd))
+    surface->window = (HWND)hwnd;
+    if (!IsWindow(surface->window))
     {
         VGFX_FREE(surface);
         return NULL;
     }
 
     RECT window_rect;
-    GetClientRect(surface->hwnd, &window_rect);
+    GetClientRect(surface->window, &window_rect);
     surface->width = window_rect.right - window_rect.left;
     surface->height = window_rect.bottom - window_rect.top;
 #else
@@ -117,8 +122,7 @@ VGFXSurface vgfxCreateSurfaceWin32(void* hinstance, void* hwnd) {
 }
 
 VGFXSurface vgfxCreateSurfaceXlib(void* display, uint32_t window) {
-    gfxSurface_T* surface = (gfxSurface_T*)VGFX_MALLOC(sizeof(gfxSurface_T));
-    surface->type = VGFX_SURFACE_TYPE_XLIB;
+    VGFXSurface surface = vgfxAllocSurface(VGFX_SURFACE_TYPE_XLIB);
 #if defined(__linux__)
     surface->display = display;
     surface->window = window;
@@ -130,8 +134,7 @@ VGFXSurface vgfxCreateSurfaceXlib(void* display, uint32_t window) {
 }
 
 VGFXSurface vgfxCreateSurfaceWeb(const char* selector) {
-    gfxSurface_T* surface = (gfxSurface_T*)VGFX_MALLOC(sizeof(gfxSurface_T));
-    surface->type = VGFX_SURFACE_TYPE_WEB;
+    VGFXSurface surface = vgfxAllocSurface(VGFX_SURFACE_TYPE_WEB);
 #if defined(__EMSCRIPTEN__)
     surface->selector = selector;
 #else
@@ -169,7 +172,7 @@ bool vgfxIsSupported(VGFXAPI api)
     return false;
 }
 
-gfxDevice vgfxCreateDevice(VGFXSurface surface, const VGFXDeviceInfo* info)
+VGFXDevice vgfxCreateDevice(VGFXSurface surface, const VGFXDeviceInfo* info)
 {
     VGFXAPI api = info->preferredApi;
 retry:
@@ -212,13 +215,13 @@ retry:
     return NULL;
 }
 
-void vgfxDestroyDevice(gfxDevice device)
+void vgfxDestroyDevice(VGFXDevice device)
 {
     NULL_RETURN(device);
     device->destroyDevice(device);
 }
 
-void vgfxFrame(gfxDevice device)
+void vgfxFrame(VGFXDevice device)
 {
     NULL_RETURN(device);
     device->frame(device->driverData);

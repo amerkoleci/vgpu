@@ -40,8 +40,14 @@
 #   define VGFX_CALL
 #endif
 
-typedef struct gfxSurface_T* VGFXSurface;
-typedef struct gfxDevice_T* gfxDevice;
+enum {
+    VGFX_MAX_INFLIGHT_FRAMES = 2,
+    VGFX_MAX_COLOR_ATTACHMENTS = 8,
+    VGFX_MAX_VERTEX_ATTRIBUTES = 16,
+};
+
+typedef struct VGFXSurface_T* VGFXSurface;
+typedef struct VGFXDevice_T* VGFXDevice;
 
 typedef enum VGFXLogLevel
 {
@@ -117,8 +123,8 @@ VGFX_API void vgfxDestroySurface(VGFXSurface surface);
 VGFX_API VGFXSurfaceType vgfxGetSurfaceType(VGFXSurface surface);
 
 VGFX_API bool vgfxIsSupported(VGFXAPI api);
-VGFX_API gfxDevice vgfxCreateDevice(VGFXSurface surface, const VGFXDeviceInfo* info);
-VGFX_API void vgfxDestroyDevice(gfxDevice device);
-VGFX_API void vgfxFrame(gfxDevice device);
+VGFX_API VGFXDevice vgfxCreateDevice(VGFXSurface surface, const VGFXDeviceInfo* info);
+VGFX_API void vgfxDestroyDevice(VGFXDevice device);
+VGFX_API void vgfxFrame(VGFXDevice device);
 
 #endif /* _VGFX_H */
