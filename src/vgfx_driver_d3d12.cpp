@@ -677,7 +677,7 @@ static void d3d12_TextureDestroy(VGFXTexture texture)
 {
     VGFXD3D12Texture* d3d12Texture = (VGFXD3D12Texture*)texture->driverData;
     d3d12_DeferDestroy(d3d12Texture->renderer, d3d12Texture->handle, d3d12Texture->allocation);
-
+    d3d12Texture->renderer->rtvAllocator.Free(d3d12Texture->rtv);
     delete texture;
 }
 
@@ -918,14 +918,14 @@ static VGFXDevice d3d12_createDevice(VGFXSurface surface, const VGFXDeviceInfo* 
     VGFXD3D12Renderer* renderer = new VGFXD3D12Renderer();
 
     DWORD dxgiFactoryFlags = 0;
-    if (info->validationMode != VGFX_VALIDATION_MODE_DISABLED)
+    if (info->validationMode != VGFXValidationMode_Disabled)
     {
         ComPtr<ID3D12Debug> debugController;
         if (SUCCEEDED(vgfxD3D12GetDebugInterface(IID_PPV_ARGS(debugController.GetAddressOf()))))
         {
             debugController->EnableDebugLayer();
 
-            if (info->validationMode == VGFX_VALIDATION_MODE_GPU)
+            if (info->validationMode == VGFXValidationMode_GPU)
             {
                 ComPtr<ID3D12Debug1> debugController1;
                 if (SUCCEEDED(debugController.As(&debugController1)))
@@ -1052,7 +1052,7 @@ static VGFXDevice d3d12_createDevice(VGFXSurface surface, const VGFXDeviceInfo* 
         // Create the DX12 API device object.
         renderer->device->SetName(L"vgfx-device");
 
-        if (info->validationMode != VGFX_VALIDATION_MODE_DISABLED)
+        if (info->validationMode != VGFXValidationMode_Disabled)
         {
             // Configure debug device (if active).
             ComPtr<ID3D12InfoQueue> infoQueue;
@@ -1070,7 +1070,7 @@ static VGFXDevice d3d12_createDevice(VGFXSurface surface, const VGFXDeviceInfo* 
                 enabledSeverities.push_back(D3D12_MESSAGE_SEVERITY_WARNING);
                 enabledSeverities.push_back(D3D12_MESSAGE_SEVERITY_MESSAGE);
 
-                if (info->validationMode == VGFX_VALIDATION_MODE_VERBOSE)
+                if (info->validationMode == VGFXValidationMode_Verbose)
                 {
                     // Verbose only filters
                     enabledSeverities.push_back(D3D12_MESSAGE_SEVERITY_INFO);
@@ -1211,7 +1211,7 @@ static VGFXDevice d3d12_createDevice(VGFXSurface surface, const VGFXDeviceInfo* 
 }
 
 VGFXDriver d3d12_driver = {
-    VGFX_API_D3D12,
+    VGFXAPI_D3D12,
     d3d12_isSupported,
     d3d12_createDevice
 };

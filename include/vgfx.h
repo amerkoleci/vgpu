@@ -53,53 +53,54 @@ typedef struct VGFXTexture_T* VGFXTexture;
 
 typedef enum VGFXLogLevel
 {
-    VGFX_LOG_LEVEL_INFO = 0,
-    VGFX_LOG_LEVEL_WARN,
-    VGFX_LOG_LEVEL_ERROR,
+    VGFXLogLevel_Info = 0,
+    VGFXLogLevel_Warn,
+    VGFXLogLevel_Error,
 
-    _VGFX_LOG_LEVEL_COUNT,
-    _VGFX_LOG_LEVEL_FORCE_U32 = 0x7FFFFFFF
+    VGFXLogLevel_Count,
+    VGFXLogLevel_Force32 = 0x7FFFFFFF
 } VGFXLogLevel;
 
 typedef enum VGFXAPI
 {
-    VGFX_API_DEFAULT = 0,
-    VGFX_API_VULKAN,
-    VGFX_API_D3D12,
-    VGFX_API_D3D11,
-    VGFX_API_WEBGPU,
+    VGFXAPI_Default = 0,
+    VGFXAPI_Vulkan,
+    VGFXAPI_D3D12,
+    VGFXAPI_D3D11,
+    VGFXAPI_WebGPU,
 
-    _VGFX_API_COUNT,
-    _VGFX_API_FORCE_U32 = 0x7FFFFFFF
+    VGFXAPI_Count,
+    VGFXAPI_Force32 = 0x7FFFFFFF
 } VGFXAPI;
 
 typedef enum VGFXValidationMode
 {
     /// No validation is enabled.
-    VGFX_VALIDATION_MODE_DISABLED = 0,
+    VGFXValidationMode_Disabled = 0,
     /// Print warnings and errors
-    VGFX_VALIDATION_MODE_ENABLED,
+    VGFXValidationMode_Enabled,
     /// Print all warnings, errors and info messages
-    VGFX_VALIDATION_MODE_VERBOSE,
+    VGFXValidationMode_Verbose,
     /// Enable GPU-based validation
-    VGFX_VALIDATION_MODE_GPU,
+    VGFXValidationMode_GPU,
 
-    _VGFX_VALIDATION_MODE_COUNT,
-    _VGFX_VALIDATION_MODE_FORCE_U32 = 0x7FFFFFFF
+    VGFXValidationMode_Count,
+    VGFXValidationMode_Force32 = 0x7FFFFFFF
 } VGFXValidationMode;
 
 typedef enum VGFXSurfaceType
 {
-    VGFX_SURFACE_TYPE_UNKNOWN = 0,
-    VGFX_SURFACE_TYPE_WIN32,
-    VGFX_SURFACE_TYPE_XLIB,
-    VGFX_SURFACE_TYPE_WEB,
+    VGFXSurfaceType_Unknown = 0,
+    VGFXSurfaceType_Win32,
+    VGFXSurfaceType_Xlib,
+    VGFXSurfaceType_Web,
 
-    _VGFX_SURFACE_TYPE_COUNT,
-    _VGFX_SURFACE_TYPE_FORCE_U32 = 0x7FFFFFFF
+    VGFXSurfaceType_Count,
+    VGFXSurfaceType_Force32 = 0x7FFFFFFF
 } VGFXSurfaceType;
 
-typedef enum VGFXTextureFormat {
+typedef enum VGFXTextureFormat
+{
     VGFXTextureFormat_Undefined,
     VGFXTextureFormat_R8Unorm,
     VGFXTextureFormat_R8Snorm,

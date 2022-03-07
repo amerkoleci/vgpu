@@ -43,7 +43,7 @@ void init_gfx(GLFWwindow* window)
 {
     VGFXDeviceInfo deviceInfo{};
 #ifdef _DEBUG
-    deviceInfo.validationMode = VGFX_VALIDATION_MODE_ENABLED;
+    deviceInfo.validationMode = VGFXValidationMode_Enabled;
 #endif
 
     //if (vgfxIsSupported(VGFX_API_VULKAN))

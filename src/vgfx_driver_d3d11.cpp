@@ -261,7 +261,7 @@ static VGFXDevice d3d11_createDevice(VGFXSurface surface, const VGFXDeviceInfo* 
     VGFXD3D11Renderer* renderer = new VGFXD3D11Renderer();
 
     DWORD dxgiFactoryFlags = 0;
-    if (info->validationMode != VGFX_VALIDATION_MODE_DISABLED)
+    if (info->validationMode != VGFXValidationMode_Disabled)
     {
 #ifdef _DEBUG
         ComPtr<IDXGIInfoQueue> dxgiInfoQueue;
@@ -369,7 +369,7 @@ static VGFXDevice d3d11_createDevice(VGFXSurface surface, const VGFXDeviceInfo* 
 }
 
 VGFXDriver d3d11_driver = {
-    VGFX_API_D3D11,
+    VGFXAPI_D3D11,
     d3d11_isSupported,
     d3d11_createDevice
 };

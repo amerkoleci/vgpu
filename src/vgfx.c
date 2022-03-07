@@ -46,7 +46,7 @@ void vgfxLogInfo(const char* format, ...)
     va_start(args, format);
     vsnprintf(msg, sizeof(char) * MAX_MESSAGE_SIZE, format, args);
     va_end(args);
-    s_LogFunc(VGFX_LOG_LEVEL_INFO, msg);
+    s_LogFunc(VGFXLogLevel_Info, msg);
 }
 
 void vgfxLogWarn(const char* format, ...)
@@ -56,7 +56,7 @@ void vgfxLogWarn(const char* format, ...)
     va_start(args, format);
     vsnprintf(msg, sizeof(char) * MAX_MESSAGE_SIZE, format, args);
     va_end(args);
-    s_LogFunc(VGFX_LOG_LEVEL_WARN, msg);
+    s_LogFunc(VGFXLogLevel_Warn, msg);
 }
 
 void vgfxLogError(const char* format, ...)
@@ -66,7 +66,7 @@ void vgfxLogError(const char* format, ...)
     va_start(args, format);
     vsnprintf(msg, sizeof(char) * MAX_MESSAGE_SIZE, format, args);
     va_end(args);
-    s_LogFunc(VGFX_LOG_LEVEL_ERROR, msg);
+    s_LogFunc(VGFXLogLevel_Error, msg);
 }
 
 void vgfxSetLogFunc(vgfxLogFunc func)
@@ -99,8 +99,9 @@ VGFXSurface vgfxAllocSurface(VGFXSurfaceType type) {
     return surface;
 }
 
-VGFXSurface vgfxCreateSurfaceWin32(void* hinstance, void* hwnd) {
-    VGFXSurface surface = vgfxAllocSurface(VGFX_SURFACE_TYPE_WIN32);
+VGFXSurface vgfxCreateSurfaceWin32(void* hinstance, void* hwnd)
+{
+    VGFXSurface surface = vgfxAllocSurface(VGFXSurfaceType_Win32);
 #if defined(_WIN32)
     surface->hinstance = (HINSTANCE)hinstance;
     surface->window = (HWND)hwnd;
@@ -116,8 +117,9 @@ VGFXSurface vgfxCreateSurfaceWin32(void* hinstance, void* hwnd) {
     return surface;
 }
 
-VGFXSurface vgfxCreateSurfaceXlib(void* display, uint32_t window) {
-    VGFXSurface surface = vgfxAllocSurface(VGFX_SURFACE_TYPE_XLIB);
+VGFXSurface vgfxCreateSurfaceXlib(void* display, uint32_t window)
+{
+    VGFXSurface surface = vgfxAllocSurface(VGFXSurfaceType_Xlib);
 #if defined(__linux__)
     surface->display = display;
     surface->window = window;
@@ -128,8 +130,9 @@ VGFXSurface vgfxCreateSurfaceXlib(void* display, uint32_t window) {
     return surface;
 }
 
-VGFXSurface vgfxCreateSurfaceWeb(const char* selector) {
-    VGFXSurface surface = vgfxAllocSurface(VGFX_SURFACE_TYPE_WEB);
+VGFXSurface vgfxCreateSurfaceWeb(const char* selector)
+{
+    VGFXSurface surface = vgfxAllocSurface(VGFXSurfaceType_Web);
 #if defined(__EMSCRIPTEN__)
     surface->selector = selector;
 #else
@@ -138,14 +141,16 @@ VGFXSurface vgfxCreateSurfaceWeb(const char* selector) {
     return surface;
 }
 
-void vgfxDestroySurface(VGFXSurface surface) {
+void vgfxDestroySurface(VGFXSurface surface)
+{
     NULL_RETURN(surface);
     VGFX_FREE(surface);
 }
 
-VGFXSurfaceType vgfxGetSurfaceType(VGFXSurface surface) {
+VGFXSurfaceType vgfxGetSurfaceType(VGFXSurface surface)
+{
     if (surface == NULL) {
-        return VGFX_SURFACE_TYPE_UNKNOWN;
+        return VGFXSurfaceType_Unknown;
     }
 
     return surface->type;
@@ -171,7 +176,7 @@ VGFXDevice vgfxCreateDevice(VGFXSurface surface, const VGFXDeviceInfo* info)
 {
     VGFXAPI api = info->preferredApi;
 retry:
-    if (api == VGFX_API_DEFAULT)
+    if (api == VGFXAPI_Default)
     {
         for (uint32_t i = 0; i < _VGFX_COUNT_OF(drivers); ++i)
         {
@@ -200,7 +205,7 @@ retry:
                 else
                 {
                     vgfxLogWarn("Wanted API not supported, fallback to default");
-                    api = VGFX_API_DEFAULT;
+                    api = VGFXAPI_Default;
                     goto retry;
                 }
             }

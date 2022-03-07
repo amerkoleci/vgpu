@@ -300,7 +300,7 @@ static VGFXDevice vulkan_createDevice(VGFXSurface surface, const VGFXDeviceInfo*
         instanceExtensions.push_back(VK_EXT_HEADLESS_SURFACE_EXTENSION_NAME);
 #endif
 
-        if (info->validationMode != VGFX_VALIDATION_MODE_DISABLED)
+        if (info->validationMode != VGFXValidationMode_Disabled)
         {
             // Determine the optimal validation layers to enable that are necessary for useful debugging
             std::vector<const char*> optimalValidationLyers = GetOptimalValidationLayers(availableInstanceLayers);
@@ -309,7 +309,7 @@ static VGFXDevice vulkan_createDevice(VGFXSurface surface, const VGFXDeviceInfo*
 
 #if defined(_DEBUG)
         bool validationFeatures = false;
-        if (info->validationMode == VGFX_VALIDATION_MODE_GPU)
+        if (info->validationMode == VGFXValidationMode_GPU)
         {
             uint32_t layerInstanceExtensionCount;
             VK_CHECK(vkEnumerateInstanceExtensionProperties("VK_LAYER_KHRONOS_validation", &layerInstanceExtensionCount, nullptr));
@@ -347,11 +347,20 @@ static VGFXDevice vulkan_createDevice(VGFXSurface surface, const VGFXDeviceInfo*
         createInfo.enabledExtensionCount = static_cast<uint32_t>(instanceExtensions.size());
         createInfo.ppEnabledExtensionNames = instanceExtensions.data();
 
-        VkDebugUtilsMessengerCreateInfoEXT debugUtilsCreateInfo = { VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT };
+        VkDebugUtilsMessengerCreateInfoEXT debugUtilsCreateInfo{};
 
-        if (info->validationMode != VGFX_VALIDATION_MODE_DISABLED && renderer->debugUtils)
+        if (info->validationMode != VGFXValidationMode_Disabled && renderer->debugUtils)
         {
-            debugUtilsCreateInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT;
+            debugUtilsCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+            debugUtilsCreateInfo.pNext = nullptr;
+            debugUtilsCreateInfo.flags = 0;
+
+            debugUtilsCreateInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+            if (info->validationMode == VGFXValidationMode_Verbose)
+            {
+                debugUtilsCreateInfo.messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT;
+            }
+
             debugUtilsCreateInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
             debugUtilsCreateInfo.pfnUserCallback = DebugUtilsMessengerCallback;
             createInfo.pNext = &debugUtilsCreateInfo;
@@ -382,7 +391,7 @@ static VGFXDevice vulkan_createDevice(VGFXSurface surface, const VGFXDeviceInfo*
 
         volkLoadInstanceOnly(renderer->instance);
 
-        if (info->validationMode != VGFX_VALIDATION_MODE_DISABLED && renderer->debugUtils)
+        if (info->validationMode != VGFXValidationMode_Disabled && renderer->debugUtils)
         {
             result = vkCreateDebugUtilsMessengerEXT(renderer->instance, &debugUtilsCreateInfo, nullptr, &renderer->debugUtilsMessenger);
             if (result != VK_SUCCESS)
@@ -428,7 +437,7 @@ static VGFXDevice vulkan_createDevice(VGFXSurface surface, const VGFXDeviceInfo*
 }
 
 VGFXDriver vulkan_driver = {
-    VGFX_API_VULKAN,
+    VGFXAPI_Vulkan,
     vulkan_isSupported,
     vulkan_createDevice
 };
