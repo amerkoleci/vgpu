@@ -100,7 +100,6 @@ namespace
             case VGFXTextureFormat_RGBA32SInt:       return DXGI_FORMAT_R32G32B32A32_SINT;
             case VGFXTextureFormat_RGBA32Float:      return DXGI_FORMAT_R32G32B32A32_FLOAT;
                 // Depth-stencil formats
-            case VGFXTextureFormat_Stencil8:                return DXGI_FORMAT_UNKNOWN;
             case VGFXTextureFormat_Depth16UNorm:		    return DXGI_FORMAT_D16_UNORM;
             case VGFXTextureFormat_Depth24UNormStencil8:    return DXGI_FORMAT_D24_UNORM_S8_UINT;
             case VGFXTextureFormat_Depth32Float:			return DXGI_FORMAT_D32_FLOAT;

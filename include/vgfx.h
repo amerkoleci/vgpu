@@ -159,7 +159,7 @@ typedef enum VGFXTextureFormat
     VGFXTextureFormat_RGBA32UInt,
     VGFXTextureFormat_RGBA32SInt,
     VGFXTextureFormat_RGBA32Float,
-    VGFXTextureFormat_Stencil8,
+    /* Depth-stencil formats */
     VGFXTextureFormat_Depth16UNorm,
     VGFXTextureFormat_Depth24UNormStencil8,
     VGFXTextureFormat_Depth32Float,

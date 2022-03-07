@@ -4,6 +4,18 @@
 #if defined(VGFX_VULKAN_DRIVER)
 
 #include "vgfx_driver.h"
+
+#if defined(VK_USE_PLATFORM_WIN32_KHR)
+#   define NOMINMAX
+#   define NODRAWTEXT
+#   define NOGDI
+#   define NOBITMAP
+#   define NOMCX
+#   define NOSERVICE
+#   define NOHELP
+#   define WIN32_LEAN_AND_MEAN
+#endif
+
 VGFX_DISABLE_WARNINGS()
 #include "volk.h"
 #define VMA_IMPLEMENTATION
@@ -70,6 +82,10 @@ namespace
         void* pUserData)
     {
         _VGFX_UNUSED(pUserData);
+
+        // Ignore for now
+        if (pCallbackData->messageIdNumber == -945112042)
+            return VK_FALSE;
 
         const char* messageTypeStr = "General";
 
@@ -266,6 +282,156 @@ namespace
 
         return extensions;
     }
+
+    constexpr VkFormat ToVk(VGFXTextureFormat format)
+    {
+        switch (format)
+        {
+            // 8-bit formats
+            case VGFXTextureFormat_R8UNorm:  return VK_FORMAT_R8_UNORM;
+            case VGFXTextureFormat_R8SNorm:  return VK_FORMAT_R8_SNORM;
+            case VGFXTextureFormat_R8UInt:   return VK_FORMAT_R8_UINT;
+            case VGFXTextureFormat_R8SInt:   return VK_FORMAT_R8_SINT;
+                // 16-bit formats
+            case VGFXTextureFormat_R16UNorm:     return VK_FORMAT_R16_UNORM;
+            case VGFXTextureFormat_R16SNorm:     return VK_FORMAT_R16_SNORM;
+            case VGFXTextureFormat_R16UInt:      return VK_FORMAT_R16_UINT;
+            case VGFXTextureFormat_R16SInt:      return VK_FORMAT_R16_SINT;
+            case VGFXTextureFormat_R16Float:     return VK_FORMAT_R16_SFLOAT;
+            case VGFXTextureFormat_RG8UNorm:     return VK_FORMAT_R8G8_UNORM;
+            case VGFXTextureFormat_RG8SNorm:     return VK_FORMAT_R8G8_SNORM;
+            case VGFXTextureFormat_RG8UInt:      return VK_FORMAT_R8G8_UINT;
+            case VGFXTextureFormat_RG8SInt:      return VK_FORMAT_R8G8_SINT;
+                // Packed 16-Bit Pixel Formats
+            //case VGFXTextureFormat_BGRA4UNorm:       return VK_FORMAT_R4G4B4A4_UNORM_PACK16;
+            //case VGFXTextureFormat_B5G6R5UNorm:      return VK_FORMAT_R5G5B5A1_UNORM_PACK16;
+            //case VGFXTextureFormat_B5G5R5A1UNorm:    return VK_FORMAT_R5G6B5_UNORM_PACK16;
+                // 32-bit formats
+            case VGFXTextureFormat_R32UInt:          return VK_FORMAT_R32_UINT;
+            case VGFXTextureFormat_R32SInt:          return VK_FORMAT_R32_SINT;
+            case VGFXTextureFormat_R32Float:         return VK_FORMAT_R32_SFLOAT;
+            case VGFXTextureFormat_RG16UNorm:        return VK_FORMAT_R16G16_UNORM;
+            case VGFXTextureFormat_RG16SNorm:        return VK_FORMAT_R16G16_SNORM;
+            case VGFXTextureFormat_RG16UInt:         return VK_FORMAT_R16G16_UINT;
+            case VGFXTextureFormat_RG16SInt:         return VK_FORMAT_R16G16_SINT;
+            case VGFXTextureFormat_RG16Float:        return VK_FORMAT_R16G16_SFLOAT;
+            case VGFXTextureFormat_RGBA8UNorm:       return VK_FORMAT_R8G8B8A8_UNORM;
+            case VGFXTextureFormat_RGBA8UNormSrgb:   return VK_FORMAT_R8G8B8A8_SRGB;
+            case VGFXTextureFormat_RGBA8SNorm:       return VK_FORMAT_R8G8B8A8_SNORM;
+            case VGFXTextureFormat_RGBA8UInt:        return VK_FORMAT_R8G8B8A8_UINT;
+            case VGFXTextureFormat_RGBA8SInt:        return VK_FORMAT_R8G8B8A8_SINT;
+            case VGFXTextureFormat_BGRA8UNorm:       return VK_FORMAT_B8G8R8A8_UNORM;
+            case VGFXTextureFormat_BGRA8UNormSrgb:   return VK_FORMAT_B8G8R8A8_SRGB;
+                // Packed 32-Bit formats
+            case VGFXTextureFormat_RGB10A2UNorm:     return VK_FORMAT_A2B10G10R10_UNORM_PACK32;
+            case VGFXTextureFormat_RG11B10Float:     return VK_FORMAT_B10G11R11_UFLOAT_PACK32;
+            case VGFXTextureFormat_RGB9E5Float:      return VK_FORMAT_E5B9G9R9_UFLOAT_PACK32;
+                // 64-Bit formats
+            case VGFXTextureFormat_RG32UInt:         return VK_FORMAT_R32G32_UINT;
+            case VGFXTextureFormat_RG32SInt:         return VK_FORMAT_R32G32_SINT;
+            case VGFXTextureFormat_RG32Float:        return VK_FORMAT_R32G32_SFLOAT;
+            case VGFXTextureFormat_RGBA16UNorm:      return VK_FORMAT_R16G16B16A16_UNORM;
+            case VGFXTextureFormat_RGBA16SNorm:      return VK_FORMAT_R16G16B16A16_SNORM;
+            case VGFXTextureFormat_RGBA16UInt:       return VK_FORMAT_R16G16B16A16_UINT;
+            case VGFXTextureFormat_RGBA16SInt:       return VK_FORMAT_R16G16B16A16_SINT;
+            case VGFXTextureFormat_RGBA16Float:      return VK_FORMAT_R16G16B16A16_SFLOAT;
+                // 128-Bit formats
+            case VGFXTextureFormat_RGBA32UInt:       return VK_FORMAT_R32G32B32A32_UINT;
+            case VGFXTextureFormat_RGBA32SInt:       return VK_FORMAT_R32G32B32A32_SINT;
+            case VGFXTextureFormat_RGBA32Float:      return VK_FORMAT_R32G32B32A32_SFLOAT;
+                // Depth-stencil formats
+            case VGFXTextureFormat_Depth16UNorm:     return VK_FORMAT_D16_UNORM;
+            case VGFXTextureFormat_Depth32Float:     return VK_FORMAT_D32_SFLOAT;
+            case VGFXTextureFormat_Depth24UNormStencil8: return VK_FORMAT_D24_UNORM_S8_UINT;
+            case VGFXTextureFormat_Depth32FloatStencil8: return VK_FORMAT_D32_SFLOAT_S8_UINT;
+                // Compressed BC formats
+            case VGFXTextureFormat_BC1RGBAUNorm:         return VK_FORMAT_BC1_RGBA_UNORM_BLOCK;
+            case VGFXTextureFormat_BC1RGBAUNormSrgb:     return VK_FORMAT_BC1_RGBA_SRGB_BLOCK;
+            case VGFXTextureFormat_BC2RGBAUNorm:         return VK_FORMAT_BC2_UNORM_BLOCK;
+            case VGFXTextureFormat_BC2RGBAUNormSrgb:     return VK_FORMAT_BC2_SRGB_BLOCK;
+            case VGFXTextureFormat_BC3RGBAUNorm:         return VK_FORMAT_BC3_UNORM_BLOCK;
+            case VGFXTextureFormat_BC3RGBAUNormSrgb:     return VK_FORMAT_BC3_SRGB_BLOCK;
+            case VGFXTextureFormat_BC4RSNorm:            return VK_FORMAT_BC4_SNORM_BLOCK;
+            case VGFXTextureFormat_BC4RUNorm:            return VK_FORMAT_BC4_UNORM_BLOCK;
+            case VGFXTextureFormat_BC5RGSNorm:           return VK_FORMAT_BC5_SNORM_BLOCK;
+            case VGFXTextureFormat_BC5RGUNorm:           return VK_FORMAT_BC5_UNORM_BLOCK;
+            case VGFXTextureFormat_BC6HRGBFloat:         return VK_FORMAT_BC6H_SFLOAT_BLOCK;
+            case VGFXTextureFormat_BC6HRGBUFloat:        return VK_FORMAT_BC6H_UFLOAT_BLOCK;
+            case VGFXTextureFormat_BC7RGBAUNorm:         return VK_FORMAT_BC7_UNORM_BLOCK;
+            case VGFXTextureFormat_BC7RGBAUNormSrgb:     return VK_FORMAT_BC7_SRGB_BLOCK;
+                // EAC/ETC compressed formats
+            case VGFXTextureFormat_ETC2RGB8UNorm:            return VK_FORMAT_ETC2_R8G8B8_UNORM_BLOCK;
+            case VGFXTextureFormat_ETC2RGB8UNormSrgb:        return VK_FORMAT_ETC2_R8G8B8_SRGB_BLOCK;
+            case VGFXTextureFormat_ETC2RGB8A1UNorm:          return VK_FORMAT_ETC2_R8G8B8A1_UNORM_BLOCK;
+            case VGFXTextureFormat_ETC2RGB8A1UNormSrgb:      return VK_FORMAT_ETC2_R8G8B8A1_SRGB_BLOCK;
+            case VGFXTextureFormat_ETC2RGBA8UNorm:           return VK_FORMAT_ETC2_R8G8B8A8_UNORM_BLOCK;
+            case VGFXTextureFormat_ETC2RGBA8UNormSrgb:       return VK_FORMAT_ETC2_R8G8B8A8_SRGB_BLOCK;
+            case VGFXTextureFormat_EACR11UNorm:              return VK_FORMAT_EAC_R11_UNORM_BLOCK;
+            case VGFXTextureFormat_EACR11SNorm:              return VK_FORMAT_EAC_R11_SNORM_BLOCK;
+            case VGFXTextureFormat_EACRG11UNorm:             return VK_FORMAT_EAC_R11G11_UNORM_BLOCK;
+            case VGFXTextureFormat_EACRG11SNorm:             return VK_FORMAT_EAC_R11G11_SNORM_BLOCK;
+                // ASTC compressed formats
+            case VGFXTextureFormat_ASTC4x4UNorm:
+                return VK_FORMAT_ASTC_4x4_UNORM_BLOCK;
+            case VGFXTextureFormat_ASTC4x4UNormSrgb:
+                return VK_FORMAT_ASTC_4x4_SRGB_BLOCK;
+            case VGFXTextureFormat_ASTC5x4UNorm:
+                return VK_FORMAT_ASTC_5x4_UNORM_BLOCK;
+            case VGFXTextureFormat_ASTC5x4UNormSrgb:
+                return VK_FORMAT_ASTC_5x4_SRGB_BLOCK;
+            case VGFXTextureFormat_ASTC5x5UNorm:
+                return VK_FORMAT_ASTC_5x5_UNORM_BLOCK;
+            case VGFXTextureFormat_ASTC5x5UNormSrgb:
+                return VK_FORMAT_ASTC_5x5_SRGB_BLOCK;
+            case VGFXTextureFormat_ASTC6x5UNorm:
+                return VK_FORMAT_ASTC_6x5_UNORM_BLOCK;
+            case VGFXTextureFormat_ASTC6x5UNormSrgb:
+                return VK_FORMAT_ASTC_6x5_SRGB_BLOCK;
+            case VGFXTextureFormat_ASTC6x6UNorm:
+                return VK_FORMAT_ASTC_6x6_UNORM_BLOCK;
+            case VGFXTextureFormat_ASTC6x6UNormSrgb:
+                return VK_FORMAT_ASTC_6x6_SRGB_BLOCK;
+            case VGFXTextureFormat_ASTC8x5UNorm:
+                return VK_FORMAT_ASTC_8x5_UNORM_BLOCK;
+            case VGFXTextureFormat_ASTC8x5UNormSrgb:
+                return VK_FORMAT_ASTC_8x5_SRGB_BLOCK;
+            case VGFXTextureFormat_ASTC8x6UNorm:
+                return VK_FORMAT_ASTC_8x6_UNORM_BLOCK;
+            case VGFXTextureFormat_ASTC8x6UNormSrgb:
+                return VK_FORMAT_ASTC_8x6_SRGB_BLOCK;
+            case VGFXTextureFormat_ASTC8x8UNorm:
+                return VK_FORMAT_ASTC_8x8_UNORM_BLOCK;
+            case VGFXTextureFormat_ASTC8x8UNormSrgb:
+                return VK_FORMAT_ASTC_8x8_SRGB_BLOCK;
+            case VGFXTextureFormat_ASTC10x5UNorm:
+                return VK_FORMAT_ASTC_10x5_UNORM_BLOCK;
+            case VGFXTextureFormat_ASTC10x5UNormSrgb:
+                return VK_FORMAT_ASTC_10x5_SRGB_BLOCK;
+            case VGFXTextureFormat_ASTC10x6UNorm:
+                return VK_FORMAT_ASTC_10x6_UNORM_BLOCK;
+            case VGFXTextureFormat_ASTC10x6UNormSrgb:
+                return VK_FORMAT_ASTC_10x6_SRGB_BLOCK;
+            case VGFXTextureFormat_ASTC10x8UNorm:
+                return VK_FORMAT_ASTC_10x8_UNORM_BLOCK;
+            case VGFXTextureFormat_ASTC10x8UNormSrgb:
+                return VK_FORMAT_ASTC_10x8_SRGB_BLOCK;
+            case VGFXTextureFormat_ASTC10x10UNorm:
+                return VK_FORMAT_ASTC_10x10_UNORM_BLOCK;
+            case VGFXTextureFormat_ASTC10x10UNormSrgb:
+                return VK_FORMAT_ASTC_10x10_SRGB_BLOCK;
+            case VGFXTextureFormat_ASTC12x10UNorm:
+                return VK_FORMAT_ASTC_12x10_UNORM_BLOCK;
+            case VGFXTextureFormat_ASTC12x10UNormSrgb:
+                return VK_FORMAT_ASTC_12x10_SRGB_BLOCK;
+            case VGFXTextureFormat_ASTC12x12UNorm:
+                return VK_FORMAT_ASTC_12x12_UNORM_BLOCK;
+            case VGFXTextureFormat_ASTC12x12UNormSrgb:
+                return VK_FORMAT_ASTC_12x12_SRGB_BLOCK;
+
+            default:
+                return VK_FORMAT_UNDEFINED;
+        }
+    }
 }
 
 /// Helper macro to test the result of Vulkan calls which can return an error.
@@ -281,8 +447,6 @@ namespace
 
 #define VK_LOG_ERROR(result, message) vgfxLogError("Vulkan: %s, error: %s", message, ToString(result));
 
-struct VGFXVulkanRenderer;
-
 struct VGFXVulkanTexture
 {
     VkImage handle = VK_NULL_HANDLE;
@@ -291,13 +455,19 @@ struct VGFXVulkanTexture
 
 struct VGFXVulkanSwapChain
 {
-    VGFXVulkanRenderer* renderer = nullptr;
     VkSurfaceKHR surface = VK_NULL_HANDLE;
     VkSwapchainKHR handle = VK_NULL_HANDLE;
     uint32_t width = 0;
     uint32_t height = 0;
     bool vsync = false;
+    VGFXTextureFormat colorFormat;
+    bool allowHDR = true;
+    uint32_t imageIndex;
     std::vector<VGFXTexture> backbufferTextures;
+
+    VkSemaphore acquireSemaphore = VK_NULL_HANDLE;
+    VkSemaphore releaseSemaphore = VK_NULL_HANDLE;
+    VkRenderPass renderPass = VK_NULL_HANDLE;
 };
 
 struct VGFXVulkanRenderer
@@ -355,6 +525,40 @@ struct VGFXVulkanRenderer
 
     uint32_t frameIndex = 0;
     uint64_t frameCount = 0;
+
+    struct FrameResources
+    {
+        VkFence fence = VK_NULL_HANDLE;
+        VkCommandPool initCommandPool = VK_NULL_HANDLE;
+        VkCommandBuffer initCommandBuffer = VK_NULL_HANDLE;
+
+        VkCommandPool frameCommandPool = VK_NULL_HANDLE;
+        VkCommandBuffer frameCommandBuffer = VK_NULL_HANDLE;
+    };
+    FrameResources frames[VGFX_MAX_INFLIGHT_FRAMES];
+
+    std::mutex initLocker;
+    bool submitInits = false;
+
+    std::vector<VGFXVulkanSwapChain*> swapChains;
+
+    VkBuffer		nullBuffer = VK_NULL_HANDLE;
+    VmaAllocation	nullBufferAllocation = VK_NULL_HANDLE;
+    VkBufferView	nullBufferView = VK_NULL_HANDLE;
+    VkSampler		nullSampler = VK_NULL_HANDLE;
+    VmaAllocation	nullImageAllocation1D = VK_NULL_HANDLE;
+    VmaAllocation	nullImageAllocation2D = VK_NULL_HANDLE;
+    VmaAllocation	nullImageAllocation3D = VK_NULL_HANDLE;
+    VkImage			nullImage1D = VK_NULL_HANDLE;
+    VkImage			nullImage2D = VK_NULL_HANDLE;
+    VkImage			nullImage3D = VK_NULL_HANDLE;
+    VkImageView		nullImageView1D = VK_NULL_HANDLE;
+    VkImageView		nullImageView1DArray = VK_NULL_HANDLE;
+    VkImageView		nullImageView2D = VK_NULL_HANDLE;
+    VkImageView		nullImageView2DArray = VK_NULL_HANDLE;
+    VkImageView		nullImageViewCube = VK_NULL_HANDLE;
+    VkImageView		nullImageViewCubeArray = VK_NULL_HANDLE;
+    VkImageView		nullImageView3D = VK_NULL_HANDLE;
 
     // Deletion queue objects
     std::mutex destroyMutex;
@@ -532,9 +736,30 @@ static void vulkan_destroyDevice(VGFXDevice device)
     VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)device->driverData;
     VK_CHECK(vkDeviceWaitIdle(renderer->device));
 
+    for (auto& frame : renderer->frames)
+    {
+        vkDestroyFence(renderer->device, frame.fence, nullptr);
+        vkDestroyCommandPool(renderer->device, frame.initCommandPool, nullptr);
+        vkDestroyCommandPool(renderer->device, frame.frameCommandPool, nullptr);
+    }
+
     renderer->frameCount = UINT64_MAX;
     vulkan_ProcessDeletionQueue(renderer);
     renderer->frameCount = 0;
+
+    vmaDestroyBuffer(renderer->allocator, renderer->nullBuffer, renderer->nullBufferAllocation);
+    vkDestroyBufferView(renderer->device, renderer->nullBufferView, nullptr);
+    vmaDestroyImage(renderer->allocator, renderer->nullImage1D, renderer->nullImageAllocation1D);
+    vmaDestroyImage(renderer->allocator, renderer->nullImage2D, renderer->nullImageAllocation2D);
+    vmaDestroyImage(renderer->allocator, renderer->nullImage3D, renderer->nullImageAllocation3D);
+    vkDestroyImageView(renderer->device, renderer->nullImageView1D, nullptr);
+    vkDestroyImageView(renderer->device, renderer->nullImageView1DArray, nullptr);
+    vkDestroyImageView(renderer->device, renderer->nullImageView2D, nullptr);
+    vkDestroyImageView(renderer->device, renderer->nullImageView2DArray, nullptr);
+    vkDestroyImageView(renderer->device, renderer->nullImageViewCube, nullptr);
+    vkDestroyImageView(renderer->device, renderer->nullImageViewCubeArray, nullptr);
+    vkDestroyImageView(renderer->device, renderer->nullImageView3D, nullptr);
+    vkDestroySampler(renderer->device, renderer->nullSampler, nullptr);
 
     if (renderer->allocator != VK_NULL_HANDLE)
     {
@@ -578,22 +803,132 @@ static void vulkan_destroyDevice(VGFXDevice device)
 
     delete renderer;
     VGFX_FREE(device);
-}
+    }
 
 static void vulkan_frame(VGFXRenderer* driverData)
 {
+    VkResult result = VK_SUCCESS;
     VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
+
+    // Collect present swapchains
+    std::vector<VkSemaphore> waitSemaphores;
+    std::vector<VkPipelineStageFlags> waitStages;
+    std::vector<VkSemaphore> signalSemaphores;
+    std::vector<VkSwapchainKHR> presentSwapChains;
+    std::vector<uint32_t> swapChainImageIndices;
+
+    for (size_t i = 0, count = renderer->swapChains.size(); i < count; ++i)
+    {
+        VGFXVulkanSwapChain* swapChain = renderer->swapChains[i];
+
+        waitSemaphores.push_back(swapChain->acquireSemaphore);
+        waitStages.push_back(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
+        signalSemaphores.push_back(swapChain->releaseSemaphore);
+
+        presentSwapChains.push_back(swapChain->handle);
+        swapChainImageIndices.push_back(swapChain->imageIndex);
+    }
+
+    renderer->initLocker.lock();
+
+    // Submit current frame.
+    {
+        auto& frame = renderer->frames[renderer->frameIndex];
+
+        // Transitions first.
+        std::vector<VkCommandBuffer> submitCommandBuffers;
+        if (renderer->submitInits)
+        {
+            result = vkEndCommandBuffer(frame.initCommandBuffer);
+            VGFX_ASSERT(result == VK_SUCCESS);
+            submitCommandBuffers.push_back(frame.initCommandBuffer);
+        }
+
+        result = vkEndCommandBuffer(frame.frameCommandBuffer);
+        VGFX_ASSERT(result == VK_SUCCESS);
+        submitCommandBuffers.push_back(frame.frameCommandBuffer);
+
+        // Submit now
+        VkSubmitInfo submitInfo = {};
+        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submitInfo.waitSemaphoreCount = (uint32_t)waitSemaphores.size();
+        submitInfo.pWaitSemaphores = waitSemaphores.data();
+        submitInfo.pWaitDstStageMask = waitStages.data();
+        submitInfo.commandBufferCount = (uint32_t)submitCommandBuffers.size();
+        submitInfo.pCommandBuffers = submitCommandBuffers.data();
+        submitInfo.signalSemaphoreCount = (uint32_t)signalSemaphores.size();
+        submitInfo.pSignalSemaphores = signalSemaphores.data();
+
+        result = vkQueueSubmit(renderer->graphicsQueue, 1, &submitInfo, frame.fence);
+        VGFX_ASSERT(result == VK_SUCCESS);
+
+        if (!presentSwapChains.empty())
+        {
+            VkPresentInfoKHR presentInfo = {};
+            presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+            presentInfo.waitSemaphoreCount = (uint32_t)signalSemaphores.size();
+            presentInfo.pWaitSemaphores = signalSemaphores.data();
+            presentInfo.swapchainCount = (uint32_t)presentSwapChains.size();
+            presentInfo.pSwapchains = presentSwapChains.data();
+            presentInfo.pImageIndices = swapChainImageIndices.data();
+            result = vkQueuePresentKHR(renderer->graphicsQueue, &presentInfo);
+            if (result != VK_SUCCESS)
+            {
+                // Handle outdated error in present:
+                if (result == VK_SUBOPTIMAL_KHR || result == VK_ERROR_OUT_OF_DATE_KHR)
+                {
+                    // TODO
+                }
+                else
+                {
+                    VGFX_ASSERT(false);
+                }
+            }
+        }
+    }
+
+    renderer->swapChains.clear();
 
     renderer->frameCount++;
     renderer->frameIndex = renderer->frameCount % VGFX_MAX_INFLIGHT_FRAMES;
 
     // Begin new frame
     {
+        auto& frame = renderer->frames[renderer->frameIndex];
+
+        // Initiate stalling CPU when GPU is not yet finished with next frame.
+        if (renderer->frameCount >= VGFX_MAX_INFLIGHT_FRAMES)
+        {
+            result = vkWaitForFences(renderer->device, 1, &frame.fence, VK_TRUE, 0xFFFFFFFFFFFFFFFF);
+            VGFX_ASSERT(result == VK_SUCCESS);
+
+            result = vkResetFences(renderer->device, 1, &frame.fence);
+            VGFX_ASSERT(result == VK_SUCCESS);
+        }
+
+
         // Safe delete deferred destroys
         vulkan_ProcessDeletionQueue(renderer);
 
-        // Prepare the command buffers to be used for the next frame
+        // Restart transition command buffers first.
+        result = vkResetCommandPool(renderer->device, frame.initCommandPool, 0);
+        VGFX_ASSERT(result == VK_SUCCESS);
+
+        VkCommandBufferBeginInfo beginInfo = {};
+        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        result = vkBeginCommandBuffer(frame.initCommandBuffer, &beginInfo);
+        VGFX_ASSERT(result == VK_SUCCESS);
+
+        // Restart frame command buffers now.
+        result = vkResetCommandPool(renderer->device, frame.frameCommandPool, 0);
+        VGFX_ASSERT(result == VK_SUCCESS);
+        result = vkBeginCommandBuffer(frame.frameCommandBuffer, &beginInfo);
+        VGFX_ASSERT(result == VK_SUCCESS);
     }
+
+    renderer->submitInits = false;
+    renderer->initLocker.unlock();
 }
 
 static void vulkan_waitIdle(VGFXRenderer* driverData)
@@ -644,6 +979,171 @@ static void vulkan_destroyTexture(VGFXRenderer* driverData, VGFXTexture texture)
 
 static void vulkan_updateSwapChain(VGFXVulkanRenderer* renderer, VGFXVulkanSwapChain* swapChain)
 {
+    VkResult result = VK_SUCCESS;
+    VkSurfaceCapabilitiesKHR caps;
+    VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(renderer->physicalDevice, swapChain->surface, &caps));
+
+    uint32_t formatCount;
+    VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(renderer->physicalDevice, swapChain->surface, &formatCount, nullptr));
+
+    std::vector<VkSurfaceFormatKHR> swapchainFormats(formatCount);
+    VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(renderer->physicalDevice, swapChain->surface, &formatCount, swapchainFormats.data()));
+
+    uint32_t presentModeCount;
+    VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(renderer->physicalDevice, swapChain->surface, &presentModeCount, nullptr));
+
+    std::vector<VkPresentModeKHR> swapchainPresentModes(presentModeCount);
+    VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(renderer->physicalDevice, swapChain->surface, &presentModeCount, swapchainPresentModes.data()));
+
+    VkSurfaceFormatKHR surfaceFormat = {};
+    surfaceFormat.format = ToVk(swapChain->colorFormat);
+    surfaceFormat.colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+    bool valid = false;
+
+    for (const auto& format : swapchainFormats)
+    {
+        if (!swapChain->allowHDR && format.colorSpace != VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+            continue;
+
+        if (format.format == surfaceFormat.format)
+        {
+            surfaceFormat = format;
+            valid = true;
+            break;
+        }
+    }
+    if (!valid)
+    {
+        surfaceFormat.format = VK_FORMAT_B8G8R8A8_UNORM;
+        surfaceFormat.colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+    }
+
+    if (caps.currentExtent.width != 0xFFFFFFFF && caps.currentExtent.width != 0xFFFFFFFF)
+    {
+        swapChain->width = caps.currentExtent.width;
+        swapChain->height = caps.currentExtent.height;
+    }
+    else
+    {
+        swapChain->width = std::max(caps.minImageExtent.width, std::min(caps.maxImageExtent.width, swapChain->width));
+        swapChain->height = std::max(caps.minImageExtent.height, std::min(caps.maxImageExtent.height, swapChain->height));
+    }
+
+    // Determine the number of images
+    uint32_t imageCount = caps.minImageCount + 1;
+    if ((caps.maxImageCount > 0) && (imageCount > caps.maxImageCount))
+    {
+        imageCount = caps.maxImageCount;
+    }
+
+    VkSwapchainCreateInfoKHR createInfo = {};
+    createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+    createInfo.surface = swapChain->surface;
+    createInfo.minImageCount = imageCount;
+    createInfo.imageFormat = surfaceFormat.format;
+    createInfo.imageColorSpace = surfaceFormat.colorSpace;
+    createInfo.imageExtent.width = swapChain->width;
+    createInfo.imageExtent.height = swapChain->height;
+    createInfo.imageArrayLayers = 1;
+    createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+    createInfo.preTransform = caps.currentTransform;
+
+    createInfo.presentMode = VK_PRESENT_MODE_FIFO_KHR; // The only one that is always supported
+    if (!swapChain->vsync)
+    {
+        // The mailbox/immediate present mode is not necessarily supported:
+        for (auto& presentMode : swapchainPresentModes)
+        {
+            if (presentMode == VK_PRESENT_MODE_MAILBOX_KHR)
+            {
+                createInfo.presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
+                break;
+            }
+            if (presentMode == VK_PRESENT_MODE_IMMEDIATE_KHR)
+            {
+                createInfo.presentMode = VK_PRESENT_MODE_IMMEDIATE_KHR;
+            }
+        }
+    }
+    createInfo.clipped = VK_TRUE;
+    createInfo.oldSwapchain = swapChain->handle;
+
+    VK_CHECK(vkCreateSwapchainKHR(renderer->device, &createInfo, nullptr, &swapChain->handle));
+
+    if (createInfo.oldSwapchain != VK_NULL_HANDLE)
+    {
+        vkDestroySwapchainKHR(renderer->device, createInfo.oldSwapchain, nullptr);
+    }
+
+    VK_CHECK(vkGetSwapchainImagesKHR(renderer->device, swapChain->handle, &imageCount, nullptr));
+    std::vector<VkImage> swapchainImages(imageCount);
+    VK_CHECK(vkGetSwapchainImagesKHR(renderer->device, swapChain->handle, &imageCount, swapchainImages.data()));
+
+    swapChain->imageIndex = 0;
+    swapChain->backbufferTextures.resize(imageCount);
+    for (uint32_t i = 0; i < imageCount; ++i)
+    {
+        VGFXVulkanTexture* texture = new VGFXVulkanTexture();
+        texture->handle = swapchainImages[i];
+        swapChain->backbufferTextures[i] = (VGFXTexture)texture;
+    }
+
+    VkSemaphoreCreateInfo semaphoreInfo = {};
+    semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+    if (swapChain->acquireSemaphore == VK_NULL_HANDLE)
+    {
+        result = vkCreateSemaphore(renderer->device, &semaphoreInfo, nullptr, &swapChain->acquireSemaphore);
+        VGFX_ASSERT(result == VK_SUCCESS);
+    }
+
+    if (swapChain->releaseSemaphore == VK_NULL_HANDLE)
+    {
+        result = vkCreateSemaphore(renderer->device, &semaphoreInfo, nullptr, &swapChain->releaseSemaphore);
+        VGFX_ASSERT(result == VK_SUCCESS);
+    }
+
+    // Create SwapChain render pass:
+    VkAttachmentDescription colorAttachment = {};
+    colorAttachment.format = createInfo.imageFormat;
+    colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+    colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+    VkAttachmentReference colorAttachmentRef = {};
+    colorAttachmentRef.attachment = 0;
+    colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+    VkSubpassDescription subpass = {};
+    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpass.colorAttachmentCount = 1;
+    subpass.pColorAttachments = &colorAttachmentRef;
+
+    VkRenderPassCreateInfo renderPassInfo = {};
+    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    renderPassInfo.attachmentCount = 1;
+    renderPassInfo.pAttachments = &colorAttachment;
+    renderPassInfo.subpassCount = 1;
+    renderPassInfo.pSubpasses = &subpass;
+
+    VkSubpassDependency dependency = {};
+    dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+    dependency.dstSubpass = 0;
+    dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependency.srcAccessMask = 0;
+    dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+    renderPassInfo.dependencyCount = 1;
+    renderPassInfo.pDependencies = &dependency;
+    result = vkCreateRenderPass(renderer->device, &renderPassInfo, nullptr, &swapChain->renderPass);
+    VGFX_ASSERT(result == VK_SUCCESS);
 }
 
 static VGFXSwapChain vulkan_createSwapChain(VGFXRenderer* driverData, VGFXSurface surface, const VGFXSwapChainInfo* info)
@@ -656,17 +1156,17 @@ static VGFXSwapChain vulkan_createSwapChain(VGFXRenderer* driverData, VGFXSurfac
     }
 
     VkBool32 supported = VK_FALSE;
-    VK_CHECK(
-        vkGetPhysicalDeviceSurfaceSupportKHR(renderer->physicalDevice, renderer->graphicsQueueFamily, vk_surface, &supported)
-    );
-    if (!supported)
+    VkResult result = vkGetPhysicalDeviceSurfaceSupportKHR(renderer->physicalDevice, renderer->graphicsQueueFamily, vk_surface, &supported);
+    if (result != VK_SUCCESS || !supported)
     {
-        return false;
+        return nullptr;
     }
 
     VGFXVulkanSwapChain* swapChain = new VGFXVulkanSwapChain();
-    swapChain->renderer = renderer;
     swapChain->surface = vk_surface;
+    swapChain->width = info->width;
+    swapChain->height = info->height;
+    swapChain->colorFormat = info->format;
     swapChain->vsync = info->presentMode == VGFXPresentMode_Fifo;
     vulkan_updateSwapChain(renderer, swapChain);
 
@@ -675,41 +1175,84 @@ static VGFXSwapChain vulkan_createSwapChain(VGFXRenderer* driverData, VGFXSurfac
 
 static void vulkan_destroySwapChain(VGFXRenderer* driverData, VGFXSwapChain swapChain)
 {
-    _VGFX_UNUSED(driverData);
-
+    VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
     VGFXVulkanSwapChain* vulkanSwapChain = (VGFXVulkanSwapChain*)swapChain;
     //vulkan_destroyTexture(nullptr, d3dSwapChain->backbufferTexture);
+
+    if (vulkanSwapChain->acquireSemaphore != VK_NULL_HANDLE)
+    {
+        vkDestroySemaphore(renderer->device, vulkanSwapChain->acquireSemaphore, nullptr);
+        vulkanSwapChain->acquireSemaphore = VK_NULL_HANDLE;
+    }
+
+    if (vulkanSwapChain->releaseSemaphore != VK_NULL_HANDLE)
+    {
+        vkDestroySemaphore(renderer->device, vulkanSwapChain->releaseSemaphore, nullptr);
+        vulkanSwapChain->releaseSemaphore = VK_NULL_HANDLE;
+    }
+
+    if (vulkanSwapChain->renderPass != VK_NULL_HANDLE)
+    {
+        vkDestroyRenderPass(renderer->device, vulkanSwapChain->renderPass, nullptr);
+        vulkanSwapChain->renderPass = VK_NULL_HANDLE;
+    }
+
+    if (vulkanSwapChain->handle != VK_NULL_HANDLE)
+    {
+        vkDestroySwapchainKHR(renderer->device, vulkanSwapChain->handle, nullptr);
+        vulkanSwapChain->handle = VK_NULL_HANDLE;
+    }
+
+    if (vulkanSwapChain->surface != VK_NULL_HANDLE)
+    {
+        vkDestroySurfaceKHR(renderer->instance, vulkanSwapChain->surface, nullptr);
+        vulkanSwapChain->surface = VK_NULL_HANDLE;
+    }
 
     delete vulkanSwapChain;
 }
 
-static void vulkan_getSwapChainSize(VGFXRenderer* driverData, VGFXSwapChain swapChain, VGFXSize2D* pSize)
+static void vulkan_getSwapChainSize(VGFXRenderer*, VGFXSwapChain swapChain, VGFXSize2D* pSize)
 {
-    _VGFX_UNUSED(driverData);
-
     VGFXVulkanSwapChain* vulkanSwapChain = (VGFXVulkanSwapChain*)swapChain;
     pSize->width = vulkanSwapChain->width;
     pSize->height = vulkanSwapChain->height;
 }
 
-
 static VGFXTexture vulkan_acquireNextTexture(VGFXRenderer* driverData, VGFXSwapChain swapChain)
 {
     VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
     VGFXVulkanSwapChain* vulkanSwapChain = (VGFXVulkanSwapChain*)swapChain;
-    //vulkanSwapChain->renderer->swapChains.push_back(d3dSwapChain);
-    //return vulkanSwapChain->backbufferTexture;
-    return nullptr;
+
+    VkResult result = vkAcquireNextImageKHR(renderer->device,
+        vulkanSwapChain->handle,
+        UINT64_MAX,
+        vulkanSwapChain->acquireSemaphore, VK_NULL_HANDLE,
+        &vulkanSwapChain->imageIndex);
+
+    if (result != VK_SUCCESS)
+    {
+        // Handle outdated error in acquire
+        if (result == VK_SUBOPTIMAL_KHR || result == VK_ERROR_OUT_OF_DATE_KHR)
+        {
+            // TODO
+        }
+    }
+
+    renderer->swapChains.push_back(vulkanSwapChain);
+    return vulkanSwapChain->backbufferTextures[vulkanSwapChain->imageIndex];
 }
 
 static void vulkan_beginRenderPass(VGFXRenderer* driverData, const VGFXRenderPassInfo* info)
 {
     VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
+    _VGFX_UNUSED(renderer);
 }
 
 static void vulkan_endRenderPass(VGFXRenderer* driverData)
 {
     VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
+    _VGFX_UNUSED(renderer);
 }
 
 static bool vulkan_isSupported(void)
@@ -781,7 +1324,7 @@ static VGFXDevice vulkan_createDevice(VGFXSurface surface, const VGFXDeviceInfo*
             else if (strcmp(availableExtension.extensionName, VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME) == 0)
             {
                 instanceExtensions.push_back(VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME);
-            }
+        }
         }
 
         instanceExtensions.push_back(VK_KHR_SURFACE_EXTENSION_NAME);
@@ -1343,6 +1886,8 @@ static VGFXDevice vulkan_createDevice(VGFXSurface surface, const VGFXDeviceInfo*
         if (result != VK_SUCCESS)
         {
             VK_LOG_ERROR(result, "Cannot create allocator");
+            delete renderer;
+            return nullptr;
         }
     }
 
@@ -1351,6 +1896,255 @@ static VGFXDevice vulkan_createDevice(VGFXSurface surface, const VGFXDeviceInfo*
     {
         vkDestroySurfaceKHR(renderer->instance, vk_surface, nullptr);
         vk_surface = VK_NULL_HANDLE;
+    }
+
+    // Create frame resources:
+    for (uint32_t i = 0; i < VGFX_MAX_INFLIGHT_FRAMES; ++i)
+    {
+        VkFenceCreateInfo fenceInfo = {};
+        fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        VkResult result = vkCreateFence(renderer->device, &fenceInfo, nullptr, &renderer->frames[i].fence);
+        if (result != VK_SUCCESS)
+        {
+            VK_LOG_ERROR(result, "Cannot create frame fence");
+            delete renderer;
+            return nullptr;
+        }
+
+        // Create resources for transition command buffer.
+        {
+            VkCommandPoolCreateInfo poolInfo = {};
+            poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+            poolInfo.queueFamilyIndex = renderer->graphicsQueueFamily;
+            poolInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
+            result = vkCreateCommandPool(renderer->device, &poolInfo, nullptr, &renderer->frames[i].initCommandPool);
+            if (result != VK_SUCCESS)
+            {
+                VK_LOG_ERROR(result, "Cannot create frame command pool");
+                delete renderer;
+                return nullptr;
+            }
+
+            VkCommandBufferAllocateInfo commandBufferInfo = {};
+            commandBufferInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+            commandBufferInfo.commandBufferCount = 1;
+            commandBufferInfo.commandPool = renderer->frames[i].initCommandPool;
+            commandBufferInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+
+            result = vkAllocateCommandBuffers(renderer->device, &commandBufferInfo, &renderer->frames[i].initCommandBuffer);
+            if (result != VK_SUCCESS)
+            {
+                VK_LOG_ERROR(result, "vkAllocateCommandBuffers failed");
+                delete renderer;
+                return nullptr;
+            }
+
+            VkCommandBufferBeginInfo beginInfo = {};
+            beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+            beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+            result = vkBeginCommandBuffer(renderer->frames[i].initCommandBuffer, &beginInfo);
+            if (result != VK_SUCCESS)
+            {
+                VK_LOG_ERROR(result, "vkBeginCommandBuffer failed");
+                delete renderer;
+                return nullptr;
+            }
+        }
+
+        // Create resources for frame command buffer.
+        {
+            VkCommandPoolCreateInfo poolInfo = {};
+            poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+            poolInfo.queueFamilyIndex = renderer->graphicsQueueFamily;
+            poolInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
+            result = vkCreateCommandPool(renderer->device, &poolInfo, nullptr, &renderer->frames[i].frameCommandPool);
+            if (result != VK_SUCCESS)
+            {
+                VK_LOG_ERROR(result, "Cannot create frame command pool");
+                delete renderer;
+                return nullptr;
+            }
+
+            VkCommandBufferAllocateInfo commandBufferInfo = {};
+            commandBufferInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+            commandBufferInfo.commandBufferCount = 1;
+            commandBufferInfo.commandPool = renderer->frames[i].frameCommandPool;
+            commandBufferInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+            result = vkAllocateCommandBuffers(renderer->device, &commandBufferInfo, &renderer->frames[i].frameCommandBuffer);
+            if (result != VK_SUCCESS)
+            {
+                VK_LOG_ERROR(result, "vkAllocateCommandBuffers failed");
+                delete renderer;
+                return nullptr;
+            }
+
+            VkCommandBufferBeginInfo beginInfo = {};
+            beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+            beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+            result = vkBeginCommandBuffer(renderer->frames[i].frameCommandBuffer, &beginInfo);
+            if (result != VK_SUCCESS)
+            {
+                VK_LOG_ERROR(result, "vkBeginCommandBuffer failed");
+                delete renderer;
+                return nullptr;
+            }
+        }
+    }
+
+    // Create default null descriptors.
+    {
+        VkBufferCreateInfo bufferInfo = {};
+        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        bufferInfo.size = 4;
+        bufferInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+        bufferInfo.flags = 0;
+        VmaAllocationCreateInfo bufferAllocInfo = {};
+        bufferAllocInfo.preferredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+        VkResult result = vmaCreateBuffer(renderer->allocator, &bufferInfo, &bufferAllocInfo, &renderer->nullBuffer, &renderer->nullBufferAllocation, nullptr);
+        VGFX_ASSERT(result == VK_SUCCESS);
+
+        VkBufferViewCreateInfo bufferViewInfo = {};
+        bufferViewInfo.sType = VK_STRUCTURE_TYPE_BUFFER_VIEW_CREATE_INFO;
+        bufferViewInfo.format = VK_FORMAT_R32G32B32A32_SFLOAT;
+        bufferViewInfo.range = VK_WHOLE_SIZE;
+        bufferViewInfo.buffer = renderer->nullBuffer;
+        result = vkCreateBufferView(renderer->device, &bufferViewInfo, nullptr, &renderer->nullBufferView);
+        VGFX_ASSERT(result == VK_SUCCESS);
+
+        VkImageCreateInfo imageInfo = {};
+        imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+        imageInfo.extent.width = 1;
+        imageInfo.extent.height = 1;
+        imageInfo.extent.depth = 1;
+        imageInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+        imageInfo.arrayLayers = 1;
+        imageInfo.mipLevels = 1;
+        imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+        imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+        imageInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
+        imageInfo.flags = 0;
+
+        VmaAllocationCreateInfo allocInfo = {};
+        allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+        imageInfo.imageType = VK_IMAGE_TYPE_1D;
+        result = vmaCreateImage(renderer->allocator, &imageInfo, &allocInfo, &renderer->nullImage1D, &renderer->nullImageAllocation1D, nullptr);
+        VGFX_ASSERT(result == VK_SUCCESS);
+
+        imageInfo.imageType = VK_IMAGE_TYPE_2D;
+        imageInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+        imageInfo.arrayLayers = 6;
+        result = vmaCreateImage(renderer->allocator, &imageInfo, &allocInfo, &renderer->nullImage2D, &renderer->nullImageAllocation2D, nullptr);
+        VGFX_ASSERT(result == VK_SUCCESS);
+
+        imageInfo.imageType = VK_IMAGE_TYPE_3D;
+        imageInfo.flags = 0;
+        imageInfo.arrayLayers = 1;
+        result = vmaCreateImage(renderer->allocator, &imageInfo, &allocInfo, &renderer->nullImage3D, &renderer->nullImageAllocation3D, nullptr);
+        VGFX_ASSERT(result == VK_SUCCESS);
+
+        // Transitions:
+        renderer->initLocker.lock();
+        {
+            VkImageMemoryBarrier barrier = {};
+            barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            barrier.oldLayout = imageInfo.initialLayout;
+            barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+            barrier.srcAccessMask = 0;
+            barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+            barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            barrier.subresourceRange.baseArrayLayer = 0;
+            barrier.subresourceRange.baseMipLevel = 0;
+            barrier.subresourceRange.levelCount = 1;
+            barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrier.image = renderer->nullImage1D;
+            barrier.subresourceRange.layerCount = 1;
+            vkCmdPipelineBarrier(
+                renderer->frames[renderer->frameIndex].initCommandBuffer,
+                VK_PIPELINE_STAGE_TRANSFER_BIT,
+                VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                0,
+                0, nullptr,
+                0, nullptr,
+                1, &barrier
+            );
+            barrier.image = renderer->nullImage2D;
+            barrier.subresourceRange.layerCount = 6;
+            vkCmdPipelineBarrier(
+                renderer->frames[renderer->frameIndex].initCommandBuffer,
+                VK_PIPELINE_STAGE_TRANSFER_BIT,
+                VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                0,
+                0, nullptr,
+                0, nullptr,
+                1, &barrier
+            );
+            barrier.image = renderer->nullImage3D;
+            barrier.subresourceRange.layerCount = 1;
+            vkCmdPipelineBarrier(
+                renderer->frames[renderer->frameIndex].initCommandBuffer,
+                VK_PIPELINE_STAGE_TRANSFER_BIT,
+                VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                0,
+                0, nullptr,
+                0, nullptr,
+                1, &barrier
+            );
+        }
+        renderer->submitInits = true;
+        renderer->initLocker.unlock();
+
+        VkImageViewCreateInfo imageViewInfo = {};
+        imageViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        imageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_1D;
+        imageViewInfo.image = renderer->nullImage1D;
+        imageViewInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+        imageViewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        imageViewInfo.subresourceRange.baseArrayLayer = 0;
+        imageViewInfo.subresourceRange.layerCount = 1;
+        imageViewInfo.subresourceRange.baseMipLevel = 0;
+        imageViewInfo.subresourceRange.levelCount = 1;
+        result = vkCreateImageView(renderer->device, &imageViewInfo, nullptr, &renderer->nullImageView1D);
+        VGFX_ASSERT(result == VK_SUCCESS);
+
+        imageViewInfo.image = renderer->nullImage1D;
+        imageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_1D_ARRAY;
+        result = vkCreateImageView(renderer->device, &imageViewInfo, nullptr, &renderer->nullImageView1DArray);
+        VGFX_ASSERT(result == VK_SUCCESS);
+
+        imageViewInfo.image = renderer->nullImage2D;
+        imageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        result = vkCreateImageView(renderer->device, &imageViewInfo, nullptr, &renderer->nullImageView2D);
+        VGFX_ASSERT(result == VK_SUCCESS);
+
+        imageViewInfo.image = renderer->nullImage2D;
+        imageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+        result = vkCreateImageView(renderer->device, &imageViewInfo, nullptr, &renderer->nullImageView2DArray);
+        VGFX_ASSERT(result == VK_SUCCESS);
+
+        imageViewInfo.image = renderer->nullImage2D;
+        imageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
+        imageViewInfo.subresourceRange.layerCount = 6;
+        result = vkCreateImageView(renderer->device, &imageViewInfo, nullptr, &renderer->nullImageViewCube);
+        VGFX_ASSERT(result == VK_SUCCESS);
+
+        imageViewInfo.image = renderer->nullImage2D;
+        imageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_CUBE_ARRAY;
+        imageViewInfo.subresourceRange.layerCount = 6;
+        result = vkCreateImageView(renderer->device, &imageViewInfo, nullptr, &renderer->nullImageViewCubeArray);
+        VGFX_ASSERT(result == VK_SUCCESS);
+
+        imageViewInfo.image = renderer->nullImage3D;
+        imageViewInfo.subresourceRange.layerCount = 1;
+        imageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_3D;
+        result = vkCreateImageView(renderer->device, &imageViewInfo, nullptr, &renderer->nullImageView3D);
+        VGFX_ASSERT(result == VK_SUCCESS);
+
+        VkSamplerCreateInfo samplerInfo = {};
+        samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+        result = vkCreateSampler(renderer->device, &samplerInfo, nullptr, &renderer->nullSampler);
+        VGFX_ASSERT(result == VK_SUCCESS);
     }
 
     vgfxLogInfo("vgfx driver: Vulkan");

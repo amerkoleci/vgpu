@@ -45,8 +45,8 @@ typedef struct IUnknown IUnknown;
 #	define VGFX_DISABLE_WARNINGS() \
 	_Pragma("GCC diagnostic push") \
 	_Pragma("GCC diagnostic ignored \"-Wall\"") \
-	_Pragma("clang diagnostic ignored \"-Wextra\"") \
-	_Pragma("clang diagnostic ignored \"-Wtautological-compare\"")
+	_Pragma("GCC diagnostic ignored \"-Wextra\"") \
+	_Pragma("GCC diagnostic ignored \"-Wtautological-compare\"")
 
 #define VGFX_ENABLE_WARNINGS() _Pragma("GCC diagnostic pop")
 #elif defined(_MSC_VER)
