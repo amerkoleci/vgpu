@@ -337,8 +337,8 @@ static void vulkan_destroyDevice(VGFXDevice device)
 
     if (renderer->allocator != VK_NULL_HANDLE)
     {
-        VmaStats stats;
-        vmaCalculateStats(renderer->allocator, &stats);
+        //VmaStats stats;
+        //vmaCalculateStats(renderer->allocator, &stats);
 
         //if (stats.total.usedBytes > 0)
         //{
@@ -457,41 +457,22 @@ static VkSurfaceKHR vulkan_createSurface(VGFXVulkanRenderer* renderer, VGFXSurfa
 
     VkInstance instance = renderer->instance;
 
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
+#if defined(VK_USE_PLATFORM_ANDROID_KHR)
+    VkAndroidSurfaceCreateInfoKHR createInfo = {};
+    createInfo.sType = VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR;
+    createInfo.window = surface->window;
+    result = vkCreateAndroidSurfaceKHR(instance, &createInfo, NULL, &vk_surface);
+#elif defined(VK_USE_PLATFORM_WIN32_KHR)
     VkWin32SurfaceCreateInfoKHR createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
     createInfo.hinstance = surface->hinstance;
     createInfo.hwnd = surface->window;
     result = vkCreateWin32SurfaceKHR(instance, &createInfo, nullptr, &vk_surface);
-#elif defined(VK_USE_PLATFORM_ANDROID_KHR)
-    VkAndroidSurfaceCreateInfoKHR createInfo = {};
-    createInfo.sType = VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR;
-    createInfo.window = surface->window;
-    result = vkCreateAndroidSurfaceKHR(instance, &createInfo, NULL, &vk_surface);
-#elif defined(VK_USE_PLATFORM_IOS_MVK)
-    VkIOSSurfaceCreateInfoMVK createInfo = {};
-    createInfo.sType = VK_STRUCTURE_TYPE_IOS_SURFACE_CREATE_INFO_MVK;
-    createInfo.pView = surface->view;
-    result = vkCreateIOSSurfaceMVK(instance, &createInfo, nullptr, &vk_surface);
-#elif defined(VK_USE_PLATFORM_MACOS_MVK)
-    VkMacOSSurfaceCreateInfoMVK createInfo = {};
-    createInfo.sType = VK_STRUCTURE_TYPE_MACOS_SURFACE_CREATE_INFO_MVK;
-    createInfo.pView = surface->view;
-    result = vkCreateMacOSSurfaceMVK(instance, &createInfo, NULL, &vk_surface);
-#elif defined(_DIRECT2DISPLAY)
-    createDirect2DisplaySurface(width, height);
-#elif defined(VK_USE_PLATFORM_DIRECTFB_EXT)
-    VkDirectFBSurfaceCreateInfoEXT createInfo = {};
-    createInfo.sType = VK_STRUCTURE_TYPE_DIRECTFB_SURFACE_CREATE_INFO_EXT;
-    createInfo.dfb = dfb;
-    createInfo.surface = window;
-    result = vkCreateDirectFBSurfaceEXT(instance, &createInfo, nullptr, &vk_surface);
-#elif defined(VK_USE_PLATFORM_WAYLAND_KHR)
-    VkWaylandSurfaceCreateInfoKHR createInfo = {};
-    createInfo.sType = VK_STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR;
-    createInfo.display = display;
-    createInfo.surface = window;
-    result = vkCreateWaylandSurfaceKHR(instance, &createInfo, nullptr, &vk_surface);
+#elif defined(VK_USE_PLATFORM_METAL_EXT)
+    VkMetalSurfaceCreateInfoEXT createInfo = {};
+    createInfo.sType = VK_STRUCTURE_TYPE_METAL_SURFACE_CREATE_INFO_EXT;
+    createInfo.pLayer = (const CAMetalLayer*)surface->pLayer;
+    result = vkCreateMetalSurfaceEXT(instance, &createInfo, nullptr, &vk_surface);
 #elif defined(VK_USE_PLATFORM_XCB_KHR)
     xcb_connection_t* connection = XGetXCBConnection((Display*)surface->display);
     if (!connection)
@@ -511,6 +492,13 @@ static VkSurfaceKHR vulkan_createSurface(VGFXVulkanRenderer* renderer, VGFXSurfa
     createInfo.dpy = (Display*)surface->display;
     createInfo.window = (Window)surface->window;
     result = vkCreateXlibSurfaceKHR(instance, &createInfo, nullptr, &vk_surface);
+#elif defined(VK_USE_PLATFORM_WAYLAND_KHR)
+    VkWaylandSurfaceCreateInfoKHR createInfo = {};
+    createInfo.sType = VK_STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR;
+    createInfo.display = display;
+    createInfo.surface = window;
+    result = vkCreateWaylandSurfaceKHR(instance, &createInfo, nullptr, &vk_surface);
+#elif defined(VK_USE_PLATFORM_DISPLAY_KHR)
 #elif defined(VK_USE_PLATFORM_HEADLESS_EXT)
     VkHeadlessSurfaceCreateInfoEXT createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_HEADLESS_SURFACE_CREATE_INFO_EXT;
@@ -579,26 +567,24 @@ static VGFXDevice vulkan_createDevice(VGFXSurface surface, const VGFXDeviceInfo*
         instanceExtensions.push_back(VK_KHR_SURFACE_EXTENSION_NAME);
 
         // Enable surface extensions depending on os
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
-        instanceExtensions.push_back(VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
-#elif defined(VK_USE_PLATFORM_ANDROID_KHR)
+#if defined(VK_USE_PLATFORM_ANDROID_KHR)
         instanceExtensions.push_back(VK_KHR_ANDROID_SURFACE_EXTENSION_NAME);
-#elif defined(_DIRECT2DISPLAY)
-        instanceExtensions.push_back(VK_KHR_DISPLAY_EXTENSION_NAME);
-#elif defined(VK_USE_PLATFORM_DIRECTFB_EXT)
-        instanceExtensions.push_back(VK_EXT_DIRECTFB_SURFACE_EXTENSION_NAME);
+#elif defined(VK_USE_PLATFORM_WIN32_KHR)
+        instanceExtensions.push_back(VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
+#elif defined(VK_USE_PLATFORM_METAL_EXT)
+        instanceExtensions.push_back(VK_EXT_METAL_SURFACE_EXTENSION_NAME);
 #elif defined(VK_USE_PLATFORM_XCB_KHR)
         instanceExtensions.push_back(VK_KHR_XCB_SURFACE_EXTENSION_NAME);
 #elif defined(VK_USE_PLATFORM_XLIB_KHR)
         instanceExtensions.push_back(VK_KHR_XLIB_SURFACE_EXTENSION_NAME);
 #elif defined(VK_USE_PLATFORM_WAYLAND_KHR)
         instanceExtensions.push_back(VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME);
-#elif defined(VK_USE_PLATFORM_IOS_MVK)
-        instanceExtensions.push_back(VK_MVK_IOS_SURFACE_EXTENSION_NAME);
-#elif defined(VK_USE_PLATFORM_MACOS_MVK)
-        instanceExtensions.push_back(VK_MVK_MACOS_SURFACE_EXTENSION_NAME);
+#elif defined(VK_USE_PLATFORM_DISPLAY_KHR)
+        instanceExtensions.push_back(VK_KHR_DISPLAY_EXTENSION_NAME);
 #elif defined(VK_USE_PLATFORM_HEADLESS_EXT)
         instanceExtensions.push_back(VK_EXT_HEADLESS_SURFACE_EXTENSION_NAME);
+#else
+#   pragma error Platform not supported
 #endif
 
         if (info->validationMode != VGFXValidationMode_Disabled)

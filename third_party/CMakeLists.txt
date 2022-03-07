@@ -12,31 +12,6 @@ if(VGFX_VULKAN_DRIVER)
     target_compile_definitions(vulkan INTERFACE VK_NO_PROTOTYPES)
     #target_compile_definitions(vulkan INTERFACE VK_ENABLE_BETA_EXTENSIONS)
 
-    if(ANDROID)
-        target_sources(vulkan INTERFACE ${VULKAN_INCLUDE_DIR}/vulkan/vulkan_android.h)
-        target_compile_definitions(vulkan INTERFACE VK_USE_PLATFORM_ANDROID_KHR)
-    elseif(WIN32)
-        target_sources(vulkan INTERFACE ${VULKAN_INCLUDE_DIR}/vulkan/vulkan_win32.h)
-        target_compile_definitions(vulkan INTERFACE VK_USE_PLATFORM_WIN32_KHR)
-    elseif(APPLE)
-        target_compile_definitions(vulkan INTERFACE VK_USE_PLATFORM_MACOS_MVK)
-    elseif(UNIX)
-        find_package(PkgConfig REQUIRED)
-
-        # Prefer Xcb over Xlib
-        pkg_check_modules(XCB xcb)
-        if (XCB_FOUND)
-            target_include_directories(vulkan INTERFACE ${XCB_INCLUDE_DIRS})
-            target_compile_definitions(vulkan INTERFACE VK_USE_PLATFORM_XCB_KHR)
-        else()
-            pkg_check_modules(X11 x11 REQUIRED)
-            if (X11_FOUND)
-                target_include_directories(vulkan INTERFACE ${X11_INCLUDE_DIRS})
-                target_compile_definitions(vulkan INTERFACE VK_USE_PLATFORM_XLIB_KHR)
-            endif()
-        endif()
-    endif()
-
      # spirv-reflect
     set(SPIRV_REFLECT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/spirv-reflect")
     set(SPIRV_REFLECT_FILES

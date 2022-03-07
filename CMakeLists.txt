@@ -153,6 +153,20 @@ if(MSVC)
 endif ()
 
 if (VGFX_VULKAN_DRIVER)
+    if(ANDROID)
+        target_compile_definitions(${PROJECT_NAME} PRIVATE VK_USE_PLATFORM_ANDROID_KHR)
+    elseif(WIN32)
+        target_compile_definitions(${PROJECT_NAME} PRIVATE VK_USE_PLATFORM_WIN32_KHR)
+    elseif(APPLE)
+        target_compile_definitions(${PROJECT_NAME} PRIVATE INTERFACE VK_USE_PLATFORM_METAL_EXT)
+    elseif(UNIX)
+        find_package(X11 REQUIRED)
+
+        target_compile_definitions(${PROJECT_NAME} PRIVATE INTERFACE VK_USE_PLATFORM_XLIB_KHR)
+        target_include_directories(${PROJECT_NAME} PRIVATE ${X11_INCLUDE_DIR})
+        target_link_libraries(${PROJECT_NAME} PRIVATE ${X11_LIBRARIES})
+    endif()
+
     target_sources(${PROJECT_NAME} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/volk/volk.h
         ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/volk/volk.c
