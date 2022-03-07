@@ -3,19 +3,9 @@
 
 #if defined(VGFX_D3D12_DRIVER)
 
-#include "vgfx_driver.h"
+#include "vgfx_driver_d3d.h"
 
-#define NOMINMAX
-#define NODRAWTEXT
-#define NOGDI
-#define NOBITMAP
-#define NOMCX
-#define NOSERVICE
-#define NOHELP
-#define WIN32_LEAN_AND_MEAN
-#include <Windows.h>
 #ifdef USING_DIRECTX_HEADERS
-#   include <directx/dxgiformat.h>
 #   include <directx/d3d12.h>
 #else
 #   include <d3d12.h>
@@ -38,9 +28,6 @@ extern "C"
 }
 #endif
 
-#if defined(_DEBUG) && WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
-#   include <dxgidebug.h>
-#endif
 
 using Microsoft::WRL::ComPtr;
 
@@ -722,7 +709,7 @@ static VGFXSwapChain d3d12_createSwapChain(VGFXRenderer* driverData, VGFXSurface
     DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
     swapChainDesc.Width = info->width;
     swapChainDesc.Height = info->height;
-    swapChainDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+    swapChainDesc.Format = ToDXGISwapChainFormat(info->format);
     swapChainDesc.Stereo = FALSE;
     swapChainDesc.SampleDesc.Count = 1;
     swapChainDesc.SampleDesc.Quality = 0;
@@ -811,9 +798,9 @@ static void d3d12_beginRenderPass(VGFXRenderer* driverData, const VGFXRenderPass
 
         rtvs[i] = texture->rtv;
 
-        switch (attachment.loadOp)
+        switch (attachment.loadAction)
         {
-            case VGFXLoadOp_Clear:
+            case VGFXLoadAction_Clear:
                 renderer->graphicsCommandList->ClearRenderTargetView(rtvs[i], &attachment.clearColor.r, 0, nullptr);
                 break;
 

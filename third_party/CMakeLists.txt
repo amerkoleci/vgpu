@@ -32,25 +32,6 @@ if(VGFX_VULKAN_DRIVER)
         endif()
     endif()
 
-    # volk
-    set(VOLK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/volk")
-    set(VOLK_FILES
-        "${VOLK_DIR}/volk.c"
-        "${VOLK_DIR}/volk.h")
-
-    add_library(volk STATIC ${VOLK_FILES})
-
-    target_link_libraries(volk PUBLIC vulkan)
-    target_include_directories(volk PUBLIC ${VOLK_DIR})
-    set_property(TARGET volk PROPERTY FOLDER "ThirdParty")
-
-    # vma
-    add_library(vma INTERFACE)
-    set(VMA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vma/include)
-    target_sources(vma INTERFACE ${VMA_DIR}/vk_mem_alloc.h)
-    target_include_directories(vma INTERFACE ${VMA_DIR})
-    target_link_libraries(vma INTERFACE vulkan)
-
      # spirv-reflect
     set(SPIRV_REFLECT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/spirv-reflect")
     set(SPIRV_REFLECT_FILES

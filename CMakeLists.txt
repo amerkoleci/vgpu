@@ -117,6 +117,7 @@ set(SOURCE_FILES
     src/vgfx_driver.h
     src/vgfx.c
     src/vgfx_driver_vulkan.cpp
+    src/vgfx_driver_d3d.h
     src/vgfx_driver_d3d11.cpp
     src/vgfx_driver_d3d12.cpp
     src/vgfx_driver_webgpu.cpp
@@ -152,8 +153,19 @@ if(MSVC)
 endif ()
 
 if (VGFX_VULKAN_DRIVER)
+    target_sources(${PROJECT_NAME} PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/volk/volk.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/volk/volk.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/vma/include/vk_mem_alloc.h
+    )
+
+    target_include_directories(${PROJECT_NAME} PRIVATE
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/lib/volk>
+	    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/lib/vma/include>
+    )
+
     target_compile_definitions(${PROJECT_NAME} PRIVATE VGFX_VULKAN_DRIVER=1)
-    target_link_libraries(${PROJECT_NAME} PRIVATE volk vma spirv-reflect)
+    target_link_libraries(${PROJECT_NAME} PRIVATE vulkan spirv-reflect)
 endif ()
 
 if (VGFX_D3D12_DRIVER)

@@ -46,9 +46,9 @@ void init_gfx(GLFWwindow* window)
     deviceInfo.validationMode = VGFXValidationMode_Enabled;
 #endif
 
-    //if (vgfxIsSupported(VGFX_API_VULKAN))
+    //if (vgfxIsSupported(VGFXAPI_Vulkan))
     //{
-    //    deviceInfo.preferredApi = VGFX_API_VULKAN;
+    //    deviceInfo.preferredApi = VGFXAPI_Vulkan;
     //}
 
 #if defined(__EMSCRIPTEN__)
@@ -118,8 +118,8 @@ void draw_frame()
 
     VGFXRenderPassColorAttachment colorAttachment = {};
     colorAttachment.texture = vgfxSwapChainGetNextTexture(swapChain);
-    colorAttachment.loadOp = VGFXLoadOp_Clear;
-    colorAttachment.storeOp = VGFXStoreOp_Store;
+    colorAttachment.loadAction = VGFXLoadAction_Clear;
+    colorAttachment.storeAction = VGFXStoreAction_Store;
     colorAttachment.clearColor.r = 0.3f;
     colorAttachment.clearColor.g = 0.3f;
     colorAttachment.clearColor.b = 0.3f;

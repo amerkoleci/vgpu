@@ -40,6 +40,11 @@
 #   define VGFX_CALL
 #endif
 
+/* Version API */
+#define VGFX_VERSION_MAJOR  0
+#define VGFX_VERSION_MINOR	1
+#define VGFX_VERSION_PATCH	0
+
 enum {
     VGFX_MAX_INFLIGHT_FRAMES = 2,
     VGFX_MAX_COLOR_ATTACHMENTS = 8,
@@ -102,101 +107,114 @@ typedef enum VGFXSurfaceType
 typedef enum VGFXTextureFormat
 {
     VGFXTextureFormat_Undefined,
-    VGFXTextureFormat_R8Unorm,
-    VGFXTextureFormat_R8Snorm,
-    VGFXTextureFormat_R8Uint,
-    VGFXTextureFormat_R8Sint,
-    VGFXTextureFormat_R16Uint,
-    VGFXTextureFormat_R16Sint,
+    /* 8-bit formats */
+    VGFXTextureFormat_R8UNorm,
+    VGFXTextureFormat_R8SNorm,
+    VGFXTextureFormat_R8UInt,
+    VGFXTextureFormat_R8SInt,
+    /* 16-bit formats */
+    VGFXTextureFormat_R16UNorm,
+    VGFXTextureFormat_R16SNorm,
+    VGFXTextureFormat_R16UInt,
+    VGFXTextureFormat_R16SInt,
     VGFXTextureFormat_R16Float,
-    VGFXTextureFormat_RG8Unorm,
-    VGFXTextureFormat_RG8Snorm,
-    VGFXTextureFormat_RG8Uint,
-    VGFXTextureFormat_RG8Sint,
+    VGFXTextureFormat_RG8UNorm,
+    VGFXTextureFormat_RG8SNorm,
+    VGFXTextureFormat_RG8UInt,
+    VGFXTextureFormat_RG8SInt,
+    /* 32-bit formats */
     VGFXTextureFormat_R32Float,
-    VGFXTextureFormat_R32Uint,
-    VGFXTextureFormat_R32Sint,
-    VGFXTextureFormat_RG16Uint,
-    VGFXTextureFormat_RG16Sint,
+    VGFXTextureFormat_R32UInt,
+    VGFXTextureFormat_R32SInt,
+    VGFXTextureFormat_RG16UNorm,
+    VGFXTextureFormat_RG16SNorm,
+    VGFXTextureFormat_RG16UInt,
+    VGFXTextureFormat_RG16SInt,
     VGFXTextureFormat_RG16Float,
-    VGFXTextureFormat_RGBA8Unorm,
-    VGFXTextureFormat_RGBA8UnormSrgb,
-    VGFXTextureFormat_RGBA8Snorm,
-    VGFXTextureFormat_RGBA8Uint,
-    VGFXTextureFormat_RGBA8Sint,
-    VGFXTextureFormat_BGRA8Unorm,
-    VGFXTextureFormat_BGRA8UnormSrgb,
-    VGFXTextureFormat_RGB10A2Unorm,
-    VGFXTextureFormat_RG11B10Ufloa,
-    VGFXTextureFormat_RGB9E5Ufloat,
+    VGFXTextureFormat_RGBA8UNorm,
+    VGFXTextureFormat_RGBA8UNormSrgb,
+    VGFXTextureFormat_RGBA8SNorm,
+    VGFXTextureFormat_RGBA8UInt,
+    VGFXTextureFormat_RGBA8SInt,
+    VGFXTextureFormat_BGRA8UNorm,
+    VGFXTextureFormat_BGRA8UNormSrgb,
+    /* Packed 32-Bit formats */
+    VGFXTextureFormat_RGB10A2UNorm,
+    VGFXTextureFormat_RG11B10Float,
+    VGFXTextureFormat_RGB9E5Float,
+    /* 64-Bit formats */
+    VGFXTextureFormat_RG32UInt,
+    VGFXTextureFormat_RG32SInt,
     VGFXTextureFormat_RG32Float,
-    VGFXTextureFormat_RG32Uint,
-    VGFXTextureFormat_RG32Sint,
-    VGFXTextureFormat_RGBA16Uint,
-    VGFXTextureFormat_RGBA16Sint,
+    VGFXTextureFormat_RGBA16UNorm,
+    VGFXTextureFormat_RGBA16SNorm,
+    VGFXTextureFormat_RGBA16UInt,
+    VGFXTextureFormat_RGBA16SInt,
     VGFXTextureFormat_RGBA16Float,
+    /* 128-Bit formats */
+    VGFXTextureFormat_RGBA32UInt,
+    VGFXTextureFormat_RGBA32SInt,
     VGFXTextureFormat_RGBA32Float,
-    VGFXTextureFormat_RGBA32Uint,
-    VGFXTextureFormat_RGBA32Sint,
     VGFXTextureFormat_Stencil8,
-    VGFXTextureFormat_Depth16Unorm,
-    VGFXTextureFormat_Depth24Plus,
-    VGFXTextureFormat_Depth24PlusStencil8,
-    VGFXTextureFormat_Depth24UnormStencil8,
+    VGFXTextureFormat_Depth16UNorm,
+    VGFXTextureFormat_Depth24UNormStencil8,
     VGFXTextureFormat_Depth32Float,
     VGFXTextureFormat_Depth32FloatStencil8,
-    VGFXTextureFormat_BC1RGBAUnorm,
-    VGFXTextureFormat_BC1RGBAUnormSrgb,
-    VGFXTextureFormat_BC2RGBAUnorm,
-    VGFXTextureFormat_BC2RGBAUnormSrgb,
-    VGFXTextureFormat_BC3RGBAUnorm,
-    VGFXTextureFormat_BC3RGBAUnormSrgb,
-    VGFXTextureFormat_BC4RUnorm,
-    VGFXTextureFormat_BC4RSnorm,
-    VGFXTextureFormat_BC5RGUnorm,
-    VGFXTextureFormat_BC5RGSnorm,
+    /* Compressed BC formats */
+    VGFXTextureFormat_BC1RGBAUNorm,
+    VGFXTextureFormat_BC1RGBAUNormSrgb,
+    VGFXTextureFormat_BC2RGBAUNorm,
+    VGFXTextureFormat_BC2RGBAUNormSrgb,
+    VGFXTextureFormat_BC3RGBAUNorm,
+    VGFXTextureFormat_BC3RGBAUNormSrgb,
+    VGFXTextureFormat_BC4RUNorm,
+    VGFXTextureFormat_BC4RSNorm,
+    VGFXTextureFormat_BC5RGUNorm,
+    VGFXTextureFormat_BC5RGSNorm,
     VGFXTextureFormat_BC6HRGBUFloat,
     VGFXTextureFormat_BC6HRGBFloat,
-    VGFXTextureFormat_BC7RGBAUnorm,
-    VGFXTextureFormat_BC7RGBAUnormSrgb,
-    VGFXTextureFormat_ETC2RGB8Unorm,
-    VGFXTextureFormat_ETC2RGB8UnormSrgb,
-    VGFXTextureFormat_ETC2RGB8A1Unorm,
-    VGFXTextureFormat_ETC2RGB8A1UnormSrgb,
-    VGFXTextureFormat_ETC2RGBA8Unorm,
-    VGFXTextureFormat_ETC2RGBA8UnormSrgb,
-    VGFXTextureFormat_EACR11Unorm,
-    VGFXTextureFormat_EACR11Snorm,
-    VGFXTextureFormat_EACRG11Unorm,
-    VGFXTextureFormat_EACRG11Snorm,
-    VGFXTextureFormat_ASTC4x4Unorm,
-    VGFXTextureFormat_ASTC4x4UnormSrgb,
-    VGFXTextureFormat_ASTC5x4Unorm,
-    VGFXTextureFormat_ASTC5x4UnormSrgb,
-    VGFXTextureFormat_ASTC5x5Unorm,
-    VGFXTextureFormat_ASTC5x5UnormSrgb,
-    VGFXTextureFormat_ASTC6x5Unorm,
-    VGFXTextureFormat_ASTC6x5UnormSrgb,
-    VGFXTextureFormat_ASTC6x6Unorm,
-    VGFXTextureFormat_ASTC6x6UnormSrgb,
-    VGFXTextureFormat_ASTC8x5Unorm,
-    VGFXTextureFormat_ASTC8x5UnormSrgb,
-    VGFXTextureFormat_ASTC8x6Unorm,
-    VGFXTextureFormat_ASTC8x6UnormSrgb,
-    VGFXTextureFormat_ASTC8x8Unorm,
-    VGFXTextureFormat_ASTC8x8UnormSrgb,
-    VGFXTextureFormat_ASTC10x5Unorm,
-    VGFXTextureFormat_ASTC10x5UnormSrgb,
-    VGFXTextureFormat_ASTC10x6Unorm,
-    VGFXTextureFormat_ASTC10x6UnormSrgb,
-    VGFXTextureFormat_ASTC10x8Unorm,
-    VGFXTextureFormat_ASTC10x8UnormSrgb,
-    VGFXTextureFormat_ASTC10x10Unorm,
-    VGFXTextureFormat_ASTC10x10UnormSrgb,
-    VGFXTextureFormat_ASTC12x10Unorm,
-    VGFXTextureFormat_ASTC12x10UnormSrgb,
-    VGFXTextureFormat_ASTC12x12Unorm,
-    VGFXTextureFormat_ASTC12x12UnormSrgb,
+    VGFXTextureFormat_BC7RGBAUNorm,
+    VGFXTextureFormat_BC7RGBAUNormSrgb,
+    /* Compressed EAC/ETC formats */
+    VGFXTextureFormat_ETC2RGB8UNorm,
+    VGFXTextureFormat_ETC2RGB8UNormSrgb,
+    VGFXTextureFormat_ETC2RGB8A1UNorm,
+    VGFXTextureFormat_ETC2RGB8A1UNormSrgb,
+    VGFXTextureFormat_ETC2RGBA8UNorm,
+    VGFXTextureFormat_ETC2RGBA8UNormSrgb,
+    VGFXTextureFormat_EACR11UNorm,
+    VGFXTextureFormat_EACR11SNorm,
+    VGFXTextureFormat_EACRG11UNorm,
+    VGFXTextureFormat_EACRG11SNorm,
+    /* Compressed ASTC formats */
+    VGFXTextureFormat_ASTC4x4UNorm,
+    VGFXTextureFormat_ASTC4x4UNormSrgb,
+    VGFXTextureFormat_ASTC5x4UNorm,
+    VGFXTextureFormat_ASTC5x4UNormSrgb,
+    VGFXTextureFormat_ASTC5x5UNorm,
+    VGFXTextureFormat_ASTC5x5UNormSrgb,
+    VGFXTextureFormat_ASTC6x5UNorm,
+    VGFXTextureFormat_ASTC6x5UNormSrgb,
+    VGFXTextureFormat_ASTC6x6UNorm,
+    VGFXTextureFormat_ASTC6x6UNormSrgb,
+    VGFXTextureFormat_ASTC8x5UNorm,
+    VGFXTextureFormat_ASTC8x5UNormSrgb,
+    VGFXTextureFormat_ASTC8x6UNorm,
+    VGFXTextureFormat_ASTC8x6UNormSrgb,
+    VGFXTextureFormat_ASTC8x8UNorm,
+    VGFXTextureFormat_ASTC8x8UNormSrgb,
+    VGFXTextureFormat_ASTC10x5UNorm,
+    VGFXTextureFormat_ASTC10x5UNormSrgb,
+    VGFXTextureFormat_ASTC10x6UNorm,
+    VGFXTextureFormat_ASTC10x6UNormSrgb,
+    VGFXTextureFormat_ASTC10x8UNorm,
+    VGFXTextureFormat_ASTC10x8UNormSrgb,
+    VGFXTextureFormat_ASTC10x10UNorm,
+    VGFXTextureFormat_ASTC10x10UNormSrgb,
+    VGFXTextureFormat_ASTC12x10UNorm,
+    VGFXTextureFormat_ASTC12x10UNormSrgb,
+    VGFXTextureFormat_ASTC12x12UNorm,
+    VGFXTextureFormat_ASTC12x12UNormSrgb,
 
     VGFXTextureFormat_Count,
     VGFXTextureFormat_Force32 = 0x7FFFFFFF
@@ -220,19 +238,20 @@ typedef enum VGFXFeature
     _VGFX_FEATURE_FORCE_U32 = 0x7FFFFFFF
 } VGFXFeature;
 
-typedef enum VGFXLoadOp {
-    VGFXLoadOp_Undefined = 0x00000000,
-    VGFXLoadOp_Clear = 0x00000001,
-    VGFXLoadOp_Load = 0x00000002,
-    VGFXLoadOp_Force32 = 0x7FFFFFFF
-} VGFXLoadOp;
+typedef enum VGFXLoadAction {
+    VGFXLoadAction_Discard = 0,
+    VGFXLoadAction_Load,
+    VGFXLoadAction_Clear,
 
-typedef enum VGFXStoreOp {
-    VGFXStoreOp_Undefined = 0x00000000,
-    VGFXStoreOp_Store = 0x00000001,
-    VGFXStoreOp_Discard = 0x00000002,
-    VGFXStoreOp_Force32 = 0x7FFFFFFF
-} VGFXStoreOp;
+    VGFXLoadAction_Force32 = 0x7FFFFFFF
+} VGFXLoadAction;
+
+typedef enum VGFXStoreAction {
+    VGFXStoreAction_Discard = 0,
+    VGFXStoreAction_Store,
+
+    VGFXStoreAction_Force32 = 0x7FFFFFFF
+} VGFXStoreAction;
 
 typedef struct VGFXColor
 {
@@ -245,8 +264,8 @@ typedef struct VGFXColor
 typedef struct VGFXRenderPassColorAttachment
 {
     VGFXTexture texture;
-    VGFXLoadOp loadOp;
-    VGFXStoreOp storeOp;
+    VGFXLoadAction loadAction;
+    VGFXStoreAction storeAction;
     VGFXColor clearColor;
 } VGFXRenderPassColorAttachment;
 

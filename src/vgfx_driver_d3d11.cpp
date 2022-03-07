@@ -3,26 +3,11 @@
 
 #if defined(VGFX_D3D11_DRIVER)
 
-#include "vgfx_driver.h"
-
-#define NOMINMAX
-#define NODRAWTEXT
-#define NOGDI
-#define NOBITMAP
-#define NOMCX
-#define NOSERVICE
-#define NOHELP
-#define WIN32_LEAN_AND_MEAN
-#include <Windows.h>
-
+#include "vgfx_driver_d3d.h"
 #define D3D11_NO_HELPERS
 #include <d3d11_1.h>
 #include <dxgi1_6.h>
 #include <wrl/client.h>
-
-#if defined(_DEBUG) && WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
-#   include <dxgidebug.h>
-#endif
 
 using Microsoft::WRL::ComPtr;
 
