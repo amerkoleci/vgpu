@@ -14,7 +14,6 @@ VGFX_ENABLE_WARNINGS()
 
 #if defined(VK_USE_PLATFORM_XCB_KHR)
 #include <xcb/xcb.h>
-#include <dlfcn.h>
 #include <X11/Xlib-xcb.h>
 #endif
 
@@ -476,6 +475,12 @@ static VkSurfaceKHR vulkan_createSurface(VkInstance instance, VGFXSurface surfac
     result = vkCreateWaylandSurfaceKHR(instance, &createInfo, nullptr, &vk_surface);
 #elif defined(VK_USE_PLATFORM_XCB_KHR)
     xcb_connection_t* connection = XGetXCBConnection((Display*)surface->display);
+    if (!connection)
+    {
+        vgfxLogError("X11: Failed to retrieve XCB connection");
+        return VK_NULL_HANDLE;
+    }
+
     VkXcbSurfaceCreateInfoKHR createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR;
     createInfo.connection = connection;
