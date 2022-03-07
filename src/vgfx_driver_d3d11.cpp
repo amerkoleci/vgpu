@@ -89,15 +89,6 @@ struct VGFXD3D11Renderer
     std::vector<VGFXD3D11SwapChain*> swapChains;
 };
 
-static void d3d11_TextureDestroy(VGFXTexture texture);
-VGFXTexture vgfxD3D11AllocTexture(VGFXD3D11Texture* impl)
-{
-    VGFXTexture_T* texture = new VGFXTexture_T();
-    ASSIGN_TEXTURE(d3d11);
-    texture->driverData = (VGFXTextureImpl*)impl;
-    return texture;
-}
-
 static void d3d11_destroyDevice(VGFXDevice device)
 {
     VGFXD3D11Renderer* renderer = (VGFXD3D11Renderer*)device->driverData;
@@ -206,12 +197,13 @@ static bool d3d11_queryFeature(VGFXRenderer* driverData, VGFXFeature feature)
 }
 
 /* Texture */
-static void d3d11_TextureDestroy(VGFXTexture texture)
+static void d3d11_destroyTexture(VGFXRenderer* driverData, VGFXTexture texture)
 {
-    VGFXD3D11Texture* d3d11Texture = (VGFXD3D11Texture*)texture->driverData;
+    _VGFX_UNUSED(driverData);
+    VGFXD3D11Texture* d3d11Texture = (VGFXD3D11Texture*)texture;
     SafeRelease(d3d11Texture->rtv);
     SafeRelease(d3d11Texture->handle);
-    delete texture;
+    delete d3d11Texture;
 }
 
 /* SwapChain */
@@ -219,7 +211,7 @@ static void d3d11_SwapChainDestroy(VGFXSwapChain swapChain)
 {
     VGFXD3D11SwapChain* d3dSwapChain = (VGFXD3D11SwapChain*)swapChain->driverData;
 
-    d3d11_TextureDestroy(d3dSwapChain->backbufferTexture);
+    d3d11_destroyTexture(nullptr, d3dSwapChain->backbufferTexture);
     d3dSwapChain->backbufferTexture = nullptr;
     d3dSwapChain->handle->Release();
 
@@ -266,7 +258,7 @@ static void d3d11_updateSwapChain(VGFXD3D11Renderer* renderer, VGFXD3D11SwapChai
     rtvDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
 
     hr = renderer->device->CreateRenderTargetView(texture->handle, &rtvDesc, &texture->rtv);
-    swapChain->backbufferTexture = vgfxD3D11AllocTexture(texture);
+    swapChain->backbufferTexture = (VGFXTexture)texture;
 }
 
 
@@ -348,7 +340,7 @@ static void d3d11_beginRenderPass(VGFXRenderer* driverData, const VGFXRenderPass
     for (uint32_t i = 0; i < info->colorAttachmentCount; ++i)
     {
         VGFXRenderPassColorAttachment attachment = info->colorAttachments[i];
-        VGFXD3D11Texture* texture = (VGFXD3D11Texture*)attachment.texture->driverData;
+        VGFXD3D11Texture* texture = (VGFXD3D11Texture*)attachment.texture;
 
         rtvs[i] = texture->rtv;
 

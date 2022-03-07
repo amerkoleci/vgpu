@@ -12,6 +12,10 @@ VGFX_DISABLE_WARNINGS()
 VGFX_ENABLE_WARNINGS()
 #include <vector>
 
+#if defined(VK_USE_PLATFORM_XCB_KHR)
+#include <X11/Xlib-xcb.h>
+#endif
+
 namespace
 {
     inline const char* ToString(VkResult result)
@@ -386,6 +390,10 @@ static bool vulkan_queryFeature(VGFXRenderer* driverData, VGFXFeature feature)
         default:
             return false;
     }
+}
+
+static void vulkan_destroyTexture(VGFXRenderer* driverData, VGFXTexture texture)
+{
 }
 
 static VGFXSwapChain vulkan_createSwapChain(VGFXRenderer* driverData, VGFXSurface surface, const VGFXSwapChainInfo* info)

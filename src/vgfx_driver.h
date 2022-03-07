@@ -74,16 +74,7 @@ constexpr uint64_t vgfxNextPowerOfTwo(uint64_t value)
 #endif /* __cplusplus */
 
 typedef struct VGFXRenderer VGFXRenderer;
-typedef struct VGFXTextureImpl VGFXTextureImpl;
 typedef struct VGFXSwapChainImpl VGFXSwapChainImpl;
-
-typedef struct VGFXTexture_T
-{
-    void (*destroy)(VGFXTexture texture);
-
-    /* Opaque pointer for the implentation */
-    VGFXTextureImpl* driverData;
-} VGFXTexture_T;
 
 typedef struct VGFXSurface_T
 {
@@ -120,6 +111,8 @@ typedef struct VGFXDevice_T
     void (*waitIdle)(VGFXRenderer* driverData);
     bool (*queryFeature)(VGFXRenderer* driverData, VGFXFeature feature);
 
+    void(*destroyTexture)(VGFXRenderer* driverData, VGFXTexture texture);
+
     VGFXSwapChain(*createSwapChain)(VGFXRenderer* driverData, VGFXSurface surface, const VGFXSwapChainInfo* info);
 
     void (*beginRenderPass)(VGFXRenderer* driverData, const VGFXRenderPassInfo* info);
@@ -145,6 +138,7 @@ typedef struct VGFXDevice_T
     ASSIGN_DRIVER_FUNC(frame, name) \
     ASSIGN_DRIVER_FUNC(waitIdle, name) \
     ASSIGN_DRIVER_FUNC(queryFeature, name) \
+    ASSIGN_DRIVER_FUNC(destroyTexture, name) \
     ASSIGN_DRIVER_FUNC(createSwapChain, name) \
     ASSIGN_DRIVER_FUNC(beginRenderPass, name) \
     ASSIGN_DRIVER_FUNC(endRenderPass, name) \

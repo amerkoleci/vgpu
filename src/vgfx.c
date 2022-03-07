@@ -243,10 +243,11 @@ bool vgfxQueryFeature(VGFXDevice device, VGFXFeature feature)
 }
 
 /* Texture */
-void vgfxDestroyTexture(VGFXTexture texture)
+void vgfxDestroyTexture(VGFXDevice device, VGFXTexture texture)
 {
+    NULL_RETURN(device);
     NULL_RETURN(texture);
-    texture->destroy(texture);
+    device->destroyTexture(device->driverData, texture);
 }
 
 /* SwapChain */

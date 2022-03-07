@@ -307,7 +307,7 @@ VGFX_API void vgfxWaitIdle(VGFXDevice device);
 VGFX_API bool vgfxQueryFeature(VGFXDevice device, VGFXFeature feature);
 
 /* Texture */
-VGFX_API void vgfxDestroyTexture(VGFXTexture texture);
+VGFX_API void vgfxDestroyTexture(VGFXDevice device, VGFXTexture texture);
 
 /* SwapChain */
 VGFX_API VGFXSwapChain vgfxCreateSwapChain(VGFXDevice device, VGFXSurface surface, const VGFXSwapChainInfo* info);
