@@ -13,8 +13,10 @@ VGFX_ENABLE_WARNINGS()
 #include <vector>
 
 #if defined(VK_USE_PLATFORM_XCB_KHR)
-#include <xcb/xcb.h>
-#include <X11/Xlib-xcb.h>
+#include <dlfcn.h>
+typedef struct xcb_connection_t xcb_connection_t;
+typedef xcb_connection_t* (*PFN_XGetXCBConnection)(Display*);
+#define XGetXCBConnection renderer->x11xcb.GetXCBConnection
 #endif
 
 namespace
@@ -275,6 +277,13 @@ namespace
 
 struct VGFXVulkanRenderer
 {
+#if defined(VK_USE_PLATFORM_XCB_KHR)
+    struct {
+        void* handle;
+        PFN_XGetXCBConnection GetXCBConnection;
+    } x11xcb;
+#endif
+
     bool debugUtils;
     VkInstance instance;
     VkDebugUtilsMessengerEXT debugUtilsMessenger;
@@ -364,6 +373,14 @@ static void vulkan_destroyDevice(VGFXDevice device)
         renderer->instance = VK_NULL_HANDLE;
     }
 
+#if defined(VK_USE_PLATFORM_XCB_KHR)
+    if (renderer->x11xcb.handle)
+    {
+        dlclose(renderer->x11xcb.handle);
+        renderer->x11xcb.handle = NULL;
+    }
+#endif
+
     delete renderer;
     VGFX_FREE(device);
 }
@@ -433,10 +450,12 @@ static bool vulkan_isSupported(void)
     return true;
 }
 
-static VkSurfaceKHR vulkan_createSurface(VkInstance instance, VGFXSurface surface)
+static VkSurfaceKHR vulkan_createSurface(VGFXVulkanRenderer* renderer, VGFXSurface surface)
 {
     VkResult result = VK_SUCCESS;
     VkSurfaceKHR vk_surface = VK_NULL_HANDLE;
+
+    VkInstance instance = renderer->instance;
 
 #if defined(VK_USE_PLATFORM_WIN32_KHR)
     VkWin32SurfaceCreateInfoKHR createInfo = {};
@@ -509,6 +528,21 @@ static VkSurfaceKHR vulkan_createSurface(VkInstance instance, VGFXSurface surfac
 static VGFXDevice vulkan_createDevice(VGFXSurface surface, const VGFXDeviceInfo* info)
 {
     VGFXVulkanRenderer* renderer = new VGFXVulkanRenderer();
+
+#if defined(VK_USE_PLATFORM_XCB_KHR)
+#if defined(__CYGWIN__)
+    renderer->x11xcb.handle = dlopen("libX11-xcb-1.so", RTLD_LAZY | RTLD_LOCAL);
+#elif defined(__OpenBSD__) || defined(__NetBSD__)
+    renderer->x11xcb.handle = dlopen("libX11-xcb.so", RTLD_LAZY | RTLD_LOCAL);
+#else
+    renderer->x11xcb.handle = dlopen("libX11-xcb.so.1", RTLD_LAZY | RTLD_LOCAL);
+#endif
+
+    if (renderer->x11xcb.handle)
+    {
+        renderer->x11xcb.GetXCBConnection = (PFN_XGetXCBConnection)dlsym(renderer->x11xcb.handle, "XGetXCBConnection");
+    }
+#endif
 
     // Enumerate available layers and extensions:
     {
@@ -689,7 +723,7 @@ static VGFXDevice vulkan_createDevice(VGFXSurface surface, const VGFXDeviceInfo*
     }
 
     // Create surface
-    renderer->surface = vulkan_createSurface(renderer->instance, surface);
+    renderer->surface = vulkan_createSurface(renderer, surface);
     if (!renderer->surface)
     {
         delete renderer;
