@@ -12,11 +12,15 @@ VGFX_DISABLE_WARNINGS()
 VGFX_ENABLE_WARNINGS()
 #include <vector>
 
-#if defined(VK_USE_PLATFORM_XCB_KHR)
+#if defined(VK_USE_PLATFORM_XLIB_KHR) || defined(VK_USE_PLATFORM_XCB_KHR)
 #include <dlfcn.h>
-typedef struct xcb_connection_t xcb_connection_t;
-typedef xcb_connection_t* (*PFN_XGetXCBConnection)(Display*);
-#define XGetXCBConnection renderer->x11xcb.GetXCBConnection
+#include <X11/Xlib.h>
+#include <X11/Xlib-xcb.h>
+
+#undef Success
+#undef None
+#undef Always
+#undef Bool
 #endif
 
 namespace
@@ -280,7 +284,7 @@ struct VGFXVulkanRenderer
 #if defined(VK_USE_PLATFORM_XCB_KHR)
     struct {
         void* handle;
-        PFN_XGetXCBConnection GetXCBConnection;
+        decltype(&::XGetXCBConnection) GetXCBConnection;
     } x11xcb;
 #endif
 
@@ -474,17 +478,10 @@ static VkSurfaceKHR vulkan_createSurface(VGFXVulkanRenderer* renderer, VGFXSurfa
     createInfo.pLayer = (const CAMetalLayer*)surface->pLayer;
     result = vkCreateMetalSurfaceEXT(instance, &createInfo, nullptr, &vk_surface);
 #elif defined(VK_USE_PLATFORM_XCB_KHR)
-    xcb_connection_t* connection = XGetXCBConnection((Display*)surface->display);
-    if (!connection)
-    {
-        vgfxLogError("X11: Failed to retrieve XCB connection");
-        return VK_NULL_HANDLE;
-    }
-
     VkXcbSurfaceCreateInfoKHR createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR;
-    createInfo.connection = connection;
-    createInfo.window = (xcb_window_t)surface->window;
+    createInfo.connection = renderer->GetXCBConnection(static_cast<Display*>(surface->display));
+    createInfo.window = surface->window;
     result = vkCreateXcbSurfaceKHR(instance, &createInfo, nullptr, &vk_surface);
 #elif defined(VK_USE_PLATFORM_XLIB_KHR)
     VkXlibSurfaceCreateInfoKHR createInfo = {};
