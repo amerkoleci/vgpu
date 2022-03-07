@@ -46,6 +46,11 @@ void init_gfx(GLFWwindow* window)
     deviceInfo.validationMode = VGFXValidationMode_Enabled;
 #endif
 
+    if (vgfxIsSupported(VGFXAPI_D3D11))
+    {
+        deviceInfo.preferredApi = VGFXAPI_D3D11;
+    }
+
     //if (vgfxIsSupported(VGFXAPI_Vulkan))
     //{
     //    deviceInfo.preferredApi = VGFXAPI_Vulkan;

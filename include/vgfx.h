@@ -232,10 +232,10 @@ typedef enum VGFXPresentMode
 
 typedef enum VGFXFeature
 {
-    VGFX_FEATURE_COMPUTE = 0,
+    VGFXFeature_Compute = 0,
 
-    _VGFX_FEATURE_COUNT,
-    _VGFX_FEATURE_FORCE_U32 = 0x7FFFFFFF
+    VGFXFeature_Count,
+    VGFXFeature_Force32 = 0x7FFFFFFF
 } VGFXFeature;
 
 typedef enum VGFXLoadAction {

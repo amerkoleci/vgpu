@@ -380,7 +380,7 @@ static bool vulkan_queryFeature(VGFXRenderer* driverData, VGFXFeature feature)
     VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
     switch (feature)
     {
-        case VGFX_FEATURE_COMPUTE:
+        case VGFXFeature_Compute:
             return true;
 
         default:
@@ -465,11 +465,18 @@ static VkSurfaceKHR vulkan_createSurface(VkInstance instance, VGFXSurface surfac
     createInfo.surface = window;
     result = vkCreateWaylandSurfaceKHR(instance, &createInfo, nullptr, &vk_surface);
 #elif defined(VK_USE_PLATFORM_XCB_KHR)
+    xcb_connection_t* connection = XGetXCBConnection((Display*)surface->display);
     VkXcbSurfaceCreateInfoKHR createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR;
     createInfo.connection = connection;
-    createInfo.window = window;
+    createInfo.window = (xcb_window_t)surface->window;
     result = vkCreateXcbSurfaceKHR(instance, &createInfo, nullptr, &vk_surface);
+#elif defined(VK_USE_PLATFORM_XLIB_KHR)
+    VkXlibSurfaceCreateInfoKHR createInfo = {};
+    createInfo.sType = VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR;
+    createInfo.dpy = (Display*)surface->display;
+    createInfo.window = (Window)surface->window;
+    result = vkCreateXlibSurfaceKHR(instance, &createInfo, nullptr, &vk_surface);
 #elif defined(VK_USE_PLATFORM_HEADLESS_EXT)
     VkHeadlessSurfaceCreateInfoEXT createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_HEADLESS_SURFACE_CREATE_INFO_EXT;
@@ -531,10 +538,12 @@ static VGFXDevice vulkan_createDevice(VGFXSurface surface, const VGFXDeviceInfo*
         instanceExtensions.push_back(VK_KHR_DISPLAY_EXTENSION_NAME);
 #elif defined(VK_USE_PLATFORM_DIRECTFB_EXT)
         instanceExtensions.push_back(VK_EXT_DIRECTFB_SURFACE_EXTENSION_NAME);
-#elif defined(VK_USE_PLATFORM_WAYLAND_KHR)
-        instanceExtensions.push_back(VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME);
 #elif defined(VK_USE_PLATFORM_XCB_KHR)
         instanceExtensions.push_back(VK_KHR_XCB_SURFACE_EXTENSION_NAME);
+#elif defined(VK_USE_PLATFORM_XLIB_KHR)
+        instanceExtensions.push_back(VK_KHR_XLIB_SURFACE_EXTENSION_NAME);
+#elif defined(VK_USE_PLATFORM_WAYLAND_KHR)
+        instanceExtensions.push_back(VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME);
 #elif defined(VK_USE_PLATFORM_IOS_MVK)
         instanceExtensions.push_back(VK_MVK_IOS_SURFACE_EXTENSION_NAME);
 #elif defined(VK_USE_PLATFORM_MACOS_MVK)

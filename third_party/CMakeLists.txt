@@ -21,14 +21,16 @@ if(VGFX_VULKAN_DRIVER)
     elseif(APPLE)
         target_compile_definitions(vulkan INTERFACE VK_USE_PLATFORM_MACOS_MVK)
     elseif(UNIX)
-        # See whether X11 is available. If not, fall back to direct-to-display mode.
-        find_package(X11 QUIET)
-        if (X11_FOUND)
+        find_package(PkgConfig REQUIRED)
+
+        pkg_check_modules(XCB xcb)
+        if (XCB_FOUND)
             target_compile_definitions(vulkan INTERFACE VK_USE_PLATFORM_XCB_KHR)
-        else()
-            set(DIRECT_TO_DISPLAY TRUE)
-            set(DIRECT_TO_DISPLAY TRUE PARENT_SCOPE)
-            target_compile_definitions(vulkan INTERFACE VK_USE_PLATFORM_DISPLAY_KHR)
+        endif()
+
+        pkg_check_modules(X11 x11)
+        if (X11_FOUND)
+            target_compile_definitions(vulkan INTERFACE VK_USE_PLATFORM_XLIB_KHR)
         endif()
     endif()
 

@@ -28,7 +28,6 @@ extern "C"
 }
 #endif
 
-
 using Microsoft::WRL::ComPtr;
 
 namespace
@@ -44,22 +43,8 @@ namespace
 #if defined(_DEBUG)
     using PFN_DXGI_GET_DEBUG_INTERFACE1 = decltype(&DXGIGetDebugInterface1);
     static PFN_DXGI_GET_DEBUG_INTERFACE1 vgfxDXGIGetDebugInterface1 = nullptr;
-
-    // Declare debug guids to avoid linking with "dxguid.lib"
-    static constexpr IID VGFX_DXGI_DEBUG_ALL = { 0xe48ae283, 0xda80, 0x490b, {0x87, 0xe6, 0x43, 0xe9, 0xa9, 0xcf, 0xda, 0x8} };
-    static constexpr IID VGFX_DXGI_DEBUG_DXGI = { 0x25cddaa4, 0xb1c6, 0x47e1, {0xac, 0x3e, 0x98, 0x87, 0x5b, 0x5a, 0x2e, 0x2a} };
 #endif
 #endif
-
-    template <typename T>
-    void SafeRelease(T& resource)
-    {
-        if (resource)
-        {
-            resource->Release();
-            resource = nullptr;
-        }
-    }
 }
 
 #if !WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
@@ -651,7 +636,7 @@ static bool d3d12_queryFeature(VGFXRenderer* driverData, VGFXFeature feature)
     VGFXD3D12Renderer* renderer = (VGFXD3D12Renderer*)driverData;
     switch (feature)
     {
-        case VGFX_FEATURE_COMPUTE:
+        case VGFXFeature_Compute:
             return true;
 
         default:
@@ -933,7 +918,7 @@ static VGFXDevice d3d12_createDevice(VGFXSurface surface, const VGFXDeviceInfo* 
             OutputDebugStringA("WARNING: Direct3D Debug Device is not available\n");
         }
 
-#ifdef _DEBUG
+#if defined(_DEBUG) && WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
         ComPtr<IDXGIInfoQueue> dxgiInfoQueue;
         if (SUCCEEDED(vgfxDXGIGetDebugInterface1(0, IID_PPV_ARGS(dxgiInfoQueue.GetAddressOf()))))
         {
