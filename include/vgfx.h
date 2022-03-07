@@ -53,8 +53,10 @@ enum {
 
 typedef struct VGFXSurface_T* VGFXSurface;
 typedef struct VGFXDevice_T* VGFXDevice;
-typedef struct VGFXSwapChain_T* VGFXSwapChain;
+typedef struct VGFXBuffer_T* VGFXBuffer;
 typedef struct VGFXTexture_T* VGFXTexture;
+typedef struct VGFXSampler_T* VGFXSampler;
+typedef struct VGFXSwapChain_T* VGFXSwapChain;
 
 typedef enum VGFXLogLevel
 {

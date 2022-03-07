@@ -25,11 +25,13 @@ if(VGFX_VULKAN_DRIVER)
 
         pkg_check_modules(XCB xcb)
         if (XCB_FOUND)
+            target_include_directories(vulkan PUBLIC ${XCB_INCLUDE_DIRS})
             target_compile_definitions(vulkan INTERFACE VK_USE_PLATFORM_XCB_KHR)
         endif()
 
         pkg_check_modules(X11 x11)
         if (X11_FOUND)
+            target_include_directories(vulkan PUBLIC ${X11_INCLUDE_DIRS})
             target_compile_definitions(vulkan INTERFACE VK_USE_PLATFORM_XLIB_KHR)
         endif()
     endif()

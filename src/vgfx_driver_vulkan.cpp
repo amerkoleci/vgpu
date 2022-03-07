@@ -13,6 +13,8 @@ VGFX_ENABLE_WARNINGS()
 #include <vector>
 
 #if defined(VK_USE_PLATFORM_XCB_KHR)
+#include <xcb/xcb.h>
+#include <dlfcn.h>
 #include <X11/Xlib-xcb.h>
 #endif
 
