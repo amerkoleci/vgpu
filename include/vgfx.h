@@ -99,6 +99,8 @@ typedef enum VGFXSurfaceType
 {
     VGFXSurfaceType_Unknown = 0,
     VGFXSurfaceType_Win32,
+    VGFXSurfaceType_CoreWindow,
+    VGFXSurfaceType_SwapChainPanel,
     VGFXSurfaceType_Xlib,
     VGFXSurfaceType_Web,
 
@@ -235,6 +237,9 @@ typedef enum VGFXPresentMode
 typedef enum VGFXFeature
 {
     VGFXFeature_Compute = 0,
+    VGFXFeature_TextureCompressionBC,
+    VGFXFeature_TextureCompressionETC2,
+    VGFXFeature_TextureCompressionASTC,
 
     VGFXFeature_Count,
     VGFXFeature_Force32 = 0x7FFFFFFF
@@ -262,6 +267,26 @@ typedef struct VGFXColor
     float b;
     float a;
 } VGFXColor;
+
+typedef struct VGFXSize2D {
+    uint32_t    width;
+    uint32_t    height;
+} VGFXSize2D;
+
+typedef struct VGFXViewport {
+    /// Top left x coordinate.
+    float x;
+    /// Top left y coordinate.
+    float y;
+    /// Width of the viewport rectangle.
+    float width;
+    /// Height of the viewport rectangle (Y is down).
+    float height;
+    /// Minimum depth of the viewport. Ranges between 0 and 1.
+    float minDepth;
+    /// Maximum depth of the viewport. Ranges between 0 and 1.
+    float maxDepth;
+} VGFXViewport;
 
 typedef struct VGFXRenderPassColorAttachment
 {
@@ -313,10 +338,9 @@ VGFX_API void vgfxDestroyTexture(VGFXDevice device, VGFXTexture texture);
 
 /* SwapChain */
 VGFX_API VGFXSwapChain vgfxCreateSwapChain(VGFXDevice device, VGFXSurface surface, const VGFXSwapChainInfo* info);
-VGFX_API void vgfxDestroySwapChain(VGFXSwapChain swapChain);
-VGFX_API uint32_t vgfxSwapChainGetWidth(VGFXSwapChain swapChain);
-VGFX_API uint32_t vgfxSwapChainGetHeight(VGFXSwapChain swapChain);
-VGFX_API VGFXTexture vgfxSwapChainGetNextTexture(VGFXSwapChain swapChain);
+VGFX_API void vgfxDestroySwapChain(VGFXDevice device, VGFXSwapChain swapChain);
+VGFX_API void vgfxSwapChainGetSize(VGFXDevice device, VGFXSwapChain swapChain, VGFXSize2D* pSize);
+VGFX_API VGFXTexture vgfxSwapChainAcquireNextTexture(VGFXDevice device, VGFXSwapChain swapChain);
 
 /* Commands */
 VGFX_API void vgfxBeginRenderPass(VGFXDevice device, const VGFXRenderPassInfo* info);

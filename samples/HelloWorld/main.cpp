@@ -118,11 +118,11 @@ KEEP_IN_MODULE void _glue_main_()
 
 void draw_frame()
 {
-    uint32_t width = vgfxSwapChainGetWidth(swapChain);
-    uint32_t height = vgfxSwapChainGetHeight(swapChain);
+    VGFXSize2D size;
+    vgfxSwapChainGetSize(device, swapChain, &size);
 
     VGFXRenderPassColorAttachment colorAttachment = {};
-    colorAttachment.texture = vgfxSwapChainGetNextTexture(swapChain);
+    colorAttachment.texture = vgfxSwapChainAcquireNextTexture(device, swapChain);
     colorAttachment.loadAction = VGFXLoadAction_Clear;
     colorAttachment.storeAction = VGFXStoreAction_Store;
     colorAttachment.clearColor.r = 0.3f;
@@ -161,7 +161,7 @@ int main()
     }
 
     vgfxWaitIdle(device);
-    vgfxDestroySwapChain(swapChain);
+    vgfxDestroySwapChain(device, swapChain);
     vgfxDestroyDevice(device);
     vgfxDestroySurface(surface);
     glfwDestroyWindow(window);

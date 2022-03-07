@@ -253,38 +253,34 @@ void vgfxDestroyTexture(VGFXDevice device, VGFXTexture texture)
 /* SwapChain */
 VGFXSwapChain vgfxCreateSwapChain(VGFXDevice device, VGFXSurface surface, const VGFXSwapChainInfo* info)
 {
-    if (device == NULL)
-        return NULL;
-
-    if (surface == NULL)
-        return NULL;
-
-    if (info == NULL)
-        return NULL;
+    NULL_RETURN_NULL(device);
+    NULL_RETURN_NULL(surface);
+    NULL_RETURN_NULL(info);
 
     return device->createSwapChain(device->driverData, surface, info);
 }
 
-void vgfxDestroySwapChain(VGFXSwapChain swapChain)
+void vgfxDestroySwapChain(VGFXDevice device, VGFXSwapChain swapChain)
 {
+    NULL_RETURN(device);
     NULL_RETURN(swapChain);
 
-    swapChain->destroy(swapChain);
+    device->destroySwapChain(device->driverData, swapChain);
 }
 
-uint32_t vgfxSwapChainGetWidth(VGFXSwapChain swapChain)
+void vgfxSwapChainGetSize(VGFXDevice device, VGFXSwapChain swapChain, VGFXSize2D* pSize)
 {
-    return swapChain->getWidth(swapChain->driverData);
+    NULL_RETURN(device);
+    NULL_RETURN(swapChain);
+    NULL_RETURN(pSize);
+
+    device->getSwapChainSize(device->driverData, swapChain, pSize);
 }
 
-uint32_t vgfxSwapChainGetHeight(VGFXSwapChain swapChain)
+VGFXTexture vgfxSwapChainAcquireNextTexture(VGFXDevice device, VGFXSwapChain swapChain)
 {
-    return swapChain->getHeight(swapChain->driverData);
-}
-
-VGFXTexture vgfxSwapChainGetNextTexture(VGFXSwapChain swapChain)
-{
-    return swapChain->getNextTexture(swapChain->driverData);
+    NULL_RETURN_NULL(device);
+    return device->acquireNextTexture(device->driverData, swapChain);
 }
 
 /* Commands */

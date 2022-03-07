@@ -189,7 +189,12 @@ static bool d3d11_queryFeature(VGFXRenderer* driverData, VGFXFeature feature)
     switch (feature)
     {
         case VGFXFeature_Compute:
+        case VGFXFeature_TextureCompressionBC:
             return true;
+
+        case VGFXFeature_TextureCompressionETC2:
+        case VGFXFeature_TextureCompressionASTC:
+            return false;
 
         default:
             return false;
@@ -207,36 +212,6 @@ static void d3d11_destroyTexture(VGFXRenderer* driverData, VGFXTexture texture)
 }
 
 /* SwapChain */
-static void d3d11_SwapChainDestroy(VGFXSwapChain swapChain)
-{
-    VGFXD3D11SwapChain* d3dSwapChain = (VGFXD3D11SwapChain*)swapChain->driverData;
-
-    d3d11_destroyTexture(nullptr, d3dSwapChain->backbufferTexture);
-    d3dSwapChain->backbufferTexture = nullptr;
-    d3dSwapChain->handle->Release();
-
-    delete swapChain;
-}
-
-static uint32_t d3d11_SwapChainGetWidth(VGFXSwapChainImpl* driverData)
-{
-    VGFXD3D11SwapChain* d3dSwapChain = (VGFXD3D11SwapChain*)driverData;
-    return d3dSwapChain->width;
-}
-
-static uint32_t d3d11_SwapChainGetHeight(VGFXSwapChainImpl* driverData)
-{
-    VGFXD3D11SwapChain* d3dSwapChain = (VGFXD3D11SwapChain*)driverData;
-    return d3dSwapChain->height;
-}
-
-static VGFXTexture d3d11_SwapChainGetNextTexture(VGFXSwapChainImpl* driverData)
-{
-    VGFXD3D11SwapChain* d3dSwapChain = (VGFXD3D11SwapChain*)driverData;
-    d3dSwapChain->renderer->swapChains.push_back(d3dSwapChain);
-    return d3dSwapChain->backbufferTexture;
-}
-
 static void d3d11_updateSwapChain(VGFXD3D11Renderer* renderer, VGFXD3D11SwapChain* swapChain)
 {
     HRESULT hr = S_OK;
@@ -319,16 +294,38 @@ static VGFXSwapChain d3d11_createSwapChain(VGFXRenderer* driverData, VGFXSurface
     );
 #endif
 
-    VGFXD3D11SwapChain* impl = new VGFXD3D11SwapChain();
-    impl->renderer = renderer;
-    impl->handle = handle;
-    impl->vsync = info->presentMode == VGFXPresentMode_Fifo;
-    d3d11_updateSwapChain(renderer, impl);
+    VGFXD3D11SwapChain* swapChain = new VGFXD3D11SwapChain();
+    swapChain->renderer = renderer;
+    swapChain->handle = handle;
+    swapChain->vsync = info->presentMode == VGFXPresentMode_Fifo;
+    d3d11_updateSwapChain(renderer, swapChain);
+    return (VGFXSwapChain)swapChain;
+}
 
-    VGFXSwapChain_T* swapChain = new VGFXSwapChain_T();
-    ASSIGN_SWAPCHAIN(d3d11);
-    swapChain->driverData = (VGFXSwapChainImpl*)impl;
-    return swapChain;
+static void d3d11_destroySwapChain(VGFXRenderer* driverData, VGFXSwapChain swapChain)
+{
+    _VGFX_UNUSED(driverData);
+    VGFXD3D11SwapChain* d3dSwapChain = (VGFXD3D11SwapChain*)swapChain;
+
+    d3d11_destroyTexture(nullptr, d3dSwapChain->backbufferTexture);
+    d3dSwapChain->backbufferTexture = nullptr;
+    d3dSwapChain->handle->Release();
+
+    delete d3dSwapChain;
+}
+
+static void d3d11_getSwapChainSize(VGFXRenderer*, VGFXSwapChain swapChain, VGFXSize2D* pSize)
+{
+    VGFXD3D11SwapChain* d3dSwapChain = (VGFXD3D11SwapChain*)swapChain;
+    pSize->width = d3dSwapChain->width;
+    pSize->height = d3dSwapChain->height;
+}
+
+static VGFXTexture d3d11_acquireNextTexture(VGFXRenderer*, VGFXSwapChain swapChain)
+{
+    VGFXD3D11SwapChain* d3dSwapChain = (VGFXD3D11SwapChain*)swapChain;
+    d3dSwapChain->renderer->swapChains.push_back(d3dSwapChain);
+    return d3dSwapChain->backbufferTexture;
 }
 
 static void d3d11_beginRenderPass(VGFXRenderer* driverData, const VGFXRenderPassInfo* info)

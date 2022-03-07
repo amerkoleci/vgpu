@@ -11,6 +11,8 @@ VGFX_DISABLE_WARNINGS()
 #include <spirv_reflect.h>
 VGFX_ENABLE_WARNINGS()
 #include <vector>
+#include <deque>
+#include <mutex>
 
 #if defined(VK_USE_PLATFORM_XLIB_KHR) || defined(VK_USE_PLATFORM_XCB_KHR)
 #include <dlfcn.h>
@@ -279,6 +281,25 @@ namespace
 
 #define VK_LOG_ERROR(result, message) vgfxLogError("Vulkan: %s, error: %s", message, ToString(result));
 
+struct VGFXVulkanRenderer;
+
+struct VGFXVulkanTexture
+{
+    VkImage handle = VK_NULL_HANDLE;
+    VmaAllocation  allocation = nullptr;
+};
+
+struct VGFXVulkanSwapChain
+{
+    VGFXVulkanRenderer* renderer = nullptr;
+    VkSurfaceKHR surface = VK_NULL_HANDLE;
+    VkSwapchainKHR handle = VK_NULL_HANDLE;
+    uint32_t width = 0;
+    uint32_t height = 0;
+    bool vsync = false;
+    std::vector<VGFXTexture> backbufferTextures;
+};
+
 struct VGFXVulkanRenderer
 {
 #if defined(VK_USE_PLATFORM_XCB_KHR)
@@ -291,7 +312,6 @@ struct VGFXVulkanRenderer
     bool debugUtils;
     VkInstance instance;
     VkDebugUtilsMessengerEXT debugUtilsMessenger;
-    VkSurfaceKHR surface;
 
     VkPhysicalDeviceProperties2 properties2 = {};
     VkPhysicalDeviceVulkan11Properties properties_1_1 = {};
@@ -332,127 +352,21 @@ struct VGFXVulkanRenderer
 
     VkDevice device = VK_NULL_HANDLE;
     VmaAllocator allocator = VK_NULL_HANDLE;
+
+    uint32_t frameIndex = 0;
+    uint64_t frameCount = 0;
+
+    // Deletion queue objects
+    std::mutex destroyMutex;
+    std::deque<std::pair<std::pair<VkImage, VmaAllocation>, uint64_t>> destroyedImagesQueue;
+    std::deque<std::pair<VkImageView, uint64_t>> destroyedImageViews;
+    std::deque<std::pair<VkSampler, uint64_t>> destroyedSamplers;
+    std::deque<std::pair<std::pair<VkBuffer, VmaAllocation>, uint64_t>> destroyedBuffers;
+    std::deque<std::pair<VkShaderModule, uint64_t>> destroyedShaderModules;
+    std::deque<std::pair<VkPipeline, uint64_t>> destroyedPipelines;
+    std::deque<std::pair<VkDescriptorPool, uint64_t>> destroyedDescriptorPools;
+    std::deque<std::pair<VkQueryPool, uint64_t>> destroyedQueryPools;
 };
-
-static void vulkan_destroyDevice(VGFXDevice device)
-{
-    VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)device->driverData;
-    VK_CHECK(vkDeviceWaitIdle(renderer->device));
-
-    if (renderer->allocator != VK_NULL_HANDLE)
-    {
-        //VmaStats stats;
-        //vmaCalculateStats(renderer->allocator, &stats);
-
-        //if (stats.total.usedBytes > 0)
-        //{
-        //    vgfxLogError("Total device memory leaked: {} bytes.", stats.total.usedBytes);
-        //}
-
-        vmaDestroyAllocator(renderer->allocator);
-        renderer->allocator = VK_NULL_HANDLE;
-    }
-
-    if (renderer->device != VK_NULL_HANDLE)
-    {
-        vkDestroyDevice(renderer->device, nullptr);
-        renderer->device = VK_NULL_HANDLE;
-    }
-
-    if (renderer->surface != VK_NULL_HANDLE)
-    {
-        vkDestroySurfaceKHR(renderer->instance, renderer->surface, nullptr);
-        renderer->surface = VK_NULL_HANDLE;
-    }
-
-    if (renderer->debugUtilsMessenger != VK_NULL_HANDLE)
-    {
-        vkDestroyDebugUtilsMessengerEXT(renderer->instance, renderer->debugUtilsMessenger, nullptr);
-        renderer->debugUtilsMessenger = VK_NULL_HANDLE;
-    }
-
-    if (renderer->instance != VK_NULL_HANDLE)
-    {
-        vkDestroyInstance(renderer->instance, nullptr);
-        renderer->instance = VK_NULL_HANDLE;
-    }
-
-#if defined(VK_USE_PLATFORM_XCB_KHR)
-    if (renderer->x11xcb.handle)
-    {
-        dlclose(renderer->x11xcb.handle);
-        renderer->x11xcb.handle = NULL;
-    }
-#endif
-
-    delete renderer;
-    VGFX_FREE(device);
-}
-
-static void vulkan_frame(VGFXRenderer* driverData)
-{
-    VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
-    _VGFX_UNUSED(renderer);
-}
-
-static void vulkan_waitIdle(VGFXRenderer* driverData)
-{
-    VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
-    VK_CHECK(vkDeviceWaitIdle(renderer->device));
-}
-
-static bool vulkan_queryFeature(VGFXRenderer* driverData, VGFXFeature feature)
-{
-    VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
-    switch (feature)
-    {
-        case VGFXFeature_Compute:
-            return true;
-
-        default:
-            return false;
-    }
-}
-
-static void vulkan_destroyTexture(VGFXRenderer* driverData, VGFXTexture texture)
-{
-}
-
-static VGFXSwapChain vulkan_createSwapChain(VGFXRenderer* driverData, VGFXSurface surface, const VGFXSwapChainInfo* info)
-{
-    return nullptr;
-}
-
-static void vulkan_beginRenderPass(VGFXRenderer* driverData, const VGFXRenderPassInfo* info)
-{
-    VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
-}
-
-static void vulkan_endRenderPass(VGFXRenderer* driverData)
-{
-    VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
-}
-
-static bool vulkan_isSupported(void)
-{
-    static bool available_initialized = false;
-    static bool available = false;
-
-    if (available_initialized) {
-        return available;
-    }
-
-    available_initialized = true;
-
-    VkResult result = volkInitialize();
-    if (result != VK_SUCCESS)
-    {
-        return false;
-    }
-
-    available = true;
-    return true;
-}
 
 static VkSurfaceKHR vulkan_createSurface(VGFXVulkanRenderer* renderer, VGFXSurface surface)
 {
@@ -508,6 +422,315 @@ static VkSurfaceKHR vulkan_createSurface(VGFXVulkanRenderer* renderer, VGFXSurfa
     }
 
     return vk_surface;
+}
+
+static void vulkan_ProcessDeletionQueue(VGFXVulkanRenderer* renderer)
+{
+    renderer->destroyMutex.lock();
+    while (!renderer->destroyedImagesQueue.empty())
+    {
+        if (renderer->destroyedImagesQueue.front().second + VGFX_MAX_INFLIGHT_FRAMES < renderer->frameCount)
+        {
+            auto item = renderer->destroyedImagesQueue.front();
+            renderer->destroyedImagesQueue.pop_front();
+            vmaDestroyImage(renderer->allocator, item.first.first, item.first.second);
+        }
+        else
+        {
+            break;
+        }
+    }
+
+    while (!renderer->destroyedImageViews.empty())
+    {
+        if (renderer->destroyedImageViews.front().second + VGFX_MAX_INFLIGHT_FRAMES < renderer->frameCount)
+        {
+            auto item = renderer->destroyedImageViews.front();
+            renderer->destroyedImageViews.pop_front();
+            vkDestroyImageView(renderer->device, item.first, nullptr);
+        }
+        else
+        {
+            break;
+        }
+    }
+
+    while (!renderer->destroyedSamplers.empty())
+    {
+        if (renderer->destroyedSamplers.front().second + VGFX_MAX_INFLIGHT_FRAMES < renderer->frameCount)
+        {
+            auto item = renderer->destroyedSamplers.front();
+            renderer->destroyedSamplers.pop_front();
+            vkDestroySampler(renderer->device, item.first, nullptr);
+        }
+        else
+        {
+            break;
+        }
+    }
+
+    while (!renderer->destroyedBuffers.empty())
+    {
+        if (renderer->destroyedBuffers.front().second + VGFX_MAX_INFLIGHT_FRAMES < renderer->frameCount)
+        {
+            auto item = renderer->destroyedBuffers.front();
+            renderer->destroyedBuffers.pop_front();
+            vmaDestroyBuffer(renderer->allocator, item.first.first, item.first.second);
+        }
+        else
+        {
+            break;
+        }
+    }
+
+    while (!renderer->destroyedPipelines.empty())
+    {
+        if (renderer->destroyedPipelines.front().second + VGFX_MAX_INFLIGHT_FRAMES < renderer->frameCount)
+        {
+            auto item = renderer->destroyedPipelines.front();
+            renderer->destroyedPipelines.pop_front();
+            vkDestroyPipeline(renderer->device, item.first, nullptr);
+        }
+        else
+        {
+            break;
+        }
+    }
+
+    while (!renderer->destroyedDescriptorPools.empty())
+    {
+        if (renderer->destroyedDescriptorPools.front().second + VGFX_MAX_INFLIGHT_FRAMES < renderer->frameCount)
+        {
+            auto item = renderer->destroyedDescriptorPools.front();
+            renderer->destroyedDescriptorPools.pop_front();
+            vkDestroyDescriptorPool(renderer->device, item.first, nullptr);
+        }
+        else
+        {
+            break;
+        }
+    }
+
+    while (!renderer->destroyedQueryPools.empty())
+    {
+        if (renderer->destroyedQueryPools.front().second + VGFX_MAX_INFLIGHT_FRAMES < renderer->frameCount)
+        {
+            auto item = renderer->destroyedQueryPools.front();
+            renderer->destroyedQueryPools.pop_front();
+            vkDestroyQueryPool(renderer->device, item.first, nullptr);
+        }
+        else
+        {
+            break;
+        }
+    }
+    renderer->destroyMutex.unlock();
+}
+
+static void vulkan_destroyDevice(VGFXDevice device)
+{
+    VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)device->driverData;
+    VK_CHECK(vkDeviceWaitIdle(renderer->device));
+
+    renderer->frameCount = UINT64_MAX;
+    vulkan_ProcessDeletionQueue(renderer);
+    renderer->frameCount = 0;
+
+    if (renderer->allocator != VK_NULL_HANDLE)
+    {
+        //VmaStats stats;
+        //vmaCalculateStats(renderer->allocator, &stats);
+
+        //if (stats.total.usedBytes > 0)
+        //{
+        //    vgfxLogError("Total device memory leaked: {} bytes.", stats.total.usedBytes);
+        //}
+
+        vmaDestroyAllocator(renderer->allocator);
+        renderer->allocator = VK_NULL_HANDLE;
+    }
+
+    if (renderer->device != VK_NULL_HANDLE)
+    {
+        vkDestroyDevice(renderer->device, nullptr);
+        renderer->device = VK_NULL_HANDLE;
+    }
+
+    if (renderer->debugUtilsMessenger != VK_NULL_HANDLE)
+    {
+        vkDestroyDebugUtilsMessengerEXT(renderer->instance, renderer->debugUtilsMessenger, nullptr);
+        renderer->debugUtilsMessenger = VK_NULL_HANDLE;
+    }
+
+    if (renderer->instance != VK_NULL_HANDLE)
+    {
+        vkDestroyInstance(renderer->instance, nullptr);
+        renderer->instance = VK_NULL_HANDLE;
+    }
+
+#if defined(VK_USE_PLATFORM_XCB_KHR)
+    if (renderer->x11xcb.handle)
+    {
+        dlclose(renderer->x11xcb.handle);
+        renderer->x11xcb.handle = NULL;
+    }
+#endif
+
+    delete renderer;
+    VGFX_FREE(device);
+}
+
+static void vulkan_frame(VGFXRenderer* driverData)
+{
+    VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
+
+    renderer->frameCount++;
+    renderer->frameIndex = renderer->frameCount % VGFX_MAX_INFLIGHT_FRAMES;
+
+    // Begin new frame
+    {
+        // Safe delete deferred destroys
+        vulkan_ProcessDeletionQueue(renderer);
+
+        // Prepare the command buffers to be used for the next frame
+    }
+}
+
+static void vulkan_waitIdle(VGFXRenderer* driverData)
+{
+    VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
+    VK_CHECK(vkDeviceWaitIdle(renderer->device));
+}
+
+static bool vulkan_queryFeature(VGFXRenderer* driverData, VGFXFeature feature)
+{
+    VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
+    switch (feature)
+    {
+        case VGFXFeature_Compute:
+            return true;
+
+        case VGFXFeature_TextureCompressionBC:
+            return renderer->features2.features.textureCompressionBC;
+
+        case VGFXFeature_TextureCompressionETC2:
+            return renderer->features2.features.textureCompressionETC2;
+
+        case VGFXFeature_TextureCompressionASTC:
+            return renderer->features2.features.textureCompressionASTC_LDR;
+
+        default:
+            return false;
+    }
+}
+
+/* Texture */
+static void vulkan_destroyTexture(VGFXRenderer* driverData, VGFXTexture texture)
+{
+    VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
+    VGFXVulkanTexture* vulkanTexture = (VGFXVulkanTexture*)texture;
+
+    if (vulkanTexture->allocation)
+    {
+        renderer->destroyMutex.lock();
+        renderer->destroyedImagesQueue.push_back(std::make_pair(std::make_pair(vulkanTexture->handle, vulkanTexture->allocation), renderer->frameCount));
+        renderer->destroyMutex.unlock();
+    }
+
+    delete vulkanTexture;
+}
+
+/* SwapChain */
+
+static void vulkan_updateSwapChain(VGFXVulkanRenderer* renderer, VGFXVulkanSwapChain* swapChain)
+{
+}
+
+static VGFXSwapChain vulkan_createSwapChain(VGFXRenderer* driverData, VGFXSurface surface, const VGFXSwapChainInfo* info)
+{
+    VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
+    VkSurfaceKHR vk_surface = vulkan_createSurface(renderer, surface);
+    if (vk_surface == VK_NULL_HANDLE)
+    {
+        return nullptr;
+    }
+
+    VkBool32 supported = VK_FALSE;
+    VK_CHECK(
+        vkGetPhysicalDeviceSurfaceSupportKHR(renderer->physicalDevice, renderer->graphicsQueueFamily, vk_surface, &supported)
+    );
+    if (!supported)
+    {
+        return false;
+    }
+
+    VGFXVulkanSwapChain* swapChain = new VGFXVulkanSwapChain();
+    swapChain->renderer = renderer;
+    swapChain->surface = vk_surface;
+    swapChain->vsync = info->presentMode == VGFXPresentMode_Fifo;
+    vulkan_updateSwapChain(renderer, swapChain);
+
+    return (VGFXSwapChain)swapChain;
+}
+
+static void vulkan_destroySwapChain(VGFXRenderer* driverData, VGFXSwapChain swapChain)
+{
+    _VGFX_UNUSED(driverData);
+
+    VGFXVulkanSwapChain* vulkanSwapChain = (VGFXVulkanSwapChain*)swapChain;
+    //vulkan_destroyTexture(nullptr, d3dSwapChain->backbufferTexture);
+
+    delete vulkanSwapChain;
+}
+
+static void vulkan_getSwapChainSize(VGFXRenderer* driverData, VGFXSwapChain swapChain, VGFXSize2D* pSize)
+{
+    _VGFX_UNUSED(driverData);
+
+    VGFXVulkanSwapChain* vulkanSwapChain = (VGFXVulkanSwapChain*)swapChain;
+    pSize->width = vulkanSwapChain->width;
+    pSize->height = vulkanSwapChain->height;
+}
+
+
+static VGFXTexture vulkan_acquireNextTexture(VGFXRenderer* driverData, VGFXSwapChain swapChain)
+{
+    VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
+    VGFXVulkanSwapChain* vulkanSwapChain = (VGFXVulkanSwapChain*)swapChain;
+    //vulkanSwapChain->renderer->swapChains.push_back(d3dSwapChain);
+    //return vulkanSwapChain->backbufferTexture;
+    return nullptr;
+}
+
+static void vulkan_beginRenderPass(VGFXRenderer* driverData, const VGFXRenderPassInfo* info)
+{
+    VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
+}
+
+static void vulkan_endRenderPass(VGFXRenderer* driverData)
+{
+    VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
+}
+
+static bool vulkan_isSupported(void)
+{
+    static bool available_initialized = false;
+    static bool available = false;
+
+    if (available_initialized) {
+        return available;
+    }
+
+    available_initialized = true;
+
+    VkResult result = volkInitialize();
+    if (result != VK_SUCCESS)
+    {
+        return false;
+    }
+
+    available = true;
+    return true;
 }
 
 static VGFXDevice vulkan_createDevice(VGFXSurface surface, const VGFXDeviceInfo* info)
@@ -706,8 +929,8 @@ static VGFXDevice vulkan_createDevice(VGFXSurface surface, const VGFXDeviceInfo*
     }
 
     // Create surface
-    renderer->surface = vulkan_createSurface(renderer, surface);
-    if (!renderer->surface)
+    VkSurfaceKHR vk_surface = vulkan_createSurface(renderer, surface);
+    if (!vk_surface)
     {
         delete renderer;
         return nullptr;
@@ -980,7 +1203,7 @@ static VGFXDevice vulkan_createDevice(VGFXSurface surface, const VGFXDeviceInfo*
                 if ((required & VK_QUEUE_GRAPHICS_BIT) != 0)
                 {
                     VkBool32 supported = VK_FALSE;
-                    if (vkGetPhysicalDeviceSurfaceSupportKHR(renderer->physicalDevice, familyIndex, renderer->surface, &supported) != VK_SUCCESS || !supported)
+                    if (vkGetPhysicalDeviceSurfaceSupportKHR(renderer->physicalDevice, familyIndex, vk_surface, &supported) != VK_SUCCESS || !supported)
                         continue;
                 }
 
@@ -1121,6 +1344,13 @@ static VGFXDevice vulkan_createDevice(VGFXSurface surface, const VGFXDeviceInfo*
         {
             VK_LOG_ERROR(result, "Cannot create allocator");
         }
+    }
+
+    // Destroy surface
+    if (vk_surface != VK_NULL_HANDLE)
+    {
+        vkDestroySurfaceKHR(renderer->instance, vk_surface, nullptr);
+        vk_surface = VK_NULL_HANDLE;
     }
 
     vgfxLogInfo("vgfx driver: Vulkan");

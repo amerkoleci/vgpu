@@ -11,6 +11,7 @@
 #if defined(_WIN32)
 typedef struct HINSTANCE__* HINSTANCE;
 typedef struct HWND__* HWND;
+typedef struct IUnknown IUnknown;
 #endif
 
 #ifndef VGFX_MALLOC
@@ -74,7 +75,6 @@ constexpr uint64_t vgfxNextPowerOfTwo(uint64_t value)
 #endif /* __cplusplus */
 
 typedef struct VGFXRenderer VGFXRenderer;
-typedef struct VGFXSwapChainImpl VGFXSwapChainImpl;
 
 typedef struct VGFXSurface_T
 {
@@ -82,6 +82,7 @@ typedef struct VGFXSurface_T
 #if defined(_WIN32)
     HINSTANCE hinstance;
     HWND window;
+    IUnknown* coreWindowOrSwapChainPanel;
 #elif defined(__EMSCRIPTEN__)
     const char* selector;
 #elif defined(__ANDROID__)
@@ -93,17 +94,6 @@ typedef struct VGFXSurface_T
 
 } VGFXSurface_T;
 
-typedef struct VGFXSwapChain_T
-{
-    void (*destroy)(VGFXSwapChain handle);
-    uint32_t(*getWidth)(VGFXSwapChainImpl* driverData);
-    uint32_t(*getHeight)(VGFXSwapChainImpl* driverData);
-    VGFXTexture(*getNextTexture)(VGFXSwapChainImpl* driverData);
-
-    /* Opaque pointer for the implentation */
-    VGFXSwapChainImpl* driverData;
-} VGFXSwapChain_T;
-
 typedef struct VGFXDevice_T
 {
     void (*destroyDevice)(VGFXDevice device);
@@ -114,6 +104,9 @@ typedef struct VGFXDevice_T
     void(*destroyTexture)(VGFXRenderer* driverData, VGFXTexture texture);
 
     VGFXSwapChain(*createSwapChain)(VGFXRenderer* driverData, VGFXSurface surface, const VGFXSwapChainInfo* info);
+    void(*destroySwapChain)(VGFXRenderer* driverData, VGFXSwapChain swapChain);
+    void (*getSwapChainSize)(VGFXRenderer* driverData, VGFXSwapChain swapChain, VGFXSize2D* pSize);
+    VGFXTexture(*acquireNextTexture)(VGFXRenderer* driverData, VGFXSwapChain swapChain);
 
     void (*beginRenderPass)(VGFXRenderer* driverData, const VGFXRenderPassInfo* info);
     void (*endRenderPass)(VGFXRenderer* driverData);
@@ -121,15 +114,6 @@ typedef struct VGFXDevice_T
     /* Opaque pointer for the Driver */
     VGFXRenderer* driverData;
 } VGFXDevice_T;
-
-#define ASSIGN_TEXTURE(name) \
-    texture->destroy = name##_##TextureDestroy; \
-
-#define ASSIGN_SWAPCHAIN(name) \
-	swapChain->destroy = name##_##SwapChainDestroy; \
-    swapChain->getWidth = name##_##SwapChainGetWidth; \
-    swapChain->getHeight = name##_##SwapChainGetHeight; \
-    swapChain->getNextTexture = name##_##SwapChainGetNextTexture;
 
 #define ASSIGN_DRIVER_FUNC(func, name) \
 	device->func = name##_##func;
@@ -140,6 +124,9 @@ typedef struct VGFXDevice_T
     ASSIGN_DRIVER_FUNC(queryFeature, name) \
     ASSIGN_DRIVER_FUNC(destroyTexture, name) \
     ASSIGN_DRIVER_FUNC(createSwapChain, name) \
+    ASSIGN_DRIVER_FUNC(destroySwapChain, name) \
+    ASSIGN_DRIVER_FUNC(getSwapChainSize, name) \
+    ASSIGN_DRIVER_FUNC(acquireNextTexture, name) \
     ASSIGN_DRIVER_FUNC(beginRenderPass, name) \
     ASSIGN_DRIVER_FUNC(endRenderPass, name) \
 
