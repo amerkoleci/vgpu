@@ -627,6 +627,8 @@ static bool d3d12_queryFeature(VGFXRenderer* driverData, VGFXFeature feature)
     switch (feature)
     {
         case VGFXFeature_Compute:
+        case VGFXFeature_IndependentBlend:
+        case VGFXFeature_TextureCubeArray:
         case VGFXFeature_TextureCompressionBC:
             return true;
 
@@ -640,6 +642,11 @@ static bool d3d12_queryFeature(VGFXRenderer* driverData, VGFXFeature feature)
 }
 
 /* Texture */
+static VGFXTexture d3d12_createTexture(VGFXRenderer* driverData, const VGFXTextureInfo* info)
+{
+    return nullptr;
+}
+
 static void d3d12_destroyTexture(VGFXRenderer* driverData, VGFXTexture texture)
 {
     VGFXD3D12Renderer* renderer = (VGFXD3D12Renderer*)driverData;
@@ -789,6 +796,13 @@ static VGFXTexture d3d12_acquireNextTexture(VGFXRenderer* driverData, VGFXSwapCh
 
     renderer->swapChains.push_back(d3d12SwapChain);
     return d3d12SwapChain->backbufferTextures[d3d12SwapChain->handle->GetCurrentBackBufferIndex()];
+}
+
+static void d3d12_beginRenderPassSwapChain(VGFXRenderer* driverData, VGFXSwapChain swapChain)
+{
+    VGFXD3D12Renderer* renderer = (VGFXD3D12Renderer*)driverData;
+    _VGFX_UNUSED(renderer);
+    _VGFX_UNUSED(swapChain);
 }
 
 static void d3d12_beginRenderPass(VGFXRenderer* driverData, const VGFXRenderPassInfo* info)

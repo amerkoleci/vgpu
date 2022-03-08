@@ -129,11 +129,12 @@ void draw_frame()
     colorAttachment.clearColor.g = 0.3f;
     colorAttachment.clearColor.b = 0.3f;
     colorAttachment.clearColor.a = 1.0f;
-
+    
     VGFXRenderPassInfo renderPass{};
     renderPass.colorAttachmentCount = 1u;
     renderPass.colorAttachments = &colorAttachment;
     vgfxBeginRenderPass(device, &renderPass);
+    //vgfxBeginRenderPassSwapChain(device, swapChain);
     vgfxEndRenderPass(device);
 
     vgfxFrame(device);

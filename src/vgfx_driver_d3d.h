@@ -105,20 +105,20 @@ namespace
             case VGFXTextureFormat_Depth32Float:			return DXGI_FORMAT_D32_FLOAT;
             case VGFXTextureFormat_Depth32FloatStencil8:    return DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
                 // Compressed BC formats
-            case VGFXTextureFormat_BC1RGBAUNorm:         return DXGI_FORMAT_BC1_UNORM;
-            case VGFXTextureFormat_BC1RGBAUNormSrgb:     return DXGI_FORMAT_BC1_UNORM_SRGB;
-            case VGFXTextureFormat_BC2RGBAUNorm:         return DXGI_FORMAT_BC2_UNORM;
-            case VGFXTextureFormat_BC2RGBAUNormSrgb:     return DXGI_FORMAT_BC2_UNORM_SRGB;
-            case VGFXTextureFormat_BC3RGBAUNorm:         return DXGI_FORMAT_BC3_UNORM;
-            case VGFXTextureFormat_BC3RGBAUNormSrgb:     return DXGI_FORMAT_BC3_UNORM_SRGB;
-            case VGFXTextureFormat_BC4RSNorm:            return DXGI_FORMAT_BC4_SNORM;
-            case VGFXTextureFormat_BC4RUNorm:            return DXGI_FORMAT_BC4_UNORM;
-            case VGFXTextureFormat_BC5RGSNorm:           return DXGI_FORMAT_BC5_SNORM;
-            case VGFXTextureFormat_BC5RGUNorm:           return DXGI_FORMAT_BC5_UNORM;
-            case VGFXTextureFormat_BC6HRGBFloat:         return DXGI_FORMAT_BC6H_SF16;
-            case VGFXTextureFormat_BC6HRGBUFloat:        return DXGI_FORMAT_BC6H_UF16;
-            case VGFXTextureFormat_BC7RGBAUNorm:         return DXGI_FORMAT_BC7_UNORM;
-            case VGFXTextureFormat_BC7RGBAUNormSrgb:     return DXGI_FORMAT_BC7_UNORM_SRGB;
+            case VGFXTextureFormat_BC1UNorm:            return DXGI_FORMAT_BC1_UNORM;
+            case VGFXTextureFormat_BC1UNormSrgb:        return DXGI_FORMAT_BC1_UNORM_SRGB;
+            case VGFXTextureFormat_BC2UNorm:            return DXGI_FORMAT_BC2_UNORM;
+            case VGFXTextureFormat_BC2UNormSrgb:        return DXGI_FORMAT_BC2_UNORM_SRGB;
+            case VGFXTextureFormat_BC3UNorm:            return DXGI_FORMAT_BC3_UNORM;
+            case VGFXTextureFormat_BC3UNormSrgb:        return DXGI_FORMAT_BC3_UNORM_SRGB;
+            case VGFXTextureFormat_BC4SNorm:            return DXGI_FORMAT_BC4_SNORM;
+            case VGFXTextureFormat_BC4UNorm:            return DXGI_FORMAT_BC4_UNORM;
+            case VGFXTextureFormat_BC5SNorm:            return DXGI_FORMAT_BC5_SNORM;
+            case VGFXTextureFormat_BC5UNorm:            return DXGI_FORMAT_BC5_UNORM;
+            case VGFXTextureFormat_BC6HUFloat:          return DXGI_FORMAT_BC6H_UF16;
+            case VGFXTextureFormat_BC6HSFloat:          return DXGI_FORMAT_BC6H_SF16;
+            case VGFXTextureFormat_BC7UNorm:            return DXGI_FORMAT_BC7_UNORM;
+            case VGFXTextureFormat_BC7UNormSrgb:        return DXGI_FORMAT_BC7_UNORM_SRGB;
 
             default:
                 return DXGI_FORMAT_UNKNOWN;
@@ -145,5 +145,24 @@ namespace
         }
 
         return DXGI_FORMAT_B8G8R8A8_UNORM;
+    }
+
+    constexpr DXGI_FORMAT GetTypelessFormatFromDepthFormat(VGFXTextureFormat format)
+    {
+        switch (format)
+        {
+            case VGFXTextureFormat_Depth16UNorm:
+                return DXGI_FORMAT_R16_TYPELESS;
+            case VGFXTextureFormat_Depth32Float:
+                return DXGI_FORMAT_R32_TYPELESS;
+            case VGFXTextureFormat_Depth24UNormStencil8:
+                return DXGI_FORMAT_R24G8_TYPELESS;
+            case VGFXTextureFormat_Depth32FloatStencil8:
+                return DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS;
+
+            default:
+                VGFX_ASSERT(vgfxIsDepthFormat(format) == false);
+                return ToDXGIFormat(format);
+        }
     }
 }

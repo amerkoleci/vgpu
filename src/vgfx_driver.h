@@ -30,6 +30,7 @@ typedef struct IUnknown IUnknown;
 #endif
 
 #define _VGFX_COUNT_OF(arr) (sizeof(arr) / sizeof((arr)[0]))
+#define _VGFX_DEF(val, def) (((val) == 0) ? (def) : (val))
 
 #if defined(__clang__)
 // CLANG ENABLE/DISABLE WARNING DEFINITION
@@ -59,19 +60,33 @@ _VGFX_EXTERN void vgfxLogWarn(const char* format, ...);
 _VGFX_EXTERN void vgfxLogError(const char* format, ...);
 
 #ifdef __cplusplus
-/// Round up to next power of two.
-constexpr uint64_t vgfxNextPowerOfTwo(uint64_t value)
+#include <functional>
+
+namespace
 {
-    // http://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2
-    --value;
-    value |= value >> 1u;
-    value |= value >> 2u;
-    value |= value >> 4u;
-    value |= value >> 8u;
-    value |= value >> 16u;
-    value |= value >> 32u;
-    return ++value;
+
+    /// Round up to next power of two.
+    constexpr uint64_t vgfxNextPowerOfTwo(uint64_t value)
+    {
+        // http://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2
+        --value;
+        value |= value >> 1u;
+        value |= value >> 2u;
+        value |= value >> 4u;
+        value |= value >> 8u;
+        value |= value >> 16u;
+        value |= value >> 32u;
+        return ++value;
+    }
+
+    template <class T>
+    void hash_combine(size_t& seed, const T& v)
+    {
+        std::hash<T> hasher;
+        seed ^= hasher(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+    }
 }
+
 #endif /* __cplusplus */
 
 typedef struct VGFXRenderer VGFXRenderer;
@@ -101,6 +116,7 @@ typedef struct VGFXDevice_T
     void (*waitIdle)(VGFXRenderer* driverData);
     bool (*queryFeature)(VGFXRenderer* driverData, VGFXFeature feature);
 
+    VGFXTexture(*createTexture)(VGFXRenderer* driverData, const VGFXTextureInfo* info);
     void(*destroyTexture)(VGFXRenderer* driverData, VGFXTexture texture);
 
     VGFXSwapChain(*createSwapChain)(VGFXRenderer* driverData, VGFXSurface surface, const VGFXSwapChainInfo* info);
@@ -108,6 +124,7 @@ typedef struct VGFXDevice_T
     void (*getSwapChainSize)(VGFXRenderer* driverData, VGFXSwapChain swapChain, VGFXSize2D* pSize);
     VGFXTexture(*acquireNextTexture)(VGFXRenderer* driverData, VGFXSwapChain swapChain);
 
+    void (*beginRenderPassSwapChain)(VGFXRenderer* driverData, VGFXSwapChain swapChain);
     void (*beginRenderPass)(VGFXRenderer* driverData, const VGFXRenderPassInfo* info);
     void (*endRenderPass)(VGFXRenderer* driverData);
 
@@ -122,11 +139,13 @@ typedef struct VGFXDevice_T
     ASSIGN_DRIVER_FUNC(frame, name) \
     ASSIGN_DRIVER_FUNC(waitIdle, name) \
     ASSIGN_DRIVER_FUNC(queryFeature, name) \
+    ASSIGN_DRIVER_FUNC(createTexture, name) \
     ASSIGN_DRIVER_FUNC(destroyTexture, name) \
     ASSIGN_DRIVER_FUNC(createSwapChain, name) \
     ASSIGN_DRIVER_FUNC(destroySwapChain, name) \
     ASSIGN_DRIVER_FUNC(getSwapChainSize, name) \
     ASSIGN_DRIVER_FUNC(acquireNextTexture, name) \
+    ASSIGN_DRIVER_FUNC(beginRenderPassSwapChain, name) \
     ASSIGN_DRIVER_FUNC(beginRenderPass, name) \
     ASSIGN_DRIVER_FUNC(endRenderPass, name) \
 

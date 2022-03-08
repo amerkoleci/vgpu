@@ -189,6 +189,8 @@ static bool d3d11_queryFeature(VGFXRenderer* driverData, VGFXFeature feature)
     switch (feature)
     {
         case VGFXFeature_Compute:
+        case VGFXFeature_IndependentBlend:
+        case VGFXFeature_TextureCubeArray:
         case VGFXFeature_TextureCompressionBC:
             return true;
 
@@ -202,6 +204,63 @@ static bool d3d11_queryFeature(VGFXRenderer* driverData, VGFXFeature feature)
 }
 
 /* Texture */
+static VGFXTexture d3d11_createTexture(VGFXRenderer* driverData, const VGFXTextureInfo* info)
+{
+    VGFXD3D11Renderer* renderer = (VGFXD3D11Renderer*)driverData;
+
+    D3D11_USAGE usage = D3D11_USAGE_DEFAULT;
+    UINT bindFlags = 0;
+    UINT cpuAccessFlags = 0u;
+
+    if (info->usage & VGFXTextureUsage_ShaderRead)
+        bindFlags |= D3D11_BIND_SHADER_RESOURCE;
+
+    if (info->usage & VGFXTextureUsage_ShaderWrite)
+        bindFlags |= D3D11_BIND_UNORDERED_ACCESS;
+
+    if (info->usage & VGFXTextureUsage_RenderTarget)
+    {
+        if (vgfxIsDepthStencilFormat(info->format))
+        {
+            bindFlags |= D3D11_BIND_DEPTH_STENCIL;
+        }
+        else
+        {
+            bindFlags |= D3D11_BIND_RENDER_TARGET;
+        }
+    }
+
+    VGFXD3D11Texture* texture = new VGFXD3D11Texture();
+
+    HRESULT hr = E_FAIL;
+    if (info->type == VGFXTextureType3D)
+    {
+        D3D11_TEXTURE3D_DESC desc = {};
+        desc.Width = info->width;
+        desc.Height = info->height;
+        desc.Depth = info->depthOrArraySize;
+        desc.MipLevels = info->mipLevelCount;
+        desc.Format = ToDXGIFormat(info->format);
+        desc.Usage = usage;
+        desc.BindFlags = bindFlags;
+        desc.CPUAccessFlags = cpuAccessFlags;
+
+        hr = renderer->device->CreateTexture3D(&desc, nullptr, (ID3D11Texture3D**)&texture->handle);
+    }
+    else
+    {
+    }
+
+    if (FAILED(hr))
+    {
+        vgfxLogError("D3D11: Failed to create texture");
+        delete texture;
+        return nullptr;
+    }
+
+    return (VGFXTexture)texture;
+}
+
 static void d3d11_destroyTexture(VGFXRenderer* driverData, VGFXTexture texture)
 {
     _VGFX_UNUSED(driverData);
@@ -326,6 +385,13 @@ static VGFXTexture d3d11_acquireNextTexture(VGFXRenderer*, VGFXSwapChain swapCha
     VGFXD3D11SwapChain* d3dSwapChain = (VGFXD3D11SwapChain*)swapChain;
     d3dSwapChain->renderer->swapChains.push_back(d3dSwapChain);
     return d3dSwapChain->backbufferTexture;
+}
+
+static void d3d11_beginRenderPassSwapChain(VGFXRenderer* driverData, VGFXSwapChain swapChain)
+{
+    VGFXD3D11Renderer* renderer = (VGFXD3D11Renderer*)driverData;
+    _VGFX_UNUSED(renderer);
+    _VGFX_UNUSED(swapChain);
 }
 
 static void d3d11_beginRenderPass(VGFXRenderer* driverData, const VGFXRenderPassInfo* info)
