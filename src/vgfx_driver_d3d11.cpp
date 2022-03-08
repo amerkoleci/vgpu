@@ -79,6 +79,11 @@ namespace
 
 struct VGFXD3D11Renderer;
 
+struct VGFXD3D11Buffer
+{
+    ID3D11Buffer* handle = nullptr;
+};
+
 struct VGFXD3D11Texture
 {
     ID3D11Resource* handle = nullptr;
@@ -221,6 +226,93 @@ static bool d3d11_queryFeature(VGFXRenderer* driverData, VGFXFeature feature)
     }
 }
 
+/* Buffer */
+static VGFXBuffer d3d11_createBuffer(VGFXRenderer* driverData, const VGFXBufferDesc* desc, const void* pInitialData)
+{
+    VGFXD3D11Renderer* renderer = (VGFXD3D11Renderer*)driverData;
+
+    D3D11_BUFFER_DESC d3d_desc;
+    d3d_desc.ByteWidth = (uint32_t)desc->size;
+    d3d_desc.Usage = D3D11_USAGE_DEFAULT;
+    d3d_desc.BindFlags = 0;
+    d3d_desc.CPUAccessFlags = 0;
+    d3d_desc.MiscFlags = 0;
+    d3d_desc.StructureByteStride = 0;
+
+    if (desc->usage & VGFXBufferUsage_Uniform)
+    {
+        d3d_desc.BindFlags |= D3D11_BIND_CONSTANT_BUFFER;
+        d3d_desc.Usage = D3D11_USAGE_DYNAMIC;
+        d3d_desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+    }
+    else
+    {
+        if (desc->usage & VGFXBufferUsage_Vertex)
+        {
+            d3d_desc.BindFlags |= D3D11_BIND_VERTEX_BUFFER;
+        }
+
+        if (desc->usage & VGFXBufferUsage_Index)
+        {
+            d3d_desc.BindFlags |= D3D11_BIND_INDEX_BUFFER;
+        }
+
+        // TODO: understand D3D11_RESOURCE_MISC_BUFFER_STRUCTURED usage
+        if (desc->usage & VGFXBufferUsage_ShaderRead)
+        {
+            d3d_desc.BindFlags |= D3D11_BIND_SHADER_RESOURCE;
+            d3d_desc.MiscFlags |= D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS;
+        }
+        if (desc->usage & VGFXBufferUsage_ShaderWrite)
+        {
+            d3d_desc.BindFlags |= D3D11_BIND_UNORDERED_ACCESS;
+            d3d_desc.MiscFlags |= D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS;
+        }
+
+        if (desc->usage & VGFXBufferUsage_Indirect)
+        {
+            d3d_desc.MiscFlags |= D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS;
+        }
+    }
+
+    // If a resource array was provided for the resource, create the resource pre-populated
+    D3D11_SUBRESOURCE_DATA initialData;
+    D3D11_SUBRESOURCE_DATA* pInitData = nullptr;
+    if (pInitialData != nullptr)
+    {
+        initialData.pSysMem = pInitialData;
+        initialData.SysMemPitch = (UINT)desc->size;
+        initialData.SysMemSlicePitch = 0;
+        pInitData = &initialData;
+    }
+
+    VGFXD3D11Buffer* buffer = new VGFXD3D11Buffer();
+
+    HRESULT hr = renderer->device->CreateBuffer(&d3d_desc, pInitData, &buffer->handle);
+
+    if (FAILED(hr))
+    {
+        vgfxLogError("D3D11: Failed to create buffer");
+        delete buffer;
+        return nullptr;
+    }
+
+
+    if (desc->label)
+    {
+        D3D11SetName(buffer->handle, desc->label);
+    }
+
+    return (VGFXBuffer)buffer;
+}
+
+static void d3d11_destroyBuffer(VGFXRenderer* driverData, VGFXBuffer resource)
+{
+    VGFXD3D11Buffer* d3dBuffer = (VGFXD3D11Buffer*)resource;
+    SafeRelease(d3dBuffer->handle);
+    delete d3dBuffer;
+}
+
 /* Texture */
 static VGFXTexture d3d11_createTexture(VGFXRenderer* driverData, const VGFXTextureDesc* desc)
 {
@@ -312,9 +404,8 @@ static VGFXTexture d3d11_createTexture(VGFXRenderer* driverData, const VGFXTextu
     return (VGFXTexture)texture;
 }
 
-static void d3d11_destroyTexture(VGFXRenderer* driverData, VGFXTexture texture)
+static void d3d11_destroyTexture(VGFXRenderer*, VGFXTexture texture)
 {
-    _VGFX_UNUSED(driverData);
     VGFXD3D11Texture* d3d11Texture = (VGFXD3D11Texture*)texture;
     SafeRelease(d3d11Texture->rtv);
     SafeRelease(d3d11Texture->handle);

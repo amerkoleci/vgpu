@@ -242,6 +242,31 @@ bool vgfxQueryFeature(VGFXDevice device, VGFXFeature feature)
     return device->queryFeature(device->driverData, feature);
 }
 
+/* Buffer */
+static VGFXBufferDesc _vgfxBufferDescDef(const VGFXBufferDesc* desc)
+{
+    VGFXBufferDesc def = *desc;
+    def.size = _VGFX_DEF(def.size, 4);
+    return def;
+}
+
+VGFXBuffer vgfxCreateBuffer(VGFXDevice device, const VGFXBufferDesc* desc, const void* pInitialData)
+{
+     NULL_RETURN_NULL(device);
+     NULL_RETURN_NULL(desc);
+
+     VGFXBufferDesc desc_def = _vgfxBufferDescDef(desc);
+     return device->createBuffer(device->driverData, &desc_def, pInitialData);
+}
+
+void vgfxDestroyBuffer(VGFXDevice device, VGFXBuffer buffer)
+{
+    NULL_RETURN(device);
+    NULL_RETURN(buffer);
+
+    device->destroyBuffer(device->driverData, buffer);
+}
+
 /* Texture */
 static VGFXTextureDesc _vgfxTextureDescDef(const VGFXTextureDesc* desc)
 {

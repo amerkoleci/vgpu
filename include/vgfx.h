@@ -126,6 +126,7 @@ typedef enum VGFXBufferUsage
     VGFXBufferUsage_Uniform = 0x04,
     VGFXBufferUsage_ShaderRead = 0x08,
     VGFXBufferUsage_ShaderWrite = 0x10,
+    VGFXBufferUsage_Indirect = 0x20,
 
     _VGFXBufferUsage_Force32 = 0x7FFFFFFF
 } VGFXBufferUsage;
@@ -284,7 +285,7 @@ typedef enum VGFXFeature
 } VGFXFeature;
 
 typedef enum VGFXLoadAction {
-    VGFXLoadAction_Discard = 0,
+    VGFXLoadAction_DontCare = 0,
     VGFXLoadAction_Load,
     VGFXLoadAction_Clear,
 
@@ -292,14 +293,13 @@ typedef enum VGFXLoadAction {
 } VGFXLoadAction;
 
 typedef enum VGFXStoreAction {
-    VGFXStoreAction_Discard = 0,
+    VGFXStoreAction_DontCare = 0,
     VGFXStoreAction_Store,
 
     VGFXStoreAction_Force32 = 0x7FFFFFFF
 } VGFXStoreAction;
 
-typedef struct VGFXColor
-{
+typedef struct VGFXColor {
     float r;
     float g;
     float b;
@@ -307,9 +307,15 @@ typedef struct VGFXColor
 } VGFXColor;
 
 typedef struct VGFXSize2D {
-    uint32_t    width;
-    uint32_t    height;
+    uint32_t width;
+    uint32_t height;
 } VGFXSize2D;
+
+typedef struct VGFXSize3D {
+    uint32_t width;
+    uint32_t height;
+    uint32_t depth;
+} VGFXSize3D;
 
 typedef struct VGFXViewport {
     /// Top left x coordinate.
@@ -326,16 +332,16 @@ typedef struct VGFXViewport {
     float maxDepth;
 } VGFXViewport;
 
-typedef struct VGFXRenderPassColorAttachment
-{
+typedef struct VGFXRenderPassColorAttachment {
     VGFXTexture texture;
+    uint32_t level;
+    uint32_t slice;
     VGFXLoadAction loadAction;
     VGFXStoreAction storeAction;
     VGFXColor clearColor;
 } VGFXRenderPassColorAttachment;
 
-typedef struct VGFXRenderPassDesc
-{
+typedef struct VGFXRenderPassDesc {
     uint32_t colorAttachmentCount;
     const VGFXRenderPassColorAttachment* colorAttachments;
     //const VGFXRenderPassDepthStencilAttachment* depthStencilAttachment;
@@ -360,6 +366,11 @@ typedef struct VGFXTextureDesc
     uint32_t mipLevelCount;
     uint32_t sampleCount;
 } VGFXTextureDesc;
+
+typedef struct VGFXSamplerDesc
+{
+    const char* label;
+} VGFXSamplerDesc;
 
 typedef struct VGFXSwapChainDesc
 {
@@ -390,6 +401,10 @@ VGFX_API void vgfxDestroyDevice(VGFXDevice device);
 VGFX_API void vgfxFrame(VGFXDevice device);
 VGFX_API void vgfxWaitIdle(VGFXDevice device);
 VGFX_API bool vgfxQueryFeature(VGFXDevice device, VGFXFeature feature);
+
+/* Buffer */
+VGFX_API VGFXBuffer vgfxCreateBuffer(VGFXDevice device, const VGFXBufferDesc* desc, const void* pInitialData);
+VGFX_API void vgfxDestroyBuffer(VGFXDevice device, VGFXBuffer buffer);
 
 /* Texture */
 VGFX_API VGFXTexture vgfxCreateTexture(VGFXDevice device, const VGFXTextureDesc* desc);

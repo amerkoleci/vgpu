@@ -661,6 +661,16 @@ static bool d3d12_queryFeature(VGFXRenderer* driverData, VGFXFeature feature)
     }
 }
 
+/* Buffer */
+static VGFXBuffer d3d12_createBuffer(VGFXRenderer* driverData, const VGFXBufferDesc* desc, const void* pInitialData)
+{
+    return nullptr;
+}
+
+static void d3d12_destroyBuffer(VGFXRenderer* driverData, VGFXBuffer resource)
+{
+}
+
 /* Texture */
 static VGFXTexture d3d12_createTexture(VGFXRenderer* driverData, const VGFXTextureDesc* desc)
 {

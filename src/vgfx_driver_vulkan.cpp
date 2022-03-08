@@ -434,7 +434,7 @@ namespace
     {
         switch (action)
         {
-            case VGFXLoadAction_Discard:
+            case VGFXLoadAction_DontCare:
                 return VK_ATTACHMENT_LOAD_OP_DONT_CARE;
             case VGFXLoadAction_Load:
                 return VK_ATTACHMENT_LOAD_OP_LOAD;
@@ -450,7 +450,7 @@ namespace
     {
         switch (action)
         {
-            case VGFXStoreAction_Discard:
+            case VGFXStoreAction_DontCare:
                 return VK_ATTACHMENT_STORE_OP_DONT_CARE;
             case VGFXStoreAction_Store:
                 return VK_ATTACHMENT_STORE_OP_STORE;
@@ -917,9 +917,11 @@ static VkFramebuffer vulkan_RequestFramebuffer(
 
     for (uint32_t i = 0; i < info->colorAttachmentCount; ++i)
     {
-        const uint32_t mipLevel = 0;
-        const uint32_t slice = 0;
-        VGFXVulkanTexture* texture = (VGFXVulkanTexture*)info->colorAttachments[i].texture;
+        const VGFXRenderPassColorAttachment* attachment = &info->colorAttachments[i];
+
+        VGFXVulkanTexture* texture = (VGFXVulkanTexture*)attachment->texture;
+        const uint32_t mipLevel = attachment->level;
+        const uint32_t slice = attachment->slice;
 
         attachments[attachmentCount] = vulkan_GetRTV(renderer, info->colorAttachments[i].texture, mipLevel, slice);
         hash_combine(hash, attachments[attachmentCount]);
@@ -1306,6 +1308,16 @@ static bool vulkan_queryFeature(VGFXRenderer* driverData, VGFXFeature feature)
     }
 }
 
+/* Buffer */
+static VGFXBuffer vulkan_createBuffer(VGFXRenderer* driverData, const VGFXBufferDesc* desc, const void* pInitialData)
+{
+    return nullptr;
+}
+
+static void vulkan_destroyBuffer(VGFXRenderer* driverData, VGFXBuffer resource)
+{
+}
+
 /* Texture */
 static VGFXTexture vulkan_createTexture(VGFXRenderer* driverData, const VGFXTextureDesc* desc)
 {
@@ -1316,6 +1328,8 @@ static VGFXTexture vulkan_createTexture(VGFXRenderer* driverData, const VGFXText
 
     VkImageCreateInfo imageInfo = {};
     imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    imageInfo.pNext = nullptr;
+    imageInfo.flags = 0;
     imageInfo.format = ToVk(desc->format);
     imageInfo.extent.width = desc->width;
     imageInfo.extent.height = desc->height;
@@ -1325,6 +1339,8 @@ static VGFXTexture vulkan_createTexture(VGFXRenderer* driverData, const VGFXText
         imageInfo.extent.depth = desc->depthOrArraySize;
         imageInfo.arrayLayers = 1;
         imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+
+        imageInfo.flags |= VK_IMAGE_CREATE_2D_ARRAY_COMPATIBLE_BIT;
     }
     else
     {
@@ -1332,6 +1348,11 @@ static VGFXTexture vulkan_createTexture(VGFXRenderer* driverData, const VGFXText
         imageInfo.extent.depth = 1;
         imageInfo.arrayLayers = desc->depthOrArraySize;
         imageInfo.samples = (VkSampleCountFlagBits)desc->sampleCount;
+
+        if (desc->width == desc->height && (desc->depthOrArraySize % 6 == 0))
+        {
+            imageInfo.flags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+        }
     }
     imageInfo.extent.depth = 1;
     imageInfo.mipLevels = desc->mipLevelCount;
@@ -1355,15 +1376,6 @@ static VGFXTexture vulkan_createTexture(VGFXRenderer* driverData, const VGFXText
         else
         {
             imageInfo.usage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-        }
-    }
-
-    imageInfo.flags = 0;
-    if (desc->type == VGFXTextureType2D)
-    {
-        if (desc->width == desc->height && (desc->depthOrArraySize % 6 == 0))
-        {
-            imageInfo.flags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
         }
     }
 
