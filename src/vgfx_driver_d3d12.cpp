@@ -46,6 +46,26 @@ namespace
     static PFN_DXGI_GET_DEBUG_INTERFACE1 vgfxDXGIGetDebugInterface1 = nullptr;
 #endif
 #endif
+
+    inline void D3D12SetName(ID3D12DeviceChild* obj, const char* name)
+    {
+        if (obj)
+        {
+            if (name != nullptr)
+            {
+                const size_t name_size = strlen(name) + 1;
+                wchar_t* wide_name = (wchar_t*)alloca(sizeof(wchar_t) * name_size);
+                size_t numberOfConverted;
+                mbstowcs_s(&numberOfConverted, wide_name, name_size, name, name_size - 1);
+
+                obj->SetName(wide_name);
+            }
+            else
+            {
+                obj->SetName(nullptr);
+            }
+        }
+    }
 }
 
 #if !WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
@@ -438,14 +458,14 @@ static void d3d12_destroyDevice(VGFXDevice device)
             if (SUCCEEDED(renderer->device->QueryInterface(debugDevice.GetAddressOf())))
             {
                 debugDevice->ReportLiveDeviceObjects(D3D12_RLDO_DETAIL | D3D12_RLDO_IGNORE_INTERNAL);
-            }
-
         }
+
+    }
 #else
         (void)refCount; // avoid warning
 #endif
         renderer->device = nullptr;
-    }
+}
 
     renderer->factory.Reset();
 
@@ -462,7 +482,7 @@ static void d3d12_destroyDevice(VGFXDevice device)
 
     delete renderer;
     VGFX_FREE(device);
-}
+            }
 
 static void d3d12_updateSwapChain(VGFXD3D12Renderer* renderer, VGFXD3D12SwapChain* swapChain)
 {
@@ -642,9 +662,102 @@ static bool d3d12_queryFeature(VGFXRenderer* driverData, VGFXFeature feature)
 }
 
 /* Texture */
-static VGFXTexture d3d12_createTexture(VGFXRenderer* driverData, const VGFXTextureInfo* info)
+static VGFXTexture d3d12_createTexture(VGFXRenderer* driverData, const VGFXTextureDesc* desc)
 {
-    return nullptr;
+    VGFXD3D12Renderer* renderer = (VGFXD3D12Renderer*)driverData;
+
+    D3D12MA::ALLOCATION_DESC allocationDesc = {};
+    allocationDesc.HeapType = D3D12_HEAP_TYPE_DEFAULT;
+
+    D3D12_RESOURCE_DESC resourceDesc;
+    if (desc->type == VGFXTextureType3D)
+    {
+        resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE3D;
+    }
+    else
+    {
+        resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    }
+    resourceDesc.Alignment = 0;
+    resourceDesc.Width = desc->width;
+    resourceDesc.Height = desc->height;
+    resourceDesc.DepthOrArraySize = (UINT16)desc->depthOrArraySize;
+    resourceDesc.MipLevels = (UINT16)desc->mipLevelCount;
+    resourceDesc.Format = ToDXGIFormat(desc->format);
+    resourceDesc.SampleDesc.Count = desc->sampleCount;
+    resourceDesc.SampleDesc.Quality = 0;
+    resourceDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+    resourceDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+
+    if (desc->usage & VGFXTextureUsage_ShaderWrite)
+    {
+        resourceDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+    }
+
+    if (desc->usage & VGFXTextureUsage_RenderTarget)
+    {
+        if (vgfxIsDepthStencilFormat(desc->format))
+        {
+            resourceDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+
+            if (!(desc->usage & VGFXTextureUsage_ShaderRead))
+            {
+                resourceDesc.Flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
+            }
+        }
+        else
+        {
+            resourceDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+        }
+    }
+
+    D3D12_CLEAR_VALUE clearValue = {};
+    D3D12_CLEAR_VALUE* pClearValue = nullptr;
+
+    if (desc->usage & VGFXTextureUsage_RenderTarget)
+    {
+        clearValue.Format = resourceDesc.Format;
+        if (vgfxIsDepthStencilFormat(desc->format))
+        {
+            clearValue.DepthStencil.Depth = 1.0f;
+        }
+        pClearValue = &clearValue;
+    }
+
+    // If shader read/write and depth format, set to typeless
+    if (vgfxIsDepthFormat(desc->format) && desc->usage & (VGFXTextureUsage_ShaderRead | VGFXTextureUsage_ShaderWrite))
+    {
+        resourceDesc.Format = GetTypelessFormatFromDepthFormat(desc->format);
+        pClearValue = nullptr;
+    }
+
+    // TODO: TextureLayout/State
+    D3D12_RESOURCE_STATES resourceState = D3D12_RESOURCE_STATE_COMMON;
+
+    VGFXD3D12Texture* texture = new VGFXD3D12Texture();
+    HRESULT hr = renderer->allocator->CreateResource(
+        &allocationDesc,
+        &resourceDesc,
+        resourceState,
+        pClearValue,
+        &texture->allocation,
+        IID_PPV_ARGS(&texture->handle)
+    );
+
+    if (FAILED(hr))
+    {
+        vgfxLogError("D3D11: Failed to create texture");
+        delete texture;
+        return nullptr;
+    }
+
+    if (desc->label)
+    {
+        D3D12SetName(texture->handle, desc->label);
+    }
+
+    return (VGFXTexture)texture;
 }
 
 static void d3d12_destroyTexture(VGFXRenderer* driverData, VGFXTexture texture)
@@ -658,7 +771,7 @@ static void d3d12_destroyTexture(VGFXRenderer* driverData, VGFXTexture texture)
 }
 
 /* SwapChain */
-static VGFXSwapChain d3d12_createSwapChain(VGFXRenderer* driverData, VGFXSurface surface, const VGFXSwapChainInfo* info)
+static VGFXSwapChain d3d12_createSwapChain(VGFXRenderer* driverData, VGFXSurface surface, const VGFXSwapChainDesc* info)
 {
     VGFXD3D12Renderer* renderer = (VGFXD3D12Renderer*)driverData;
 
@@ -798,14 +911,7 @@ static VGFXTexture d3d12_acquireNextTexture(VGFXRenderer* driverData, VGFXSwapCh
     return d3d12SwapChain->backbufferTextures[d3d12SwapChain->handle->GetCurrentBackBufferIndex()];
 }
 
-static void d3d12_beginRenderPassSwapChain(VGFXRenderer* driverData, VGFXSwapChain swapChain)
-{
-    VGFXD3D12Renderer* renderer = (VGFXD3D12Renderer*)driverData;
-    _VGFX_UNUSED(renderer);
-    _VGFX_UNUSED(swapChain);
-}
-
-static void d3d12_beginRenderPass(VGFXRenderer* driverData, const VGFXRenderPassInfo* info)
+static void d3d12_beginRenderPass(VGFXRenderer* driverData, const VGFXRenderPassDesc* info)
 {
     VGFXD3D12Renderer* renderer = (VGFXD3D12Renderer*)driverData;
     D3D12_CPU_DESCRIPTOR_HANDLE rtvs[VGFX_MAX_COLOR_ATTACHMENTS] = {};
@@ -1088,7 +1194,7 @@ static VGFXDevice d3d12_createDevice(VGFXSurface surface, const VGFXDeviceInfo* 
                 {
                     // Verbose only filters
                     enabledSeverities.push_back(D3D12_MESSAGE_SEVERITY_INFO);
-                }
+            }
 
 #if defined (VGFX_DX12_USE_PIPELINE_LIBRARY)
                 disabledMessages.push_back(D3D12_MESSAGE_ID_LOADPIPELINE_NAMENOTFOUND);
@@ -1114,8 +1220,8 @@ static VGFXDevice d3d12_createDevice(VGFXSurface surface, const VGFXDeviceInfo* 
 
                 infoQueue->AddStorageFilterEntries(&filter);
                 infoQueue->AddApplicationMessage(D3D12_MESSAGE_SEVERITY_MESSAGE, "D3D12 Debug Filters setup");
-            }
         }
+    }
 
         // Create allocator
         D3D12MA::ALLOCATOR_DESC allocatorDesc = {};
@@ -1150,7 +1256,7 @@ static VGFXDevice d3d12_createDevice(VGFXSurface surface, const VGFXDeviceInfo* 
 
         vgfxLogInfo("vgfx driver: D3D12");
         vgfxLogInfo("D3D12 Adapter: %S", adapterDesc.Description);
-    }
+}
 
     // Create command queues
     {
@@ -1222,7 +1328,7 @@ static VGFXDevice d3d12_createDevice(VGFXSurface surface, const VGFXDeviceInfo* 
     ASSIGN_DRIVER(d3d12);
     device->driverData = (VGFXRenderer*)renderer;
     return device;
-}
+        }
 
 VGFXDriver d3d12_driver = {
     VGFXAPI_D3D12,

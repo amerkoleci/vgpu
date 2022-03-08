@@ -52,6 +52,24 @@ namespace
 
         return SUCCEEDED(hr);
     }
+
+    // Declare custom object of "WKPDID_D3DDebugObjectName" as defined in <d3dcommon.h> to avoid linking with "dxguid.lib"
+    static const GUID g_WKPDID_D3DDebugObjectName = { 0x429b8c22, 0x9188, 0x4b0c, { 0x87,0x42,0xac,0xb0,0xbf,0x85,0xc2,0x00 } };
+
+    inline void D3D11SetName(ID3D11DeviceChild* obj, const char* name)
+    {
+        if (obj)
+        {
+            if (name != nullptr)
+            {
+                obj->SetPrivateData(g_WKPDID_D3DDebugObjectName, (UINT)strlen(name), name);
+            }
+            else
+            {
+                obj->SetPrivateData(g_WKPDID_D3DDebugObjectName, 0, nullptr);
+            }
+        }
+    }
 }
 
 #if !WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
@@ -204,23 +222,28 @@ static bool d3d11_queryFeature(VGFXRenderer* driverData, VGFXFeature feature)
 }
 
 /* Texture */
-static VGFXTexture d3d11_createTexture(VGFXRenderer* driverData, const VGFXTextureInfo* info)
+static VGFXTexture d3d11_createTexture(VGFXRenderer* driverData, const VGFXTextureDesc* desc)
 {
     VGFXD3D11Renderer* renderer = (VGFXD3D11Renderer*)driverData;
 
     D3D11_USAGE usage = D3D11_USAGE_DEFAULT;
     UINT bindFlags = 0;
     UINT cpuAccessFlags = 0u;
+    DXGI_FORMAT format = ToDXGIFormat(desc->format);
 
-    if (info->usage & VGFXTextureUsage_ShaderRead)
-        bindFlags |= D3D11_BIND_SHADER_RESOURCE;
-
-    if (info->usage & VGFXTextureUsage_ShaderWrite)
-        bindFlags |= D3D11_BIND_UNORDERED_ACCESS;
-
-    if (info->usage & VGFXTextureUsage_RenderTarget)
+    if (desc->usage & VGFXTextureUsage_ShaderRead)
     {
-        if (vgfxIsDepthStencilFormat(info->format))
+        bindFlags |= D3D11_BIND_SHADER_RESOURCE;
+    }
+
+    if (desc->usage & VGFXTextureUsage_ShaderWrite)
+    {
+        bindFlags |= D3D11_BIND_UNORDERED_ACCESS;
+    }
+
+    if (desc->usage & VGFXTextureUsage_RenderTarget)
+    {
+        if (vgfxIsDepthStencilFormat(desc->format))
         {
             bindFlags |= D3D11_BIND_DEPTH_STENCIL;
         }
@@ -230,25 +253,48 @@ static VGFXTexture d3d11_createTexture(VGFXRenderer* driverData, const VGFXTextu
         }
     }
 
+    // If shader read/write and depth format, set to typeless
+    if (vgfxIsDepthFormat(desc->format) && desc->usage & (VGFXTextureUsage_ShaderRead | VGFXTextureUsage_ShaderWrite))
+    {
+        format = GetTypelessFormatFromDepthFormat(desc->format);
+    }
+
     VGFXD3D11Texture* texture = new VGFXD3D11Texture();
 
     HRESULT hr = E_FAIL;
-    if (info->type == VGFXTextureType3D)
+    if (desc->type == VGFXTextureType3D)
     {
-        D3D11_TEXTURE3D_DESC desc = {};
-        desc.Width = info->width;
-        desc.Height = info->height;
-        desc.Depth = info->depthOrArraySize;
-        desc.MipLevels = info->mipLevelCount;
-        desc.Format = ToDXGIFormat(info->format);
-        desc.Usage = usage;
-        desc.BindFlags = bindFlags;
-        desc.CPUAccessFlags = cpuAccessFlags;
+        D3D11_TEXTURE3D_DESC d3d_desc = {};
+        d3d_desc.Width = desc->width;
+        d3d_desc.Height = desc->height;
+        d3d_desc.Depth = desc->depthOrArraySize;
+        d3d_desc.MipLevels = desc->mipLevelCount;
+        d3d_desc.Format = format;
+        d3d_desc.Usage = usage;
+        d3d_desc.BindFlags = bindFlags;
+        d3d_desc.CPUAccessFlags = cpuAccessFlags;
 
-        hr = renderer->device->CreateTexture3D(&desc, nullptr, (ID3D11Texture3D**)&texture->handle);
+        hr = renderer->device->CreateTexture3D(&d3d_desc, nullptr, (ID3D11Texture3D**)&texture->handle);
     }
     else
     {
+        D3D11_TEXTURE2D_DESC d3d_desc = {};
+        d3d_desc.Width = desc->width;
+        d3d_desc.Height = desc->height;
+        d3d_desc.MipLevels = desc->mipLevelCount;
+        d3d_desc.ArraySize = desc->depthOrArraySize;
+        d3d_desc.Format = format;
+        d3d_desc.SampleDesc.Count = desc->sampleCount;
+        d3d_desc.Usage = usage;
+        d3d_desc.BindFlags = bindFlags;
+        d3d_desc.CPUAccessFlags = cpuAccessFlags;
+
+        if (desc->width == desc->height && (desc->depthOrArraySize % 6 == 0))
+        {
+            d3d_desc.MiscFlags = D3D11_RESOURCE_MISC_TEXTURECUBE;
+        }
+
+        hr = renderer->device->CreateTexture2D(&d3d_desc, nullptr, (ID3D11Texture2D**)&texture->handle);
     }
 
     if (FAILED(hr))
@@ -256,6 +302,11 @@ static VGFXTexture d3d11_createTexture(VGFXRenderer* driverData, const VGFXTextu
         vgfxLogError("D3D11: Failed to create texture");
         delete texture;
         return nullptr;
+    }
+
+    if (desc->label)
+    {
+        D3D11SetName(texture->handle, desc->label);
     }
 
     return (VGFXTexture)texture;
@@ -296,7 +347,7 @@ static void d3d11_updateSwapChain(VGFXD3D11Renderer* renderer, VGFXD3D11SwapChai
 }
 
 
-static VGFXSwapChain d3d11_createSwapChain(VGFXRenderer* driverData, VGFXSurface surface, const VGFXSwapChainInfo* info)
+static VGFXSwapChain d3d11_createSwapChain(VGFXRenderer* driverData, VGFXSurface surface, const VGFXSwapChainDesc* info)
 {
     VGFXD3D11Renderer* renderer = (VGFXD3D11Renderer*)driverData;
 
@@ -387,14 +438,7 @@ static VGFXTexture d3d11_acquireNextTexture(VGFXRenderer*, VGFXSwapChain swapCha
     return d3dSwapChain->backbufferTexture;
 }
 
-static void d3d11_beginRenderPassSwapChain(VGFXRenderer* driverData, VGFXSwapChain swapChain)
-{
-    VGFXD3D11Renderer* renderer = (VGFXD3D11Renderer*)driverData;
-    _VGFX_UNUSED(renderer);
-    _VGFX_UNUSED(swapChain);
-}
-
-static void d3d11_beginRenderPass(VGFXRenderer* driverData, const VGFXRenderPassInfo* info)
+static void d3d11_beginRenderPass(VGFXRenderer* driverData, const VGFXRenderPassDesc* info)
 {
     VGFXD3D11Renderer* renderer = (VGFXD3D11Renderer*)driverData;
 

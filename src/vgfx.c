@@ -243,9 +243,9 @@ bool vgfxQueryFeature(VGFXDevice device, VGFXFeature feature)
 }
 
 /* Texture */
-static VGFXTextureInfo _vgfxTextureInfoDef(const VGFXTextureInfo* info)
+static VGFXTextureDesc _vgfxTextureDescDef(const VGFXTextureDesc* desc)
 {
-    VGFXTextureInfo def = *info;
+    VGFXTextureDesc def = *desc;
     def.type = _VGFX_DEF(def.type, VGFXTextureType2D);
     def.format = _VGFX_DEF(def.type, VGFXTextureFormat_RGBA8UNorm);
     //def.usage = _VGFX_DEF(def.type, VGFXTextureUsage_ShaderRead);
@@ -257,13 +257,13 @@ static VGFXTextureInfo _vgfxTextureInfoDef(const VGFXTextureInfo* info)
     return def;
 }
 
-VGFXTexture vgfxCreateTexture(VGFXDevice device, const VGFXTextureInfo* info)
+VGFXTexture vgfxCreateTexture(VGFXDevice device, const VGFXTextureDesc* desc)
 {
     NULL_RETURN_NULL(device);
-    NULL_RETURN_NULL(info);
+    NULL_RETURN_NULL(desc);
 
-    VGFXTextureInfo info_def = _vgfxTextureInfoDef(info);
-    return device->createTexture(device->driverData, &info_def);
+    VGFXTextureDesc desc_def = _vgfxTextureDescDef(desc);
+    return device->createTexture(device->driverData, &desc_def);
 }
 
 void vgfxDestroyTexture(VGFXDevice device, VGFXTexture texture)
@@ -275,13 +275,13 @@ void vgfxDestroyTexture(VGFXDevice device, VGFXTexture texture)
 }
 
 /* SwapChain */
-VGFXSwapChain vgfxCreateSwapChain(VGFXDevice device, VGFXSurface surface, const VGFXSwapChainInfo* info)
+VGFXSwapChain vgfxCreateSwapChain(VGFXDevice device, VGFXSurface surface, const VGFXSwapChainDesc* desc)
 {
     NULL_RETURN_NULL(device);
     NULL_RETURN_NULL(surface);
-    NULL_RETURN_NULL(info);
+    NULL_RETURN_NULL(desc);
 
-    return device->createSwapChain(device->driverData, surface, info);
+    return device->createSwapChain(device->driverData, surface, desc);
 }
 
 void vgfxDestroySwapChain(VGFXDevice device, VGFXSwapChain swapChain)
@@ -308,20 +308,12 @@ VGFXTexture vgfxSwapChainAcquireNextTexture(VGFXDevice device, VGFXSwapChain swa
 }
 
 /* Commands */
-void vgfxBeginRenderPassSwapChain(VGFXDevice device, VGFXSwapChain swapChain)
+void vgfxBeginRenderPass(VGFXDevice device, const VGFXRenderPassDesc* desc)
 {
     NULL_RETURN(device);
-    NULL_RETURN(swapChain);
+    NULL_RETURN(desc);
 
-    device->beginRenderPassSwapChain(device->driverData, swapChain);
-}
-
-void vgfxBeginRenderPass(VGFXDevice device, const VGFXRenderPassInfo* info)
-{
-    NULL_RETURN(device);
-    NULL_RETURN(info);
-
-    device->beginRenderPass(device->driverData, info);
+    device->beginRenderPass(device->driverData, desc);
 }
 
 void vgfxEndRenderPass(VGFXDevice device)

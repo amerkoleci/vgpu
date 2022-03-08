@@ -285,39 +285,39 @@ namespace
         switch (format)
         {
             // 8-bit formats
-            case VGFXTextureFormat_R8UNorm:  return VK_FORMAT_R8_UNORM;
-            case VGFXTextureFormat_R8SNorm:  return VK_FORMAT_R8_SNORM;
-            case VGFXTextureFormat_R8UInt:   return VK_FORMAT_R8_UINT;
-            case VGFXTextureFormat_R8SInt:   return VK_FORMAT_R8_SINT;
+            case VGFXTextureFormat_R8UInt:      return VK_FORMAT_R8_UINT;
+            case VGFXTextureFormat_R8SInt:      return VK_FORMAT_R8_SINT;
+            case VGFXTextureFormat_R8UNorm:     return VK_FORMAT_R8_UNORM;
+            case VGFXTextureFormat_R8SNorm:     return VK_FORMAT_R8_SNORM;
                 // 16-bit formats
-            case VGFXTextureFormat_R16UNorm:     return VK_FORMAT_R16_UNORM;
-            case VGFXTextureFormat_R16SNorm:     return VK_FORMAT_R16_SNORM;
-            case VGFXTextureFormat_R16UInt:      return VK_FORMAT_R16_UINT;
-            case VGFXTextureFormat_R16SInt:      return VK_FORMAT_R16_SINT;
-            case VGFXTextureFormat_R16Float:     return VK_FORMAT_R16_SFLOAT;
-            case VGFXTextureFormat_RG8UNorm:     return VK_FORMAT_R8G8_UNORM;
-            case VGFXTextureFormat_RG8SNorm:     return VK_FORMAT_R8G8_SNORM;
-            case VGFXTextureFormat_RG8UInt:      return VK_FORMAT_R8G8_UINT;
-            case VGFXTextureFormat_RG8SInt:      return VK_FORMAT_R8G8_SINT;
+            case VGFXTextureFormat_R16UInt:         return VK_FORMAT_R16_UINT;
+            case VGFXTextureFormat_R16SInt:         return VK_FORMAT_R16_SINT;
+            case VGFXTextureFormat_R16UNorm:        return VK_FORMAT_R16_UNORM;
+            case VGFXTextureFormat_R16SNorm:        return VK_FORMAT_R16_SNORM;
+            case VGFXTextureFormat_R16Float:        return VK_FORMAT_R16_SFLOAT;
+            case VGFXTextureFormat_RG8UInt:         return VK_FORMAT_R8G8_UINT;
+            case VGFXTextureFormat_RG8SInt:         return VK_FORMAT_R8G8_SINT;
+            case VGFXTextureFormat_RG8UNorm:        return VK_FORMAT_R8G8_UNORM;
+            case VGFXTextureFormat_RG8SNorm:        return VK_FORMAT_R8G8_SNORM;
                 // Packed 16-Bit Pixel Formats
-            //case VGFXTextureFormat_BGRA4UNorm:       return VK_FORMAT_R4G4B4A4_UNORM_PACK16;
-            //case VGFXTextureFormat_B5G6R5UNorm:      return VK_FORMAT_R5G5B5A1_UNORM_PACK16;
-            //case VGFXTextureFormat_B5G5R5A1UNorm:    return VK_FORMAT_R5G6B5_UNORM_PACK16;
+            case VGFXTextureFormat_BGRA4UNorm:       return VK_FORMAT_B4G4R4A4_UNORM_PACK16;
+            case VGFXTextureFormat_B5G6R5UNorm:      return VK_FORMAT_B5G6R5_UNORM_PACK16;
+            case VGFXTextureFormat_B5G5R5A1UNorm:    return VK_FORMAT_B5G5R5A1_UNORM_PACK16;
                 // 32-bit formats
             case VGFXTextureFormat_R32UInt:          return VK_FORMAT_R32_UINT;
             case VGFXTextureFormat_R32SInt:          return VK_FORMAT_R32_SINT;
             case VGFXTextureFormat_R32Float:         return VK_FORMAT_R32_SFLOAT;
-            case VGFXTextureFormat_RG16UNorm:        return VK_FORMAT_R16G16_UNORM;
-            case VGFXTextureFormat_RG16SNorm:        return VK_FORMAT_R16G16_SNORM;
             case VGFXTextureFormat_RG16UInt:         return VK_FORMAT_R16G16_UINT;
             case VGFXTextureFormat_RG16SInt:         return VK_FORMAT_R16G16_SINT;
+            case VGFXTextureFormat_RG16UNorm:        return VK_FORMAT_R16G16_UNORM;
+            case VGFXTextureFormat_RG16SNorm:        return VK_FORMAT_R16G16_SNORM;
             case VGFXTextureFormat_RG16Float:        return VK_FORMAT_R16G16_SFLOAT;
+            case VGFXTextureFormat_RGBA8UInt:        return VK_FORMAT_R8G8B8A8_UINT;
+            case VGFXTextureFormat_BGRA8UNorm:       return VK_FORMAT_B8G8R8A8_UNORM;
             case VGFXTextureFormat_RGBA8UNorm:       return VK_FORMAT_R8G8B8A8_UNORM;
             case VGFXTextureFormat_RGBA8UNormSrgb:   return VK_FORMAT_R8G8B8A8_SRGB;
             case VGFXTextureFormat_RGBA8SNorm:       return VK_FORMAT_R8G8B8A8_SNORM;
-            case VGFXTextureFormat_RGBA8UInt:        return VK_FORMAT_R8G8B8A8_UINT;
             case VGFXTextureFormat_RGBA8SInt:        return VK_FORMAT_R8G8B8A8_SINT;
-            case VGFXTextureFormat_BGRA8UNorm:       return VK_FORMAT_B8G8R8A8_UNORM;
             case VGFXTextureFormat_BGRA8UNormSrgb:   return VK_FORMAT_B8G8R8A8_SRGB;
                 // Packed 32-Bit formats
             case VGFXTextureFormat_RGB10A2UNorm:     return VK_FORMAT_A2B10G10R10_UNORM_PACK32;
@@ -327,10 +327,10 @@ namespace
             case VGFXTextureFormat_RG32UInt:         return VK_FORMAT_R32G32_UINT;
             case VGFXTextureFormat_RG32SInt:         return VK_FORMAT_R32G32_SINT;
             case VGFXTextureFormat_RG32Float:        return VK_FORMAT_R32G32_SFLOAT;
-            case VGFXTextureFormat_RGBA16UNorm:      return VK_FORMAT_R16G16B16A16_UNORM;
-            case VGFXTextureFormat_RGBA16SNorm:      return VK_FORMAT_R16G16B16A16_SNORM;
             case VGFXTextureFormat_RGBA16UInt:       return VK_FORMAT_R16G16B16A16_UINT;
             case VGFXTextureFormat_RGBA16SInt:       return VK_FORMAT_R16G16B16A16_SINT;
+            case VGFXTextureFormat_RGBA16UNorm:      return VK_FORMAT_R16G16B16A16_UNORM;
+            case VGFXTextureFormat_RGBA16SNorm:      return VK_FORMAT_R16G16B16A16_SNORM;
             case VGFXTextureFormat_RGBA16Float:      return VK_FORMAT_R16G16B16A16_SFLOAT;
                 // 128-Bit formats
             case VGFXTextureFormat_RGBA32UInt:       return VK_FORMAT_R32G32B32A32_UINT;
@@ -503,6 +503,8 @@ struct VGFXVulkanTexture
 {
     VkImage handle = VK_NULL_HANDLE;
     VmaAllocation  allocation = nullptr;
+    uint32_t width = 0;
+    uint32_t height = 0;
     VkFormat format = VK_FORMAT_UNDEFINED;
     bool isSwapChain = false;
     std::unordered_map<size_t, VkImageView> viewCache;
@@ -519,12 +521,9 @@ struct VGFXVulkanSwapChain
     bool allowHDR = true;
     uint32_t imageIndex;
     std::vector<VGFXTexture> backbufferTextures;
-    std::vector<VkImageView> backbufferTextureViews;
-    std::vector<VkFramebuffer> backbufferFramebuffers;
 
     VkSemaphore acquireSemaphore = VK_NULL_HANDLE;
     VkSemaphore releaseSemaphore = VK_NULL_HANDLE;
-    VkRenderPass renderPass = VK_NULL_HANDLE;
 };
 
 struct VGFXVulkanRenderer
@@ -623,6 +622,7 @@ struct VGFXVulkanRenderer
     VkImageView		nullImageView3D = VK_NULL_HANDLE;
 
     std::unordered_map<size_t, VkRenderPass> renderPassCache;
+    std::unordered_map<size_t, VkFramebuffer> framebufferCache;
 
     // Deletion queue objects
     std::mutex destroyMutex;
@@ -630,7 +630,6 @@ struct VGFXVulkanRenderer
     std::deque<std::pair<std::pair<VkImage, VmaAllocation>, uint64_t>> destroyedImagesQueue;
     std::deque<std::pair<VkImageView, uint64_t>> destroyedImageViews;
     std::deque<std::pair<VkSampler, uint64_t>> destroyedSamplers;
-    std::deque<std::pair<VkFramebuffer, uint64_t>> destroyedFramebuffers;
     std::deque<std::pair<VkShaderModule, uint64_t>> destroyedShaderModules;
     std::deque<std::pair<VkPipeline, uint64_t>> destroyedPipelines;
     std::deque<std::pair<VkDescriptorPool, uint64_t>> destroyedDescriptorPools;
@@ -706,19 +705,23 @@ static VkImageView vulkan_GetView(VGFXVulkanRenderer* renderer, VGFXTexture text
     auto it = vulkanTexture->viewCache.find(hash);
     if (it == vulkanTexture->viewCache.end())
     {
-        VkImageViewCreateInfo createInfo{};
-        createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        createInfo.image = vulkanTexture->handle;
-        createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        createInfo.format = vulkanTexture->format;
-        createInfo.subresourceRange.aspectMask = GetImageAspectFlags(createInfo.format);
-        createInfo.subresourceRange.baseMipLevel = baseMipLevel;
-        createInfo.subresourceRange.levelCount = levelCount;
-        createInfo.subresourceRange.baseArrayLayer = baseArrayLayer;
-        createInfo.subresourceRange.layerCount = 1;
+        VkImageViewCreateInfo viewInfo{};
+        viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        viewInfo.image = vulkanTexture->handle;
+        viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        viewInfo.format = vulkanTexture->format;
+        viewInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+        viewInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+        viewInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+        viewInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+        viewInfo.subresourceRange.aspectMask = GetImageAspectFlags(viewInfo.format);
+        viewInfo.subresourceRange.baseMipLevel = baseMipLevel;
+        viewInfo.subresourceRange.levelCount = levelCount;
+        viewInfo.subresourceRange.baseArrayLayer = baseArrayLayer;
+        viewInfo.subresourceRange.layerCount = 1;
 
         VkImageView newView;
-        const VkResult result = vkCreateImageView(renderer->device, &createInfo, nullptr, &newView);
+        const VkResult result = vkCreateImageView(renderer->device, &viewInfo, nullptr, &newView);
         if (result != VK_SUCCESS)
         {
             VK_LOG_ERROR(result, "Failed to create ImageView");
@@ -737,7 +740,7 @@ static VkImageView vulkan_GetRTV(VGFXVulkanRenderer* renderer, VGFXTexture textu
     return vulkan_GetView(renderer, texture, level, 1, slice, 1);
 }
 
-static VkRenderPass vulkan_RequestRenderPass(VGFXVulkanRenderer* renderer, const VGFXRenderPassInfo* info)
+static VkRenderPass vulkan_RequestRenderPass(VGFXVulkanRenderer* renderer, const VGFXRenderPassDesc* info)
 {
     size_t hash = 0;
     hash_combine(hash, info->colorAttachmentCount);
@@ -895,6 +898,63 @@ static VkRenderPass vulkan_RequestRenderPass(VGFXVulkanRenderer* renderer, const
     return it->second;
 }
 
+static VkFramebuffer vulkan_RequestFramebuffer(
+    VGFXVulkanRenderer* renderer,
+    VkRenderPass renderPass,
+    const VGFXRenderPassDesc* info,
+    uint32_t* width, uint32_t* height)
+{
+    *width = UINT32_MAX;
+    *height = UINT32_MAX;
+    uint32_t layers = 1u;
+
+    size_t hash = 0;
+    hash_combine(hash, renderPass);
+
+
+    uint32_t attachmentCount = 0;
+    VkImageView attachments[VGFX_MAX_COLOR_ATTACHMENTS + 1];
+
+    for (uint32_t i = 0; i < info->colorAttachmentCount; ++i)
+    {
+        const uint32_t mipLevel = 0;
+        const uint32_t slice = 0;
+        VGFXVulkanTexture* texture = (VGFXVulkanTexture*)info->colorAttachments[i].texture;
+
+        attachments[attachmentCount] = vulkan_GetRTV(renderer, info->colorAttachments[i].texture, mipLevel, slice);
+        hash_combine(hash, attachments[attachmentCount]);
+        attachmentCount++;
+
+        *width = std::min(*width, std::max(1U, texture->width >> mipLevel));
+        *height = std::min(*height, std::max(1U, texture->height >> mipLevel));
+    }
+
+    hash_combine(hash, attachmentCount);
+
+    auto it = renderer->framebufferCache.find(hash);
+    if (it == renderer->framebufferCache.end())
+    {
+        VkFramebufferCreateInfo createInfo;
+        createInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        createInfo.pNext = nullptr;
+        createInfo.flags = 0;
+        createInfo.renderPass = renderPass;
+        createInfo.attachmentCount = attachmentCount;
+        createInfo.pAttachments = attachments;
+        createInfo.width = *width;
+        createInfo.height = *height;
+        createInfo.layers = layers;
+
+        VkFramebuffer framebuffer;
+        VK_CHECK(vkCreateFramebuffer(renderer->device, &createInfo, nullptr, &framebuffer));
+        renderer->framebufferCache[hash] = framebuffer;
+
+        return framebuffer;
+    }
+
+    return it->second;
+}
+
 static void vulkan_ProcessDeletionQueue(VGFXVulkanRenderer* renderer)
 {
     renderer->destroyMutex.lock();
@@ -948,20 +1008,6 @@ static void vulkan_ProcessDeletionQueue(VGFXVulkanRenderer* renderer)
             auto item = renderer->destroyedSamplers.front();
             renderer->destroyedSamplers.pop_front();
             vkDestroySampler(renderer->device, item.first, nullptr);
-        }
-        else
-        {
-            break;
-        }
-    }
-
-    while (!renderer->destroyedFramebuffers.empty())
-    {
-        if (renderer->destroyedFramebuffers.front().second + VGFX_MAX_INFLIGHT_FRAMES < renderer->frameCount)
-        {
-            auto item = renderer->destroyedFramebuffers.front();
-            renderer->destroyedFramebuffers.pop_front();
-            vkDestroyFramebuffer(renderer->device, item.first, nullptr);
         }
         else
         {
@@ -1024,6 +1070,19 @@ static void vulkan_destroyDevice(VGFXDevice device)
         vkDestroyCommandPool(renderer->device, frame.initCommandPool, nullptr);
         vkDestroyCommandPool(renderer->device, frame.frameCommandPool, nullptr);
     }
+
+    // Release caches
+    for (auto& it : renderer->framebufferCache)
+    {
+        vkDestroyFramebuffer(renderer->device, it.second, nullptr);
+    }
+    renderer->framebufferCache.clear();
+
+    for (auto& it : renderer->renderPassCache)
+    {
+        vkDestroyRenderPass(renderer->device, it.second, nullptr);
+    }
+    renderer->renderPassCache.clear();
 
     renderer->frameCount = UINT64_MAX;
     vulkan_ProcessDeletionQueue(renderer);
@@ -1248,9 +1307,117 @@ static bool vulkan_queryFeature(VGFXRenderer* driverData, VGFXFeature feature)
 }
 
 /* Texture */
-static VGFXTexture vulkan_createTexture(VGFXRenderer* driverData, const VGFXTextureInfo* info)
+static VGFXTexture vulkan_createTexture(VGFXRenderer* driverData, const VGFXTextureDesc* desc)
 {
-    return nullptr;
+    VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
+
+    VmaAllocationCreateInfo memoryInfo = {};
+    memoryInfo.usage = VMA_MEMORY_USAGE_AUTO;
+
+    VkImageCreateInfo imageInfo = {};
+    imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    imageInfo.format = ToVk(desc->format);
+    imageInfo.extent.width = desc->width;
+    imageInfo.extent.height = desc->height;
+    if (desc->type == VGFXTextureType3D)
+    {
+        imageInfo.imageType = VK_IMAGE_TYPE_3D;
+        imageInfo.extent.depth = desc->depthOrArraySize;
+        imageInfo.arrayLayers = 1;
+        imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    }
+    else
+    {
+        imageInfo.imageType = VK_IMAGE_TYPE_2D;
+        imageInfo.extent.depth = 1;
+        imageInfo.arrayLayers = desc->depthOrArraySize;
+        imageInfo.samples = (VkSampleCountFlagBits)desc->sampleCount;
+    }
+    imageInfo.extent.depth = 1;
+    imageInfo.mipLevels = desc->mipLevelCount;
+    imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    imageInfo.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+
+
+    if (desc->usage & VGFXTextureUsage_ShaderRead)
+        imageInfo.usage |= VK_IMAGE_USAGE_SAMPLED_BIT;
+
+    if (desc->usage & VGFXTextureUsage_ShaderWrite)
+        imageInfo.usage |= VK_IMAGE_USAGE_STORAGE_BIT;
+
+    if (desc->usage & VGFXTextureUsage_RenderTarget)
+    {
+        if (vgfxIsDepthStencilFormat(desc->format))
+        {
+            imageInfo.usage |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+        }
+        else
+        {
+            imageInfo.usage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+        }
+    }
+
+    imageInfo.flags = 0;
+    if (desc->type == VGFXTextureType2D)
+    {
+        if (desc->width == desc->height && (desc->depthOrArraySize % 6 == 0))
+        {
+            imageInfo.flags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+        }
+    }
+
+    uint32_t sharingIndices[3] = {};
+    if (renderer->graphicsQueueFamily != renderer->computeQueueFamily ||
+        renderer->graphicsQueueFamily != renderer->copyQueueFamily)
+    {
+        // For buffers, always just use CONCURRENT access modes,
+        // so we don't have to deal with acquire/release barriers in async compute.
+        imageInfo.sharingMode = VK_SHARING_MODE_CONCURRENT;
+
+        sharingIndices[imageInfo.queueFamilyIndexCount++] = renderer->graphicsQueueFamily;
+
+        if (renderer->graphicsQueueFamily != renderer->computeQueueFamily)
+        {
+            sharingIndices[imageInfo.queueFamilyIndexCount++] = renderer->computeQueueFamily;
+        }
+
+        if (renderer->graphicsQueueFamily != renderer->copyQueueFamily
+            && renderer->computeQueueFamily != renderer->copyQueueFamily)
+        {
+            sharingIndices[imageInfo.queueFamilyIndexCount++] = renderer->copyQueueFamily;
+        }
+
+        imageInfo.pQueueFamilyIndices = sharingIndices;
+    }
+    else
+    {
+        imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        imageInfo.queueFamilyIndexCount = 0;
+        imageInfo.pQueueFamilyIndices = nullptr;
+    }
+
+    // TODO: Handle readback texture
+
+    VGFXVulkanTexture* texture = new VGFXVulkanTexture();
+    VkResult result = vmaCreateImage(renderer->allocator,
+        &imageInfo, &memoryInfo,
+        &texture->handle,
+        &texture->allocation,
+        nullptr);
+
+    if (result != VK_SUCCESS)
+    {
+        vgfxLogError("Vulkan: Failed to create texture");
+        delete texture;
+        return nullptr;
+    }
+
+    texture->width = imageInfo.extent.width;
+    texture->height = imageInfo.extent.height;
+    texture->format = imageInfo.format;
+
+    return (VGFXTexture)texture;
 }
 
 static void vulkan_destroyTexture(VGFXRenderer* driverData, VGFXTexture texture)
@@ -1258,12 +1425,17 @@ static void vulkan_destroyTexture(VGFXRenderer* driverData, VGFXTexture texture)
     VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
     VGFXVulkanTexture* vulkanTexture = (VGFXVulkanTexture*)texture;
 
+    renderer->destroyMutex.lock();
+    for (auto& it : vulkanTexture->viewCache)
+    {
+        renderer->destroyedImageViews.push_back(std::make_pair(it.second, renderer->frameCount));
+    }
+    vulkanTexture->viewCache.clear();
     if (vulkanTexture->allocation)
     {
-        renderer->destroyMutex.lock();
         renderer->destroyedImagesQueue.push_back(std::make_pair(std::make_pair(vulkanTexture->handle, vulkanTexture->allocation), renderer->frameCount));
-        renderer->destroyMutex.unlock();
     }
+    renderer->destroyMutex.unlock();
 
     delete vulkanTexture;
 }
@@ -1373,93 +1545,21 @@ static void vulkan_updateSwapChain(VGFXVulkanRenderer* renderer, VGFXVulkanSwapC
     std::vector<VkImage> swapchainImages(imageCount);
     VK_CHECK(vkGetSwapchainImagesKHR(renderer->device, swapChain->handle, &imageCount, swapchainImages.data()));
 
-
-    // Create SwapChain render pass:
-    VkAttachmentDescription colorAttachment = {};
-    colorAttachment.format = createInfo.imageFormat;
-    colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
-    colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-
-    VkAttachmentReference colorAttachmentRef = {};
-    colorAttachmentRef.attachment = 0;
-    colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-    VkSubpassDescription subpass = {};
-    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-    subpass.colorAttachmentCount = 1;
-    subpass.pColorAttachments = &colorAttachmentRef;
-
-    VkRenderPassCreateInfo renderPassInfo = {};
-    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-    renderPassInfo.attachmentCount = 1;
-    renderPassInfo.pAttachments = &colorAttachment;
-    renderPassInfo.subpassCount = 1;
-    renderPassInfo.pSubpasses = &subpass;
-
-    VkSubpassDependency dependency = {};
-    dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
-    dependency.dstSubpass = 0;
-    dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    dependency.srcAccessMask = 0;
-    dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-
-    renderPassInfo.dependencyCount = 1;
-    renderPassInfo.pDependencies = &dependency;
-    result = vkCreateRenderPass(renderer->device, &renderPassInfo, nullptr, &swapChain->renderPass);
-    VGFX_ASSERT(result == VK_SUCCESS);
-
     swapChain->imageIndex = 0;
     swapChain->backbufferTextures.resize(imageCount);
-    swapChain->backbufferTextureViews.resize(imageCount);
-    swapChain->backbufferFramebuffers.resize(imageCount);
     for (uint32_t i = 0; i < imageCount; ++i)
     {
         VGFXVulkanTexture* texture = new VGFXVulkanTexture();
         texture->handle = swapchainImages[i];
+        texture->width = createInfo.imageExtent.width;
+        texture->height = createInfo.imageExtent.height;
         texture->format = createInfo.imageFormat;
         texture->isSwapChain = true;
         swapChain->backbufferTextures[i] = (VGFXTexture)texture;
-
-        VkImageViewCreateInfo viewInfo = {};
-        viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        viewInfo.image = swapchainImages[i];
-        viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        viewInfo.format = createInfo.imageFormat;
-        viewInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-        viewInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-        viewInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-        viewInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-        viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        viewInfo.subresourceRange.baseMipLevel = 0;
-        viewInfo.subresourceRange.levelCount = 1;
-        viewInfo.subresourceRange.baseArrayLayer = 0;
-        viewInfo.subresourceRange.layerCount = 1;
-
-        result = vkCreateImageView(renderer->device, &viewInfo, nullptr, &swapChain->backbufferTextureViews[i]);
-        VGFX_ASSERT(result == VK_SUCCESS);
-
-        VkFramebufferCreateInfo framebufferInfo = {};
-        framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-        framebufferInfo.renderPass = swapChain->renderPass;
-        framebufferInfo.attachmentCount = 1;
-        framebufferInfo.pAttachments = &swapChain->backbufferTextureViews[i];
-        framebufferInfo.width = createInfo.imageExtent.width;
-        framebufferInfo.height = createInfo.imageExtent.height;
-        framebufferInfo.layers = 1;
-
-        result = vkCreateFramebuffer(renderer->device, &framebufferInfo, nullptr, &swapChain->backbufferFramebuffers[i]);
-        VGFX_ASSERT(result == VK_SUCCESS);
     }
 
     VkSemaphoreCreateInfo semaphoreInfo = {};
     semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-
     if (swapChain->acquireSemaphore == VK_NULL_HANDLE)
     {
         result = vkCreateSemaphore(renderer->device, &semaphoreInfo, nullptr, &swapChain->acquireSemaphore);
@@ -1476,7 +1576,7 @@ static void vulkan_updateSwapChain(VGFXVulkanRenderer* renderer, VGFXVulkanSwapC
     swapChain->height = createInfo.imageExtent.height;
 }
 
-static VGFXSwapChain vulkan_createSwapChain(VGFXRenderer* driverData, VGFXSurface surface, const VGFXSwapChainInfo* info)
+static VGFXSwapChain vulkan_createSwapChain(VGFXRenderer* driverData, VGFXSurface surface, const VGFXSwapChainDesc* info)
 {
     VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
     VkSurfaceKHR vk_surface = vulkan_createSurface(renderer, surface);
@@ -1509,13 +1609,10 @@ static void vulkan_destroySwapChain(VGFXRenderer* driverData, VGFXSwapChain swap
     VGFXVulkanSwapChain* vulkanSwapChain = (VGFXVulkanSwapChain*)swapChain;
     //vulkan_destroyTexture(nullptr, d3dSwapChain->backbufferTexture);
 
-    renderer->destroyMutex.lock();
-    for (size_t i = 0, count = vulkanSwapChain->backbufferTextureViews.size(); i < count; ++i)
+    for (size_t i = 0, count = vulkanSwapChain->backbufferTextures.size(); i < count; ++i)
     {
-        renderer->destroyedImageViews.push_back(std::make_pair(vulkanSwapChain->backbufferTextureViews[i], renderer->frameCount));
-        renderer->destroyedFramebuffers.push_back(std::make_pair(vulkanSwapChain->backbufferFramebuffers[i], renderer->frameCount));
+        vulkan_destroyTexture(driverData, vulkanSwapChain->backbufferTextures[i]);
     }
-    renderer->destroyMutex.unlock();
 
     if (vulkanSwapChain->acquireSemaphore != VK_NULL_HANDLE)
     {
@@ -1527,12 +1624,6 @@ static void vulkan_destroySwapChain(VGFXRenderer* driverData, VGFXSwapChain swap
     {
         vkDestroySemaphore(renderer->device, vulkanSwapChain->releaseSemaphore, nullptr);
         vulkanSwapChain->releaseSemaphore = VK_NULL_HANDLE;
-    }
-
-    if (vulkanSwapChain->renderPass != VK_NULL_HANDLE)
-    {
-        vkDestroyRenderPass(renderer->device, vulkanSwapChain->renderPass, nullptr);
-        vulkanSwapChain->renderPass = VK_NULL_HANDLE;
     }
 
     if (vulkanSwapChain->handle != VK_NULL_HANDLE)
@@ -1581,48 +1672,7 @@ static VGFXTexture vulkan_acquireNextTexture(VGFXRenderer* driverData, VGFXSwapC
     return vulkanSwapChain->backbufferTextures[vulkanSwapChain->imageIndex];
 }
 
-static void vulkan_beginRenderPassSwapChain(VGFXRenderer* driverData, VGFXSwapChain swapChain)
-{
-    VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
-    VGFXVulkanSwapChain* vulkanSwapChain = (VGFXVulkanSwapChain*)swapChain;
-
-    VkResult result = vkAcquireNextImageKHR(renderer->device,
-        vulkanSwapChain->handle,
-        UINT64_MAX,
-        vulkanSwapChain->acquireSemaphore, VK_NULL_HANDLE,
-        &vulkanSwapChain->imageIndex);
-
-    if (result != VK_SUCCESS)
-    {
-        // Handle outdated error in acquire
-        if (result == VK_SUBOPTIMAL_KHR || result == VK_ERROR_OUT_OF_DATE_KHR)
-        {
-            // TODO
-        }
-    }
-
-    renderer->swapChains.push_back(vulkanSwapChain);
-
-    VkClearValue clearColor = {
-        0.3f,
-        0.3f,
-        0.3f,
-        1.0f,
-    };
-
-    VkRenderPassBeginInfo beginInfo = {};
-    beginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    beginInfo.renderPass = vulkanSwapChain->renderPass;
-    beginInfo.framebuffer = vulkanSwapChain->backbufferFramebuffers[vulkanSwapChain->imageIndex];
-    beginInfo.renderArea.offset = { 0, 0 };
-    beginInfo.renderArea.extent.width = vulkanSwapChain->width;
-    beginInfo.renderArea.extent.height = vulkanSwapChain->height;
-    beginInfo.clearValueCount = 1;
-    beginInfo.pClearValues = &clearColor;
-    vkCmdBeginRenderPass(renderer->GetCommandBuffer(), &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
-}
-
-static void vulkan_beginRenderPass(VGFXRenderer* driverData, const VGFXRenderPassInfo* info)
+static void vulkan_beginRenderPass(VGFXRenderer* driverData, const VGFXRenderPassDesc* desc)
 {
     VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
     VkCommandBuffer commandBuffer = renderer->GetCommandBuffer();
@@ -1699,28 +1749,35 @@ static void vulkan_beginRenderPass(VGFXRenderer* driverData, const VGFXRenderPas
     }
     else
     {
-        VkRenderPass renderPass = vulkan_RequestRenderPass(renderer, info);
+        uint32_t width = 0;
+        uint32_t height = 0;
+        VkRenderPass renderPass = vulkan_RequestRenderPass(renderer, desc);
+        VkClearValue clearValues[VGFX_MAX_COLOR_ATTACHMENTS + 1];
 
-        for (uint32_t i = 0; i < info->colorAttachmentCount; ++i)
+        for (uint32_t i = 0; i < desc->colorAttachmentCount; ++i)
         {
-            VGFXRenderPassColorAttachment attachment = info->colorAttachments[i];
-            VGFXVulkanTexture* texture = (VGFXVulkanTexture*)attachment.texture;
-        }
+            VGFXRenderPassColorAttachment attachment = desc->colorAttachments[i];
+
+            clearValues[i].color.float32[0] = attachment.clearColor.r;
+            clearValues[i].color.float32[1] = attachment.clearColor.g;
+            clearValues[i].color.float32[2] = attachment.clearColor.b;
+            clearValues[i].color.float32[3] = attachment.clearColor.a;
+            }
 
         VkRenderPassBeginInfo beginInfo = {};
         beginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
         beginInfo.pNext = nullptr;
         beginInfo.renderPass = renderPass;
-        //beginInfo.framebuffer = device.GetFramebuffer(&fboKey);
-        //beginInfo.renderArea.offset.x = 0;
-        //beginInfo.renderArea.offset.y = 0;
-        //beginInfo.renderArea.extent.width = fboKey.width;
-        //beginInfo.renderArea.extent.height = fboKey.height;
-        //beginInfo.clearValueCount = fboKey.attachmentCount;
-        //beginInfo.pClearValues = renderPassClearValues.data();
+        beginInfo.framebuffer = vulkan_RequestFramebuffer(renderer, renderPass, desc, &width, &height);
+        beginInfo.renderArea.offset.x = 0;
+        beginInfo.renderArea.offset.y = 0;
+        beginInfo.renderArea.extent.width = width;
+        beginInfo.renderArea.extent.height = height;
+        beginInfo.clearValueCount = 1;
+        beginInfo.pClearValues = clearValues;
         vkCmdBeginRenderPass(commandBuffer, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
+        }
     }
-}
 
 static void vulkan_endRenderPass(VGFXRenderer* driverData)
 {
@@ -1799,7 +1856,7 @@ static VGFXDevice vulkan_createDevice(VGFXSurface surface, const VGFXDeviceInfo*
             else if (strcmp(availableExtension.extensionName, VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME) == 0)
             {
                 instanceExtensions.push_back(VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME);
-        }
+            }
         }
 
         instanceExtensions.push_back(VK_KHR_SURFACE_EXTENSION_NAME);
@@ -1849,7 +1906,7 @@ static VGFXDevice vulkan_createDevice(VGFXSurface surface, const VGFXDeviceInfo*
                     instanceExtensions.push_back(VK_EXT_VALIDATION_FEATURES_EXTENSION_NAME);
                 }
             }
-        }
+}
 #endif 
 
         VkApplicationInfo appInfo = {};
@@ -1944,7 +2001,7 @@ static VGFXDevice vulkan_createDevice(VGFXSurface surface, const VGFXDeviceInfo*
             vgfxLogInfo("	\t%s", createInfo.ppEnabledExtensionNames[i]);
         }
 #endif
-    }
+}
 
     // Create surface
     VkSurfaceKHR vk_surface = vulkan_createSurface(renderer, surface);

@@ -51,10 +51,10 @@ void init_gfx(GLFWwindow* window)
     //    deviceInfo.preferredApi = VGFXAPI_D3D11;
     //}
 
-    //if (vgfxIsSupported(VGFXAPI_Vulkan))
-    //{
-    //    deviceInfo.preferredApi = VGFXAPI_Vulkan;
-    //}
+    if (vgfxIsSupported(VGFXAPI_Vulkan))
+    {
+        deviceInfo.preferredApi = VGFXAPI_Vulkan;
+    }
 
 #if defined(__EMSCRIPTEN__)
     surface = vgfxCreateSurfaceWeb("canvas");
@@ -73,11 +73,12 @@ void init_gfx(GLFWwindow* window)
     int width = 0;
     int height = 0;
     glfwGetWindowSize(window, &width, &height);
-    VGFXSwapChainInfo swapChainInfo{};
-    swapChainInfo.width = (uint32_t)width;
-    swapChainInfo.height = (uint32_t)height;
-    swapChainInfo.presentMode = VGFXPresentMode_Fifo;
-    swapChain = vgfxCreateSwapChain(device, surface, &swapChainInfo);
+
+    VGFXSwapChainDesc swapChainDesc{};
+    swapChainDesc.width = (uint32_t)width;
+    swapChainDesc.height = (uint32_t)height;
+    swapChainDesc.presentMode = VGFXPresentMode_Fifo;
+    swapChain = vgfxCreateSwapChain(device, surface, &swapChainDesc);
 }
 
 #if defined(__EMSCRIPTEN__)
@@ -130,7 +131,7 @@ void draw_frame()
     colorAttachment.clearColor.b = 0.3f;
     colorAttachment.clearColor.a = 1.0f;
     
-    VGFXRenderPassInfo renderPass{};
+    VGFXRenderPassDesc renderPass{};
     renderPass.colorAttachmentCount = 1u;
     renderPass.colorAttachments = &colorAttachment;
     vgfxBeginRenderPass(device, &renderPass);

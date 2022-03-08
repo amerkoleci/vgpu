@@ -113,11 +113,22 @@ typedef enum VGFXTextureType
 {
     VGFXTextureType2D,
     VGFXTextureType3D,
-    VGFXTextureTypeCube,
 
     _VGFXTextureType_Count,
     _VGFXTextureType_Force32 = 0x7FFFFFFF
 } VGFXTextureType;
+
+typedef enum VGFXBufferUsage
+{
+    VGFXBufferUsage_None = 0x00,
+    VGFXBufferUsage_Vertex = 0x01,
+    VGFXBufferUsage_Index = 0x02,
+    VGFXBufferUsage_Uniform = 0x04,
+    VGFXBufferUsage_ShaderRead = 0x08,
+    VGFXBufferUsage_ShaderWrite = 0x10,
+
+    _VGFXBufferUsage_Force32 = 0x7FFFFFFF
+} VGFXBufferUsage;
 
 typedef enum VGFXTextureUsage
 {
@@ -323,22 +334,21 @@ typedef struct VGFXRenderPassColorAttachment
     VGFXColor clearColor;
 } VGFXRenderPassColorAttachment;
 
-typedef struct VGFXRenderPassInfo
+typedef struct VGFXRenderPassDesc
 {
     uint32_t colorAttachmentCount;
     const VGFXRenderPassColorAttachment* colorAttachments;
     //const VGFXRenderPassDepthStencilAttachment* depthStencilAttachment;
-} VGFXRenderPassInfo;
+} VGFXRenderPassDesc;
 
-typedef struct VGFXSwapChainInfo
+typedef struct VGFXBufferDesc
 {
-    VGFXTextureFormat format;
-    uint32_t width;
-    uint32_t height;
-    VGFXPresentMode presentMode;
-} VGFXSwapChainInfo;
+    const char* label;
+    VGFXBufferUsage usage;
+    uint64_t size;
+} VGFXBufferDesc;
 
-typedef struct VGFXTextureInfo
+typedef struct VGFXTextureDesc
 {
     const char* label;
     VGFXTextureType type;
@@ -349,7 +359,15 @@ typedef struct VGFXTextureInfo
     uint32_t depthOrArraySize;
     uint32_t mipLevelCount;
     uint32_t sampleCount;
-} VGFXTextureInfo;
+} VGFXTextureDesc;
+
+typedef struct VGFXSwapChainDesc
+{
+    VGFXTextureFormat format;
+    uint32_t width;
+    uint32_t height;
+    VGFXPresentMode presentMode;
+} VGFXSwapChainDesc;
 
 typedef struct VGFXDeviceInfo
 {
@@ -374,18 +392,17 @@ VGFX_API void vgfxWaitIdle(VGFXDevice device);
 VGFX_API bool vgfxQueryFeature(VGFXDevice device, VGFXFeature feature);
 
 /* Texture */
-VGFX_API VGFXTexture vgfxCreateTexture(VGFXDevice device, const VGFXTextureInfo* info);
+VGFX_API VGFXTexture vgfxCreateTexture(VGFXDevice device, const VGFXTextureDesc* desc);
 VGFX_API void vgfxDestroyTexture(VGFXDevice device, VGFXTexture texture);
 
 /* SwapChain */
-VGFX_API VGFXSwapChain vgfxCreateSwapChain(VGFXDevice device, VGFXSurface surface, const VGFXSwapChainInfo* info);
+VGFX_API VGFXSwapChain vgfxCreateSwapChain(VGFXDevice device, VGFXSurface surface, const VGFXSwapChainDesc* desc);
 VGFX_API void vgfxDestroySwapChain(VGFXDevice device, VGFXSwapChain swapChain);
 VGFX_API void vgfxSwapChainGetSize(VGFXDevice device, VGFXSwapChain swapChain, VGFXSize2D* pSize);
 VGFX_API VGFXTexture vgfxSwapChainAcquireNextTexture(VGFXDevice device, VGFXSwapChain swapChain);
 
 /* Commands */
-VGFX_API void vgfxBeginRenderPassSwapChain(VGFXDevice device,  VGFXSwapChain swapChain);
-VGFX_API void vgfxBeginRenderPass(VGFXDevice device, const VGFXRenderPassInfo* info);
+VGFX_API void vgfxBeginRenderPass(VGFXDevice device, const VGFXRenderPassDesc* desc);
 VGFX_API void vgfxEndRenderPass(VGFXDevice device);
 
 /* Helper functions */
