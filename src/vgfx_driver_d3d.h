@@ -25,6 +25,8 @@
 #   include <dxgidebug.h>
 #endif
 
+#include <string>
+
 namespace
 {
 #if defined(_DEBUG) && WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
@@ -41,6 +43,32 @@ namespace
             resource->Release();
             resource = nullptr;
         }
+    }
+
+    inline std::string WCharToUTF8(const wchar_t* input)
+    {
+        // The -1 argument asks WideCharToMultiByte to use the null terminator to know the size of
+        // input. It will return a size that includes the null terminator.
+        const int requiredSize = WideCharToMultiByte(CP_UTF8, 0, input, -1, nullptr, 0, nullptr, nullptr);
+        if (requiredSize < 0)
+            return "";
+
+        char* char_buffer = (char*)alloca(sizeof(char) * requiredSize);
+        WideCharToMultiByte(CP_UTF8, 0, input, -1, char_buffer, requiredSize, nullptr, nullptr);
+        return std::string(char_buffer, requiredSize);
+    }
+
+    inline std::wstring UTF8ToWStr(const char* input)
+    {
+        // The -1 argument asks MultiByteToWideChar to use the null terminator to know the size of
+        // input. It will return a size that includes the null terminator.
+        const int requiredSize = MultiByteToWideChar(CP_UTF8, 0, input, -1, nullptr, 0);
+        if (requiredSize < 0)
+            return L"";
+
+        wchar_t* char_buffer = (wchar_t*)alloca(sizeof(wchar_t) * requiredSize);
+        MultiByteToWideChar(CP_UTF8, 0, input, -1, char_buffer, requiredSize);
+        return std::wstring(char_buffer, requiredSize);
     }
 
     constexpr DXGI_FORMAT ToDXGIFormat(VGFXTextureFormat format)

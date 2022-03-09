@@ -169,6 +169,7 @@ namespace
     {
         bool swapchain;
         bool depth_clip_enable;
+        bool driver_properties;
         bool memory_budget;
         bool performance_query;
         bool host_query_reset;
@@ -207,6 +208,9 @@ namespace
             }
             else if (strcmp(vk_extensions[i].extensionName, VK_EXT_DEPTH_CLIP_ENABLE_EXTENSION_NAME) == 0) {
                 extensions.depth_clip_enable = true;
+            }
+            else if (strcmp(vk_extensions[i].extensionName, "VK_KHR_driver_properties") == 0) {
+                extensions.driver_properties = true;
             }
             else if (strcmp(vk_extensions[i].extensionName, VK_EXT_MEMORY_BUDGET_EXTENSION_NAME) == 0) {
                 extensions.memory_budget = true;
@@ -269,6 +273,7 @@ namespace
         // Core 1.2
         if (gpuProps.apiVersion >= VK_API_VERSION_1_2)
         {
+            extensions.driver_properties = true;
             extensions.renderPass2 = true;
         }
 
@@ -540,6 +545,7 @@ struct VGFXVulkanRenderer
     VkDebugUtilsMessengerEXT debugUtilsMessenger;
 
     PhysicalDeviceExtensions supportedExtensions;
+    VkPhysicalDeviceDriverProperties driverProperties;
     VkPhysicalDeviceProperties2 properties2 = {};
     VkPhysicalDeviceVulkan11Properties properties_1_1 = {};
     VkPhysicalDeviceVulkan12Properties properties_1_2 = {};
@@ -568,6 +574,7 @@ struct VGFXVulkanRenderer
     VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamicRenderingFeaturesKHR = {};
     bool dynamicRendering{ false }; // Beta
     VkDeviceSize minAllocationAlignment{ 0 };
+    std::string driverDescription;
 
     VkPhysicalDevice physicalDevice;
     uint32_t graphicsQueueFamily = VK_QUEUE_FAMILY_IGNORED;
@@ -635,6 +642,22 @@ struct VGFXVulkanRenderer
     std::deque<std::pair<VkDescriptorPool, uint64_t>> destroyedDescriptorPools;
     std::deque<std::pair<VkQueryPool, uint64_t>> destroyedQueryPools;
 };
+
+static void vulkan_SetObjectName(VGFXVulkanRenderer* renderer, VkObjectType type, uint64_t handle, const char* name)
+{
+    if (!renderer->debugUtils)
+    {
+        return;
+    }
+
+    VkDebugUtilsObjectNameInfoEXT info;
+    info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
+    info.pNext = nullptr;
+    info.objectType = type;
+    info.objectHandle = handle;
+    info.pObjectName = name;
+    VK_CHECK(vkSetDebugUtilsObjectNameEXT(renderer->device, &info));
+}
 
 static VkSurfaceKHR vulkan_createSurface(VGFXVulkanRenderer* renderer, VGFXSurface surface)
 {
@@ -1274,14 +1297,12 @@ static void vulkan_frame(VGFXRenderer* driverData)
     renderer->initLocker.unlock();
 }
 
-static void vulkan_waitIdle(VGFXRenderer* driverData)
-{
+static void vulkan_waitIdle(VGFXRenderer* driverData) {
     VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
     VK_CHECK(vkDeviceWaitIdle(renderer->device));
 }
 
-static bool vulkan_queryFeature(VGFXRenderer* driverData, VGFXFeature feature)
-{
+static bool vulkan_hasFeature(VGFXRenderer* driverData, VGFXFeature feature) {
     VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
     switch (feature)
     {
@@ -1306,6 +1327,39 @@ static bool vulkan_queryFeature(VGFXRenderer* driverData, VGFXFeature feature)
         default:
             return false;
     }
+}
+
+static void vulkan_getAdapterProperties(VGFXRenderer* driverData, VGFXAdapterProperties* properties)
+{
+    VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
+
+    properties->vendorID = renderer->properties2.properties.vendorID;
+    properties->deviceID = renderer->properties2.properties.deviceID;
+    properties->name = renderer->properties2.properties.deviceName;
+    properties->driverDescription = renderer->driverDescription.c_str();
+
+    switch (renderer->properties2.properties.deviceType)
+    {
+        case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU:
+            properties->adapterType = VGFXAdapterType_IntegratedGPU;
+            break;
+        case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:
+            properties->adapterType = VGFXAdapterType_DiscreteGPU;
+            break;
+        case VK_PHYSICAL_DEVICE_TYPE_CPU:
+            properties->adapterType = VGFXAdapterType_CPU;
+            break;
+        default:
+            properties->adapterType = VGFXAdapterType_Unknown;
+            break;
+    }
+
+    properties->backendType = VGFXBackendType_Vulkan;
+}
+
+static void vulkan_getLimits(VGFXRenderer* driverData, VGFXLimits* limits)
+{
+    VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
 }
 
 /* Buffer */
@@ -1820,7 +1874,7 @@ static bool vulkan_isSupported(void)
     return true;
 }
 
-static VGFXDevice vulkan_createDevice(VGFXSurface surface, const VGFXDeviceInfo* info)
+static VGFXDevice vulkan_createDevice(VGFXSurface surface, const VGFXDeviceDesc* info)
 {
     VGFXVulkanRenderer* renderer = new VGFXVulkanRenderer();
 
@@ -1838,6 +1892,8 @@ static VGFXDevice vulkan_createDevice(VGFXSurface surface, const VGFXDeviceInfo*
         renderer->x11xcb.GetXCBConnection = (PFN_XGetXCBConnection)dlsym(renderer->x11xcb.handle, "XGetXCBConnection");
     }
 #endif
+
+    uint32_t apiVersion = volkGetInstanceVersion();
 
     // Enumerate available layers and extensions:
     {
@@ -1861,13 +1917,26 @@ static VGFXDevice vulkan_createDevice(VGFXSurface surface, const VGFXDeviceInfo*
                 renderer->debugUtils = true;
                 instanceExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
             }
-            else if (strcmp(availableExtension.extensionName, VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME) == 0)
+            else if (strcmp(availableExtension.extensionName, "VK_EXT_swapchain_colorspace") == 0)
             {
-                instanceExtensions.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
+                instanceExtensions.push_back("VK_EXT_swapchain_colorspace");
             }
-            else if (strcmp(availableExtension.extensionName, VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME) == 0)
+
+            /* Core 1.1 */
+            if (apiVersion < VK_API_VERSION_1_1)
             {
-                instanceExtensions.push_back(VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME);
+                if (strcmp(availableExtension.extensionName, "VK_KHR_get_physical_device_properties2") == 0)
+                {
+                    instanceExtensions.push_back("VK_KHR_get_physical_device_properties2");
+                }
+                else if (strcmp(availableExtension.extensionName, "VK_KHR_external_memory_capabilities") == 0)
+                {
+                    instanceExtensions.push_back("VK_KHR_external_memory_capabilities");
+                }
+                else if (strcmp(availableExtension.extensionName, "VK_KHR_external_semaphore_capabilities") == 0)
+                {
+                    instanceExtensions.push_back("VK_KHR_external_semaphore_capabilities");
+                }
             }
         }
 
@@ -2071,6 +2140,7 @@ static VGFXDevice vulkan_createDevice(VGFXSurface surface, const VGFXDeviceInfo*
             renderer->fragment_shading_rate_features = {};
             renderer->mesh_shader_features = {};
 
+            renderer->driverProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES;
             renderer->properties2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
             renderer->properties_1_1.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_PROPERTIES;
             renderer->properties_1_2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_PROPERTIES;
@@ -2088,7 +2158,14 @@ static VGFXDevice vulkan_createDevice(VGFXSurface surface, const VGFXDeviceInfo*
             properties_chain = &renderer->sampler_minmax_properties.pNext;
 
             enabledExtensions.clear();
-            enabledExtensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+            enabledExtensions.push_back("VK_KHR_swapchain");
+
+            if (physicalDeviceExt.driver_properties)
+            {
+                enabledExtensions.push_back("VK_KHR_driver_properties");
+                *properties_chain = &renderer->driverProperties;
+                properties_chain = &renderer->driverProperties.pNext;
+            }
 
             // For performance queries, we also use host query reset since queryPool resets cannot live in the same command buffer as beginQuery
             if (physicalDeviceExt.performance_query &&
@@ -2107,13 +2184,13 @@ static VGFXDevice vulkan_createDevice(VGFXSurface surface, const VGFXDeviceInfo*
 
             if (physicalDeviceExt.memory_budget)
             {
-                enabledExtensions.push_back(VK_EXT_MEMORY_BUDGET_EXTENSION_NAME);
+                enabledExtensions.push_back("VK_EXT_memory_budget");
             }
 
             if (physicalDeviceExt.depth_clip_enable)
             {
                 renderer->depth_clip_enable_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEPTH_CLIP_ENABLE_FEATURES_EXT;
-                enabledExtensions.push_back(VK_EXT_DEPTH_CLIP_ENABLE_EXTENSION_NAME);
+                enabledExtensions.push_back("VK_EXT_depth_clip_enable");
                 *features_chain = &renderer->depth_clip_enable_features;
                 features_chain = &renderer->depth_clip_enable_features.pNext;
             }
@@ -2388,6 +2465,24 @@ static VGFXDevice vulkan_createDevice(VGFXSurface surface, const VGFXDeviceInfo*
             vgfxLogInfo("	\t%s", createInfo.ppEnabledExtensionNames[i]);
         }
 #endif
+
+        if (info->label)
+        {
+            vulkan_SetObjectName(renderer, VK_OBJECT_TYPE_DEVICE, (uint64_t)renderer->device, info->label);
+        }
+
+        if (renderer->supportedExtensions.driver_properties)
+        {
+            renderer->driverDescription = renderer->driverProperties.driverName;
+            if (renderer->driverProperties.driverInfo[0] != '\0')
+            {
+                renderer->driverDescription += std::string(": ") + renderer->driverProperties.driverInfo;
+            }
+        }
+        else
+        {
+            renderer->driverDescription = "Vulkan driver version: " + std::to_string(renderer->properties2.properties.driverVersion);
+        }
     }
 
     // Create memory allocator
@@ -2699,6 +2794,7 @@ static VGFXDevice vulkan_createDevice(VGFXSurface surface, const VGFXDeviceInfo*
     }
 
     vgfxLogInfo("vgfx driver: Vulkan");
+    vgfxLogInfo("Vulkan Adapter: %s", renderer->properties2.properties.deviceName);
 
     VGFXDevice_T* device = (VGFXDevice_T*)VGFX_MALLOC(sizeof(VGFXDevice_T));
     ASSIGN_DRIVER(vulkan);
@@ -2708,7 +2804,7 @@ static VGFXDevice vulkan_createDevice(VGFXSurface surface, const VGFXDeviceInfo*
 }
 
 VGFXDriver vulkan_driver = {
-    VGFXAPI_Vulkan,
+    VGFXBackendType_Vulkan,
     vulkan_isSupported,
     vulkan_createDevice
 };

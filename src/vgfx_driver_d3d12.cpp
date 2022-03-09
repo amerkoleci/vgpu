@@ -16,6 +16,7 @@
 #include <vector>
 #include <deque>
 #include <mutex>
+#include <sstream>
 
 #define D3D12MA_D3D12_HEADERS_ALREADY_INCLUDED
 #include "D3D12MemAlloc.h"
@@ -53,12 +54,8 @@ namespace
         {
             if (name != nullptr)
             {
-                const size_t name_size = strlen(name) + 1;
-                wchar_t* wide_name = (wchar_t*)alloca(sizeof(wchar_t) * name_size);
-                size_t numberOfConverted;
-                mbstowcs_s(&numberOfConverted, wide_name, name_size, name, name_size - 1);
-
-                obj->SetName(wide_name);
+                std::wstring wide_name = UTF8ToWStr(name);
+                obj->SetName(wide_name.c_str());
             }
             else
             {
@@ -171,6 +168,12 @@ struct VGFXD3D12Renderer
     bool tearingSupported = false;
     ID3D12Device5* device = nullptr;
     D3D_FEATURE_LEVEL featureLevel{};
+
+    uint32_t vendorID;
+    uint32_t deviceID;
+    std::string adapterName;
+    std::string driverDescription;
+    VGFXAdapterType adapterType;
 
     ID3D12Fence* frameFence = nullptr;
     HANDLE frameFenceEvent = INVALID_HANDLE_VALUE;
@@ -458,14 +461,14 @@ static void d3d12_destroyDevice(VGFXDevice device)
             if (SUCCEEDED(renderer->device->QueryInterface(debugDevice.GetAddressOf())))
             {
                 debugDevice->ReportLiveDeviceObjects(D3D12_RLDO_DETAIL | D3D12_RLDO_IGNORE_INTERNAL);
-        }
+            }
 
-    }
+        }
 #else
         (void)refCount; // avoid warning
 #endif
         renderer->device = nullptr;
-}
+    }
 
     renderer->factory.Reset();
 
@@ -482,7 +485,7 @@ static void d3d12_destroyDevice(VGFXDevice device)
 
     delete renderer;
     VGFX_FREE(device);
-            }
+    }
 
 static void d3d12_updateSwapChain(VGFXD3D12Renderer* renderer, VGFXD3D12SwapChain* swapChain)
 {
@@ -641,8 +644,7 @@ static void d3d12_waitIdle(VGFXRenderer* driverData)
     d3d12_ProcessDeletionQueue(renderer);
 }
 
-static bool d3d12_queryFeature(VGFXRenderer* driverData, VGFXFeature feature)
-{
+static bool d3d12_hasFeature(VGFXRenderer* driverData, VGFXFeature feature) {
     VGFXD3D12Renderer* renderer = (VGFXD3D12Renderer*)driverData;
     switch (feature)
     {
@@ -659,6 +661,22 @@ static bool d3d12_queryFeature(VGFXRenderer* driverData, VGFXFeature feature)
         default:
             return false;
     }
+}
+
+static void d3d12_getAdapterProperties(VGFXRenderer* driverData, VGFXAdapterProperties* properties) {
+    VGFXD3D12Renderer* renderer = (VGFXD3D12Renderer*)driverData;
+
+    properties->vendorID = renderer->vendorID;
+    properties->deviceID = renderer->deviceID;
+    properties->name = renderer->adapterName.c_str();
+    properties->driverDescription = renderer->driverDescription.c_str();
+    properties->adapterType = renderer->adapterType;
+    properties->backendType = VGFXBackendType_D3D12;
+}
+
+static void d3d12_getLimits(VGFXRenderer* driverData, VGFXLimits* limits)
+{
+    VGFXD3D12Renderer* renderer = (VGFXD3D12Renderer*)driverData;
 }
 
 /* Buffer */
@@ -1041,7 +1059,7 @@ static bool d3d12_isSupported(void)
     return false;
 }
 
-static VGFXDevice d3d12_createDevice(VGFXSurface surface, const VGFXDeviceInfo* info)
+static VGFXDevice d3d12_createDevice(VGFXSurface surface, const VGFXDeviceDesc* info)
 {
     VGFX_ASSERT(info);
 
@@ -1179,8 +1197,12 @@ static VGFXDevice d3d12_createDevice(VGFXSurface surface, const VGFXDeviceInfo* 
             return nullptr;
         }
 
-        // Create the DX12 API device object.
-        renderer->device->SetName(L"vgfx-device");
+        // Assign label object.
+        if (info->label)
+        {
+            std::wstring wide_name = UTF8ToWStr(info->label);
+            renderer->device->SetName(wide_name.c_str());
+        }
 
         if (info->validationMode != VGFXValidationMode_Disabled)
         {
@@ -1204,7 +1226,7 @@ static VGFXDevice d3d12_createDevice(VGFXSurface surface, const VGFXDeviceInfo* 
                 {
                     // Verbose only filters
                     enabledSeverities.push_back(D3D12_MESSAGE_SEVERITY_INFO);
-            }
+                }
 
 #if defined (VGFX_DX12_USE_PIPELINE_LIBRARY)
                 disabledMessages.push_back(D3D12_MESSAGE_ID_LOADPIPELINE_NAMENOTFOUND);
@@ -1230,8 +1252,8 @@ static VGFXDevice d3d12_createDevice(VGFXSurface surface, const VGFXDeviceInfo* 
 
                 infoQueue->AddStorageFilterEntries(&filter);
                 infoQueue->AddApplicationMessage(D3D12_MESSAGE_SEVERITY_MESSAGE, "D3D12 Debug Filters setup");
+            }
         }
-    }
 
         // Create allocator
         D3D12MA::ALLOCATOR_DESC allocatorDesc = {};
@@ -1248,13 +1270,45 @@ static VGFXDevice d3d12_createDevice(VGFXSurface surface, const VGFXDeviceInfo* 
         DXGI_ADAPTER_DESC1 adapterDesc;
         dxgiAdapter->GetDesc1(&adapterDesc);
 
+        renderer->vendorID = adapterDesc.VendorId;
+        renderer->deviceID = adapterDesc.DeviceId;
+        renderer->adapterName = WCharToUTF8(adapterDesc.Description);
+
+        D3D12_FEATURE_DATA_ARCHITECTURE arch = {};
+        HRESULT hr = renderer->device->CheckFeatureSupport(D3D12_FEATURE_ARCHITECTURE, &arch, sizeof(arch));
+
+        if (adapterDesc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)
+        {
+            renderer->adapterType = VGFXAdapterType_CPU;
+        }
+        else {
+            renderer->adapterType = (arch.UMA == TRUE) ? VGFXAdapterType_IntegratedGPU : VGFXAdapterType_DiscreteGPU;
+        }
+
+        // Convert the adapter's D3D12 driver version to a readable string like "24.21.13.9793".
+        LARGE_INTEGER umdVersion;
+        if (dxgiAdapter->CheckInterfaceSupport(__uuidof(IDXGIDevice), &umdVersion) != DXGI_ERROR_UNSUPPORTED)
+        {
+            uint64_t encodedVersion = umdVersion.QuadPart;
+            std::ostringstream o;
+            o << "D3D12 driver version ";
+            uint16_t driverVersion[4] = {};
+
+            for (size_t i = 0; i < 4; ++i) {
+                driverVersion[i] = (encodedVersion >> (48 - 16 * i)) & 0xFFFF;
+                o << driverVersion[i] << ".";
+            }
+
+            renderer->driverDescription = o.str();
+        }
+
         // Check the maximum feature level, and make sure it's above our minimum
         D3D12_FEATURE_DATA_FEATURE_LEVELS featureLevels =
         {
             _countof(s_featureLevels), s_featureLevels, D3D_FEATURE_LEVEL_11_0
         };
 
-        HRESULT hr = renderer->device->CheckFeatureSupport(D3D12_FEATURE_FEATURE_LEVELS, &featureLevels, sizeof(featureLevels));
+        hr = renderer->device->CheckFeatureSupport(D3D12_FEATURE_FEATURE_LEVELS, &featureLevels, sizeof(featureLevels));
         if (SUCCEEDED(hr))
         {
             renderer->featureLevel = featureLevels.MaxSupportedFeatureLevel;
@@ -1266,7 +1320,7 @@ static VGFXDevice d3d12_createDevice(VGFXSurface surface, const VGFXDeviceInfo* 
 
         vgfxLogInfo("vgfx driver: D3D12");
         vgfxLogInfo("D3D12 Adapter: %S", adapterDesc.Description);
-}
+    }
 
     // Create command queues
     {
@@ -1338,10 +1392,10 @@ static VGFXDevice d3d12_createDevice(VGFXSurface surface, const VGFXDeviceInfo* 
     ASSIGN_DRIVER(d3d12);
     device->driverData = (VGFXRenderer*)renderer;
     return device;
-        }
+}
 
 VGFXDriver d3d12_driver = {
-    VGFXAPI_D3D12,
+    VGFXBackendType_D3D12,
     d3d12_isSupported,
     d3d12_createDevice
 };

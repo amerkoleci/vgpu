@@ -9,6 +9,7 @@
 #include <dxgi1_6.h>
 #include <wrl/client.h>
 #include <vector>
+#include <sstream>
 
 using Microsoft::WRL::ComPtr;
 
@@ -104,6 +105,13 @@ struct VGFXD3D11Renderer
 {
     ComPtr<IDXGIFactory2> factory;
     bool tearingSupported = false;
+
+    uint32_t vendorID;
+    uint32_t deviceID;
+    std::string adapterName;
+    std::string driverDescription;
+    VGFXAdapterType adapterType;
+
     ID3D11Device1* device = nullptr;
     ID3D11DeviceContext1* context = nullptr;
     D3D_FEATURE_LEVEL featureLevel{};
@@ -206,8 +214,7 @@ static void d3d11_waitIdle(VGFXRenderer* driverData)
     renderer->context->Flush();
 }
 
-static bool d3d11_queryFeature(VGFXRenderer* driverData, VGFXFeature feature)
-{
+static bool d3d11_hasFeature(VGFXRenderer* driverData, VGFXFeature feature) {
     VGFXD3D11Renderer* renderer = (VGFXD3D11Renderer*)driverData;
     switch (feature)
     {
@@ -224,6 +231,23 @@ static bool d3d11_queryFeature(VGFXRenderer* driverData, VGFXFeature feature)
         default:
             return false;
     }
+}
+
+static void d3d11_getAdapterProperties(VGFXRenderer* driverData, VGFXAdapterProperties* properties)
+{
+    VGFXD3D11Renderer* renderer = (VGFXD3D11Renderer*)driverData;
+
+    properties->vendorID = renderer->vendorID;
+    properties->deviceID = renderer->deviceID;
+    properties->name = renderer->adapterName.c_str();
+    properties->driverDescription = renderer->driverDescription.c_str();
+    properties->adapterType = renderer->adapterType;
+    properties->backendType = VGFXBackendType_D3D11;
+}
+
+static void d3d11_getLimits(VGFXRenderer* driverData, VGFXLimits* limits)
+{
+    VGFXD3D11Renderer* renderer = (VGFXD3D11Renderer*)driverData;
 }
 
 /* Buffer */
@@ -638,7 +662,7 @@ static bool d3d11_isSupported(void)
     return true;
 }
 
-static VGFXDevice d3d11_createDevice(VGFXSurface surface, const VGFXDeviceInfo* info)
+static VGFXDevice d3d11_createDevice(VGFXSurface surface, const VGFXDeviceDesc* info)
 {
     VGFX_ASSERT(info);
     VGFXD3D11Renderer* renderer = new VGFXD3D11Renderer();
@@ -677,8 +701,8 @@ static VGFXDevice d3d11_createDevice(VGFXSurface surface, const VGFXDeviceInfo* 
     {
         BOOL allowTearing = FALSE;
 
-        IDXGIFactory5* dxgiFactory5 = nullptr;
-        HRESULT hr = renderer->factory->QueryInterface(&dxgiFactory5);
+        ComPtr<IDXGIFactory5> dxgiFactory5;
+        HRESULT hr = renderer->factory.As(&dxgiFactory5);
         if (SUCCEEDED(hr))
         {
             hr = dxgiFactory5->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &allowTearing, sizeof(allowTearing));
@@ -695,172 +719,205 @@ static VGFXDevice d3d11_createDevice(VGFXSurface surface, const VGFXDeviceInfo* 
         {
             renderer->tearingSupported = true;
         }
-        SafeRelease(dxgiFactory5);
     }
 
+    ComPtr<IDXGIFactory6> dxgiFactory6;
+    const bool queryByPreference = SUCCEEDED(renderer->factory.As(&dxgiFactory6));
+    auto NextAdapter = [&](uint32_t index, IDXGIAdapter1** ppAdapter)
     {
-        ComPtr<IDXGIFactory6> dxgiFactory6;
-        const bool queryByPreference = SUCCEEDED(renderer->factory.As(&dxgiFactory6));
-        auto NextAdapter = [&](uint32_t index, IDXGIAdapter1** ppAdapter)
+        if (queryByPreference)
+            return dxgiFactory6->EnumAdapterByGpuPreference(index, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, IID_PPV_ARGS(ppAdapter));
+        else
+            return renderer->factory->EnumAdapters1(index, ppAdapter);
+    };
+
+    ComPtr<IDXGIAdapter1> dxgiAdapter = nullptr;
+    for (uint32_t i = 0; NextAdapter(i, dxgiAdapter.ReleaseAndGetAddressOf()) != DXGI_ERROR_NOT_FOUND; ++i)
+    {
+        DXGI_ADAPTER_DESC1 adapterDesc;
+        dxgiAdapter->GetDesc1(&adapterDesc);
+
+        // Don't select the Basic Render Driver adapter.
+        if (adapterDesc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)
         {
-            if (queryByPreference)
-                return dxgiFactory6->EnumAdapterByGpuPreference(index, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, IID_PPV_ARGS(ppAdapter));
-            else
-                return renderer->factory->EnumAdapters1(index, ppAdapter);
-        };
-
-        ComPtr<IDXGIAdapter1> dxgiAdapter = nullptr;
-        for (uint32_t i = 0; NextAdapter(i, dxgiAdapter.ReleaseAndGetAddressOf()) != DXGI_ERROR_NOT_FOUND; ++i)
-        {
-            DXGI_ADAPTER_DESC1 adapterDesc;
-            dxgiAdapter->GetDesc1(&adapterDesc);
-
-            // Don't select the Basic Render Driver adapter.
-            if (adapterDesc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)
-            {
-                continue;
-            }
-
-            break;
+            continue;
         }
 
-        VGFX_ASSERT(dxgiAdapter != nullptr);
-        if (dxgiAdapter == nullptr)
+        break;
+    }
+
+    VGFX_ASSERT(dxgiAdapter != nullptr);
+    if (dxgiAdapter == nullptr)
+    {
+        vgfxLogError("DXGI: No capable adapter found!");
+        delete renderer;
+        return nullptr;
+    }
+
+    UINT creationFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
+    if (info->validationMode != VGFXValidationMode_Disabled)
+    {
+        if (SdkLayersAvailable())
         {
-            vgfxLogError("DXGI: No capable adapter found!");
-            delete renderer;
-            return nullptr;
-        }
-
-        UINT creationFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
-        if (info->validationMode != VGFXValidationMode_Disabled)
-        {
-            if (SdkLayersAvailable())
-            {
-                // If the project is in a debug build, enable debugging via SDK Layers with this flag.
-                creationFlags |= D3D11_CREATE_DEVICE_DEBUG;
-            }
-            else
-            {
-                OutputDebugStringA("WARNING: Direct3D Debug Device is not available\n");
-            }
-        }
-
-        // Create the Direct3D 11 API device object and a corresponding context.
-        ComPtr<ID3D11Device> device;
-        ComPtr<ID3D11DeviceContext> context;
-
-        HRESULT hr = E_FAIL;
-
-        // Create a WARP device instead of a hardware device if no adapter found.
-        if (dxgiAdapter == nullptr)
-        {
-            // If the initialization fails, fall back to the WARP device.
-            // For more information on WARP, see:
-            // http://go.microsoft.com/fwlink/?LinkId=286690
-            hr = vgfxD3D11CreateDevice(
-                nullptr,
-                D3D_DRIVER_TYPE_WARP,
-                nullptr,
-                creationFlags,
-                s_featureLevels,
-                _countof(s_featureLevels),
-                D3D11_SDK_VERSION,
-                device.GetAddressOf(),
-                &renderer->featureLevel,
-                context.GetAddressOf()
-            );
+            // If the project is in a debug build, enable debugging via SDK Layers with this flag.
+            creationFlags |= D3D11_CREATE_DEVICE_DEBUG;
         }
         else
         {
-            hr = vgfxD3D11CreateDevice(
-                dxgiAdapter.Get(),
-                D3D_DRIVER_TYPE_UNKNOWN,
-                nullptr,
-                creationFlags,
-                s_featureLevels,
-                _countof(s_featureLevels),
-                D3D11_SDK_VERSION,
-                device.GetAddressOf(),
-                &renderer->featureLevel,
-                context.GetAddressOf()
-            );
-
-            if (FAILED(hr))
-            {
-                // D3D11.1 not available
-                hr = vgfxD3D11CreateDevice(
-                    NULL,
-                    D3D_DRIVER_TYPE_HARDWARE,
-                    NULL,
-                    D3D11_CREATE_DEVICE_BGRA_SUPPORT,
-                    &s_featureLevels[1],
-                    _countof(s_featureLevels) - 1,
-                    D3D11_SDK_VERSION,
-                    device.GetAddressOf(),
-                    &renderer->featureLevel,
-                    context.GetAddressOf()
-                );
-            }
+            OutputDebugStringA("WARNING: Direct3D Debug Device is not available\n");
         }
+    }
+
+    // Create the Direct3D 11 API device object and a corresponding context.
+    ComPtr<ID3D11Device> tempDevice;
+    ComPtr<ID3D11DeviceContext> context;
+
+    HRESULT hr = E_FAIL;
+
+    // Create a WARP device instead of a hardware device if no adapter found.
+    if (dxgiAdapter == nullptr)
+    {
+        // If the initialization fails, fall back to the WARP device.
+        // For more information on WARP, see:
+        // http://go.microsoft.com/fwlink/?LinkId=286690
+        hr = vgfxD3D11CreateDevice(
+            nullptr,
+            D3D_DRIVER_TYPE_WARP,
+            nullptr,
+            creationFlags,
+            s_featureLevels,
+            _countof(s_featureLevels),
+            D3D11_SDK_VERSION,
+            tempDevice.GetAddressOf(),
+            &renderer->featureLevel,
+            context.GetAddressOf()
+        );
+    }
+    else
+    {
+        hr = vgfxD3D11CreateDevice(
+            dxgiAdapter.Get(),
+            D3D_DRIVER_TYPE_UNKNOWN,
+            nullptr,
+            creationFlags,
+            s_featureLevels,
+            _countof(s_featureLevels),
+            D3D11_SDK_VERSION,
+            tempDevice.GetAddressOf(),
+            &renderer->featureLevel,
+            context.GetAddressOf()
+        );
 
         if (FAILED(hr))
         {
-            delete renderer;
-            return nullptr;
+            // D3D11.1 not available
+            hr = vgfxD3D11CreateDevice(
+                NULL,
+                D3D_DRIVER_TYPE_HARDWARE,
+                NULL,
+                D3D11_CREATE_DEVICE_BGRA_SUPPORT,
+                &s_featureLevels[1],
+                _countof(s_featureLevels) - 1,
+                D3D11_SDK_VERSION,
+                tempDevice.GetAddressOf(),
+                &renderer->featureLevel,
+                context.GetAddressOf()
+            );
         }
+    }
 
-        if (info->validationMode != VGFXValidationMode_Disabled)
+    if (FAILED(hr))
+    {
+        delete renderer;
+        return nullptr;
+    }
+
+    if (info->validationMode != VGFXValidationMode_Disabled)
+    {
+        ComPtr<ID3D11Debug> d3dDebug;
+        if (SUCCEEDED(tempDevice.As(&d3dDebug)))
         {
-            ComPtr<ID3D11Debug> d3dDebug;
-            if (SUCCEEDED(device.As(&d3dDebug)))
+            ComPtr<ID3D11InfoQueue> d3dInfoQueue;
+            if (SUCCEEDED(d3dDebug.As(&d3dInfoQueue)))
             {
-                ComPtr<ID3D11InfoQueue> d3dInfoQueue;
-                if (SUCCEEDED(d3dDebug.As(&d3dInfoQueue)))
-                {
 #ifdef _DEBUG
-                    d3dInfoQueue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_CORRUPTION, true);
-                    d3dInfoQueue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_ERROR, true);
+                d3dInfoQueue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_CORRUPTION, true);
+                d3dInfoQueue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_ERROR, true);
 #endif
-                    D3D11_MESSAGE_ID hide[] =
-                    {
-                        D3D11_MESSAGE_ID_SETPRIVATEDATA_CHANGINGPARAMS,
-                    };
-                    D3D11_INFO_QUEUE_FILTER filter = {};
-                    filter.DenyList.NumIDs = _countof(hide);
-                    filter.DenyList.pIDList = hide;
-                    d3dInfoQueue->AddStorageFilterEntries(&filter);
-                }
+                D3D11_MESSAGE_ID hide[] =
+                {
+                    D3D11_MESSAGE_ID_SETPRIVATEDATA_CHANGINGPARAMS,
+                };
+                D3D11_INFO_QUEUE_FILTER filter = {};
+                filter.DenyList.NumIDs = _countof(hide);
+                filter.DenyList.pIDList = hide;
+                d3dInfoQueue->AddStorageFilterEntries(&filter);
             }
         }
+    }
 
-        if (FAILED(device->QueryInterface(&renderer->device)))
+    if (FAILED(tempDevice->QueryInterface(&renderer->device)))
+    {
+        delete renderer;
+        return nullptr;
+    }
+
+    if (FAILED(context->QueryInterface(&renderer->context)))
+    {
+        delete renderer;
+        return nullptr;
+    }
+
+    //ThrowIfFailed(context.As(&m_d3dAnnotation));
+
+    if (info->label)
+    {
+        renderer->device->SetPrivateData(g_WKPDID_D3DDebugObjectName, (UINT)strlen(info->label), info->label);
+    }
+
+    // Init capabilities.
+    vgfxLogInfo("vgfx driver: D3D11");
+    if (dxgiAdapter != nullptr)
+    {
+        DXGI_ADAPTER_DESC1 adapterDesc;
+        dxgiAdapter->GetDesc1(&adapterDesc);
+
+        renderer->vendorID = adapterDesc.VendorId;
+        renderer->deviceID = adapterDesc.DeviceId;
+        renderer->adapterName = WCharToUTF8(adapterDesc.Description);
+
+        if (adapterDesc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)
         {
-            delete renderer;
-            return nullptr;
+            renderer->adapterType = VGFXAdapterType_CPU;
+        }
+        else {
+            renderer->adapterType = /*(arch.UMA == TRUE) ? VGFXAdapterType_IntegratedGPU :*/ VGFXAdapterType_DiscreteGPU;
         }
 
-        if (FAILED(context->QueryInterface(&renderer->context)))
+        // Convert the adapter's D3D12 driver version to a readable string like "24.21.13.9793".
+        LARGE_INTEGER umdVersion;
+        if (dxgiAdapter->CheckInterfaceSupport(__uuidof(IDXGIDevice), &umdVersion) != DXGI_ERROR_UNSUPPORTED)
         {
-            delete renderer;
-            return nullptr;
+            uint64_t encodedVersion = umdVersion.QuadPart;
+            std::ostringstream o;
+            o << "D3D11 driver version ";
+            uint16_t driverVersion[4] = {};
+
+            for (size_t i = 0; i < 4; ++i) {
+                driverVersion[i] = (encodedVersion >> (48 - 16 * i)) & 0xFFFF;
+                o << driverVersion[i] << ".";
+            }
+
+            renderer->driverDescription = o.str();
         }
 
-        //ThrowIfFailed(context.As(&m_d3dAnnotation));
-
-        // Init capabilities.
-        vgfxLogInfo("vgfx driver: D3D11");
-        if (dxgiAdapter != nullptr)
-        {
-            DXGI_ADAPTER_DESC1 adapterDesc;
-            dxgiAdapter->GetDesc1(&adapterDesc);
-
-            vgfxLogInfo("D3D12 Adapter: %S", adapterDesc.Description);
-        }
-        else
-        {
-            vgfxLogInfo("D3D12 Adapter: WARP");
-        }
+        vgfxLogInfo("D3D11 Adapter: %S", adapterDesc.Description);
+    }
+    else
+    {
+        renderer->adapterName = "WARP";
+        renderer->adapterType = VGFXAdapterType_CPU;
+        vgfxLogInfo("D3D11 Adapter: WARP");
     }
 
     _VGFX_UNUSED(surface);
@@ -873,7 +930,7 @@ static VGFXDevice d3d11_createDevice(VGFXSurface surface, const VGFXDeviceInfo* 
 }
 
 VGFXDriver d3d11_driver = {
-    VGFXAPI_D3D11,
+    VGFXBackendType_D3D11,
     d3d11_isSupported,
     d3d11_createDevice
 };

@@ -114,7 +114,9 @@ typedef struct VGFXDevice_T
     void (*destroyDevice)(VGFXDevice device);
     void (*frame)(VGFXRenderer* driverData);
     void (*waitIdle)(VGFXRenderer* driverData);
-    bool (*queryFeature)(VGFXRenderer* driverData, VGFXFeature feature);
+    bool (*hasFeature)(VGFXRenderer* driverData, VGFXFeature feature);
+    void (*getAdapterProperties)(VGFXRenderer* driverData, VGFXAdapterProperties* properties);
+    void (*getLimits)(VGFXRenderer* driverData, VGFXLimits* limits);
 
     VGFXBuffer(*createBuffer)(VGFXRenderer* driverData, const VGFXBufferDesc* desc, const void* pInitialData);
     void(*destroyBuffer)(VGFXRenderer* driverData, VGFXBuffer resource);
@@ -140,7 +142,9 @@ typedef struct VGFXDevice_T
 ASSIGN_DRIVER_FUNC(destroyDevice, name) \
 ASSIGN_DRIVER_FUNC(frame, name) \
 ASSIGN_DRIVER_FUNC(waitIdle, name) \
-ASSIGN_DRIVER_FUNC(queryFeature, name) \
+ASSIGN_DRIVER_FUNC(hasFeature, name) \
+ASSIGN_DRIVER_FUNC(getAdapterProperties, name) \
+ASSIGN_DRIVER_FUNC(getLimits, name) \
 ASSIGN_DRIVER_FUNC(createBuffer, name) \
 ASSIGN_DRIVER_FUNC(destroyBuffer, name) \
 ASSIGN_DRIVER_FUNC(createTexture, name) \
@@ -154,9 +158,9 @@ ASSIGN_DRIVER_FUNC(endRenderPass, name) \
 
 typedef struct VGFXDriver
 {
-    VGFXAPI api;
+    VGFXBackendType backend;
     bool (*isSupported)(void);
-    VGFXDevice(*createDevice)(VGFXSurface surface, const VGFXDeviceInfo* info);
+    VGFXDevice(*createDevice)(VGFXSurface surface, const VGFXDeviceDesc* desc);
 } VGFXDriver;
 
 _VGFX_EXTERN VGFXDriver vulkan_driver;

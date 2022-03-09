@@ -59,8 +59,7 @@ typedef struct VGFXTexture_T* VGFXTexture;
 typedef struct VGFXSampler_T* VGFXSampler;
 typedef struct VGFXSwapChain_T* VGFXSwapChain;
 
-typedef enum VGFXLogLevel
-{
+typedef enum VGFXLogLevel {
     VGFXLogLevel_Info = 0,
     VGFXLogLevel_Warn,
     VGFXLogLevel_Error,
@@ -69,20 +68,18 @@ typedef enum VGFXLogLevel
     VGFXLogLevel_Force32 = 0x7FFFFFFF
 } VGFXLogLevel;
 
-typedef enum VGFXAPI
-{
-    VGFXAPI_Default = 0,
-    VGFXAPI_Vulkan,
-    VGFXAPI_D3D12,
-    VGFXAPI_D3D11,
-    VGFXAPI_WebGPU,
+typedef enum VGFXBackendType {
+    VGFXBackendType_Default = 0,
+    VGFXBackendType_Vulkan,
+    VGFXBackendType_D3D12,
+    VGFXBackendType_D3D11,
+    VGFXBackendType_WebGPU,
 
-    _VGFXAPI_Count,
-    _VGFXAPI_Force32 = 0x7FFFFFFF
-} VGFXAPI;
+    _VGFXBackendType_Count,
+    _VGFXBackendType_Force32 = 0x7FFFFFFF
+} VGFXBackendType;
 
-typedef enum VGFXValidationMode
-{
+typedef enum VGFXValidationMode {
     /// No validation is enabled.
     VGFXValidationMode_Disabled = 0,
     /// Print warnings and errors
@@ -96,8 +93,17 @@ typedef enum VGFXValidationMode
     _VGFXValidationMode_Force32 = 0x7FFFFFFF
 } VGFXValidationMode;
 
-typedef enum VGFXSurfaceType
-{
+typedef enum VGFXAdapterType {
+    VGFXAdapterType_DiscreteGPU = 0x00000000,
+    VGFXAdapterType_IntegratedGPU = 0x00000001,
+    VGFXAdapterType_CPU = 0x00000002,
+    VGFXAdapterType_Unknown = 0x00000003,
+
+    _VGFXAdapterType_Count,
+    _VGFXAdapterType_Force32 = 0x7FFFFFFF
+} VGFXAdapterType;
+
+typedef enum VGFXSurfaceType {
     VGFXSurfaceType_Unknown = 0,
     VGFXSurfaceType_Win32,
     VGFXSurfaceType_CoreWindow,
@@ -109,8 +115,7 @@ typedef enum VGFXSurfaceType
     _VGFXSurfaceType_Force32 = 0x7FFFFFFF
 } VGFXSurfaceType;
 
-typedef enum VGFXTextureType
-{
+typedef enum VGFXTextureType {
     VGFXTextureType2D,
     VGFXTextureType3D,
 
@@ -118,8 +123,7 @@ typedef enum VGFXTextureType
     _VGFXTextureType_Force32 = 0x7FFFFFFF
 } VGFXTextureType;
 
-typedef enum VGFXBufferUsage
-{
+typedef enum VGFXBufferUsage {
     VGFXBufferUsage_None = 0x00,
     VGFXBufferUsage_Vertex = 0x01,
     VGFXBufferUsage_Index = 0x02,
@@ -131,8 +135,7 @@ typedef enum VGFXBufferUsage
     _VGFXBufferUsage_Force32 = 0x7FFFFFFF
 } VGFXBufferUsage;
 
-typedef enum VGFXTextureUsage
-{
+typedef enum VGFXTextureUsage {
     VGFXTextureUsage_None = 0x0,
     VGFXTextureUsage_ShaderRead  = 0x1,
     VGFXTextureUsage_ShaderWrite = 0x2,
@@ -141,8 +144,7 @@ typedef enum VGFXTextureUsage
     _VGFXTextureUsage_Force32 = 0x7FFFFFFF
 } VGFXTextureUsage;
 
-typedef enum VGFXTextureFormat
-{
+typedef enum VGFXTextureFormat {
     VGFXTextureFormat_Undefined,
     /* 8-bit formats */
     VGFXTextureFormat_R8UInt,
@@ -261,8 +263,17 @@ typedef enum VGFXTextureFormat
     _VGFXTextureFormat_Force32 = 0x7FFFFFFF
 } VGFXTextureFormat;
 
-typedef enum VGFXPresentMode
-{
+typedef enum VGFXFormatKind {
+    VGFXFormatKind_Integer,
+    VGFXFormatKind_Normalized,
+    VGFXFormatKind_Float,
+    VGFXFormatKind_DepthStencil,
+
+    _VGFXFormatKind_Count,
+    _VGFXFormatKind_Force32 = 0x7FFFFFFF
+} VGFXFormatKind;
+
+typedef enum VGFXPresentMode {
     VGFXPresentMode_Immediate = 0x00000000,
     VGFXPresentMode_Mailbox = 0x00000001,
     VGFXPresentMode_Fifo = 0x00000002,
@@ -271,8 +282,7 @@ typedef enum VGFXPresentMode
     _VGFXPresentMode_Force32 = 0x7FFFFFFF
 } VGFXPresentMode;
 
-typedef enum VGFXFeature
-{
+typedef enum VGFXFeature {
     VGFXFeature_Compute = 0,
     VGFXFeature_IndependentBlend,
     VGFXFeature_TextureCubeArray,
@@ -347,15 +357,13 @@ typedef struct VGFXRenderPassDesc {
     //const VGFXRenderPassDepthStencilAttachment* depthStencilAttachment;
 } VGFXRenderPassDesc;
 
-typedef struct VGFXBufferDesc
-{
+typedef struct VGFXBufferDesc {
     const char* label;
     VGFXBufferUsage usage;
     uint64_t size;
 } VGFXBufferDesc;
 
-typedef struct VGFXTextureDesc
-{
+typedef struct VGFXTextureDesc {
     const char* label;
     VGFXTextureType type;
     VGFXTextureFormat format;
@@ -380,11 +388,49 @@ typedef struct VGFXSwapChainDesc
     VGFXPresentMode presentMode;
 } VGFXSwapChainDesc;
 
-typedef struct VGFXDeviceInfo
-{
-    VGFXAPI preferredApi;
+typedef struct VGFXDeviceDesc {
+    const char* label;
+    VGFXBackendType preferredBackend;
     VGFXValidationMode validationMode;
-} VGFXDeviceInfo;
+} VGFXDeviceDesc;
+
+typedef struct VGFXAdapterProperties {
+    uint32_t vendorID;
+    uint32_t deviceID;
+    const char* name;
+    const char* driverDescription;
+    VGFXAdapterType adapterType;
+    VGFXBackendType backendType;
+} VGFXAdapterProperties;
+
+typedef struct VGFXLimits {
+    uint32_t maxTextureDimension1D;
+    uint32_t maxTextureDimension2D;
+    uint32_t maxTextureDimension3D;
+    uint32_t maxTextureArrayLayers;
+    uint32_t maxBindGroups;
+    uint32_t maxDynamicUniformBuffersPerPipelineLayout;
+    uint32_t maxDynamicStorageBuffersPerPipelineLayout;
+    uint32_t maxSampledTexturesPerShaderStage;
+    uint32_t maxSamplersPerShaderStage;
+    uint32_t maxStorageBuffersPerShaderStage;
+    uint32_t maxStorageTexturesPerShaderStage;
+    uint32_t maxUniformBuffersPerShaderStage;
+    uint64_t maxUniformBufferBindingSize;
+    uint64_t maxStorageBufferBindingSize;
+    uint32_t minUniformBufferOffsetAlignment;
+    uint32_t minStorageBufferOffsetAlignment;
+    uint32_t maxVertexBuffers;
+    uint32_t maxVertexAttributes;
+    uint32_t maxVertexBufferArrayStride;
+    uint32_t maxInterStageShaderComponents;
+    uint32_t maxComputeWorkgroupStorageSize;
+    uint32_t maxComputeInvocationsPerWorkgroup;
+    uint32_t maxComputeWorkgroupSizeX;
+    uint32_t maxComputeWorkgroupSizeY;
+    uint32_t maxComputeWorkgroupSizeZ;
+    uint32_t maxComputeWorkgroupsPerDimension;
+} VGFXLimits;
 
 typedef void (VGFX_CALL* vgfxLogFunc)(VGFXLogLevel level, const char* message);
 VGFX_API void vgfxSetLogFunc(vgfxLogFunc func);
@@ -395,12 +441,14 @@ VGFX_API VGFXSurface vgfxCreateSurfaceWeb(const char* selector);
 VGFX_API void vgfxDestroySurface(VGFXSurface surface);
 VGFX_API VGFXSurfaceType vgfxGetSurfaceType(VGFXSurface surface);
 
-VGFX_API bool vgfxIsSupported(VGFXAPI api);
-VGFX_API VGFXDevice vgfxCreateDevice(VGFXSurface surface, const VGFXDeviceInfo* info);
+VGFX_API bool vgfxIsSupported(VGFXBackendType backend);
+VGFX_API VGFXDevice vgfxCreateDevice(VGFXSurface surface, const VGFXDeviceDesc* desc);
 VGFX_API void vgfxDestroyDevice(VGFXDevice device);
 VGFX_API void vgfxFrame(VGFXDevice device);
 VGFX_API void vgfxWaitIdle(VGFXDevice device);
-VGFX_API bool vgfxQueryFeature(VGFXDevice device, VGFXFeature feature);
+VGFX_API bool vgfxHasFeature(VGFXDevice device, VGFXFeature feature);
+VGFX_API void vgfxGetAdapterProperties(VGFXDevice device, VGFXAdapterProperties* properties);
+VGFX_API void vgfxGetLimits(VGFXDevice device, VGFXLimits* limits);
 
 /* Buffer */
 VGFX_API VGFXBuffer vgfxCreateBuffer(VGFXDevice device, const VGFXBufferDesc* desc, const void* pInitialData);
@@ -421,16 +469,7 @@ VGFX_API void vgfxBeginRenderPass(VGFXDevice device, const VGFXRenderPassDesc* d
 VGFX_API void vgfxEndRenderPass(VGFXDevice device);
 
 /* Helper functions */
-typedef enum VGFXFormatKind
-{
-    VGFXFormatKind_Integer,
-    VGFXFormatKind_Normalized,
-    VGFXFormatKind_Float,
-    VGFXFormatKind_DepthStencil
-} VGFXFormatKind;
-
-typedef struct VGFXFormatInfo
-{
+typedef struct VGFXFormatInfo {
     VGFXTextureFormat format;
     const char* name;
     uint8_t bytesPerBlock;

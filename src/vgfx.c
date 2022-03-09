@@ -156,14 +156,14 @@ VGFXSurfaceType vgfxGetSurfaceType(VGFXSurface surface)
     return surface->type;
 }
 
-bool vgfxIsSupported(VGFXAPI api)
+bool vgfxIsSupported(VGFXBackendType backend)
 {
     for (uint32_t i = 0; i < _VGFX_COUNT_OF(drivers); ++i)
     {
         if (!drivers[i])
             break;
 
-        if (drivers[i]->api == api)
+        if (drivers[i]->backend == backend)
         {
             return drivers[i]->isSupported();
         }
@@ -172,11 +172,11 @@ bool vgfxIsSupported(VGFXAPI api)
     return false;
 }
 
-VGFXDevice vgfxCreateDevice(VGFXSurface surface, const VGFXDeviceInfo* info)
+VGFXDevice vgfxCreateDevice(VGFXSurface surface, const VGFXDeviceDesc* desc)
 {
-    VGFXAPI api = info->preferredApi;
+    VGFXBackendType backend = desc->preferredBackend;
 retry:
-    if (api == VGFXAPI_Default)
+    if (backend == VGFXBackendType_Default)
     {
         for (uint32_t i = 0; i < _VGFX_COUNT_OF(drivers); ++i)
         {
@@ -185,7 +185,7 @@ retry:
 
             if (drivers[i]->isSupported())
             {
-                return drivers[i]->createDevice(surface, info);
+                return drivers[i]->createDevice(surface, desc);
             }
         }
     }
@@ -196,16 +196,16 @@ retry:
             if (!drivers[i])
                 break;
 
-            if (drivers[i]->api == api)
+            if (drivers[i]->backend == backend)
             {
                 if (drivers[i]->isSupported())
                 {
-                    return drivers[i]->createDevice(surface, info);
+                    return drivers[i]->createDevice(surface, desc);
                 }
                 else
                 {
                     vgfxLogWarn("Wanted API not supported, fallback to default");
-                    api = VGFXAPI_Default;
+                    backend = VGFXBackendType_Default;
                     goto retry;
                 }
             }
@@ -227,19 +227,33 @@ void vgfxFrame(VGFXDevice device)
     device->frame(device->driverData);
 }
 
-void vgfxWaitIdle(VGFXDevice device)
-{
+void vgfxWaitIdle(VGFXDevice device) {
     NULL_RETURN(device);
     device->waitIdle(device->driverData);
 }
 
-bool vgfxQueryFeature(VGFXDevice device, VGFXFeature feature)
-{
+bool vgfxHasFeature(VGFXDevice device, VGFXFeature feature) {
     if (device == NULL) {
         return false;
     }
 
-    return device->queryFeature(device->driverData, feature);
+    return device->hasFeature(device->driverData, feature);
+}
+
+void vgfxGetAdapterProperties(VGFXDevice device, VGFXAdapterProperties* properties)
+{
+    NULL_RETURN(device);
+    NULL_RETURN(properties);
+
+    device->getAdapterProperties(device->driverData, properties);
+}
+
+void vgfxGetLimits(VGFXDevice device, VGFXLimits* limits)
+{
+    NULL_RETURN(device);
+    NULL_RETURN(limits);
+
+    device->getLimits(device->driverData, limits);
 }
 
 /* Buffer */
