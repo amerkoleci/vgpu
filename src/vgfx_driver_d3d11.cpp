@@ -10,6 +10,7 @@
 #include <wrl/client.h>
 #include <vector>
 #include <sstream>
+#include <unordered_map>
 
 using Microsoft::WRL::ComPtr;
 
@@ -78,7 +79,6 @@ namespace
 #define vgfxD3D11CreateDevice D3D11CreateDevice
 #endif
 
-struct VGFXD3D11Renderer;
 
 struct VGFXD3D11Buffer
 {
@@ -88,12 +88,16 @@ struct VGFXD3D11Buffer
 struct VGFXD3D11Texture
 {
     ID3D11Resource* handle = nullptr;
-    ID3D11RenderTargetView* rtv = nullptr;
+    uint32_t width = 0;
+    uint32_t height = 0;
+    DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
+    DXGI_FORMAT viewFormat = DXGI_FORMAT_UNKNOWN;
+    std::unordered_map<size_t, ID3D11RenderTargetView*> rtvCache;
+    std::unordered_map<size_t, ID3D11DepthStencilView*> dsvCache;
 };
 
 struct VGFXD3D11SwapChain
 {
-    VGFXD3D11Renderer* renderer = nullptr;
     IDXGISwapChain1* handle = nullptr;
     uint32_t width = 0;
     uint32_t height = 0;
@@ -119,6 +123,231 @@ struct VGFXD3D11Renderer
     // Current frame present swap chains
     std::vector<VGFXD3D11SwapChain*> swapChains;
 };
+
+static ID3D11RenderTargetView* d3d11_GetRTV(
+    VGFXD3D11Renderer* renderer,
+    VGFXD3D11Texture* texture,
+    DXGI_FORMAT format,
+    uint32_t mipLevel,
+    uint32_t slice)
+{
+    if (format == DXGI_FORMAT_UNKNOWN)
+    {
+        format = texture->viewFormat;
+    }
+
+    size_t hash = 0;
+    hash_combine(hash, format);
+    hash_combine(hash, mipLevel);
+    hash_combine(hash, slice);
+
+    auto it = texture->rtvCache.find(hash);
+    if (it == texture->rtvCache.end())
+    {
+        D3D11_RESOURCE_DIMENSION type;
+        texture->handle->GetType(&type);
+
+        D3D11_RENDER_TARGET_VIEW_DESC viewDesc = {};
+        viewDesc.Format = format;
+
+        switch (type)
+        {
+            case D3D11_RESOURCE_DIMENSION_TEXTURE1D:
+            {
+                D3D11_TEXTURE1D_DESC desc1d;
+                ((ID3D11Texture1D*)texture->handle)->GetDesc(&desc1d);
+
+                if (desc1d.ArraySize > 1)
+                {
+                    viewDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE1DARRAY;
+                    viewDesc.Texture1DArray.MipSlice = mipLevel;
+                    viewDesc.Texture1DArray.FirstArraySlice = slice;
+                    viewDesc.Texture1DArray.ArraySize = 1;
+                }
+                else
+                {
+                    viewDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE1D;
+                    viewDesc.Texture1D.MipSlice = mipLevel;
+                }
+            }
+            break;
+
+            case D3D11_RESOURCE_DIMENSION_TEXTURE2D:
+            {
+                D3D11_TEXTURE2D_DESC desc2d;
+                ((ID3D11Texture2D*)texture->handle)->GetDesc(&desc2d);
+
+                if (desc2d.ArraySize > 1)
+                {
+                    if (desc2d.SampleDesc.Count > 1)
+                    {
+                        viewDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2DMSARRAY;
+                        viewDesc.Texture2DMSArray.FirstArraySlice = slice;
+                        viewDesc.Texture2DMSArray.ArraySize = 1;
+                    }
+                    else
+                    {
+                        viewDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2DARRAY;
+                        viewDesc.Texture2DArray.MipSlice = mipLevel;
+                        viewDesc.Texture2DArray.FirstArraySlice = slice;
+                        viewDesc.Texture2DArray.ArraySize = 1;
+                    }
+                }
+                else
+                {
+                    if (desc2d.SampleDesc.Count > 1)
+                    {
+                        viewDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2DMS;
+                    }
+                    else
+                    {
+                        viewDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+                        viewDesc.Texture2D.MipSlice = mipLevel;
+                    }
+                }
+            }
+            break;
+
+            case D3D11_RESOURCE_DIMENSION_TEXTURE3D:
+            {
+                D3D11_TEXTURE3D_DESC desc3d;
+                ((ID3D11Texture3D*)texture->handle)->GetDesc(&desc3d);
+
+                viewDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE3D;
+                viewDesc.Texture3D.MipSlice = mipLevel;
+                viewDesc.Texture3D.FirstWSlice = slice;
+                viewDesc.Texture3D.WSize = -1;
+                break;
+            }
+            break;
+
+            default:
+                vgfxLogError("D3D11: Invalid texture dimension");
+                return nullptr;
+        }
+
+        ID3D11RenderTargetView* newView = nullptr;
+        const HRESULT hr = renderer->device->CreateRenderTargetView(texture->handle, &viewDesc, &newView);
+        if (FAILED(hr))
+        {
+            vgfxLogError("D3D11: Failed to create RenderTargetView");
+            return nullptr;
+        }
+
+        texture->rtvCache[hash] = newView;
+        return newView;
+    }
+
+    return it->second;
+}
+
+static ID3D11DepthStencilView* d3d11_GetDSV(
+    VGFXD3D11Renderer* renderer,
+    VGFXD3D11Texture* texture,
+    DXGI_FORMAT format,
+    uint32_t mipLevel,
+    uint32_t slice)
+{
+    if (format == DXGI_FORMAT_UNKNOWN)
+    {
+        format = texture->viewFormat;
+    }
+
+    size_t hash = 0;
+    hash_combine(hash, mipLevel);
+    hash_combine(hash, slice);
+    hash_combine(hash, format);
+
+    auto it = texture->dsvCache.find(hash);
+    if (it == texture->dsvCache.end())
+    {
+        D3D11_RESOURCE_DIMENSION type;
+        texture->handle->GetType(&type);
+
+        D3D11_DEPTH_STENCIL_VIEW_DESC viewDesc = {};
+        viewDesc.Format = format;
+
+        switch (type)
+        {
+            case D3D11_RESOURCE_DIMENSION_TEXTURE1D:
+            {
+                D3D11_TEXTURE1D_DESC desc1d;
+                ((ID3D11Texture1D*)texture->handle)->GetDesc(&desc1d);
+
+                if (desc1d.ArraySize > 1)
+                {
+                    viewDesc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE1DARRAY;
+                    viewDesc.Texture1DArray.MipSlice = mipLevel;
+                    viewDesc.Texture1DArray.FirstArraySlice = slice;
+                    viewDesc.Texture1DArray.ArraySize = 1;
+                }
+                else
+                {
+                    viewDesc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE1D;
+                    viewDesc.Texture1D.MipSlice = mipLevel;
+                }
+            }
+            break;
+
+            case D3D11_RESOURCE_DIMENSION_TEXTURE2D:
+            {
+                D3D11_TEXTURE2D_DESC desc2d;
+                ((ID3D11Texture2D*)texture->handle)->GetDesc(&desc2d);
+
+                if (desc2d.ArraySize > 1)
+                {
+                    if (desc2d.SampleDesc.Count > 1)
+                    {
+                        viewDesc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2DMSARRAY;
+                        viewDesc.Texture2DMSArray.FirstArraySlice = slice;
+                        viewDesc.Texture2DMSArray.ArraySize = 1;
+                    }
+                    else
+                    {
+                        viewDesc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2DARRAY;
+                        viewDesc.Texture2DArray.MipSlice = mipLevel;
+                        viewDesc.Texture2DArray.FirstArraySlice = slice;
+                        viewDesc.Texture2DArray.ArraySize = 1;
+                    }
+                }
+                else
+                {
+                    if (desc2d.SampleDesc.Count > 1)
+                    {
+                        viewDesc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2DMS;
+                    }
+                    else
+                    {
+                        viewDesc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
+                        viewDesc.Texture2D.MipSlice = mipLevel;
+                    }
+                }
+            }
+            break;
+
+            case D3D11_RESOURCE_DIMENSION_TEXTURE3D:
+                vgfxLogError("D3D11: Cannot create 3D texture DSV");
+                return nullptr;
+
+            default:
+                vgfxLogError("D3D11: Invalid texture dimension");
+                return nullptr;
+        }
+
+        ID3D11DepthStencilView* newView = nullptr;
+        const HRESULT hr = renderer->device->CreateDepthStencilView(texture->handle, &viewDesc, &newView);
+        if (FAILED(hr))
+        {
+            vgfxLogError("D3D11: Failed to create DepthStencilView");
+            return nullptr;
+        }
+
+        texture->dsvCache[hash] = newView;
+        return newView;
+    }
+
+    return it->second;
+}
 
 static void d3d11_destroyDevice(VGFXDevice device)
 {
@@ -423,6 +652,10 @@ static VGFXTexture d3d11_createTexture(VGFXRenderer* driverData, const VGFXTextu
     }
 
     VGFXD3D11Texture* texture = new VGFXD3D11Texture();
+    texture->width = desc->width;
+    texture->height = desc->height;
+    texture->format = format;
+    texture->viewFormat = ToDXGIFormat(desc->format);
 
     HRESULT hr = E_FAIL;
     if (desc->type == VGFXTextureType3D)
@@ -478,7 +711,16 @@ static VGFXTexture d3d11_createTexture(VGFXRenderer* driverData, const VGFXTextu
 static void d3d11_destroyTexture(VGFXRenderer*, VGFXTexture texture)
 {
     VGFXD3D11Texture* d3d11Texture = (VGFXD3D11Texture*)texture;
-    SafeRelease(d3d11Texture->rtv);
+    for (auto& it : d3d11Texture->rtvCache)
+    {
+        SafeRelease(it.second);
+    }
+    d3d11Texture->rtvCache.clear();
+    for (auto& it : d3d11Texture->dsvCache)
+    {
+        SafeRelease(it.second);
+    }
+    d3d11Texture->dsvCache.clear();
     SafeRelease(d3d11Texture->handle);
     delete d3d11Texture;
 }
@@ -496,18 +738,16 @@ static void d3d11_updateSwapChain(VGFXD3D11Renderer* renderer, VGFXD3D11SwapChai
     swapChain->height = swapChainDesc.Height;
 
     VGFXD3D11Texture* texture = new VGFXD3D11Texture();
+    texture->width = swapChainDesc.Width;
+    texture->height = swapChainDesc.Height;
+    // TODO: Handle srgb
+    texture->format = swapChainDesc.Format;
+    texture->viewFormat = swapChainDesc.Format;
 
     hr = swapChain->handle->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&texture->handle);
     VGFX_ASSERT(SUCCEEDED(hr));
-
-    D3D11_RENDER_TARGET_VIEW_DESC rtvDesc = {};
-    rtvDesc.Format = swapChainDesc.Format;
-    rtvDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
-
-    hr = renderer->device->CreateRenderTargetView(texture->handle, &rtvDesc, &texture->rtv);
     swapChain->backbufferTexture = (VGFXTexture)texture;
 }
-
 
 static VGFXSwapChain d3d11_createSwapChain(VGFXRenderer* driverData, VGFXSurface surface, const VGFXSwapChainDesc* info)
 {
@@ -567,7 +807,6 @@ static VGFXSwapChain d3d11_createSwapChain(VGFXRenderer* driverData, VGFXSurface
 #endif
 
     VGFXD3D11SwapChain* swapChain = new VGFXD3D11SwapChain();
-    swapChain->renderer = renderer;
     swapChain->handle = handle;
     swapChain->vsync = info->presentMode == VGFXPresentMode_Fifo;
     d3d11_updateSwapChain(renderer, swapChain);
@@ -593,10 +832,12 @@ static void d3d11_getSwapChainSize(VGFXRenderer*, VGFXSwapChain swapChain, VGFXS
     pSize->height = d3dSwapChain->height;
 }
 
-static VGFXTexture d3d11_acquireNextTexture(VGFXRenderer*, VGFXSwapChain swapChain)
+static VGFXTexture d3d11_acquireNextTexture(VGFXRenderer* driverData, VGFXSwapChain swapChain)
 {
+    VGFXD3D11Renderer* renderer = (VGFXD3D11Renderer*)driverData;
     VGFXD3D11SwapChain* d3dSwapChain = (VGFXD3D11SwapChain*)swapChain;
-    d3dSwapChain->renderer->swapChains.push_back(d3dSwapChain);
+
+    renderer->swapChains.push_back(d3dSwapChain);
     return d3dSwapChain->backbufferTexture;
 }
 
@@ -604,27 +845,77 @@ static void d3d11_beginRenderPass(VGFXRenderer* driverData, const VGFXRenderPass
 {
     VGFXD3D11Renderer* renderer = (VGFXD3D11Renderer*)driverData;
 
-    ID3D11RenderTargetView* rtvs[VGFX_MAX_COLOR_ATTACHMENTS] = {};
+    uint32_t width = UINT32_MAX;
+    uint32_t height = UINT32_MAX;
+    uint32_t numRTVs = 0;
+    ID3D11RenderTargetView* RTVs[VGFX_MAX_COLOR_ATTACHMENTS] = {};
+    ID3D11DepthStencilView* DSV = nullptr;
 
     for (uint32_t i = 0; i < info->colorAttachmentCount; ++i)
     {
-        VGFXRenderPassColorAttachment attachment = info->colorAttachments[i];
-        VGFXD3D11Texture* texture = (VGFXD3D11Texture*)attachment.texture;
+        const VGFXRenderPassColorAttachment* attachment = &info->colorAttachments[i];
+        VGFXD3D11Texture* texture = (VGFXD3D11Texture*)attachment->texture;
+        const uint32_t level = attachment->level;
+        const uint32_t slice = attachment->slice;
 
-        rtvs[i] = texture->rtv;
+        RTVs[i] = d3d11_GetRTV(renderer, texture, DXGI_FORMAT_UNKNOWN, level, slice);
 
-        switch (attachment.loadOp)
+        switch (attachment->loadOp)
         {
             case VGFXLoadOp_Clear:
-                renderer->context->ClearRenderTargetView(rtvs[i], &attachment.clearColor.r);
+                renderer->context->ClearRenderTargetView(RTVs[i], &attachment->clearColor.r);
                 break;
 
             default:
                 break;
         }
+
+        width = std::min(width, std::max(1U, texture->width >> level));
+        height = std::min(height, std::max(1U, texture->height >> level));
+        numRTVs++;
     }
 
-    renderer->context->OMSetRenderTargets(info->colorAttachmentCount, rtvs, nullptr);
+    if (info->depthStencilAttachment)
+    {
+        const VGFXRenderPassDepthStencilAttachment* attachment = info->depthStencilAttachment;
+        VGFXD3D11Texture* texture = (VGFXD3D11Texture*)attachment->texture;
+        const uint32_t level = attachment->level;
+        const uint32_t slice = attachment->slice;
+
+        DSV = d3d11_GetDSV(renderer, texture, DXGI_FORMAT_UNKNOWN, level, slice);
+
+        UINT clearFlags = {};
+        float clearDepth = 0.0f;
+        uint8_t clearStencil = 0u;
+
+        if (attachment->depthLoadOp == VGFXLoadOp_Clear)
+        {
+            clearFlags |= D3D11_CLEAR_DEPTH;
+            clearDepth = attachment->clearDepth;
+        }
+
+        if (attachment->stencilLoadOp == VGFXLoadOp_Clear)
+        {
+            clearFlags |= D3D11_CLEAR_STENCIL;
+            clearStencil = attachment->clearStencil;
+        }
+
+        if (clearFlags)
+        {
+            renderer->context->ClearDepthStencilView(DSV, clearFlags, clearDepth, clearStencil);
+        }
+
+        width = std::min(width, std::max(1U, texture->width >> level));
+        height = std::min(height, std::max(1U, texture->height >> level));
+    }
+
+    renderer->context->OMSetRenderTargets(numRTVs, RTVs, DSV);
+
+    // Set the viewport and scissor.
+    D3D11_VIEWPORT viewport = { 0.0f, 0.0f, float(width), float(height), 0.0f, 1.0f };
+    D3D11_RECT scissorRect = { 0, 0, static_cast<long>(width), static_cast<long>(height) };
+    renderer->context->RSSetViewports(1, &viewport);
+    renderer->context->RSSetScissorRects(1, &scissorRect);
 }
 
 static void d3d11_endRenderPass(VGFXRenderer* driverData)

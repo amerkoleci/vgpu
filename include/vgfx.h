@@ -359,7 +359,7 @@ typedef struct VGFXRenderPassDepthStencilAttachment {
     float clearDepth;
     VGFXLoadOp stencilLoadOp;
     VGFXStoreOp stencilStoreOp;
-    uint32_t clearStencil;
+    uint8_t clearStencil;
 } VGFXRenderPassDepthStencilAttachment;
 
 typedef struct VGFXRenderPassDesc {

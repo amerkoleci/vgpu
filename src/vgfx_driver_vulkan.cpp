@@ -2005,7 +2005,7 @@ static void vulkan_beginRenderPass(VGFXRenderer* driverData, const VGFXRenderPas
 
             colorAttachments[renderingInfo.colorAttachmentCount].sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
             colorAttachments[renderingInfo.colorAttachmentCount].pNext = nullptr;
-            colorAttachments[renderingInfo.colorAttachmentCount].imageView = vulkan_GetRTV(renderer, texture, level, slice);;
+            colorAttachments[renderingInfo.colorAttachmentCount].imageView = vulkan_GetRTV(renderer, texture, level, slice);
             colorAttachments[renderingInfo.colorAttachmentCount].imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
             colorAttachments[renderingInfo.colorAttachmentCount].resolveMode = VK_RESOLVE_MODE_NONE;
             colorAttachments[renderingInfo.colorAttachmentCount].loadOp = ToVk(attachment->loadOp);
@@ -2029,7 +2029,7 @@ static void vulkan_beginRenderPass(VGFXRenderer* driverData, const VGFXRenderPas
 
             depthStencilAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
             depthStencilAttachmentInfo.pNext = VK_NULL_HANDLE;
-            depthStencilAttachmentInfo.imageView = vulkan_GetRTV(renderer, texture, level, slice);;
+            depthStencilAttachmentInfo.imageView = vulkan_GetRTV(renderer, texture, level, slice);
             depthStencilAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
             depthStencilAttachmentInfo.resolveMode = VK_RESOLVE_MODE_NONE;
             depthStencilAttachmentInfo.loadOp = ToVk(attachment->depthLoadOp);
