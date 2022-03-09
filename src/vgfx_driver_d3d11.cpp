@@ -248,6 +248,53 @@ static void d3d11_getAdapterProperties(VGFXRenderer* driverData, VGFXAdapterProp
 static void d3d11_getLimits(VGFXRenderer* driverData, VGFXLimits* limits)
 {
     VGFXD3D11Renderer* renderer = (VGFXD3D11Renderer*)driverData;
+
+    D3D11_FEATURE_DATA_D3D11_OPTIONS featureData = {};
+    HRESULT hr = renderer->device->CheckFeatureSupport(D3D11_FEATURE_D3D11_OPTIONS, &featureData, sizeof(featureData));
+    if (FAILED(hr))
+    {
+    }
+
+    uint32_t maxCBVsPerStage = D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT;
+    uint32_t maxSRVsPerStage = D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT;
+    uint32_t maxUAVsPerStage = D3D11_1_UAV_SLOT_COUNT;
+    uint32_t maxSamplersPerStage = D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT;
+
+    limits->maxTextureDimension1D = D3D11_REQ_TEXTURE1D_U_DIMENSION;
+    limits->maxTextureDimension2D = D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION;
+    limits->maxTextureDimension3D = D3D11_REQ_TEXTURE3D_U_V_OR_W_DIMENSION;
+    limits->maxTextureArrayLayers = D3D11_REQ_TEXTURE2D_ARRAY_AXIS_DIMENSION;
+    limits->maxBindGroups = 0;
+    limits->maxDynamicUniformBuffersPerPipelineLayout = 0;
+    limits->maxDynamicStorageBuffersPerPipelineLayout = 0;
+    limits->maxSampledTexturesPerShaderStage = maxSRVsPerStage;
+    limits->maxSamplersPerShaderStage = maxSamplersPerStage;
+    limits->maxStorageBuffersPerShaderStage = maxUAVsPerStage - maxUAVsPerStage / 2;
+    limits->maxStorageTexturesPerShaderStage = maxUAVsPerStage / 2;
+    limits->maxUniformBuffersPerShaderStage = maxCBVsPerStage;
+    limits->maxUniformBufferBindingSize = D3D11_REQ_CONSTANT_BUFFER_ELEMENT_COUNT * 16;
+    // D3D12 has no documented limit on the size of a storage buffer binding.
+    limits->maxStorageBufferBindingSize = 4294967295;
+    limits->minUniformBufferOffsetAlignment = 256;
+    limits->minStorageBufferOffsetAlignment = 32;
+    limits->maxVertexBuffers = 16;
+    limits->maxVertexAttributes = D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT;
+    limits->maxVertexBufferArrayStride = 2048u;
+    limits->maxInterStageShaderComponents = D3D11_IA_VERTEX_INPUT_STRUCTURE_ELEMENTS_COMPONENTS;
+
+    // https://docs.microsoft.com/en-us/windows/win32/direct3d11/overviews-direct3d-11-devices-downlevel-compute-shaders
+    // Thread Group Shared Memory is limited to 16Kb on downlevel hardware. This is less than
+    // the 32Kb that is available to Direct3D 11 hardware. D3D12 is also 32kb.
+    limits->maxComputeWorkgroupStorageSize = 32768;
+
+    // https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/sm5-attributes-numthreads
+    limits->maxComputeInvocationsPerWorkGroup = D3D11_CS_THREAD_GROUP_MAX_THREADS_PER_GROUP;
+    limits->maxComputeWorkGroupSizeX = D3D11_CS_THREAD_GROUP_MAX_X;
+    limits->maxComputeWorkGroupSizeY = D3D11_CS_THREAD_GROUP_MAX_X;
+    limits->maxComputeWorkGroupSizeZ = D3D11_CS_THREAD_GROUP_MAX_X;
+
+    // https://docs.maxComputeWorkgroupSizeXmicrosoft.com/en-us/windows/win32/api/d3d12/ns-d3d12-d3d12_dispatch_arguments
+    limits->maxComputeWorkGroupsPerDimension = D3D11_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION;
 }
 
 /* Buffer */

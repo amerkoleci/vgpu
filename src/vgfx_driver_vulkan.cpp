@@ -1360,6 +1360,50 @@ static void vulkan_getAdapterProperties(VGFXRenderer* driverData, VGFXAdapterPro
 static void vulkan_getLimits(VGFXRenderer* driverData, VGFXLimits* limits)
 {
     VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
+
+#define SET_LIMIT_FROM_VULKAN(vulkanName, name) limits->name = renderer->properties2.properties.limits.vulkanName
+    SET_LIMIT_FROM_VULKAN(maxImageDimension1D, maxTextureDimension1D);
+    SET_LIMIT_FROM_VULKAN(maxImageDimension2D, maxTextureDimension2D);
+    SET_LIMIT_FROM_VULKAN(maxImageArrayLayers, maxTextureArrayLayers);
+    SET_LIMIT_FROM_VULKAN(maxBoundDescriptorSets, maxBindGroups);
+    SET_LIMIT_FROM_VULKAN(maxDescriptorSetUniformBuffersDynamic, maxDynamicUniformBuffersPerPipelineLayout);
+    SET_LIMIT_FROM_VULKAN(maxDescriptorSetStorageBuffersDynamic, maxDynamicStorageBuffersPerPipelineLayout);
+    SET_LIMIT_FROM_VULKAN(maxPerStageDescriptorSampledImages, maxSampledTexturesPerShaderStage);
+    SET_LIMIT_FROM_VULKAN(maxPerStageDescriptorSamplers, maxSamplersPerShaderStage);
+    SET_LIMIT_FROM_VULKAN(maxPerStageDescriptorStorageBuffers, maxStorageBuffersPerShaderStage);
+    SET_LIMIT_FROM_VULKAN(maxPerStageDescriptorStorageImages, maxStorageTexturesPerShaderStage);
+    SET_LIMIT_FROM_VULKAN(maxPerStageDescriptorUniformBuffers, maxUniformBuffersPerShaderStage);
+
+    limits->maxUniformBufferBindingSize = renderer->properties2.properties.limits.maxUniformBufferRange;
+    limits->maxStorageBufferBindingSize = renderer->properties2.properties.limits.maxStorageBufferRange;
+    limits->minUniformBufferOffsetAlignment = (uint32_t)renderer->properties2.properties.limits.minUniformBufferOffsetAlignment;
+    limits->minUniformBufferOffsetAlignment = (uint32_t)renderer->properties2.properties.limits.minUniformBufferOffsetAlignment;
+    SET_LIMIT_FROM_VULKAN(maxVertexInputBindings, maxVertexBuffers);
+    SET_LIMIT_FROM_VULKAN(maxVertexInputAttributes, maxVertexAttributes);
+
+    limits->maxVertexBufferArrayStride = std::min(
+        renderer->properties2.properties.limits.maxVertexInputBindingStride,
+        renderer->properties2.properties.limits.maxVertexInputAttributeOffset + 1);
+
+    limits->maxInterStageShaderComponents = std::min(
+        renderer->properties2.properties.limits.maxVertexOutputComponents,
+        renderer->properties2.properties.limits.maxFragmentInputComponents);
+
+    SET_LIMIT_FROM_VULKAN(maxComputeSharedMemorySize, maxComputeWorkgroupStorageSize);
+    SET_LIMIT_FROM_VULKAN(maxComputeWorkGroupInvocations, maxComputeInvocationsPerWorkGroup);
+    SET_LIMIT_FROM_VULKAN(maxComputeWorkGroupSize[0], maxComputeWorkGroupSizeX);
+    SET_LIMIT_FROM_VULKAN(maxComputeWorkGroupSize[1], maxComputeWorkGroupSizeY);
+    SET_LIMIT_FROM_VULKAN(maxComputeWorkGroupSize[2], maxComputeWorkGroupSizeZ);
+    SET_LIMIT_FROM_VULKAN(maxComputeWorkGroupSize[2], maxComputeWorkGroupsPerDimension);
+
+    limits->maxComputeWorkGroupsPerDimension = std::min(
+        std::min(
+            renderer->properties2.properties.limits.maxComputeWorkGroupCount[0],
+            renderer->properties2.properties.limits.maxComputeWorkGroupCount[1]),
+            renderer->properties2.properties.limits.maxComputeWorkGroupCount[2]
+    );
+
+#undef SET_LIMIT_FROM_VULKAN
 }
 
 /* Buffer */

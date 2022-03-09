@@ -425,11 +425,11 @@ typedef struct VGFXLimits {
     uint32_t maxVertexBufferArrayStride;
     uint32_t maxInterStageShaderComponents;
     uint32_t maxComputeWorkgroupStorageSize;
-    uint32_t maxComputeInvocationsPerWorkgroup;
-    uint32_t maxComputeWorkgroupSizeX;
-    uint32_t maxComputeWorkgroupSizeY;
-    uint32_t maxComputeWorkgroupSizeZ;
-    uint32_t maxComputeWorkgroupsPerDimension;
+    uint32_t maxComputeInvocationsPerWorkGroup;
+    uint32_t maxComputeWorkGroupSizeX;
+    uint32_t maxComputeWorkGroupSizeY;
+    uint32_t maxComputeWorkGroupSizeZ;
+    uint32_t maxComputeWorkGroupsPerDimension;
 } VGFXLimits;
 
 typedef void (VGFX_CALL* vgfxLogFunc)(VGFXLogLevel level, const char* message);

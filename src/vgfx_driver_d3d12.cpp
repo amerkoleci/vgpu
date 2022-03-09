@@ -677,6 +677,85 @@ static void d3d12_getAdapterProperties(VGFXRenderer* driverData, VGFXAdapterProp
 static void d3d12_getLimits(VGFXRenderer* driverData, VGFXLimits* limits)
 {
     VGFXD3D12Renderer* renderer = (VGFXD3D12Renderer*)driverData;
+
+    D3D12_FEATURE_DATA_D3D12_OPTIONS featureData = {};
+    HRESULT hr = renderer->device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &featureData, sizeof(featureData));
+    if (FAILED(hr))
+    {
+    }
+
+    // Max(CBV+UAV+SRV)         1M    1M    1M+
+    // Max CBV per stage        14    14   full
+    // Max SRV per stage       128  full   full
+    // Max UAV in all stages    64    64   full
+    // Max Samplers per stage   16  2048   2048
+    // https://docs.microsoft.com/en-us/windows-hardware/test/hlk/testref/efad06e8-51d1-40ce-ad5c-573a134b4bb6
+    // "full" means the full heap can be used. This is tested
+    // to work for 1 million descriptors, and 1.1M for tier 3.
+    uint32_t maxCBVsPerStage;
+    uint32_t maxSRVsPerStage;
+    uint32_t maxUAVsAllStages;
+    uint32_t maxSamplersPerStage;
+    switch (featureData.ResourceBindingTier)
+    {
+        case D3D12_RESOURCE_BINDING_TIER_1:
+            maxCBVsPerStage = 14;
+            maxSRVsPerStage = 128;
+            maxUAVsAllStages = 64;
+            maxSamplersPerStage = 16;
+            break;
+        case D3D12_RESOURCE_BINDING_TIER_2:
+            maxCBVsPerStage = 14;
+            maxSRVsPerStage = 1'000'000;
+            maxUAVsAllStages = 64;
+            maxSamplersPerStage = 2048;
+            break;
+        case D3D12_RESOURCE_BINDING_TIER_3:
+        default:
+            maxCBVsPerStage = 1'100'000;
+            maxSRVsPerStage = 1'100'000;
+            maxUAVsAllStages = 1'100'000;
+            maxSamplersPerStage = 2048;
+            break;
+    }
+
+    uint32_t maxUAVsPerStage = maxUAVsAllStages / 2;
+
+    limits->maxTextureDimension1D = D3D12_REQ_TEXTURE1D_U_DIMENSION;
+    limits->maxTextureDimension2D = D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION;
+    limits->maxTextureDimension3D = D3D12_REQ_TEXTURE3D_U_V_OR_W_DIMENSION;
+    limits->maxTextureArrayLayers = D3D12_REQ_TEXTURE2D_ARRAY_AXIS_DIMENSION;
+    limits->maxBindGroups = 0;
+    limits->maxDynamicUniformBuffersPerPipelineLayout = 0;
+    limits->maxDynamicStorageBuffersPerPipelineLayout = 0;
+    limits->maxSampledTexturesPerShaderStage = maxSRVsPerStage;
+    limits->maxSamplersPerShaderStage = maxSamplersPerStage;
+    limits->maxStorageBuffersPerShaderStage = maxUAVsPerStage - maxUAVsPerStage / 2;
+    limits->maxStorageTexturesPerShaderStage = maxUAVsPerStage / 2;
+    limits->maxUniformBuffersPerShaderStage = maxCBVsPerStage;
+    limits->maxUniformBufferBindingSize = D3D12_REQ_CONSTANT_BUFFER_ELEMENT_COUNT * 16;
+    // D3D12 has no documented limit on the size of a storage buffer binding.
+    limits->maxStorageBufferBindingSize = 4294967295;
+    limits->minUniformBufferOffsetAlignment = D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT;
+    limits->minStorageBufferOffsetAlignment = 32;
+    limits->maxVertexBuffers = 16;
+    limits->maxVertexAttributes = D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT;
+    limits->maxVertexBufferArrayStride = 2048u;
+    limits->maxInterStageShaderComponents = D3D12_IA_VERTEX_INPUT_STRUCTURE_ELEMENTS_COMPONENTS;
+
+    // https://docs.microsoft.com/en-us/windows/win32/direct3d11/overviews-direct3d-11-devices-downlevel-compute-shaders
+    // Thread Group Shared Memory is limited to 16Kb on downlevel hardware. This is less than
+    // the 32Kb that is available to Direct3D 11 hardware. D3D12 is also 32kb.
+    limits->maxComputeWorkgroupStorageSize = 32768;
+
+    // https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/sm5-attributes-numthreads
+    limits->maxComputeInvocationsPerWorkGroup = D3D12_CS_THREAD_GROUP_MAX_THREADS_PER_GROUP;
+    limits->maxComputeWorkGroupSizeX = D3D12_CS_THREAD_GROUP_MAX_X;
+    limits->maxComputeWorkGroupSizeY = D3D12_CS_THREAD_GROUP_MAX_X;
+    limits->maxComputeWorkGroupSizeZ = D3D12_CS_THREAD_GROUP_MAX_X;
+
+    // https://docs.maxComputeWorkgroupSizeXmicrosoft.com/en-us/windows/win32/api/d3d12/ns-d3d12-d3d12_dispatch_arguments
+    limits->maxComputeWorkGroupsPerDimension = D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION;
 }
 
 /* Buffer */
