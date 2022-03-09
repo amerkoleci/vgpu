@@ -52,10 +52,10 @@ void init_gfx(GLFWwindow* window)
     //    deviceDesc.preferredApi = VGFXAPI_D3D11;
     //}
 
-    //if (vgfxIsSupported(VGFXBackendType_Vulkan))
-    //{
-    //    deviceDesc.preferredBackend = VGFXBackendType_Vulkan;
-    //}
+    if (vgfxIsSupported(VGFXBackendType_Vulkan))
+    {
+        deviceDesc.preferredBackend = VGFXBackendType_Vulkan;
+    }
 
 #if defined(__EMSCRIPTEN__)
     surface = vgfxCreateSurfaceWeb("canvas");
@@ -70,8 +70,12 @@ void init_gfx(GLFWwindow* window)
 #endif
 
     device = vgfxCreateDevice(surface, &deviceDesc);
+
     VGFXAdapterProperties adapterProps;
     vgfxGetAdapterProperties(device, &adapterProps);
+
+    VGFXLimits limits;
+    vgfxGetLimits(device, &limits);
 
     int width = 0;
     int height = 0;
@@ -127,8 +131,8 @@ void draw_frame()
 
     VGFXRenderPassColorAttachment colorAttachment = {};
     colorAttachment.texture = vgfxSwapChainAcquireNextTexture(device, swapChain);
-    colorAttachment.loadAction = VGFXLoadAction_Clear;
-    colorAttachment.storeAction = VGFXStoreAction_Store;
+    colorAttachment.loadOp = VGFXLoadOp_Clear;
+    colorAttachment.storeOp = VGFXStoreOp_Store;
     colorAttachment.clearColor.r = 0.3f;
     colorAttachment.clearColor.g = 0.3f;
     colorAttachment.clearColor.b = 0.3f;

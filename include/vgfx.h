@@ -290,24 +290,23 @@ typedef enum VGFXFeature {
     VGFXFeature_TextureCompressionETC2,
     VGFXFeature_TextureCompressionASTC,
 
-    VGFXFeature_Count,
-    VGFXFeature_Force32 = 0x7FFFFFFF
+    _VGFXFeature_Force32 = 0x7FFFFFFF
 } VGFXFeature;
 
-typedef enum VGFXLoadAction {
-    VGFXLoadAction_DontCare = 0,
-    VGFXLoadAction_Load,
-    VGFXLoadAction_Clear,
+typedef enum VGFXLoadOp {
+    VGFXLoadOp_DontCare = 0,
+    VGFXLoadOp_Load,
+    VGFXLoadOp_Clear,
 
-    VGFXLoadAction_Force32 = 0x7FFFFFFF
-} VGFXLoadAction;
+    _VGFXLoadOp_Force32 = 0x7FFFFFFF
+} VGFXLoadOp;
 
-typedef enum VGFXStoreAction {
-    VGFXStoreAction_DontCare = 0,
-    VGFXStoreAction_Store,
+typedef enum VGFXStoreOp {
+    VGFXStoreOp_DontCare = 0,
+    VGFXStoreOp_Store,
 
-    VGFXStoreAction_Force32 = 0x7FFFFFFF
-} VGFXStoreAction;
+    _VGFXStoreOp_Force32 = 0x7FFFFFFF
+} VGFXStoreOp;
 
 typedef struct VGFXColor {
     float r;
@@ -346,15 +345,27 @@ typedef struct VGFXRenderPassColorAttachment {
     VGFXTexture texture;
     uint32_t level;
     uint32_t slice;
-    VGFXLoadAction loadAction;
-    VGFXStoreAction storeAction;
+    VGFXLoadOp loadOp;
+    VGFXStoreOp storeOp;
     VGFXColor clearColor;
 } VGFXRenderPassColorAttachment;
+
+typedef struct VGFXRenderPassDepthStencilAttachment {
+    VGFXTexture texture;
+    uint32_t level;
+    uint32_t slice;
+    VGFXLoadOp depthLoadOp;
+    VGFXStoreOp depthStoreOp;
+    float clearDepth;
+    VGFXLoadOp stencilLoadOp;
+    VGFXStoreOp stencilStoreOp;
+    uint32_t clearStencil;
+} VGFXRenderPassDepthStencilAttachment;
 
 typedef struct VGFXRenderPassDesc {
     uint32_t colorAttachmentCount;
     const VGFXRenderPassColorAttachment* colorAttachments;
-    //const VGFXRenderPassDepthStencilAttachment* depthStencilAttachment;
+    const VGFXRenderPassDepthStencilAttachment* depthStencilAttachment;
 } VGFXRenderPassDesc;
 
 typedef struct VGFXBufferDesc {

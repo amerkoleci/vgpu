@@ -613,9 +613,9 @@ static void d3d11_beginRenderPass(VGFXRenderer* driverData, const VGFXRenderPass
 
         rtvs[i] = texture->rtv;
 
-        switch (attachment.loadAction)
+        switch (attachment.loadOp)
         {
-            case VGFXLoadAction_Clear:
+            case VGFXLoadOp_Clear:
                 renderer->context->ClearRenderTargetView(rtvs[i], &attachment.clearColor.r);
                 break;
 

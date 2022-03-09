@@ -257,7 +257,7 @@ namespace
             else if (strcmp(vk_extensions[i].extensionName, VK_EXT_EXTENDED_DYNAMIC_STATE_2_EXTENSION_NAME) == 0) {
                 extensions.extended_dynamic_state2 = true;
             }
-            else if (strcmp(vk_extensions[i].extensionName, VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME) == 0) {
+            else if (strcmp(vk_extensions[i].extensionName, "VK_KHR_dynamic_rendering") == 0) {
                 extensions.dynamic_rendering = true;
             }
 #if defined(VK_USE_PLATFORM_WIN32_KHR)
@@ -435,15 +435,15 @@ namespace
         }
     }
 
-    constexpr VkAttachmentLoadOp ToVk(VGFXLoadAction action)
+    constexpr VkAttachmentLoadOp ToVk(VGFXLoadOp op)
     {
-        switch (action)
+        switch (op)
         {
-            case VGFXLoadAction_DontCare:
+            case VGFXLoadOp_DontCare:
                 return VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-            case VGFXLoadAction_Load:
+            case VGFXLoadOp_Load:
                 return VK_ATTACHMENT_LOAD_OP_LOAD;
-            case VGFXLoadAction_Clear:
+            case VGFXLoadOp_Clear:
                 return VK_ATTACHMENT_LOAD_OP_CLEAR;
 
             default:
@@ -451,13 +451,13 @@ namespace
         }
     }
 
-    constexpr VkAttachmentStoreOp ToVk(VGFXStoreAction action)
+    constexpr VkAttachmentStoreOp ToVk(VGFXStoreOp op)
     {
-        switch (action)
+        switch (op)
         {
-            case VGFXStoreAction_DontCare:
+            case VGFXStoreOp_DontCare:
                 return VK_ATTACHMENT_STORE_OP_DONT_CARE;
-            case VGFXStoreAction_Store:
+            case VGFXStoreOp_Store:
                 return VK_ATTACHMENT_STORE_OP_STORE;
 
             default:
@@ -503,6 +503,12 @@ namespace
 	} while (0)
 
 #define VK_LOG_ERROR(result, message) vgfxLogError("Vulkan: %s, error: %s", message, ToString(result));
+
+struct VGFXVulkanBuffer
+{
+    VkBuffer handle = VK_NULL_HANDLE;
+    VmaAllocation  allocation = nullptr;
+};
 
 struct VGFXVulkanTexture
 {
@@ -571,7 +577,7 @@ struct VGFXVulkanRenderer
     VkPhysicalDeviceExtendedDynamicStateFeaturesEXT extendedDynamicStateFeatures = {};
     VkPhysicalDeviceExtendedDynamicState2FeaturesEXT extendedDynamicState2Features = {};
     VkPhysicalDeviceVertexInputDynamicStateFeaturesEXT vertexInputDynamicStateFeatures = {};
-    VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamicRenderingFeaturesKHR = {};
+    VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeatures = {};
     bool dynamicRendering{ false }; // Beta
     VkDeviceSize minAllocationAlignment{ 0 };
     std::string driverDescription;
@@ -609,6 +615,7 @@ struct VGFXVulkanRenderer
     bool submitInits = false;
 
     std::vector<VGFXVulkanSwapChain*> swapChains;
+    std::vector<VGFXVulkanTexture*> swapChainTextures;
 
     VkBuffer		nullBuffer = VK_NULL_HANDLE;
     VmaAllocation	nullBufferAllocation = VK_NULL_HANDLE;
@@ -715,7 +722,7 @@ static VkSurfaceKHR vulkan_createSurface(VGFXVulkanRenderer* renderer, VGFXSurfa
     return vk_surface;
 }
 
-static VkImageView vulkan_GetView(VGFXVulkanRenderer* renderer, VGFXTexture texture, uint32_t baseMipLevel, uint32_t levelCount, uint32_t baseArrayLayer, uint32_t layerCount)
+static VkImageView vulkan_GetView(VGFXVulkanRenderer* renderer, VGFXVulkanTexture* texture, uint32_t baseMipLevel, uint32_t levelCount, uint32_t baseArrayLayer, uint32_t layerCount)
 {
     size_t hash = 0;
     hash_combine(hash, baseMipLevel);
@@ -723,16 +730,14 @@ static VkImageView vulkan_GetView(VGFXVulkanRenderer* renderer, VGFXTexture text
     hash_combine(hash, baseArrayLayer);
     hash_combine(hash, layerCount);
 
-    VGFXVulkanTexture* vulkanTexture = (VGFXVulkanTexture*)texture;
-
-    auto it = vulkanTexture->viewCache.find(hash);
-    if (it == vulkanTexture->viewCache.end())
+    auto it = texture->viewCache.find(hash);
+    if (it == texture->viewCache.end())
     {
         VkImageViewCreateInfo viewInfo{};
         viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        viewInfo.image = vulkanTexture->handle;
+        viewInfo.image = texture->handle;
         viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        viewInfo.format = vulkanTexture->format;
+        viewInfo.format = texture->format;
         viewInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
         viewInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
         viewInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
@@ -751,14 +756,14 @@ static VkImageView vulkan_GetView(VGFXVulkanRenderer* renderer, VGFXTexture text
             return VK_NULL_HANDLE;
         }
 
-        vulkanTexture->viewCache[hash] = newView;
+        texture->viewCache[hash] = newView;
         return newView;
     }
 
     return it->second;
 }
 
-static VkImageView vulkan_GetRTV(VGFXVulkanRenderer* renderer, VGFXTexture texture, uint32_t level, uint32_t slice)
+static VkImageView vulkan_GetRTV(VGFXVulkanRenderer* renderer, VGFXVulkanTexture* texture, uint32_t level, uint32_t slice)
 {
     return vulkan_GetView(renderer, texture, level, 1, slice, 1);
 }
@@ -773,8 +778,8 @@ static VkRenderPass vulkan_RequestRenderPass(VGFXVulkanRenderer* renderer, const
         VGFXVulkanTexture* texture = (VGFXVulkanTexture*)info->colorAttachments[i].texture;
 
         hash_combine(hash, texture->format);
-        hash_combine(hash, info->colorAttachments[i].loadAction);
-        hash_combine(hash, info->colorAttachments[i].storeAction);
+        hash_combine(hash, info->colorAttachments[i].loadOp);
+        hash_combine(hash, info->colorAttachments[i].storeOp);
         if (texture->isSwapChain)
         {
             hash_combine(hash, VK_IMAGE_LAYOUT_UNDEFINED);
@@ -819,8 +824,8 @@ static VkRenderPass vulkan_RequestRenderPass(VGFXVulkanRenderer* renderer, const
             attachmentDesc.flags = 0;
             attachmentDesc.format = texture->format;
             attachmentDesc.samples = sampleCount;
-            attachmentDesc.loadOp = ToVk(info->colorAttachments[i].loadAction);
-            attachmentDesc.storeOp = ToVk(info->colorAttachments[i].storeAction);
+            attachmentDesc.loadOp = ToVk(info->colorAttachments[i].loadOp);
+            attachmentDesc.storeOp = ToVk(info->colorAttachments[i].storeOp);
             attachmentDesc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
             attachmentDesc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
             if (texture->isSwapChain)
@@ -837,14 +842,15 @@ static VkRenderPass vulkan_RequestRenderPass(VGFXVulkanRenderer* renderer, const
             subpass.colorAttachmentCount++;
         }
 
-        const bool hasDepthStencil = false/*
-            key->depthStencilAttachment.depthFormat != PixelFormat::Undefined ||
-            key->depthStencilAttachment.stencilFormat != PixelFormat::Undefined*/;
+        const bool hasDepthStencil = info->depthStencilAttachment != nullptr;
 
         uint32_t attachmentCount = subpass.colorAttachmentCount;
         VkAttachmentReference2* depthStencilAttachment = nullptr;
         if (hasDepthStencil)
         {
+            const VGFXRenderPassDepthStencilAttachment* attachment = info->depthStencilAttachment;
+            VGFXVulkanTexture* texture = (VGFXVulkanTexture*)attachment->texture;
+
             auto& attachmentDesc = attachmentDescriptions[subpass.colorAttachmentCount];
             depthStencilAttachment = &depthStencilAttachmentRef;
 
@@ -853,17 +859,17 @@ static VkRenderPass vulkan_RequestRenderPass(VGFXVulkanRenderer* renderer, const
             depthStencilAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
             depthStencilAttachmentRef.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
 
-            //attachmentDesc.sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2;
-            //attachmentDesc.flags = 0;
-            //attachmentDesc.format = ToVulkanFormat(key->depthStencilAttachment.depthFormat);
-            //attachmentDesc.samples = sampleCount;
-            //attachmentDesc.loadOp = ToVulkan(key->depthStencilAttachment.depthLoadAction);
-            //attachmentDesc.storeOp = ToVulkan(key->depthStencilAttachment.depthStoreAction);
-            //attachmentDesc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-            //attachmentDesc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-            //attachmentDesc.initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-            //attachmentDesc.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-            //++attachmentCount;
+            attachmentDesc.sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2;
+            attachmentDesc.flags = 0;
+            attachmentDesc.format = texture->format;
+            attachmentDesc.samples = sampleCount;
+            attachmentDesc.loadOp = ToVk(attachment->depthLoadOp);
+            attachmentDesc.storeOp = ToVk(attachment->depthStoreOp);
+            attachmentDesc.stencilLoadOp = ToVk(attachment->stencilLoadOp);
+            attachmentDesc.stencilStoreOp = ToVk(attachment->stencilStoreOp);
+            attachmentDesc.initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+            attachmentDesc.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+            ++attachmentCount;
         }
 
         subpass.pColorAttachments = colorAttachmentRefs;
@@ -934,7 +940,6 @@ static VkFramebuffer vulkan_RequestFramebuffer(
     size_t hash = 0;
     hash_combine(hash, renderPass);
 
-
     uint32_t attachmentCount = 0;
     VkImageView attachments[VGFX_MAX_COLOR_ATTACHMENTS + 1];
 
@@ -943,15 +948,15 @@ static VkFramebuffer vulkan_RequestFramebuffer(
         const VGFXRenderPassColorAttachment* attachment = &info->colorAttachments[i];
 
         VGFXVulkanTexture* texture = (VGFXVulkanTexture*)attachment->texture;
-        const uint32_t mipLevel = attachment->level;
+        const uint32_t level = attachment->level;
         const uint32_t slice = attachment->slice;
 
-        attachments[attachmentCount] = vulkan_GetRTV(renderer, info->colorAttachments[i].texture, mipLevel, slice);
+        attachments[attachmentCount] = vulkan_GetRTV(renderer, texture, level, slice);
         hash_combine(hash, attachments[attachmentCount]);
         attachmentCount++;
 
-        *width = std::min(*width, std::max(1U, texture->width >> mipLevel));
-        *height = std::min(*height, std::max(1U, texture->height >> mipLevel));
+        *width = std::min(*width, std::max(1U, texture->width >> level));
+        *height = std::min(*height, std::max(1U, texture->height >> level));
     }
 
     hash_combine(hash, attachmentCount);
@@ -1169,7 +1174,7 @@ static void vulkan_destroyDevice(VGFXDevice device)
 
     delete renderer;
     VGFX_FREE(device);
-    }
+}
 
 static void vulkan_frame(VGFXRenderer* driverData)
 {
@@ -1400,7 +1405,7 @@ static void vulkan_getLimits(VGFXRenderer* driverData, VGFXLimits* limits)
         std::min(
             renderer->properties2.properties.limits.maxComputeWorkGroupCount[0],
             renderer->properties2.properties.limits.maxComputeWorkGroupCount[1]),
-            renderer->properties2.properties.limits.maxComputeWorkGroupCount[2]
+        renderer->properties2.properties.limits.maxComputeWorkGroupCount[2]
     );
 
 #undef SET_LIMIT_FROM_VULKAN
@@ -1409,11 +1414,144 @@ static void vulkan_getLimits(VGFXRenderer* driverData, VGFXLimits* limits)
 /* Buffer */
 static VGFXBuffer vulkan_createBuffer(VGFXRenderer* driverData, const VGFXBufferDesc* desc, const void* pInitialData)
 {
-    return nullptr;
+    VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
+
+    VkBufferCreateInfo bufferInfo = {};
+    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufferInfo.size = desc->size;
+    bufferInfo.usage = 0;
+
+    if (desc->usage & VGFXBufferUsage_Vertex)
+    {
+        bufferInfo.usage |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+    }
+
+    if (desc->usage & VGFXBufferUsage_Index)
+    {
+        bufferInfo.usage |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+    }
+
+    if (desc->usage & VGFXBufferUsage_Uniform)
+    {
+        bufferInfo.size = VmaAlignUp(bufferInfo.size, renderer->properties2.properties.limits.minUniformBufferOffsetAlignment);
+        bufferInfo.usage |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+    }
+
+    if (desc->usage & VGFXBufferUsage_ShaderRead)
+    {
+        bufferInfo.usage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+        bufferInfo.usage |= VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT;
+    }
+
+    if (desc->usage & VGFXBufferUsage_ShaderWrite)
+    {
+        bufferInfo.usage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+        bufferInfo.usage |= VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT;
+    }
+
+    if (desc->usage & VGFXBufferUsage_Indirect)
+    {
+        bufferInfo.usage |= VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
+    }
+
+    //if (usage & VGFXBufferUsage_Predication)
+    //{
+    //    bufferInfo.usage |= VK_BUFFER_USAGE_CONDITIONAL_RENDERING_BIT_EXT;
+    //}
+    //
+    //if (usage & VGFXBufferUsage_RayTracing))
+    //{
+    //    bufferInfo.usage |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR;
+    //    bufferInfo.usage |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
+    //    bufferInfo.usage |= VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR;
+    //}
+
+    if (renderer->features_1_2.bufferDeviceAddress == VK_TRUE &&
+        desc->usage & (VGFXBufferUsage_Vertex | VGFXBufferUsage_Index/* | VGFXBufferUsage_RayTracing*/))
+    {
+        bufferInfo.usage |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+    }
+
+    bufferInfo.usage |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    bufferInfo.usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+
+    uint32_t sharingIndices[3] = {};
+    if (renderer->graphicsQueueFamily != renderer->computeQueueFamily ||
+        renderer->graphicsQueueFamily != renderer->copyQueueFamily)
+    {
+        // For buffers, always just use CONCURRENT access modes,
+        // so we don't have to deal with acquire/release barriers in async compute.
+        bufferInfo.sharingMode = VK_SHARING_MODE_CONCURRENT;
+
+        sharingIndices[bufferInfo.queueFamilyIndexCount++] = renderer->graphicsQueueFamily;
+
+        if (renderer->graphicsQueueFamily != renderer->computeQueueFamily)
+        {
+            sharingIndices[bufferInfo.queueFamilyIndexCount++] = renderer->computeQueueFamily;
+        }
+
+        if (renderer->graphicsQueueFamily != renderer->copyQueueFamily
+            && renderer->computeQueueFamily != renderer->copyQueueFamily)
+        {
+            sharingIndices[bufferInfo.queueFamilyIndexCount++] = renderer->copyQueueFamily;
+        }
+
+        bufferInfo.pQueueFamilyIndices = sharingIndices;
+    }
+    else
+    {
+        bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        bufferInfo.queueFamilyIndexCount = 0;
+        bufferInfo.pQueueFamilyIndices = nullptr;
+    }
+
+    VmaAllocationCreateInfo memoryInfo = {};
+    memoryInfo.usage = VMA_MEMORY_USAGE_AUTO;
+    //if (info.heapType == HeapType::Readback)
+    //{
+    //    bufferInfo.usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    //    memoryInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+    //}
+    //else if (info.heapType == HeapType::Upload)
+    //{
+    //    bufferInfo.usage |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    //    memoryInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+    //}
+
+    VmaAllocationInfo allocationInfo{};
+    VGFXVulkanBuffer* buffer = new VGFXVulkanBuffer();
+    VkResult result = vmaCreateBuffer(renderer->allocator, &bufferInfo, &memoryInfo,
+        &buffer->handle,
+        &buffer->allocation,
+        &allocationInfo);
+
+    if (result != VK_SUCCESS)
+    {
+        VK_LOG_ERROR(result, "Failed to create buffer.");
+        return nullptr;
+    }
+
+    if (desc->label)
+    {
+        vulkan_SetObjectName(renderer, VK_OBJECT_TYPE_BUFFER, (uint64_t)buffer->handle, desc->label);
+    }
+
+    return (VGFXBuffer)buffer;
 }
 
 static void vulkan_destroyBuffer(VGFXRenderer* driverData, VGFXBuffer resource)
 {
+    VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
+    VGFXVulkanBuffer* buffer = (VGFXVulkanBuffer*)resource;
+
+    renderer->destroyMutex.lock();
+    if (buffer->allocation)
+    {
+        renderer->destroyedBuffers.push_back(std::make_pair(std::make_pair(buffer->handle, buffer->allocation), renderer->frameCount));
+    }
+    renderer->destroyMutex.unlock();
+
+    delete buffer;
 }
 
 /* Texture */
@@ -1457,7 +1595,6 @@ static VGFXTexture vulkan_createTexture(VGFXRenderer* driverData, const VGFXText
     imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
     imageInfo.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-
 
     if (desc->usage & VGFXTextureUsage_ShaderRead)
         imageInfo.usage |= VK_IMAGE_USAGE_SAMPLED_BIT;
@@ -1782,6 +1919,39 @@ static VGFXTexture vulkan_acquireNextTexture(VGFXRenderer* driverData, VGFXSwapC
     return vulkanSwapChain->backbufferTextures[vulkanSwapChain->imageIndex];
 }
 
+/* Commands */
+static void insertImageMemoryBarrier(
+    VkCommandBuffer         commandBuffer,
+    VkImage                 image,
+    VkAccessFlags           src_access_mask,
+    VkAccessFlags           dst_access_mask,
+    VkImageLayout           old_layout,
+    VkImageLayout           new_layout,
+    VkPipelineStageFlags    src_stage_mask,
+    VkPipelineStageFlags    dst_stage_mask,
+    VkImageSubresourceRange subresource_range)
+{
+    VkImageMemoryBarrier barrier{};
+    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.srcAccessMask = src_access_mask;
+    barrier.dstAccessMask = dst_access_mask;
+    barrier.oldLayout = old_layout;
+    barrier.newLayout = new_layout;
+    barrier.image = image;
+    barrier.subresourceRange = subresource_range;
+
+    vkCmdPipelineBarrier(
+        commandBuffer,
+        src_stage_mask,
+        dst_stage_mask,
+        0,
+        0, nullptr,
+        0, nullptr,
+        1, &barrier);
+}
+
 static void vulkan_beginRenderPass(VGFXRenderer* driverData, const VGFXRenderPassDesc* desc)
 {
     VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
@@ -1804,21 +1974,21 @@ static void vulkan_beginRenderPass(VGFXRenderer* driverData, const VGFXRenderPas
         renderingInfo.layerCount = 1;
         renderingInfo.viewMask = 0;
 
-#if TODO
-        VkRenderingAttachmentInfoKHR colorAttachments[VGFX_MAX_COLOR_ATTACHMENTS] = {};
-        for (uint32_t i = 0; i < VGFX_MAX_COLOR_ATTACHMENTS; ++i)
+        VkRenderingAttachmentInfo colorAttachments[VGFX_MAX_COLOR_ATTACHMENTS] = {};
+        VkRenderingAttachmentInfo depthStencilAttachmentInfo{};
+        
+
+        for (uint32_t i = 0; i < desc->colorAttachmentCount; ++i)
         {
-            if (renderPass.colorAttachments[i].texture == nullptr)
-                continue;
-
-            auto attachment = renderPass.colorAttachments[i];
-            const uint32_t mipLevel = attachment.level;
-
-            VulkanTexture* texture = static_cast<VulkanTexture*>(attachment.texture);
+            const VGFXRenderPassColorAttachment* attachment = &desc->colorAttachments[i];
+            VGFXVulkanTexture* texture = (VGFXVulkanTexture*)attachment->texture;
+            const uint32_t level = attachment->level;
+            const uint32_t slice = attachment->slice;
 
             if (texture->isSwapChain)
             {
-                InsertImageMemoryBarrier(
+                insertImageMemoryBarrier(
+                    commandBuffer,
                     texture->handle,
                     0,
                     VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
@@ -1826,36 +1996,64 @@ static void vulkan_beginRenderPass(VGFXRenderer* driverData, const VGFXRenderPas
                     VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                     VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
                     VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, range);
-
-                swapChainTextures.push_back(texture);
+            
+                renderer->swapChainTextures.push_back(texture);
             }
 
-            renderingInfo.renderArea.extent.width = Min(renderingInfo.renderArea.extent.width, texture->GetWidth(mipLevel));
-            renderingInfo.renderArea.extent.height = Min(renderingInfo.renderArea.extent.height, texture->GetHeight(mipLevel));
+            renderingInfo.renderArea.extent.width = std::min(renderingInfo.renderArea.extent.width, std::max(1U, texture->width >> level));
+            renderingInfo.renderArea.extent.height = std::min(renderingInfo.renderArea.extent.height, std::max(1U, texture->height >> level));
 
-            colorAttachments[renderingInfo.colorAttachmentCount].sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+            colorAttachments[renderingInfo.colorAttachmentCount].sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
             colorAttachments[renderingInfo.colorAttachmentCount].pNext = nullptr;
-            colorAttachments[renderingInfo.colorAttachmentCount].imageView = texture->GetRTV(mipLevel, attachment.slice);;
+            colorAttachments[renderingInfo.colorAttachmentCount].imageView = vulkan_GetRTV(renderer, texture, level, slice);;
             colorAttachments[renderingInfo.colorAttachmentCount].imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
             colorAttachments[renderingInfo.colorAttachmentCount].resolveMode = VK_RESOLVE_MODE_NONE;
-            colorAttachments[renderingInfo.colorAttachmentCount].loadOp = ToVulkan(attachment.loadAction);
-            colorAttachments[renderingInfo.colorAttachmentCount].storeOp = ToVulkan(attachment.storeAction);
+            colorAttachments[renderingInfo.colorAttachmentCount].loadOp = ToVk(attachment->loadOp);
+            colorAttachments[renderingInfo.colorAttachmentCount].storeOp = ToVk(attachment->storeOp);
 
-            colorAttachments[renderingInfo.colorAttachmentCount].clearValue.color.float32[0] = attachment.clearColor.r;
-            colorAttachments[renderingInfo.colorAttachmentCount].clearValue.color.float32[1] = attachment.clearColor.g;
-            colorAttachments[renderingInfo.colorAttachmentCount].clearValue.color.float32[2] = attachment.clearColor.b;
-            colorAttachments[renderingInfo.colorAttachmentCount].clearValue.color.float32[3] = attachment.clearColor.a;
+            colorAttachments[renderingInfo.colorAttachmentCount].clearValue.color.float32[0] = attachment->clearColor.r;
+            colorAttachments[renderingInfo.colorAttachmentCount].clearValue.color.float32[1] = attachment->clearColor.g;
+            colorAttachments[renderingInfo.colorAttachmentCount].clearValue.color.float32[2] = attachment->clearColor.b;
+            colorAttachments[renderingInfo.colorAttachmentCount].clearValue.color.float32[3] = attachment->clearColor.a;
 
             renderingInfo.colorAttachmentCount++;
         }
-
         renderingInfo.pColorAttachments = colorAttachments;
-        renderingInfo.pDepthAttachment = VK_NULL_HANDLE;
-        renderingInfo.pStencilAttachment = VK_NULL_HANDLE;
+
+        if (desc->depthStencilAttachment != nullptr)
+        {
+            const VGFXRenderPassDepthStencilAttachment* attachment = desc->depthStencilAttachment;
+            VGFXVulkanTexture* texture = (VGFXVulkanTexture*)attachment->texture;
+            const uint32_t level = attachment->level;
+            const uint32_t slice = attachment->slice;
+
+            depthStencilAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+            depthStencilAttachmentInfo.pNext = VK_NULL_HANDLE;
+            depthStencilAttachmentInfo.imageView = vulkan_GetRTV(renderer, texture, level, slice);;
+            depthStencilAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+            depthStencilAttachmentInfo.resolveMode = VK_RESOLVE_MODE_NONE;
+            depthStencilAttachmentInfo.loadOp = ToVk(attachment->depthLoadOp);
+            depthStencilAttachmentInfo.storeOp = ToVk(attachment->depthStoreOp);
+            depthStencilAttachmentInfo.clearValue.depthStencil.depth = attachment->clearDepth;
+
+            // Barrier
+            insertImageMemoryBarrier(
+                commandBuffer,
+                texture->handle,
+                0,
+                VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                VK_IMAGE_LAYOUT_UNDEFINED,
+                VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+                VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+                VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT, range);
+
+            renderer->swapChainTextures.push_back(texture);
+
+            renderingInfo.pDepthAttachment = &depthStencilAttachmentInfo;
+            renderingInfo.pStencilAttachment = &depthStencilAttachmentInfo;
+        }
 
         vkCmdBeginRenderingKHR(commandBuffer, &renderingInfo);
-#endif // TODO
-
     }
     else
     {
@@ -1872,7 +2070,7 @@ static void vulkan_beginRenderPass(VGFXRenderer* driverData, const VGFXRenderPas
             clearValues[i].color.float32[1] = attachment.clearColor.g;
             clearValues[i].color.float32[2] = attachment.clearColor.b;
             clearValues[i].color.float32[3] = attachment.clearColor.a;
-            }
+        }
 
         VkRenderPassBeginInfo beginInfo = {};
         beginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -1886,15 +2084,45 @@ static void vulkan_beginRenderPass(VGFXRenderer* driverData, const VGFXRenderPas
         beginInfo.clearValueCount = 1;
         beginInfo.pClearValues = clearValues;
         vkCmdBeginRenderPass(commandBuffer, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
-        }
     }
+}
 
 static void vulkan_endRenderPass(VGFXRenderer* driverData)
 {
     VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
     VkCommandBuffer commandBuffer = renderer->GetCommandBuffer();
 
-    vkCmdEndRenderPass(commandBuffer);
+    if (renderer->dynamicRendering)
+    {
+        vkCmdEndRenderingKHR(commandBuffer);
+
+        VkImageSubresourceRange range{};
+        range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        range.baseMipLevel = 0;
+        range.levelCount = VK_REMAINING_MIP_LEVELS;
+        range.baseArrayLayer = 0;
+        range.layerCount = VK_REMAINING_ARRAY_LAYERS;
+
+        for (auto texture : renderer->swapChainTextures)
+        {
+            insertImageMemoryBarrier(
+                commandBuffer,
+                texture->handle,
+                VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                0,
+                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                range);
+        }
+
+        renderer->swapChainTextures.clear();
+    }
+    else
+    {
+        vkCmdEndRenderPass(commandBuffer);
+    }
 }
 
 static bool vulkan_isSupported(void)
@@ -2031,7 +2259,7 @@ static VGFXDevice vulkan_createDevice(VGFXSurface surface, const VGFXDeviceDesc*
                     instanceExtensions.push_back(VK_EXT_VALIDATION_FEATURES_EXTENSION_NAME);
                 }
             }
-}
+        }
 #endif 
 
         VkApplicationInfo appInfo = {};
@@ -2126,7 +2354,7 @@ static VGFXDevice vulkan_createDevice(VGFXSurface surface, const VGFXDeviceDesc*
             vgfxLogInfo("	\t%s", createInfo.ppEnabledExtensionNames[i]);
         }
 #endif
-}
+    }
 
     // Create surface
     VkSurfaceKHR vk_surface = vulkan_createSurface(renderer, surface);
@@ -2362,10 +2590,11 @@ static VGFXDevice vulkan_createDevice(VGFXSurface surface, const VGFXDeviceDesc*
             // TODO: Enable
             //if (physicalDeviceExt.dynamic_rendering)
             //{
-            //    dynamicRenderingFeaturesKHR.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR;
-            //    enabledExtensions.push_back(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
-            //    *features_chain = &dynamicRenderingFeaturesKHR;
-            //    features_chain = &dynamicRenderingFeaturesKHR.pNext;
+            //    renderer->dynamicRenderingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES;
+            //    enabledExtensions.push_back("VK_KHR_dynamic_rendering");
+            //    *features_chain = &renderer->dynamicRenderingFeatures;
+            //    features_chain = &renderer->dynamicRenderingFeatures.pNext;
+            //    renderer->dynamicRendering = true;
             //}
 
             vkGetPhysicalDeviceProperties2(candidatePhysicalDevice, &renderer->properties2);
