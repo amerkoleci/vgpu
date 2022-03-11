@@ -47,15 +47,15 @@ void init_gfx(GLFWwindow* window)
     deviceDesc.validationMode = VGFXValidationMode_Enabled;
 #endif
 
-    if (vgfxIsSupported(VGFXBackendType_D3D11))
-    {
-        deviceDesc.preferredBackend = VGFXBackendType_D3D11;
-    }
-
-    //if (vgfxIsSupported(VGFXBackendType_Vulkan))
+    //if (vgfxIsSupported(VGFXBackendType_D3D11))
     //{
-    //    deviceDesc.preferredBackend = VGFXBackendType_Vulkan;
+    //    deviceDesc.preferredBackend = VGFXBackendType_D3D11;
     //}
+
+    if (vgfxIsSupported(VGFXBackendType_Vulkan))
+    {
+        deviceDesc.preferredBackend = VGFXBackendType_Vulkan;
+    }
 
 #if defined(__EMSCRIPTEN__)
     surface = vgfxCreateSurfaceWeb("canvas");
@@ -69,7 +69,7 @@ void init_gfx(GLFWwindow* window)
     surface = vgfxCreateSurfaceXlib(x11_display, x11_window);
 #endif
 
-    device = vgfxCreateDevice(surface, &deviceDesc);
+    device = vgfxCreateDevice(&deviceDesc);
 
     VGFXAdapterProperties adapterProps;
     vgfxGetAdapterProperties(device, &adapterProps);
