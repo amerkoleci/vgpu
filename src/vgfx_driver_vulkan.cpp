@@ -165,6 +165,21 @@ namespace
         return {};
     }
 
+    static VkBool32 vulkan_queryPresentationSupport(VkPhysicalDevice physicalDevice, uint32_t queueFamilyIndex)
+    {
+#if defined(VK_USE_PLATFORM_ANDROID_KHR)
+        // All Android queues surfaces support present.
+        return true;
+#elif defined(VK_USE_PLATFORM_WIN32_KHR)
+        return vkGetPhysicalDeviceWin32PresentationSupportKHR(physicalDevice, queueFamilyIndex);
+#elif defined(VK_USE_PLATFORM_XCB_KHR)
+        // TODO: vkGetPhysicalDeviceXcbPresentationSupportKHR
+        return true;
+#else
+        return true;
+#endif
+    }
+
     struct PhysicalDeviceExtensions
     {
         bool swapchain;
@@ -2146,7 +2161,7 @@ static bool vulkan_isSupported(void)
     return true;
 }
 
-static VGFXDevice vulkan_createDevice(VGFXSurface surface, const VGFXDeviceDesc* info)
+static VGFXDevice vulkan_createDevice(const VGFXDeviceDesc* info)
 {
     VGFXVulkanRenderer* renderer = new VGFXVulkanRenderer();
 
@@ -2354,14 +2369,6 @@ static VGFXDevice vulkan_createDevice(VGFXSurface surface, const VGFXDeviceDesc*
             vgfxLogInfo("	\t%s", createInfo.ppEnabledExtensionNames[i]);
         }
 #endif
-    }
-
-    // Create surface
-    VkSurfaceKHR vk_surface = vulkan_createSurface(renderer, surface);
-    if (!vk_surface)
-    {
-        delete renderer;
-        return nullptr;
     }
 
     // Enumerate physical device and create logical device.
@@ -2646,9 +2653,11 @@ static VGFXDevice vulkan_createDevice(VGFXSurface surface, const VGFXDeviceDesc*
                 // A graphics queue candidate must support present for us to select it.
                 if ((required & VK_QUEUE_GRAPHICS_BIT) != 0)
                 {
-                    VkBool32 supported = VK_FALSE;
-                    if (vkGetPhysicalDeviceSurfaceSupportKHR(renderer->physicalDevice, familyIndex, vk_surface, &supported) != VK_SUCCESS || !supported)
+                    VkBool32 supported = vulkan_queryPresentationSupport(renderer->physicalDevice, familyIndex);
+                    if (!supported)
                         continue;
+                    //if (vkGetPhysicalDeviceSurfaceSupportKHR(renderer->physicalDevice, familyIndex, vk_surface, &supported) != VK_SUCCESS || !supported)
+                    //    continue;
                 }
 
                 if (queueFamilies[familyIndex].queueCount &&
@@ -2808,13 +2817,6 @@ static VGFXDevice vulkan_createDevice(VGFXSurface surface, const VGFXDeviceDesc*
             delete renderer;
             return nullptr;
         }
-    }
-
-    // Destroy surface
-    if (vk_surface != VK_NULL_HANDLE)
-    {
-        vkDestroySurfaceKHR(renderer->instance, vk_surface, nullptr);
-        vk_surface = VK_NULL_HANDLE;
     }
 
     // Create frame resources:

@@ -453,7 +453,7 @@ VGFX_API void vgfxDestroySurface(VGFXSurface surface);
 VGFX_API VGFXSurfaceType vgfxGetSurfaceType(VGFXSurface surface);
 
 VGFX_API bool vgfxIsSupported(VGFXBackendType backend);
-VGFX_API VGFXDevice vgfxCreateDevice(VGFXSurface surface, const VGFXDeviceDesc* desc);
+VGFX_API VGFXDevice vgfxCreateDevice(const VGFXDeviceDesc* desc);
 VGFX_API void vgfxDestroyDevice(VGFXDevice device);
 VGFX_API void vgfxFrame(VGFXDevice device);
 VGFX_API void vgfxWaitIdle(VGFXDevice device);

@@ -1000,9 +1000,10 @@ static bool d3d11_isSupported(void)
     return true;
 }
 
-static VGFXDevice d3d11_createDevice(VGFXSurface surface, const VGFXDeviceDesc* info)
+static VGFXDevice d3d11_createDevice(const VGFXDeviceDesc* info)
 {
     VGFX_ASSERT(info);
+
     VGFXD3D11Renderer* renderer = new VGFXD3D11Renderer();
 
     DWORD dxgiFactoryFlags = 0;
@@ -1257,8 +1258,6 @@ static VGFXDevice d3d11_createDevice(VGFXSurface surface, const VGFXDeviceDesc* 
         renderer->adapterType = VGFXAdapterType_CPU;
         vgfxLogInfo("D3D11 Adapter: WARP");
     }
-
-    _VGFX_UNUSED(surface);
 
     VGFXDevice_T* device = (VGFXDevice_T*)VGFX_MALLOC(sizeof(VGFXDevice_T));
     ASSIGN_DRIVER(d3d11);

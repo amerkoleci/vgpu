@@ -172,9 +172,12 @@ bool vgfxIsSupported(VGFXBackendType backend)
     return false;
 }
 
-VGFXDevice vgfxCreateDevice(VGFXSurface surface, const VGFXDeviceDesc* desc)
+VGFXDevice vgfxCreateDevice(const VGFXDeviceDesc* desc)
 {
+    NULL_RETURN_NULL(desc);
+
     VGFXBackendType backend = desc->preferredBackend;
+
 retry:
     if (backend == VGFXBackendType_Default)
     {
@@ -185,7 +188,7 @@ retry:
 
             if (drivers[i]->isSupported())
             {
-                return drivers[i]->createDevice(surface, desc);
+                return drivers[i]->createDevice(desc);
             }
         }
     }
@@ -200,7 +203,7 @@ retry:
             {
                 if (drivers[i]->isSupported())
                 {
-                    return drivers[i]->createDevice(surface, desc);
+                    return drivers[i]->createDevice(desc);
                 }
                 else
                 {
@@ -227,12 +230,14 @@ void vgfxFrame(VGFXDevice device)
     device->frame(device->driverData);
 }
 
-void vgfxWaitIdle(VGFXDevice device) {
+void vgfxWaitIdle(VGFXDevice device)
+{
     NULL_RETURN(device);
     device->waitIdle(device->driverData);
 }
 
-bool vgfxHasFeature(VGFXDevice device, VGFXFeature feature) {
+bool vgfxHasFeature(VGFXDevice device, VGFXFeature feature)
+{
     if (device == NULL) {
         return false;
     }

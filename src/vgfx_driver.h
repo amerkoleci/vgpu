@@ -160,7 +160,7 @@ typedef struct VGFXDriver
 {
     VGFXBackendType backend;
     bool (*isSupported)(void);
-    VGFXDevice(*createDevice)(VGFXSurface surface, const VGFXDeviceDesc* desc);
+    VGFXDevice(*createDevice)(const VGFXDeviceDesc* desc);
 } VGFXDriver;
 
 _VGFX_EXTERN VGFXDriver vulkan_driver;

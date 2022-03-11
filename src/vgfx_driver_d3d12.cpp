@@ -1138,7 +1138,7 @@ static bool d3d12_isSupported(void)
     return false;
 }
 
-static VGFXDevice d3d12_createDevice(VGFXSurface surface, const VGFXDeviceDesc* info)
+static VGFXDevice d3d12_createDevice(const VGFXDeviceDesc* info)
 {
     VGFX_ASSERT(info);
 
