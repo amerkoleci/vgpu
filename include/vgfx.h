@@ -274,9 +274,9 @@ typedef enum VGFXFormatKind {
 } VGFXFormatKind;
 
 typedef enum VGFXPresentMode {
-    VGFXPresentMode_Immediate = 0x00000000,
-    VGFXPresentMode_Mailbox = 0x00000001,
-    VGFXPresentMode_Fifo = 0x00000002,
+    VGFXPresentMode_Immediate = 0,
+    VGFXPresentMode_Mailbox,
+    VGFXPresentMode_Fifo,
 
     _VGFXPresentMode_Count,
     _VGFXPresentMode_Force32 = 0x7FFFFFFF

@@ -24,6 +24,10 @@ VGFXSurface surface = nullptr;
 VGFXDevice device = nullptr;
 VGFXSwapChain swapChain = nullptr;
 
+inline void vgfx_log(VGFXLogLevel level, const char* message)
+{
+}
+
 #if defined(__EMSCRIPTEN__)
 namespace
 {
@@ -52,10 +56,10 @@ void init_gfx(GLFWwindow* window)
     //    deviceDesc.preferredBackend = VGFXBackendType_D3D11;
     //}
 
-    if (vgfxIsSupported(VGFXBackendType_Vulkan))
-    {
-        deviceDesc.preferredBackend = VGFXBackendType_Vulkan;
-    }
+    //if (vgfxIsSupported(VGFXBackendType_Vulkan))
+    //{
+    //    deviceDesc.preferredBackend = VGFXBackendType_Vulkan;
+    //}
 
 #if defined(__EMSCRIPTEN__)
     surface = vgfxCreateSurfaceWeb("canvas");
@@ -158,6 +162,8 @@ int main()
     {
         return EXIT_FAILURE;
     }
+
+    vgfxSetLogFunc(vgfx_log);
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     GLFWwindow* window = glfwCreateWindow(1280, 720, "Hello World", NULL, NULL);
