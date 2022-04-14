@@ -519,6 +519,8 @@ namespace
 
 #define VK_LOG_ERROR(result, message) vgfxLogError("Vulkan: %s, error: %s", message, ToString(result));
 
+struct VGFXVulkanRenderer;
+
 struct VGFXVulkanBuffer
 {
     VkBuffer handle = VK_NULL_HANDLE;
@@ -550,6 +552,14 @@ struct VGFXVulkanSwapChain
 
     VkSemaphore acquireSemaphore = VK_NULL_HANDLE;
     VkSemaphore releaseSemaphore = VK_NULL_HANDLE;
+};
+
+struct VulkanCommandBuffer
+{
+    VGFXVulkanRenderer* renderer;
+    VkCommandPool commandPools[VGPU_MAX_INFLIGHT_FRAMES];
+    VkCommandBuffer commandBuffers[VGPU_MAX_INFLIGHT_FRAMES];
+    VkCommandBuffer commandBuffer;
 };
 
 struct VGFXVulkanRenderer
@@ -616,18 +626,16 @@ struct VGFXVulkanRenderer
         VkFence fence = VK_NULL_HANDLE;
         VkCommandPool initCommandPool = VK_NULL_HANDLE;
         VkCommandBuffer initCommandBuffer = VK_NULL_HANDLE;
-
-        VkCommandPool frameCommandPool = VK_NULL_HANDLE;
-        VkCommandBuffer frameCommandBuffer = VK_NULL_HANDLE;
     };
-    FrameResources frames[VGFX_MAX_INFLIGHT_FRAMES];
-
-    VkCommandBuffer GetCommandBuffer() const {
-        return frames[frameIndex].frameCommandBuffer;
-    }
+    FrameResources frames[VGPU_MAX_INFLIGHT_FRAMES];
 
     std::mutex initLocker;
     bool submitInits = false;
+
+    /* Command contexts */
+    std::mutex cmdBuffersLocker;
+    uint32_t cmdBuffersCount{ 0 };
+    std::vector<VGPUCommandBuffer_T*> commandBuffers;
 
     std::vector<VGFXVulkanSwapChain*> swapChains;
     std::vector<VGFXVulkanTexture*> swapChainTextures;
@@ -811,9 +819,9 @@ static VkRenderPass vulkan_RequestRenderPass(VGFXVulkanRenderer* renderer, const
     if (it == renderer->renderPassCache.end())
     {
         // Not found -> create new
-        VkAttachmentDescription2  attachmentDescriptions[VGFX_MAX_COLOR_ATTACHMENTS * 2 + 1] = {};
-        VkAttachmentReference2 colorAttachmentRefs[VGFX_MAX_COLOR_ATTACHMENTS] = {};
-        VkAttachmentReference2 resolveAttachmentRefs[VGFX_MAX_COLOR_ATTACHMENTS] = {};
+        VkAttachmentDescription2  attachmentDescriptions[VGPU_MAX_COLOR_ATTACHMENTS * 2 + 1] = {};
+        VkAttachmentReference2 colorAttachmentRefs[VGPU_MAX_COLOR_ATTACHMENTS] = {};
+        VkAttachmentReference2 resolveAttachmentRefs[VGPU_MAX_COLOR_ATTACHMENTS] = {};
         VkAttachmentReference2 shadingRateAttachmentRef = {};
         VkAttachmentReference2 depthStencilAttachmentRef = {};
 
@@ -956,7 +964,7 @@ static VkFramebuffer vulkan_RequestFramebuffer(
     hash_combine(hash, renderPass);
 
     uint32_t attachmentCount = 0;
-    VkImageView attachments[VGFX_MAX_COLOR_ATTACHMENTS + 1];
+    VkImageView attachments[VGPU_MAX_COLOR_ATTACHMENTS + 1];
 
     for (uint32_t i = 0; i < info->colorAttachmentCount; ++i)
     {
@@ -1006,7 +1014,7 @@ static void vulkan_ProcessDeletionQueue(VGFXVulkanRenderer* renderer)
 
     while (!renderer->destroyedBuffers.empty())
     {
-        if (renderer->destroyedBuffers.front().second + VGFX_MAX_INFLIGHT_FRAMES < renderer->frameCount)
+        if (renderer->destroyedBuffers.front().second + VGPU_MAX_INFLIGHT_FRAMES < renderer->frameCount)
         {
             auto item = renderer->destroyedBuffers.front();
             renderer->destroyedBuffers.pop_front();
@@ -1020,7 +1028,7 @@ static void vulkan_ProcessDeletionQueue(VGFXVulkanRenderer* renderer)
 
     while (!renderer->destroyedImagesQueue.empty())
     {
-        if (renderer->destroyedImagesQueue.front().second + VGFX_MAX_INFLIGHT_FRAMES < renderer->frameCount)
+        if (renderer->destroyedImagesQueue.front().second + VGPU_MAX_INFLIGHT_FRAMES < renderer->frameCount)
         {
             auto item = renderer->destroyedImagesQueue.front();
             renderer->destroyedImagesQueue.pop_front();
@@ -1034,7 +1042,7 @@ static void vulkan_ProcessDeletionQueue(VGFXVulkanRenderer* renderer)
 
     while (!renderer->destroyedImageViews.empty())
     {
-        if (renderer->destroyedImageViews.front().second + VGFX_MAX_INFLIGHT_FRAMES < renderer->frameCount)
+        if (renderer->destroyedImageViews.front().second + VGPU_MAX_INFLIGHT_FRAMES < renderer->frameCount)
         {
             auto item = renderer->destroyedImageViews.front();
             renderer->destroyedImageViews.pop_front();
@@ -1048,7 +1056,7 @@ static void vulkan_ProcessDeletionQueue(VGFXVulkanRenderer* renderer)
 
     while (!renderer->destroyedSamplers.empty())
     {
-        if (renderer->destroyedSamplers.front().second + VGFX_MAX_INFLIGHT_FRAMES < renderer->frameCount)
+        if (renderer->destroyedSamplers.front().second + VGPU_MAX_INFLIGHT_FRAMES < renderer->frameCount)
         {
             auto item = renderer->destroyedSamplers.front();
             renderer->destroyedSamplers.pop_front();
@@ -1062,7 +1070,7 @@ static void vulkan_ProcessDeletionQueue(VGFXVulkanRenderer* renderer)
 
     while (!renderer->destroyedPipelines.empty())
     {
-        if (renderer->destroyedPipelines.front().second + VGFX_MAX_INFLIGHT_FRAMES < renderer->frameCount)
+        if (renderer->destroyedPipelines.front().second + VGPU_MAX_INFLIGHT_FRAMES < renderer->frameCount)
         {
             auto item = renderer->destroyedPipelines.front();
             renderer->destroyedPipelines.pop_front();
@@ -1076,7 +1084,7 @@ static void vulkan_ProcessDeletionQueue(VGFXVulkanRenderer* renderer)
 
     while (!renderer->destroyedDescriptorPools.empty())
     {
-        if (renderer->destroyedDescriptorPools.front().second + VGFX_MAX_INFLIGHT_FRAMES < renderer->frameCount)
+        if (renderer->destroyedDescriptorPools.front().second + VGPU_MAX_INFLIGHT_FRAMES < renderer->frameCount)
         {
             auto item = renderer->destroyedDescriptorPools.front();
             renderer->destroyedDescriptorPools.pop_front();
@@ -1090,7 +1098,7 @@ static void vulkan_ProcessDeletionQueue(VGFXVulkanRenderer* renderer)
 
     while (!renderer->destroyedQueryPools.empty())
     {
-        if (renderer->destroyedQueryPools.front().second + VGFX_MAX_INFLIGHT_FRAMES < renderer->frameCount)
+        if (renderer->destroyedQueryPools.front().second + VGPU_MAX_INFLIGHT_FRAMES < renderer->frameCount)
         {
             auto item = renderer->destroyedQueryPools.front();
             renderer->destroyedQueryPools.pop_front();
@@ -1113,8 +1121,19 @@ static void vulkan_destroyDevice(VGPUDevice device)
     {
         vkDestroyFence(renderer->device, frame.fence, nullptr);
         vkDestroyCommandPool(renderer->device, frame.initCommandPool, nullptr);
-        vkDestroyCommandPool(renderer->device, frame.frameCommandPool, nullptr);
     }
+
+    for (size_t i = 0; i < renderer->commandBuffers.size(); ++i)
+    {
+        VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)renderer->commandBuffers[i]->driverData;
+        for (uint32_t i = 0; i < VGPU_MAX_INFLIGHT_FRAMES; ++i)
+        {
+            vkFreeCommandBuffers(renderer->device, commandBuffer->commandPools[i], 1, &commandBuffer->commandBuffers[i]);
+            vkDestroyCommandPool(renderer->device, commandBuffer->commandPools[i], nullptr);
+            //binderPools[i].Shutdown();
+        }
+    }
+    renderer->commandBuffers.clear();
 
     // Release caches
     for (auto& it : renderer->framebufferCache)
@@ -1196,94 +1215,17 @@ static uint64_t vulkan_frame(VGFXRenderer* driverData)
     VkResult result = VK_SUCCESS;
     VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
 
-    // Collect present swapchains
-    std::vector<VkSemaphore> waitSemaphores;
-    std::vector<VkPipelineStageFlags> waitStages;
-    std::vector<VkSemaphore> signalSemaphores;
-    std::vector<VkSwapchainKHR> presentSwapChains;
-    std::vector<uint32_t> swapChainImageIndices;
-
-    for (size_t i = 0, count = renderer->swapChains.size(); i < count; ++i)
-    {
-        VGFXVulkanSwapChain* swapChain = renderer->swapChains[i];
-
-        waitSemaphores.push_back(swapChain->acquireSemaphore);
-        waitStages.push_back(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
-        signalSemaphores.push_back(swapChain->releaseSemaphore);
-
-        presentSwapChains.push_back(swapChain->handle);
-        swapChainImageIndices.push_back(swapChain->imageIndex);
-    }
-
     renderer->initLocker.lock();
 
-    // Submit current frame.
-    {
-        auto& frame = renderer->frames[renderer->frameIndex];
-
-        // Transitions first.
-        std::vector<VkCommandBuffer> submitCommandBuffers;
-        if (renderer->submitInits)
-        {
-            result = vkEndCommandBuffer(frame.initCommandBuffer);
-            VGFX_ASSERT(result == VK_SUCCESS);
-            submitCommandBuffers.push_back(frame.initCommandBuffer);
-        }
-
-        result = vkEndCommandBuffer(frame.frameCommandBuffer);
-        VGFX_ASSERT(result == VK_SUCCESS);
-        submitCommandBuffers.push_back(frame.frameCommandBuffer);
-
-        // Submit now
-        VkSubmitInfo submitInfo = {};
-        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        submitInfo.waitSemaphoreCount = (uint32_t)waitSemaphores.size();
-        submitInfo.pWaitSemaphores = waitSemaphores.data();
-        submitInfo.pWaitDstStageMask = waitStages.data();
-        submitInfo.commandBufferCount = (uint32_t)submitCommandBuffers.size();
-        submitInfo.pCommandBuffers = submitCommandBuffers.data();
-        submitInfo.signalSemaphoreCount = (uint32_t)signalSemaphores.size();
-        submitInfo.pSignalSemaphores = signalSemaphores.data();
-
-        result = vkQueueSubmit(renderer->graphicsQueue, 1, &submitInfo, frame.fence);
-        VGFX_ASSERT(result == VK_SUCCESS);
-
-        if (!presentSwapChains.empty())
-        {
-            VkPresentInfoKHR presentInfo = {};
-            presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-            presentInfo.waitSemaphoreCount = (uint32_t)signalSemaphores.size();
-            presentInfo.pWaitSemaphores = signalSemaphores.data();
-            presentInfo.swapchainCount = (uint32_t)presentSwapChains.size();
-            presentInfo.pSwapchains = presentSwapChains.data();
-            presentInfo.pImageIndices = swapChainImageIndices.data();
-            result = vkQueuePresentKHR(renderer->graphicsQueue, &presentInfo);
-            if (result != VK_SUCCESS)
-            {
-                // Handle outdated error in present:
-                if (result == VK_SUBOPTIMAL_KHR || result == VK_ERROR_OUT_OF_DATE_KHR)
-                {
-                    // TODO
-                }
-                else
-                {
-                    VGFX_ASSERT(false);
-                }
-            }
-        }
-    }
-
-    renderer->swapChains.clear();
-
     renderer->frameCount++;
-    renderer->frameIndex = renderer->frameCount % VGFX_MAX_INFLIGHT_FRAMES;
+    renderer->frameIndex = renderer->frameCount % VGPU_MAX_INFLIGHT_FRAMES;
 
     // Begin new frame
     {
         auto& frame = renderer->frames[renderer->frameIndex];
 
         // Initiate stalling CPU when GPU is not yet finished with next frame.
-        if (renderer->frameCount >= VGFX_MAX_INFLIGHT_FRAMES)
+        if (renderer->frameCount >= VGPU_MAX_INFLIGHT_FRAMES)
         {
             result = vkWaitForFences(renderer->device, 1, &frame.fence, VK_TRUE, 0xFFFFFFFFFFFFFFFF);
             VGFX_ASSERT(result == VK_SUCCESS);
@@ -1304,12 +1246,6 @@ static uint64_t vulkan_frame(VGFXRenderer* driverData)
         beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
         result = vkBeginCommandBuffer(frame.initCommandBuffer, &beginInfo);
-        VGFX_ASSERT(result == VK_SUCCESS);
-
-        // Restart frame command buffers now.
-        result = vkResetCommandPool(renderer->device, frame.frameCommandPool, 0);
-        VGFX_ASSERT(result == VK_SUCCESS);
-        result = vkBeginCommandBuffer(frame.frameCommandBuffer, &beginInfo);
         VGFX_ASSERT(result == VK_SUCCESS);
     }
 
@@ -1973,21 +1909,13 @@ static void insertImageMemoryBarrier(
         1, &barrier);
 }
 
-static VGPUCommandBuffer vulkan_beginCommandBuffer(VGFXRenderer* driverData, const char* label)
-{
-    return nullptr;
-}
 
-static void vulkan_submit(VGFXRenderer* driverData, VGPUCommandBuffer* commandBuffers, uint32_t count)
-{
-}
 
-static void vulkan_beginRenderPass(VGFXRenderer* driverData, const VGFXRenderPassDesc* desc)
+static void vulkan_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGFXRenderPassDesc* desc)
 {
-    VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
-    VkCommandBuffer commandBuffer = renderer->GetCommandBuffer();
+    VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
 
-    if (renderer->dynamicRendering)
+    if (commandBuffer->renderer->dynamicRendering)
     {
         VkImageSubresourceRange range{};
         range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -2004,9 +1932,8 @@ static void vulkan_beginRenderPass(VGFXRenderer* driverData, const VGFXRenderPas
         renderingInfo.layerCount = 1;
         renderingInfo.viewMask = 0;
 
-        VkRenderingAttachmentInfo colorAttachments[VGFX_MAX_COLOR_ATTACHMENTS] = {};
+        VkRenderingAttachmentInfo colorAttachments[VGPU_MAX_COLOR_ATTACHMENTS] = {};
         VkRenderingAttachmentInfo depthStencilAttachmentInfo{};
-        
 
         for (uint32_t i = 0; i < desc->colorAttachmentCount; ++i)
         {
@@ -2018,7 +1945,7 @@ static void vulkan_beginRenderPass(VGFXRenderer* driverData, const VGFXRenderPas
             if (texture->isSwapChain)
             {
                 insertImageMemoryBarrier(
-                    commandBuffer,
+                    commandBuffer->commandBuffer,
                     texture->handle,
                     0,
                     VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
@@ -2026,8 +1953,8 @@ static void vulkan_beginRenderPass(VGFXRenderer* driverData, const VGFXRenderPas
                     VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                     VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
                     VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, range);
-            
-                renderer->swapChainTextures.push_back(texture);
+
+                commandBuffer->renderer->swapChainTextures.push_back(texture);
             }
 
             renderingInfo.renderArea.extent.width = std::min(renderingInfo.renderArea.extent.width, std::max(1U, texture->width >> level));
@@ -2035,7 +1962,7 @@ static void vulkan_beginRenderPass(VGFXRenderer* driverData, const VGFXRenderPas
 
             colorAttachments[renderingInfo.colorAttachmentCount].sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
             colorAttachments[renderingInfo.colorAttachmentCount].pNext = nullptr;
-            colorAttachments[renderingInfo.colorAttachmentCount].imageView = vulkan_GetRTV(renderer, texture, level, slice);
+            colorAttachments[renderingInfo.colorAttachmentCount].imageView = vulkan_GetRTV(commandBuffer->renderer, texture, level, slice);
             colorAttachments[renderingInfo.colorAttachmentCount].imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
             colorAttachments[renderingInfo.colorAttachmentCount].resolveMode = VK_RESOLVE_MODE_NONE;
             colorAttachments[renderingInfo.colorAttachmentCount].loadOp = ToVk(attachment->loadOp);
@@ -2059,7 +1986,7 @@ static void vulkan_beginRenderPass(VGFXRenderer* driverData, const VGFXRenderPas
 
             depthStencilAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
             depthStencilAttachmentInfo.pNext = VK_NULL_HANDLE;
-            depthStencilAttachmentInfo.imageView = vulkan_GetRTV(renderer, texture, level, slice);
+            depthStencilAttachmentInfo.imageView = vulkan_GetRTV(commandBuffer->renderer, texture, level, slice);
             depthStencilAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
             depthStencilAttachmentInfo.resolveMode = VK_RESOLVE_MODE_NONE;
             depthStencilAttachmentInfo.loadOp = ToVk(attachment->depthLoadOp);
@@ -2068,7 +1995,7 @@ static void vulkan_beginRenderPass(VGFXRenderer* driverData, const VGFXRenderPas
 
             // Barrier
             insertImageMemoryBarrier(
-                commandBuffer,
+                commandBuffer->commandBuffer,
                 texture->handle,
                 0,
                 VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
@@ -2077,20 +2004,20 @@ static void vulkan_beginRenderPass(VGFXRenderer* driverData, const VGFXRenderPas
                 VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
                 VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT, range);
 
-            renderer->swapChainTextures.push_back(texture);
+            commandBuffer->renderer->swapChainTextures.push_back(texture);
 
             renderingInfo.pDepthAttachment = &depthStencilAttachmentInfo;
             renderingInfo.pStencilAttachment = &depthStencilAttachmentInfo;
         }
 
-        vkCmdBeginRenderingKHR(commandBuffer, &renderingInfo);
+        vkCmdBeginRenderingKHR(commandBuffer->commandBuffer, &renderingInfo);
     }
     else
     {
         uint32_t width = 0;
         uint32_t height = 0;
-        VkRenderPass renderPass = vulkan_RequestRenderPass(renderer, desc);
-        VkClearValue clearValues[VGFX_MAX_COLOR_ATTACHMENTS + 1];
+        VkRenderPass renderPass = vulkan_RequestRenderPass(commandBuffer->renderer, desc);
+        VkClearValue clearValues[VGPU_MAX_COLOR_ATTACHMENTS + 1];
 
         for (uint32_t i = 0; i < desc->colorAttachmentCount; ++i)
         {
@@ -2106,25 +2033,24 @@ static void vulkan_beginRenderPass(VGFXRenderer* driverData, const VGFXRenderPas
         beginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
         beginInfo.pNext = nullptr;
         beginInfo.renderPass = renderPass;
-        beginInfo.framebuffer = vulkan_RequestFramebuffer(renderer, renderPass, desc, &width, &height);
+        beginInfo.framebuffer = vulkan_RequestFramebuffer(commandBuffer->renderer, renderPass, desc, &width, &height);
         beginInfo.renderArea.offset.x = 0;
         beginInfo.renderArea.offset.y = 0;
         beginInfo.renderArea.extent.width = width;
         beginInfo.renderArea.extent.height = height;
         beginInfo.clearValueCount = 1;
         beginInfo.pClearValues = clearValues;
-        vkCmdBeginRenderPass(commandBuffer, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
+        vkCmdBeginRenderPass(commandBuffer->commandBuffer, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
     }
 }
 
-static void vulkan_endRenderPass(VGFXRenderer* driverData)
+static void vulkan_endRenderPass(VGPUCommandBufferImpl* driverData)
 {
-    VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
-    VkCommandBuffer commandBuffer = renderer->GetCommandBuffer();
+    VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
 
-    if (renderer->dynamicRendering)
+    if (commandBuffer->renderer->dynamicRendering)
     {
-        vkCmdEndRenderingKHR(commandBuffer);
+        vkCmdEndRenderingKHR(commandBuffer->commandBuffer);
 
         VkImageSubresourceRange range{};
         range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -2133,10 +2059,10 @@ static void vulkan_endRenderPass(VGFXRenderer* driverData)
         range.baseArrayLayer = 0;
         range.layerCount = VK_REMAINING_ARRAY_LAYERS;
 
-        for (auto texture : renderer->swapChainTextures)
+        for (auto texture : commandBuffer->renderer->swapChainTextures)
         {
             insertImageMemoryBarrier(
-                commandBuffer,
+                commandBuffer->commandBuffer,
                 texture->handle,
                 VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
                 0,
@@ -2147,12 +2073,175 @@ static void vulkan_endRenderPass(VGFXRenderer* driverData)
                 range);
         }
 
-        renderer->swapChainTextures.clear();
+        commandBuffer->renderer->swapChainTextures.clear();
     }
     else
     {
-        vkCmdEndRenderPass(commandBuffer);
+        vkCmdEndRenderPass(commandBuffer->commandBuffer);
     }
+}
+
+static VGPUCommandBuffer vulkan_beginCommandBuffer(VGFXRenderer* driverData, const char* label)
+{
+    VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
+    VulkanCommandBuffer* impl = nullptr;
+
+    renderer->cmdBuffersLocker.lock();
+    uint32_t cmd_current = renderer->cmdBuffersCount++;
+    if (cmd_current >= renderer->commandBuffers.size())
+    {
+        impl = new VulkanCommandBuffer();
+        impl->renderer = renderer;
+
+        for (uint32_t i = 0; i < VGPU_MAX_INFLIGHT_FRAMES; ++i)
+        {
+            VkCommandPoolCreateInfo poolInfo = {};
+            poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+            poolInfo.queueFamilyIndex = renderer->graphicsQueueFamily;
+            poolInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
+            //poolInfo.queueFamilyIndex = renderer->computeQueueFamily;
+            VK_CHECK(vkCreateCommandPool(renderer->device, &poolInfo, nullptr, &impl->commandPools[i]));
+
+            VkCommandBufferAllocateInfo commandBufferInfo = {};
+            commandBufferInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+            commandBufferInfo.commandBufferCount = 1;
+            commandBufferInfo.commandPool = impl->commandPools[i];
+            commandBufferInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+            VK_CHECK(vkAllocateCommandBuffers(renderer->device, &commandBufferInfo, &impl->commandBuffers[i]));
+            //binderPools[i].Init(device);
+        }
+
+        VGPUCommandBuffer_T* commandBuffer = (VGPUCommandBuffer_T*)VGFX_MALLOC(sizeof(VGPUCommandBuffer_T));
+        ASSIGN_COMMAND_BUFFER(vulkan);
+        commandBuffer->driverData = (VGPUCommandBufferImpl*)impl;
+
+        renderer->commandBuffers.push_back(commandBuffer);
+    }
+    else
+    {
+        impl = (VulkanCommandBuffer*)renderer->commandBuffers.back()->driverData;
+    }
+
+    renderer->cmdBuffersLocker.unlock();
+
+    // Begin recording
+    VK_CHECK(vkResetCommandPool(renderer->device, impl->commandPools[renderer->frameIndex], 0));
+
+    VkCommandBufferBeginInfo beginInfo = {};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    beginInfo.pInheritanceInfo = nullptr; // Optional
+    VK_CHECK(vkBeginCommandBuffer(impl->commandBuffers[renderer->frameIndex], &beginInfo));
+    //impl->insideRenderPass = false;
+
+    impl->commandBuffer = impl->commandBuffers[renderer->frameIndex];
+
+    //binderPools[frameIndex].Reset();
+    //binder.Reset();
+    //frameAllocators[frameIndex].Reset();
+    //
+    //SetStencilReference(0);
+    //SetBlendColor(Colors::Transparent);
+    //
+    //if (device->features2.features.depthBounds == VK_TRUE)
+    //{
+    //    vkCmdSetDepthBounds(commandBuffer, 0.0f, 1.0f);
+    //}
+
+    return renderer->commandBuffers.back();
+}
+
+static void vulkan_submit(VGFXRenderer* driverData, VGPUCommandBuffer* commandBuffers, uint32_t count)
+{
+    VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
+
+    // Collect present swapchains
+    std::vector<VkSemaphore> waitSemaphores;
+    std::vector<VkPipelineStageFlags> waitStages;
+    std::vector<VkSemaphore> signalSemaphores;
+    std::vector<VkSwapchainKHR> presentSwapChains;
+    std::vector<uint32_t> swapChainImageIndices;
+
+    for (size_t i = 0, count = renderer->swapChains.size(); i < count; ++i)
+    {
+        VGFXVulkanSwapChain* swapChain = renderer->swapChains[i];
+
+        waitSemaphores.push_back(swapChain->acquireSemaphore);
+        waitStages.push_back(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
+        signalSemaphores.push_back(swapChain->releaseSemaphore);
+
+        presentSwapChains.push_back(swapChain->handle);
+        swapChainImageIndices.push_back(swapChain->imageIndex);
+    }
+
+    VkResult result = VK_SUCCESS;
+    renderer->initLocker.lock();
+    renderer->cmdBuffersCount = 0;
+
+    // Submit current frame.
+    {
+        auto& frame = renderer->frames[renderer->frameIndex];
+
+        // Transitions first.
+        std::vector<VkCommandBuffer> submitCommandBuffers;
+        if (renderer->submitInits)
+        {
+            result = vkEndCommandBuffer(frame.initCommandBuffer);
+            VGFX_ASSERT(result == VK_SUCCESS);
+            submitCommandBuffers.push_back(frame.initCommandBuffer);
+        }
+
+        for (uint32_t i = 0; i < count; i += 1)
+        {
+            VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)commandBuffers[i]->driverData;
+
+            result = vkEndCommandBuffer(commandBuffer->commandBuffer);
+            VGFX_ASSERT(result == VK_SUCCESS);
+            submitCommandBuffers.push_back(commandBuffer->commandBuffer);
+        }
+
+        // Submit now
+        VkSubmitInfo submitInfo = {};
+        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submitInfo.waitSemaphoreCount = (uint32_t)waitSemaphores.size();
+        submitInfo.pWaitSemaphores = waitSemaphores.data();
+        submitInfo.pWaitDstStageMask = waitStages.data();
+        submitInfo.commandBufferCount = (uint32_t)submitCommandBuffers.size();
+        submitInfo.pCommandBuffers = submitCommandBuffers.data();
+        submitInfo.signalSemaphoreCount = (uint32_t)signalSemaphores.size();
+        submitInfo.pSignalSemaphores = signalSemaphores.data();
+
+        result = vkQueueSubmit(renderer->graphicsQueue, 1, &submitInfo, frame.fence);
+        VGFX_ASSERT(result == VK_SUCCESS);
+
+        if (!presentSwapChains.empty())
+        {
+            VkPresentInfoKHR presentInfo = {};
+            presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+            presentInfo.waitSemaphoreCount = (uint32_t)signalSemaphores.size();
+            presentInfo.pWaitSemaphores = signalSemaphores.data();
+            presentInfo.swapchainCount = (uint32_t)presentSwapChains.size();
+            presentInfo.pSwapchains = presentSwapChains.data();
+            presentInfo.pImageIndices = swapChainImageIndices.data();
+            result = vkQueuePresentKHR(renderer->graphicsQueue, &presentInfo);
+            if (result != VK_SUCCESS)
+            {
+                // Handle outdated error in present:
+                if (result == VK_SUBOPTIMAL_KHR || result == VK_ERROR_OUT_OF_DATE_KHR)
+                {
+                    // TODO
+                }
+                else
+                {
+                    VGFX_ASSERT(false);
+                }
+            }
+        }
+    }
+
+    renderer->swapChains.clear();
+    renderer->submitInits = false;
+    renderer->initLocker.unlock();
 }
 
 static bool vulkan_isSupported(void)
@@ -2837,7 +2926,7 @@ static VGPUDevice vulkan_createDevice(const VGPUDeviceDesc* info)
     }
 
     // Create frame resources:
-    for (uint32_t i = 0; i < VGFX_MAX_INFLIGHT_FRAMES; ++i)
+    for (uint32_t i = 0; i < VGPU_MAX_INFLIGHT_FRAMES; ++i)
     {
         VkFenceCreateInfo fenceInfo = {};
         fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
@@ -2881,45 +2970,6 @@ static VGPUDevice vulkan_createDevice(const VGPUDeviceDesc* info)
             beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
             beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
             result = vkBeginCommandBuffer(renderer->frames[i].initCommandBuffer, &beginInfo);
-            if (result != VK_SUCCESS)
-            {
-                VK_LOG_ERROR(result, "vkBeginCommandBuffer failed");
-                delete renderer;
-                return nullptr;
-            }
-        }
-
-        // Create resources for frame command buffer.
-        {
-            VkCommandPoolCreateInfo poolInfo = {};
-            poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-            poolInfo.queueFamilyIndex = renderer->graphicsQueueFamily;
-            poolInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
-            result = vkCreateCommandPool(renderer->device, &poolInfo, nullptr, &renderer->frames[i].frameCommandPool);
-            if (result != VK_SUCCESS)
-            {
-                VK_LOG_ERROR(result, "Cannot create frame command pool");
-                delete renderer;
-                return nullptr;
-            }
-
-            VkCommandBufferAllocateInfo commandBufferInfo = {};
-            commandBufferInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-            commandBufferInfo.commandBufferCount = 1;
-            commandBufferInfo.commandPool = renderer->frames[i].frameCommandPool;
-            commandBufferInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-            result = vkAllocateCommandBuffers(renderer->device, &commandBufferInfo, &renderer->frames[i].frameCommandBuffer);
-            if (result != VK_SUCCESS)
-            {
-                VK_LOG_ERROR(result, "vkAllocateCommandBuffers failed");
-                delete renderer;
-                return nullptr;
-            }
-
-            VkCommandBufferBeginInfo beginInfo = {};
-            beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-            beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-            result = vkBeginCommandBuffer(renderer->frames[i].frameCommandBuffer, &beginInfo);
             if (result != VK_SUCCESS)
             {
                 VK_LOG_ERROR(result, "vkBeginCommandBuffer failed");

@@ -50,15 +50,15 @@ void init_gfx(GLFWwindow* window)
     deviceDesc.validationMode = VGPU_VALIDATION_MODE_ENABLED;
 #endif
 
-    if (vgpuIsSupported(VGPU_BACKEND_TYPE_VULKAN))
-    {
-        deviceDesc.preferredBackend = VGPU_BACKEND_TYPE_VULKAN;
-    }
+    //if (vgpuIsSupported(VGPU_BACKEND_TYPE_VULKAN))
+    //{
+    //    deviceDesc.preferredBackend = VGPU_BACKEND_TYPE_VULKAN;
+    //}
 
-    if (vgpuIsSupported(VGPU_BACKEND_TYPE_D3D11))
-    {
-        deviceDesc.preferredBackend = VGPU_BACKEND_TYPE_D3D11;
-}
+    //if (vgpuIsSupported(VGPU_BACKEND_TYPE_D3D11))
+    //{
+    //    deviceDesc.preferredBackend = VGPU_BACKEND_TYPE_D3D11;
+    //}
 
     void* windowHandle = nullptr;
 #if defined(__EMSCRIPTEN__)
@@ -115,7 +115,7 @@ EM_JS(void, glue_preint, (), {
 else {
  console.error("Entry point not found; unable to start");
 }
-});
+    });
 
 KEEP_IN_MODULE void _glue_main_()
 {
@@ -139,13 +139,13 @@ void draw_frame()
     colorAttachment.clearColor.g = 0.3f;
     colorAttachment.clearColor.b = 0.3f;
     colorAttachment.clearColor.a = 1.0f;
-    
+
     VGFXRenderPassDesc renderPass{};
     renderPass.colorAttachmentCount = 1u;
     renderPass.colorAttachments = &colorAttachment;
     vgpuBeginRenderPass(commandBuffer, &renderPass);
     //vgfxBeginRenderPassSwapChain(device, swapChain);
-    vgpuEndRenderPass( commandBuffer);
+    vgpuEndRenderPass(commandBuffer);
     vgpuSubmit(device, &commandBuffer, 1u);
     vgpuFrame(device);
 }
@@ -154,7 +154,7 @@ int main()
 {
 #if defined(__EMSCRIPTEN__)
     glue_preint();
-    
+
 #else
     if (!glfwInit())
     {

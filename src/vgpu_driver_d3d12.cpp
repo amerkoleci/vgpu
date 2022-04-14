@@ -134,6 +134,8 @@ struct VGFXD3D12DescriptorAllocator
     }
 };
 
+struct VGFXD3D12Renderer;
+
 struct VGFXD3D12Texture
 {
     ID3D12Resource* handle = nullptr;
@@ -162,6 +164,16 @@ struct VGFXD3D12UploadContext
     void* uploadBufferData = nullptr;
 };
 
+struct D3D12CommandBuffer
+{
+    VGFXD3D12Renderer* renderer;
+    D3D12_COMMAND_LIST_TYPE type;
+
+    ID3D12CommandAllocator* commandAllocators[VGPU_MAX_INFLIGHT_FRAMES];
+    ID3D12GraphicsCommandList4* commandList;
+    D3D12_CPU_DESCRIPTOR_HANDLE RTVs[VGPU_MAX_COLOR_ATTACHMENTS] = {};
+};
+
 struct VGFXD3D12Renderer
 {
     ComPtr<IDXGIFactory4> factory;
@@ -181,8 +193,10 @@ struct VGFXD3D12Renderer
     D3D12MA::Allocator* allocator = nullptr;
     ID3D12CommandQueue* graphicsQueue = nullptr;
 
-    ID3D12GraphicsCommandList4* graphicsCommandList = nullptr;
-    ID3D12CommandAllocator* commandAllocators[VGFX_MAX_INFLIGHT_FRAMES] = {};
+    /* Command contexts */
+    std::mutex cmdBuffersLocker;
+    uint32_t cmdBuffersCount{ 0 };
+    std::vector<VGPUCommandBuffer_T*> commandBuffers;
 
     std::vector<VGFXD3D12SwapChain*> swapChains;
 
@@ -239,7 +253,7 @@ static void d3d12_ProcessDeletionQueue(VGFXD3D12Renderer* renderer)
 
     while (!renderer->deferredAllocations.empty())
     {
-        if (renderer->deferredAllocations.front().second + VGFX_MAX_INFLIGHT_FRAMES < renderer->frameCount)
+        if (renderer->deferredAllocations.front().second + VGPU_MAX_INFLIGHT_FRAMES < renderer->frameCount)
         {
             auto item = renderer->deferredAllocations.front();
             renderer->deferredAllocations.pop_front();
@@ -253,7 +267,7 @@ static void d3d12_ProcessDeletionQueue(VGFXD3D12Renderer* renderer)
 
     while (!renderer->deferredReleases.empty())
     {
-        if (renderer->deferredReleases.front().second + VGFX_MAX_INFLIGHT_FRAMES < renderer->frameCount)
+        if (renderer->deferredReleases.front().second + VGPU_MAX_INFLIGHT_FRAMES < renderer->frameCount)
         {
             auto item = renderer->deferredReleases.front();
             renderer->deferredReleases.pop_front();
@@ -427,11 +441,16 @@ static void d3d12_destroyDevice(VGPUDevice device)
         renderer->dsvAllocator.Shutdown();
     }
 
-    for (uint32_t i = 0; i < VGFX_MAX_INFLIGHT_FRAMES; ++i)
+    for (size_t i = 0; i < renderer->commandBuffers.size(); ++i)
     {
-        SafeRelease(renderer->commandAllocators[i]);
+        D3D12CommandBuffer* commandBuffer = (D3D12CommandBuffer*)renderer->commandBuffers[i]->driverData;
+        for (uint32_t i = 0; i < VGPU_MAX_INFLIGHT_FRAMES; ++i)
+        {
+            SafeRelease(commandBuffer->commandAllocators[i]);
+        }
+        SafeRelease(commandBuffer->commandList);
     }
-    SafeRelease(renderer->graphicsCommandList);
+    renderer->commandBuffers.clear();
     SafeRelease(renderer->graphicsQueue);
 
     // Allocator.
@@ -485,7 +504,7 @@ static void d3d12_destroyDevice(VGPUDevice device)
 
     delete renderer;
     VGFX_FREE(device);
-    }
+}
 
 static void d3d12_updateSwapChain(VGFXD3D12Renderer* renderer, VGFXD3D12SwapChain* swapChain)
 {
@@ -524,103 +543,37 @@ static uint64_t d3d12_frame(VGFXRenderer* driverData)
     HRESULT hr = S_OK;
     VGFXD3D12Renderer* renderer = (VGFXD3D12Renderer*)driverData;
 
-    /* Transition SwapChain textures to present */
-    for (size_t i = 0, count = renderer->swapChains.size(); i < count; ++i)
-    {
-        VGFXD3D12SwapChain* swapChain = renderer->swapChains[i];
-        VGFXD3D12Texture* texture = (VGFXD3D12Texture*)swapChain->backbufferTextures[swapChain->handle->GetCurrentBackBufferIndex()];
+    renderer->frameCount++;
+    renderer->frameIndex = renderer->frameCount % VGPU_MAX_INFLIGHT_FRAMES;
 
-        D3D12_RESOURCE_BARRIER barrier = {};
-        barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        barrier.Transition.pResource = texture->handle;
-        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-        barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
-        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-        renderer->graphicsCommandList->ResourceBarrier(1, &barrier);
-    }
-
-    hr = renderer->graphicsCommandList->Close();
+    // Signal the fence with the current frame number, so that we can check back on it
+    hr = renderer->graphicsQueue->Signal(renderer->frameFence, renderer->frameCount);
     if (FAILED(hr))
     {
-        vgfxLogError("Failed to close command list");
+        vgfxLogError("Failed to signal frame");
         return (uint64_t)(-1);
     }
 
-    ID3D12CommandList* commandLists[] = { renderer->graphicsCommandList };
-    renderer->graphicsQueue->ExecuteCommandLists(_countof(commandLists), commandLists);
-
-    // Present acquired SwapChains
-    for (size_t i = 0, count = renderer->swapChains.size(); i < count && SUCCEEDED(hr); ++i)
+    // Wait for the GPU to catch up before we stomp an executing command buffer
+    const uint64_t gpuLag = renderer->frameCount - renderer->GPUFrameCount;
+    VGFX_ASSERT(gpuLag <= VGPU_MAX_INFLIGHT_FRAMES);
+    if (gpuLag >= VGPU_MAX_INFLIGHT_FRAMES)
     {
-        VGFXD3D12SwapChain* swapChain = renderer->swapChains[i];
-
-        if (swapChain->vsync)
+        // Make sure that the previous frame is finished
+        const uint64_t signalValue = renderer->GPUFrameCount + 1;
+        if (renderer->frameFence->GetCompletedValue() < signalValue)
         {
-            hr = swapChain->handle->Present(1, 0);
+            renderer->frameFence->SetEventOnCompletion(signalValue, renderer->frameFenceEvent);
+            WaitForSingleObjectEx(renderer->frameFenceEvent, INFINITE, FALSE);
         }
-        else
-        {
-            hr = swapChain->handle->Present(0, renderer->tearingSupported ? DXGI_PRESENT_ALLOW_TEARING : 0);
-        }
-    }
-    renderer->swapChains.clear();
-
-    // If the device was reset we must completely reinitialize the renderer.
-    if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET)
-    {
-#ifdef _DEBUG
-        char buff[64] = {};
-        sprintf_s(buff, "Device Lost on Present: Reason code 0x%08X\n",
-            static_cast<unsigned int>((hr == DXGI_ERROR_DEVICE_REMOVED) ? renderer->device->GetDeviceRemovedReason() : hr));
-        OutputDebugStringA(buff);
-#endif
-        //HandleDeviceLost();
-    }
-    else
-    {
-        if (FAILED(hr))
-        {
-            vgfxLogError("Failed to process frame");
-            return (uint64_t)(-1);
-        }
-
-        renderer->frameCount++;
-
-        // Signal the fence with the current frame number, so that we can check back on it
-        hr = renderer->graphicsQueue->Signal(renderer->frameFence, renderer->frameCount);
-        if (FAILED(hr))
-        {
-            vgfxLogError("Failed to signal frame");
-            return (uint64_t)(-1);
-        }
-
-        // Wait for the GPU to catch up before we stomp an executing command buffer
-        const uint64_t gpuLag = renderer->frameCount - renderer->GPUFrameCount;
-        VGFX_ASSERT(gpuLag <= VGFX_MAX_INFLIGHT_FRAMES);
-        if (gpuLag >= VGFX_MAX_INFLIGHT_FRAMES)
-        {
-            // Make sure that the previous frame is finished
-            const uint64_t signalValue = renderer->GPUFrameCount + 1;
-            if (renderer->frameFence->GetCompletedValue() < signalValue)
-            {
-                renderer->frameFence->SetEventOnCompletion(signalValue, renderer->frameFenceEvent);
-                WaitForSingleObjectEx(renderer->frameFenceEvent, INFINITE, FALSE);
-            }
-            renderer->GPUFrameCount++;
-        }
+        renderer->GPUFrameCount++;
     }
 
     // Begin new frame
-    {
-        // Safe delete deferred destroys
-        d3d12_ProcessDeletionQueue(renderer);
+    // Safe delete deferred destroys
+    d3d12_ProcessDeletionQueue(renderer);
 
-        renderer->frameIndex = renderer->frameCount % VGFX_MAX_INFLIGHT_FRAMES;
 
-        // Prepare the command buffers to be used for the next frame
-        renderer->commandAllocators[renderer->frameIndex]->Reset();
-        renderer->graphicsCommandList->Reset(renderer->commandAllocators[renderer->frameIndex], nullptr);
-    }
 
     // Return current frame
     return renderer->frameCount - 1;
@@ -892,7 +845,7 @@ static VGPUSwapChain d3d12_createSwapChain(VGFXRenderer* driverData, void* windo
     swapChainDesc.SampleDesc.Count = 1;
     swapChainDesc.SampleDesc.Quality = 0;
     swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    swapChainDesc.BufferCount = VGFX_MAX_INFLIGHT_FRAMES;
+    swapChainDesc.BufferCount = VGPU_MAX_INFLIGHT_FRAMES;
     swapChainDesc.Scaling = DXGI_SCALING_STRETCH;
     swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
     swapChainDesc.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
@@ -1010,23 +963,13 @@ static VGFXTexture d3d12_acquireNextTexture(VGFXRenderer* driverData, VGPUSwapCh
     return d3d12SwapChain->backbufferTextures[d3d12SwapChain->handle->GetCurrentBackBufferIndex()];
 }
 
-static VGPUCommandBuffer d3d12_beginCommandBuffer(VGFXRenderer* driverData, const char* label)
+static void d3d12_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGFXRenderPassDesc* desc)
 {
-    return nullptr;
-}
+    D3D12CommandBuffer* commandBuffer = (D3D12CommandBuffer*)driverData;
 
-static void d3d12_submit(VGFXRenderer* driverData, VGPUCommandBuffer* commandBuffers, uint32_t count)
-{
-}
-
-static void d3d12_beginRenderPass(VGFXRenderer* driverData, const VGFXRenderPassDesc* info)
-{
-    VGFXD3D12Renderer* renderer = (VGFXD3D12Renderer*)driverData;
-    D3D12_CPU_DESCRIPTOR_HANDLE rtvs[VGFX_MAX_COLOR_ATTACHMENTS] = {};
-
-    for (uint32_t i = 0; i < info->colorAttachmentCount; ++i)
+    for (uint32_t i = 0; i < desc->colorAttachmentCount; ++i)
     {
-        VGFXRenderPassColorAttachment attachment = info->colorAttachments[i];
+        VGFXRenderPassColorAttachment attachment = desc->colorAttachments[i];
         VGFXD3D12Texture* texture = (VGFXD3D12Texture*)attachment.texture;
 
         D3D12_RESOURCE_BARRIER resource_barrier = {};
@@ -1035,14 +978,14 @@ static void d3d12_beginRenderPass(VGFXRenderer* driverData, const VGFXRenderPass
         resource_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
         resource_barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
         resource_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-        renderer->graphicsCommandList->ResourceBarrier(1, &resource_barrier);
+        commandBuffer->commandList->ResourceBarrier(1, &resource_barrier);
 
-        rtvs[i] = texture->rtv;
+        commandBuffer->RTVs[i] = texture->rtv;
 
         switch (attachment.loadOp)
         {
             case VGFXLoadOp_Clear:
-                renderer->graphicsCommandList->ClearRenderTargetView(rtvs[i], &attachment.clearColor.r, 0, nullptr);
+                commandBuffer->commandList->ClearRenderTargetView(commandBuffer->RTVs[i], &attachment.clearColor.r, 0, nullptr);
                 break;
 
             default:
@@ -1050,12 +993,147 @@ static void d3d12_beginRenderPass(VGFXRenderer* driverData, const VGFXRenderPass
         }
     }
 
-    renderer->graphicsCommandList->OMSetRenderTargets(info->colorAttachmentCount, rtvs, FALSE, nullptr);
+    commandBuffer->commandList->OMSetRenderTargets(desc->colorAttachmentCount, commandBuffer->RTVs, FALSE, nullptr);
 }
 
-static void d3d12_endRenderPass(VGFXRenderer* driverData)
+static void d3d12_endRenderPass(VGPUCommandBufferImpl* driverData)
+{
+    D3D12CommandBuffer* commandBuffer = (D3D12CommandBuffer*)driverData;
+
+    /* Transition SwapChain textures to present */
+    for (size_t i = 0, count = commandBuffer->renderer->swapChains.size(); i < count; ++i)
+    {
+        VGFXD3D12SwapChain* swapChain = commandBuffer->renderer->swapChains[i];
+        VGFXD3D12Texture* texture = (VGFXD3D12Texture*)swapChain->backbufferTextures[swapChain->handle->GetCurrentBackBufferIndex()];
+
+        D3D12_RESOURCE_BARRIER barrier = {};
+        barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barrier.Transition.pResource = texture->handle;
+        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
+        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        commandBuffer->commandList->ResourceBarrier(1, &barrier);
+    }
+}
+
+static VGPUCommandBuffer d3d12_beginCommandBuffer(VGFXRenderer* driverData, const char* label)
 {
     VGFXD3D12Renderer* renderer = (VGFXD3D12Renderer*)driverData;
+
+    HRESULT hr = S_OK;
+    D3D12CommandBuffer* impl = nullptr;
+
+    renderer->cmdBuffersLocker.lock();
+    uint32_t cmd_current = renderer->cmdBuffersCount++;
+    if (cmd_current >= renderer->commandBuffers.size())
+    {
+        impl = new D3D12CommandBuffer();
+        impl->renderer = renderer;
+        impl->type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+
+        for (uint32_t i = 0; i < VGPU_MAX_INFLIGHT_FRAMES; ++i)
+        {
+            hr = renderer->device->CreateCommandAllocator(
+                impl->type, IID_PPV_ARGS(&impl->commandAllocators[i])
+            );
+            VGFX_ASSERT(SUCCEEDED(hr));
+        }
+
+        hr = renderer->device->CreateCommandList1(0,
+            impl->type,
+            D3D12_COMMAND_LIST_FLAG_NONE,
+            IID_PPV_ARGS(&impl->commandList)
+        );
+        VGFX_ASSERT(SUCCEEDED(hr));
+
+        VGPUCommandBuffer_T* commandBuffer = (VGPUCommandBuffer_T*)VGFX_MALLOC(sizeof(VGPUCommandBuffer_T));
+        ASSIGN_COMMAND_BUFFER(d3d12);
+        commandBuffer->driverData = (VGPUCommandBufferImpl*)impl;
+
+        renderer->commandBuffers.push_back(commandBuffer);
+    }
+    else
+    {
+        impl = (D3D12CommandBuffer*)renderer->commandBuffers.back()->driverData;
+    }
+
+    renderer->cmdBuffersLocker.unlock();
+
+    // Start the command list in a default state.
+    hr = impl->commandAllocators[renderer->frameIndex]->Reset();
+    VGFX_ASSERT(SUCCEEDED(hr));
+    hr = impl->commandList->Reset(impl->commandAllocators[renderer->frameIndex], nullptr);
+    VGFX_ASSERT(SUCCEEDED(hr));
+
+    //ID3D12DescriptorHeap* heaps[2] = {
+    //    renderer->resourceHeap.handle,
+    //    renderer->samplerHeap.handle
+    //};
+    //impl->commandList->SetDescriptorHeaps(static_cast<UINT>(std::size(heaps)), heaps);
+
+    static constexpr float defaultBlendFactor[4] = { 0, 0, 0, 0 };
+    impl->commandList->OMSetBlendFactor(defaultBlendFactor);
+    impl->commandList->OMSetStencilRef(0);
+
+    return renderer->commandBuffers.back();
+}
+
+static void d3d12_submit(VGFXRenderer* driverData, VGPUCommandBuffer* commandBuffers, uint32_t count)
+{
+    VGFXD3D12Renderer* renderer = (VGFXD3D12Renderer*)driverData;
+
+    HRESULT hr = S_OK;
+    std::vector<ID3D12CommandList*> submitCommandLists;
+    for (uint32_t i = 0; i < count; i += 1)
+    {
+        D3D12CommandBuffer* commandBuffer = (D3D12CommandBuffer*)commandBuffers[i]->driverData;
+
+        hr = commandBuffer->commandList->Close();
+        if (FAILED(hr))
+        {
+            vgfxLogError("Failed to close command list");
+            return;
+        }
+
+        submitCommandLists.push_back(commandBuffer->commandList);
+    }
+
+    renderer->graphicsQueue->ExecuteCommandLists(
+        (UINT)submitCommandLists.size(),
+        submitCommandLists.data()
+    );
+    renderer->cmdBuffersCount = 0;
+
+    // Present acquired SwapChains
+    for (size_t i = 0, count = renderer->swapChains.size(); i < count && SUCCEEDED(hr); ++i)
+    {
+        VGFXD3D12SwapChain* swapChain = renderer->swapChains[i];
+
+        if (swapChain->vsync)
+        {
+            hr = swapChain->handle->Present(1, 0);
+        }
+        else
+        {
+            hr = swapChain->handle->Present(0, renderer->tearingSupported ? DXGI_PRESENT_ALLOW_TEARING : 0);
+        }
+
+        // If the device was reset we must completely reinitialize the renderer.
+        if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET)
+        {
+#ifdef _DEBUG
+            char buff[64] = {};
+            sprintf_s(buff, "Device Lost on Present: Reason code 0x%08X\n",
+                static_cast<unsigned int>((hr == DXGI_ERROR_DEVICE_REMOVED) ? renderer->device->GetDeviceRemovedReason() : hr));
+            OutputDebugStringA(buff);
+#endif
+            //HandleDeviceLost();
+            return;
+        }
+    }
+    renderer->swapChains.clear();
+
+    // Signal
 }
 
 static bool d3d12_isSupported(void)
@@ -1439,29 +1517,6 @@ static VGPUDevice d3d12_createDevice(const VGPUDeviceDesc* info)
         }
         renderer->frameFenceEvent = CreateEventEx(nullptr, nullptr, 0, EVENT_MODIFY_STATE | SYNCHRONIZE);
         if (renderer->frameFence == INVALID_HANDLE_VALUE)
-        {
-            delete renderer;
-            return nullptr;
-        }
-
-        for (uint32_t i = 0; i < VGFX_MAX_INFLIGHT_FRAMES; ++i)
-        {
-            if (!SUCCEEDED(renderer->device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&renderer->commandAllocators[i]))))
-            {
-                vgfxLogError("Unable to create command allocator");
-                delete renderer;
-                return nullptr;
-            }
-        }
-
-        hr = renderer->device->CreateCommandList(
-            0,
-            D3D12_COMMAND_LIST_TYPE_DIRECT,
-            renderer->commandAllocators[0],
-            nullptr,
-            IID_PPV_ARGS(&renderer->graphicsCommandList)
-        );
-        if (FAILED(hr))
         {
             delete renderer;
             return nullptr;

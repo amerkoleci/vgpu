@@ -378,6 +378,7 @@ static void d3d11_destroyDevice(VGPUDevice device)
         commandBuffer->context->Release();
         VGFX_FREE(renderer->contextPool[i]);
     }
+    renderer->contextPool.clear();
 
     SafeRelease(renderer->immediateContext);
 
@@ -462,7 +463,7 @@ static uint64_t d3d11_frame(VGFXRenderer* driverData)
     }
 
     renderer->frameCount++;
-    renderer->frameIndex = renderer->frameCount % VGFX_MAX_INFLIGHT_FRAMES;
+    renderer->frameIndex = renderer->frameCount % VGPU_MAX_INFLIGHT_FRAMES;
 
     // Return current frame
     return renderer->frameCount - 1;
@@ -793,7 +794,7 @@ static VGPUSwapChain d3d11_createSwapChain(VGFXRenderer* driverData, void* windo
     swapChainDesc.SampleDesc.Count = 1;
     swapChainDesc.SampleDesc.Quality = 0;
     swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    swapChainDesc.BufferCount = VGFX_MAX_INFLIGHT_FRAMES;
+    swapChainDesc.BufferCount = VGPU_MAX_INFLIGHT_FRAMES;
     swapChainDesc.Scaling = DXGI_SCALING_STRETCH;
     swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
     swapChainDesc.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
@@ -881,7 +882,7 @@ static void d3d11_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGFXR
     uint32_t width = UINT32_MAX;
     uint32_t height = UINT32_MAX;
     uint32_t numRTVs = 0;
-    ID3D11RenderTargetView* RTVs[VGFX_MAX_COLOR_ATTACHMENTS] = {};
+    ID3D11RenderTargetView* RTVs[VGPU_MAX_COLOR_ATTACHMENTS] = {};
     ID3D11DepthStencilView* DSV = nullptr;
 
     for (uint32_t i = 0; i < info->colorAttachmentCount; ++i)
