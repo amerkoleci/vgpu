@@ -293,19 +293,31 @@ VGFXTexture vgfxSwapChainAcquireNextTexture(VGPUDevice device, VGPUSwapChain swa
 }
 
 /* Commands */
-void vgfxBeginRenderPass(VGPUDevice device, const VGFXRenderPassDesc* desc)
+VGPUCommandBuffer vgpuBeginCommandBuffer(VGPUDevice device, const char* label)
 {
-    NULL_RETURN(device);
-    NULL_RETURN(desc);
+    NULL_RETURN_NULL(device);
 
-    device->beginRenderPass(device->driverData, desc);
+    return device->beginCommandBuffer(device->driverData, label);
 }
 
-void vgfxEndRenderPass(VGPUDevice device)
+void vgpuBeginRenderPass(VGPUCommandBuffer commandBuffer, const VGFXRenderPassDesc* desc)
 {
-    NULL_RETURN(device);
+    NULL_RETURN(desc);
 
-    device->endRenderPass(device->driverData);
+    commandBuffer->beginRenderPass(commandBuffer->driverData, desc);
+}
+
+void vgpuEndRenderPass(VGPUCommandBuffer commandBuffer)
+{
+    commandBuffer->endRenderPass(commandBuffer->driverData);
+}
+
+void vgpuSubmit(VGPUDevice device, VGPUCommandBuffer* commandBuffers, uint32_t count)
+{
+    VGFX_ASSERT(commandBuffers);
+    VGFX_ASSERT(count);
+
+    device->submit(device->driverData, commandBuffers, count);
 }
 
 // Format mapping table. The rows must be in the exactly same order as Format enum members are defined.

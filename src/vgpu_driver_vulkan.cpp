@@ -1973,6 +1973,15 @@ static void insertImageMemoryBarrier(
         1, &barrier);
 }
 
+static VGPUCommandBuffer vulkan_beginCommandBuffer(VGFXRenderer* driverData, const char* label)
+{
+    return nullptr;
+}
+
+static void vulkan_submit(VGFXRenderer* driverData, VGPUCommandBuffer* commandBuffers, uint32_t count)
+{
+}
+
 static void vulkan_beginRenderPass(VGFXRenderer* driverData, const VGFXRenderPassDesc* desc)
 {
     VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
@@ -2285,9 +2294,11 @@ static VGPUDevice vulkan_createDevice(const VGPUDeviceDesc* info)
 
         VkApplicationInfo appInfo = {};
         appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-        appInfo.pEngineName = "vgfx";
-        appInfo.engineVersion = VK_MAKE_VERSION(VGFX_VERSION_MAJOR, VGFX_VERSION_MINOR, VGFX_VERSION_PATCH);
-        appInfo.apiVersion = VK_API_VERSION_1_2;
+        appInfo.pApplicationName = info->label;
+        appInfo.applicationVersion = 1;
+        appInfo.pEngineName = "vgpu";
+        appInfo.engineVersion = VK_MAKE_VERSION(VGPU_VERSION_MAJOR, VGPU_VERSION_MINOR, VGPU_VERSION_PATCH);
+        appInfo.apiVersion = VK_HEADER_VERSION_COMPLETE;
 
         VkInstanceCreateInfo createInfo;
         createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -3074,7 +3085,7 @@ static VGPUDevice vulkan_createDevice(const VGPUDeviceDesc* info)
         VGFX_ASSERT(result == VK_SUCCESS);
     }
 
-    vgfxLogInfo("vgfx driver: Vulkan");
+    vgfxLogInfo("VGPU Driver: Vulkan");
     vgfxLogInfo("Vulkan Adapter: %s", renderer->properties2.properties.deviceName);
 
     VGFXDevice_T* device = (VGFXDevice_T*)VGFX_MALLOC(sizeof(VGFXDevice_T));

@@ -50,15 +50,15 @@ void init_gfx(GLFWwindow* window)
     deviceDesc.validationMode = VGPU_VALIDATION_MODE_ENABLED;
 #endif
 
-    //if (vgfxIsSupported(VGFXBackendType_D3D11))
-    //{
-    //    deviceDesc.preferredBackend = VGFXBackendType_D3D11;
-    //}
-
     if (vgpuIsSupported(VGPU_BACKEND_TYPE_VULKAN))
     {
         deviceDesc.preferredBackend = VGPU_BACKEND_TYPE_VULKAN;
     }
+
+    if (vgpuIsSupported(VGPU_BACKEND_TYPE_D3D11))
+    {
+        deviceDesc.preferredBackend = VGPU_BACKEND_TYPE_D3D11;
+}
 
     void* windowHandle = nullptr;
 #if defined(__EMSCRIPTEN__)
@@ -129,6 +129,8 @@ void draw_frame()
     VGPUSize2D size;
     vgfxSwapChainGetSize(device, swapChain, &size);
 
+    VGPUCommandBuffer commandBuffer = vgpuBeginCommandBuffer(device, "Frame");
+
     VGFXRenderPassColorAttachment colorAttachment = {};
     colorAttachment.texture = vgfxSwapChainAcquireNextTexture(device, swapChain);
     colorAttachment.loadOp = VGFXLoadOp_Clear;
@@ -141,10 +143,10 @@ void draw_frame()
     VGFXRenderPassDesc renderPass{};
     renderPass.colorAttachmentCount = 1u;
     renderPass.colorAttachments = &colorAttachment;
-    vgfxBeginRenderPass(device, &renderPass);
+    vgpuBeginRenderPass(commandBuffer, &renderPass);
     //vgfxBeginRenderPassSwapChain(device, swapChain);
-    vgfxEndRenderPass(device);
-
+    vgpuEndRenderPass( commandBuffer);
+    vgpuSubmit(device, &commandBuffer, 1u);
     vgpuFrame(device);
 }
 

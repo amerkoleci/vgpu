@@ -7,19 +7,19 @@
 #if defined(VGPU_SHARED_LIBRARY)
 #    if defined(_WIN32)
 #        if defined(VGPU_IMPLEMENTATION)
-#            define _VGFX_EXPORT __declspec(dllexport)
+#            define _VGPU_EXPORT __declspec(dllexport)
 #        else
-#            define _VGFX_EXPORT __declspec(dllimport)
+#            define _VGPU_EXPORT __declspec(dllimport)
 #        endif
 #    else 
 #        if defined(VGFX_IMPLEMENTATION)
-#            define _VGFX_EXPORT __attribute__((visibility("default")))
+#            define _VGPU_EXPORT __attribute__((visibility("default")))
 #        else
-#            define _VGFX_EXPORT
+#            define _VGPU_EXPORT
 #        endif
 #    endif
 #else
-#    define _VGFX_EXPORT
+#    define _VGPU_EXPORT
 #endif
 
 #ifdef __cplusplus
@@ -28,7 +28,7 @@
 #    define _VGPU_EXTERN extern
 #endif
 
-#define VGFX_API _VGPU_EXTERN _VGFX_EXPORT
+#define VGFX_API _VGPU_EXTERN _VGPU_EXPORT
 
 #include <stdint.h>
 #include <stddef.h>
@@ -41,9 +41,9 @@
 #endif
 
 /* Version API */
-#define VGFX_VERSION_MAJOR  0
-#define VGFX_VERSION_MINOR	1
-#define VGFX_VERSION_PATCH	0
+#define VGPU_VERSION_MAJOR  0
+#define VGPU_VERSION_MINOR	1
+#define VGPU_VERSION_PATCH	0
 
 enum {
     VGFX_MAX_INFLIGHT_FRAMES = 2,
@@ -57,6 +57,7 @@ typedef struct VGFXBuffer_T* VGFXBuffer;
 typedef struct VGFXTexture_T* VGFXTexture;
 typedef struct VGFXSampler_T* VGFXSampler;
 typedef struct VGFXSwapChain_T* VGPUSwapChain;
+typedef struct VGPUCommandBuffer_T* VGPUCommandBuffer;
 
 typedef enum VGFXLogLevel {
     VGFXLogLevel_Info = 0,
@@ -317,7 +318,7 @@ typedef struct VGPUSize3D {
     uint32_t depth;
 } VGPUSize3D;
 
-typedef struct VGFXViewport {
+typedef struct VGPUViewport {
     /// Top left x coordinate.
     float x;
     /// Top left y coordinate.
@@ -330,7 +331,7 @@ typedef struct VGFXViewport {
     float minDepth;
     /// Maximum depth of the viewport. Ranges between 0 and 1.
     float maxDepth;
-} VGFXViewport;
+} VGPUViewport;
 
 typedef struct VGFXRenderPassColorAttachment {
     VGFXTexture texture;
@@ -461,8 +462,10 @@ VGFX_API void vgfxSwapChainGetSize(VGPUDevice device, VGPUSwapChain swapChain, V
 VGFX_API VGFXTexture vgfxSwapChainAcquireNextTexture(VGPUDevice device, VGPUSwapChain swapChain);
 
 /* Commands */
-VGFX_API void vgfxBeginRenderPass(VGPUDevice device, const VGFXRenderPassDesc* desc);
-VGFX_API void vgfxEndRenderPass(VGPUDevice device);
+VGFX_API VGPUCommandBuffer vgpuBeginCommandBuffer(VGPUDevice device, const char* label);
+VGFX_API void vgpuBeginRenderPass(VGPUCommandBuffer commandBuffer, const VGFXRenderPassDesc* desc);
+VGFX_API void vgpuEndRenderPass(VGPUCommandBuffer commandBuffer);
+VGFX_API void vgpuSubmit(VGPUDevice device, VGPUCommandBuffer* commandBuffers, uint32_t count);
 
 /* Helper functions */
 typedef struct VGFXFormatInfo {

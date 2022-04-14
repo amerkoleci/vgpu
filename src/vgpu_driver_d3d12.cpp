@@ -1010,6 +1010,15 @@ static VGFXTexture d3d12_acquireNextTexture(VGFXRenderer* driverData, VGPUSwapCh
     return d3d12SwapChain->backbufferTextures[d3d12SwapChain->handle->GetCurrentBackBufferIndex()];
 }
 
+static VGPUCommandBuffer d3d12_beginCommandBuffer(VGFXRenderer* driverData, const char* label)
+{
+    return nullptr;
+}
+
+static void d3d12_submit(VGFXRenderer* driverData, VGPUCommandBuffer* commandBuffers, uint32_t count)
+{
+}
+
 static void d3d12_beginRenderPass(VGFXRenderer* driverData, const VGFXRenderPassDesc* info)
 {
     VGFXD3D12Renderer* renderer = (VGFXD3D12Renderer*)driverData;
@@ -1389,7 +1398,7 @@ static VGPUDevice d3d12_createDevice(const VGPUDeviceDesc* info)
             renderer->featureLevel = D3D_FEATURE_LEVEL_11_0;
         }
 
-        vgfxLogInfo("VGPU driver: D3D12");
+        vgfxLogInfo("VGPU Driver: D3D12");
         vgfxLogInfo("D3D12 Adapter: %S", adapterDesc.Description);
     }
 

@@ -90,6 +90,15 @@ namespace
 #endif /* __cplusplus */
 
 typedef struct VGFXRenderer VGFXRenderer;
+typedef struct VGPUCommandBufferImpl VGPUCommandBufferImpl;
+
+typedef struct VGPUCommandBuffer_T {
+    void (*beginRenderPass)(VGPUCommandBufferImpl* driverData, const VGFXRenderPassDesc* desc);
+    void (*endRenderPass)(VGPUCommandBufferImpl* driverData);
+
+    /* Opaque pointer for the Driver */
+    VGPUCommandBufferImpl* driverData;
+} VGPUCommandBuffer_T;
 
 typedef struct VGFXDevice_T
 {
@@ -111,14 +120,19 @@ typedef struct VGFXDevice_T
     void (*getSwapChainSize)(VGFXRenderer* driverData, VGPUSwapChain swapChain, VGPUSize2D* pSize);
     VGFXTexture(*acquireNextTexture)(VGFXRenderer* driverData, VGPUSwapChain swapChain);
 
-    void (*beginRenderPass)(VGFXRenderer* driverData, const VGFXRenderPassDesc* desc);
-    void (*endRenderPass)(VGFXRenderer* driverData);
+    VGPUCommandBuffer(*beginCommandBuffer)(VGFXRenderer* driverData, const char* label);
+    void (*submit)(VGFXRenderer* driverData, VGPUCommandBuffer* commandBuffers, uint32_t count);
 
     /* Opaque pointer for the Driver */
     VGFXRenderer* driverData;
 } VGFXDevice_T;
 
 #define ASSIGN_DRIVER_FUNC(func, name) device->func = name##_##func;
+#define ASSIGN_COMMAND_BUFFER_FUNC(func, name) commandBuffer->func = name##_##func;
+
+#define ASSIGN_COMMAND_BUFFER(name) \
+ASSIGN_COMMAND_BUFFER_FUNC(beginRenderPass, name) \
+ASSIGN_COMMAND_BUFFER_FUNC(endRenderPass, name) 
 
 #define ASSIGN_DRIVER(name) \
 ASSIGN_DRIVER_FUNC(destroyDevice, name) \
@@ -135,8 +149,8 @@ ASSIGN_DRIVER_FUNC(createSwapChain, name) \
 ASSIGN_DRIVER_FUNC(destroySwapChain, name) \
 ASSIGN_DRIVER_FUNC(getSwapChainSize, name) \
 ASSIGN_DRIVER_FUNC(acquireNextTexture, name) \
-ASSIGN_DRIVER_FUNC(beginRenderPass, name) \
-ASSIGN_DRIVER_FUNC(endRenderPass, name) \
+ASSIGN_DRIVER_FUNC(beginCommandBuffer, name) \
+ASSIGN_DRIVER_FUNC(submit, name) \
 
 typedef struct VGFXDriver
 {

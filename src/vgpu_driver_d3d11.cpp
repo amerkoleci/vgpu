@@ -8,6 +8,7 @@
 #include <d3d11_1.h>
 #include <dxgi1_6.h>
 #include <wrl/client.h>
+#include <queue>
 #include <vector>
 #include <sstream>
 #include <unordered_map>
@@ -79,6 +80,7 @@ namespace
 #define vgfxD3D11CreateDevice D3D11CreateDevice
 #endif
 
+struct VGFXD3D11Renderer;
 
 struct VGFXD3D11Buffer
 {
@@ -105,6 +107,14 @@ struct VGFXD3D11SwapChain
     VGFXTexture backbufferTexture;
 };
 
+typedef struct D3D11CommandBuffer
+{
+    VGFXD3D11Renderer* renderer;
+    bool recording;
+    ID3D11DeviceContext1* context;
+    ID3D11CommandList* commandList;
+} D3D11CommandBuffer;
+
 struct VGFXD3D11Renderer
 {
     ComPtr<IDXGIFactory2> factory;
@@ -117,11 +127,16 @@ struct VGFXD3D11Renderer
     VGPUAdapterType adapterType;
 
     ID3D11Device1* device = nullptr;
-    ID3D11DeviceContext1* context = nullptr;
+    ID3D11DeviceContext1* immediateContext = nullptr;
     D3D_FEATURE_LEVEL featureLevel{};
 
     uint32_t frameIndex = 0;
     uint64_t frameCount = 0;
+
+    std::vector<VGPUCommandBuffer_T*> contextPool;
+    std::queue<VGPUCommandBuffer_T*> availableContexts;
+    SRWLOCK contextLock = SRWLOCK_INIT;
+    SRWLOCK commandBufferAcquisitionMutex = SRWLOCK_INIT;
 
     // Current frame present swap chains
     std::vector<VGFXD3D11SwapChain*> swapChains;
@@ -356,7 +371,15 @@ static void d3d11_destroyDevice(VGPUDevice device)
 {
     VGFXD3D11Renderer* renderer = (VGFXD3D11Renderer*)device->driverData;
 
-    SafeRelease(renderer->context);
+    for (size_t i = 0; i < renderer->contextPool.size(); ++i)
+    {
+        D3D11CommandBuffer* commandBuffer = (D3D11CommandBuffer*)renderer->contextPool[i]->driverData;
+        commandBuffer->commandList->Release();
+        commandBuffer->context->Release();
+        VGFX_FREE(renderer->contextPool[i]);
+    }
+
+    SafeRelease(renderer->immediateContext);
 
     if (renderer->device)
     {
@@ -448,10 +471,11 @@ static uint64_t d3d11_frame(VGFXRenderer* driverData)
 static void d3d11_waitIdle(VGFXRenderer* driverData)
 {
     VGFXD3D11Renderer* renderer = (VGFXD3D11Renderer*)driverData;
-    renderer->context->Flush();
+    renderer->immediateContext->Flush();
 }
 
-static bool d3d11_hasFeature(VGFXRenderer* driverData, VGPUFeature feature) {
+static bool d3d11_hasFeature(VGFXRenderer* driverData, VGPUFeature feature)
+{
     VGFXD3D11Renderer* renderer = (VGFXD3D11Renderer*)driverData;
     switch (feature)
     {
@@ -849,9 +873,10 @@ static VGFXTexture d3d11_acquireNextTexture(VGFXRenderer* driverData, VGPUSwapCh
     return d3dSwapChain->backbufferTexture;
 }
 
-static void d3d11_beginRenderPass(VGFXRenderer* driverData, const VGFXRenderPassDesc* info)
+/* Command Buffer */
+static void d3d11_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGFXRenderPassDesc* info)
 {
-    VGFXD3D11Renderer* renderer = (VGFXD3D11Renderer*)driverData;
+    D3D11CommandBuffer* commandBuffer = (D3D11CommandBuffer*)driverData;
 
     uint32_t width = UINT32_MAX;
     uint32_t height = UINT32_MAX;
@@ -866,12 +891,12 @@ static void d3d11_beginRenderPass(VGFXRenderer* driverData, const VGFXRenderPass
         const uint32_t level = attachment->level;
         const uint32_t slice = attachment->slice;
 
-        RTVs[i] = d3d11_GetRTV(renderer, texture, DXGI_FORMAT_UNKNOWN, level, slice);
+        RTVs[i] = d3d11_GetRTV(commandBuffer->renderer, texture, DXGI_FORMAT_UNKNOWN, level, slice);
 
         switch (attachment->loadOp)
         {
             case VGFXLoadOp_Clear:
-                renderer->context->ClearRenderTargetView(RTVs[i], &attachment->clearColor.r);
+                commandBuffer->context->ClearRenderTargetView(RTVs[i], &attachment->clearColor.r);
                 break;
 
             default:
@@ -890,7 +915,7 @@ static void d3d11_beginRenderPass(VGFXRenderer* driverData, const VGFXRenderPass
         const uint32_t level = attachment->level;
         const uint32_t slice = attachment->slice;
 
-        DSV = d3d11_GetDSV(renderer, texture, DXGI_FORMAT_UNKNOWN, level, slice);
+        DSV = d3d11_GetDSV(commandBuffer->renderer, texture, DXGI_FORMAT_UNKNOWN, level, slice);
 
         UINT clearFlags = {};
         float clearDepth = 0.0f;
@@ -910,25 +935,120 @@ static void d3d11_beginRenderPass(VGFXRenderer* driverData, const VGFXRenderPass
 
         if (clearFlags)
         {
-            renderer->context->ClearDepthStencilView(DSV, clearFlags, clearDepth, clearStencil);
+            commandBuffer->context->ClearDepthStencilView(DSV, clearFlags, clearDepth, clearStencil);
         }
 
         width = std::min(width, std::max(1U, texture->width >> level));
         height = std::min(height, std::max(1U, texture->height >> level));
     }
 
-    renderer->context->OMSetRenderTargets(numRTVs, RTVs, DSV);
+    commandBuffer->context->OMSetRenderTargets(numRTVs, RTVs, DSV);
 
     // Set the viewport and scissor.
     D3D11_VIEWPORT viewport = { 0.0f, 0.0f, float(width), float(height), 0.0f, 1.0f };
     D3D11_RECT scissorRect = { 0, 0, static_cast<long>(width), static_cast<long>(height) };
-    renderer->context->RSSetViewports(1, &viewport);
-    renderer->context->RSSetScissorRects(1, &scissorRect);
+    commandBuffer->context->RSSetViewports(1, &viewport);
+    commandBuffer->context->RSSetScissorRects(1, &scissorRect);
 }
 
-static void d3d11_endRenderPass(VGFXRenderer* driverData)
+static void d3d11_endRenderPass(VGPUCommandBufferImpl* driverData)
+{
+    D3D11CommandBuffer* commandBuffer = (D3D11CommandBuffer*)driverData;
+}
+
+static VGPUCommandBuffer d3d11_beginCommandBuffer(VGFXRenderer* driverData, const char* label)
 {
     VGFXD3D11Renderer* renderer = (VGFXD3D11Renderer*)driverData;
+
+    /* Make sure multiple threads can't acquire the same command buffer. */
+    AcquireSRWLockExclusive(&renderer->commandBufferAcquisitionMutex);
+
+    /* Try to use an existing command buffer, if one is available. */
+    VGPUCommandBuffer commandBuffer = nullptr;
+    D3D11CommandBuffer* impl = nullptr;
+
+    if (renderer->availableContexts.empty())
+    {
+        impl = new D3D11CommandBuffer();
+        impl->renderer = renderer;
+
+        const HRESULT hr = renderer->device->CreateDeferredContext1(
+            0,
+            &impl->context
+        );
+        if (FAILED(hr))
+        {
+            ReleaseSRWLockExclusive(&renderer->commandBufferAcquisitionMutex);
+            vgfxLogError("Could not create deferred context for command buffer");
+            return nullptr;
+        }
+
+        commandBuffer = (VGPUCommandBuffer_T*)VGFX_MALLOC(sizeof(VGPUCommandBuffer_T));
+        ASSIGN_COMMAND_BUFFER(d3d11);
+        commandBuffer->driverData = (VGPUCommandBufferImpl*)impl;
+
+        renderer->contextPool.push_back(commandBuffer);
+    }
+    else
+    {
+        commandBuffer = renderer->availableContexts.front();
+        renderer->availableContexts.pop();
+
+        impl = (D3D11CommandBuffer*)commandBuffer->driverData;
+        impl->commandList->Release();
+        impl->commandList = nullptr;
+    }
+
+    impl->recording = true;
+
+    ReleaseSRWLockExclusive(&renderer->commandBufferAcquisitionMutex);
+
+    return commandBuffer;
+}
+
+static void d3d11_submit(VGFXRenderer* driverData, VGPUCommandBuffer* commandBuffers, uint32_t count)
+{
+    VGFXD3D11Renderer* renderer = (VGFXD3D11Renderer*)driverData;
+    HRESULT hr = S_OK;
+
+    for (uint32_t i = 0; i < count; i += 1)
+    {
+        D3D11CommandBuffer* commandBuffer = (D3D11CommandBuffer*)commandBuffers[i]->driverData;
+
+        /* Serialize the commands into a command list */
+        hr = commandBuffer->context->FinishCommandList(
+            0,
+            &commandBuffer->commandList
+        );
+        if (FAILED(hr))
+        {
+            vgfxLogError("Could not finish command list recording");
+            continue;
+        }
+
+        /* Submit the command list to the immediate context */
+        AcquireSRWLockExclusive(&renderer->contextLock);
+        renderer->immediateContext->ExecuteCommandList(commandBuffer->commandList, FALSE);
+        ReleaseSRWLockExclusive(&renderer->contextLock);
+
+        /* Mark the command buffer as not-recording so that it can be used to record again. */
+        AcquireSRWLockExclusive(&renderer->commandBufferAcquisitionMutex);
+        commandBuffer->recording = false;
+        renderer->availableContexts.push(commandBuffers[i]);
+        ReleaseSRWLockExclusive(&renderer->commandBufferAcquisitionMutex);
+
+        /* Present, if applicable */
+        //if (commandBuffer->swapchainData)
+        //{
+        //    SDL_LockMutex(renderer->contextLock);
+        //    IDXGISwapChain_Present(
+        //        commandBuffer->swapchainData->swapchain,
+        //        1, /* FIXME: Assumes vsync! */
+        //        0
+        //    );
+        //    SDL_UnlockMutex(renderer->contextLock);
+        //}
+    }
 }
 
 static bool d3d11_isSupported(void)
@@ -1229,7 +1349,7 @@ static VGPUDevice d3d11_createDevice(const VGPUDeviceDesc* info)
         return nullptr;
     }
 
-    if (FAILED(context->QueryInterface(&renderer->context)))
+    if (FAILED(context->QueryInterface(&renderer->immediateContext)))
     {
         delete renderer;
         return nullptr;
@@ -1243,7 +1363,7 @@ static VGPUDevice d3d11_createDevice(const VGPUDeviceDesc* info)
     }
 
     // Init capabilities.
-    vgfxLogInfo("vgfx driver: D3D11");
+    vgfxLogInfo("VGPU Driver: D3D11");
     if (dxgiAdapter != nullptr)
     {
         DXGI_ADAPTER_DESC1 adapterDesc;
