@@ -50,15 +50,15 @@ void init_gfx(GLFWwindow* window)
     deviceDesc.validationMode = VGPU_VALIDATION_MODE_ENABLED;
 #endif
 
-    //if (vgpuIsSupported(VGPU_BACKEND_TYPE_VULKAN))
-    //{
-    //    deviceDesc.preferredBackend = VGPU_BACKEND_TYPE_VULKAN;
-    //}
-
-    if (vgpuIsSupported(VGPU_BACKEND_TYPE_D3D11))
+    if (vgpuIsSupported(VGPU_BACKEND_TYPE_VULKAN))
     {
-        deviceDesc.preferredBackend = VGPU_BACKEND_TYPE_D3D11;
+        deviceDesc.preferredBackend = VGPU_BACKEND_TYPE_VULKAN;
     }
+
+    //if (vgpuIsSupported(VGPU_BACKEND_TYPE_D3D11))
+    //{
+    //    deviceDesc.preferredBackend = VGPU_BACKEND_TYPE_D3D11;
+    //}
 
     void* windowHandle = nullptr;
 #if defined(__EMSCRIPTEN__)
@@ -126,14 +126,15 @@ KEEP_IN_MODULE void _glue_main_()
 
 void draw_frame()
 {
-    VGPUSize2D size;
-    vgfxSwapChainGetSize(device, swapChain, &size);
+    VGFXTextureFormat format = vgpuSwapChainGetFormat(device, swapChain);
+    uint32_t width;
+    uint32_t height;
 
     VGPUCommandBuffer commandBuffer = vgpuBeginCommandBuffer(device, "Frame");
 
-    VGFXRenderPassColorAttachment colorAttachment = {};
-    colorAttachment.texture = vgfxSwapChainAcquireNextTexture(device, swapChain);
-    colorAttachment.loadOp = VGFXLoadOp_Clear;
+    VGPURenderPassColorAttachment colorAttachment = {};
+    colorAttachment.texture = vgpuAcquireSwapchainTexture(commandBuffer, swapChain, &width, &height);
+    colorAttachment.loadOp = VGPU_LOAD_OP_CLEAR;
     colorAttachment.storeOp = VGFXStoreOp_Store;
     colorAttachment.clearColor.r = 0.3f;
     colorAttachment.clearColor.g = 0.3f;

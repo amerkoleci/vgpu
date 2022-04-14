@@ -148,6 +148,7 @@ struct VGFXD3D12SwapChain
     IDXGISwapChain3* handle = nullptr;
     uint32_t width = 0;
     uint32_t height = 0;
+    VGFXTextureFormat format;
     uint32_t syncInterval;
     std::vector<VGPUTexture> backbufferTextures;
 };
@@ -841,7 +842,7 @@ static VGPUSwapChain d3d12_createSwapChain(VGFXRenderer* driverData, void* windo
     DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
     swapChainDesc.Width = desc->width;
     swapChainDesc.Height = desc->height;
-    swapChainDesc.Format = ToDXGISwapChainFormat(desc->format);
+    swapChainDesc.Format = ToDXGIFormat(ToDXGISwapChainFormat(desc->format));
     swapChainDesc.Stereo = FALSE;
     swapChainDesc.SampleDesc.Count = 1;
     swapChainDesc.SampleDesc.Quality = 0;
@@ -929,6 +930,7 @@ static VGPUSwapChain d3d12_createSwapChain(VGFXRenderer* driverData, void* windo
 
     VGFXD3D12SwapChain* swapChain = new VGFXD3D12SwapChain();
     swapChain->handle = handle;
+    swapChain->format = ToDXGISwapChainFormat(desc->format);
     swapChain->syncInterval = PresentModeToSwapInterval(desc->presentMode);
     d3d12_updateSwapChain(renderer, swapChain);
     return (VGPUSwapChain)swapChain;
@@ -948,11 +950,10 @@ static void d3d12_destroySwapChain(VGFXRenderer* driverData, VGPUSwapChain swapC
     delete d3d12SwapChain;
 }
 
-static void d3d12_getSwapChainSize(VGFXRenderer*, VGPUSwapChain swapChain, VGPUSize2D* pSize)
+static VGFXTextureFormat d3d12_getSwapChainFormat(VGFXRenderer*, VGPUSwapChain swapChain)
 {
     VGFXD3D12SwapChain* d3dSwapChain = (VGFXD3D12SwapChain*)swapChain;
-    pSize->width = d3dSwapChain->width;
-    pSize->height = d3dSwapChain->height;
+    return d3dSwapChain->format;
 }
 
 static VGPUTexture d3d12_acquireNextTexture(VGFXRenderer* driverData, VGPUSwapChain swapChain)
@@ -990,13 +991,18 @@ static void d3d12_insertDebugMarker(VGPUCommandBufferImpl* driverData, const cha
     commandBuffer->commandList->SetMarker(PIX_EVENT_UNICODE_VERSION, wide_name.c_str(), size);
 }
 
+static VGPUTexture d3d12_acquireSwapchainTexture(VGPUCommandBufferImpl* driverData, VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight)
+{
+    return nullptr;
+}
+
 static void d3d12_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGFXRenderPassDesc* desc)
 {
     D3D12CommandBuffer* commandBuffer = (D3D12CommandBuffer*)driverData;
 
     for (uint32_t i = 0; i < desc->colorAttachmentCount; ++i)
     {
-        VGFXRenderPassColorAttachment attachment = desc->colorAttachments[i];
+        const VGPURenderPassColorAttachment attachment = desc->colorAttachments[i];
         VGFXD3D12Texture* texture = (VGFXD3D12Texture*)attachment.texture;
 
         D3D12_RESOURCE_BARRIER resource_barrier = {};
@@ -1011,7 +1017,7 @@ static void d3d12_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGFXR
 
         switch (attachment.loadOp)
         {
-            case VGFXLoadOp_Clear:
+            case VGPU_LOAD_OP_CLEAR:
                 commandBuffer->commandList->ClearRenderTargetView(commandBuffer->RTVs[i], &attachment.clearColor.r, 0, nullptr);
                 break;
 

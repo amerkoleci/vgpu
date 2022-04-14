@@ -153,26 +153,26 @@ namespace
         }
     }
 
-    constexpr DXGI_FORMAT ToDXGISwapChainFormat(VGFXTextureFormat format)
+    constexpr VGFXTextureFormat ToDXGISwapChainFormat(VGFXTextureFormat format)
     {
         switch (format)
         {
             case VGFXTextureFormat_RGBA16Float:
-                return DXGI_FORMAT_R16G16B16A16_FLOAT;
+                return VGFXTextureFormat_RGBA16Float;
 
             case VGFXTextureFormat_BGRA8UNorm:
             case VGFXTextureFormat_BGRA8UNormSrgb:
-                return DXGI_FORMAT_B8G8R8A8_UNORM;
+                return VGFXTextureFormat_BGRA8UNorm;
 
             case VGFXTextureFormat_RGBA8UNorm:
             case VGFXTextureFormat_RGBA8UNormSrgb:
-                return DXGI_FORMAT_R8G8B8A8_UNORM;
+                return VGFXTextureFormat_RGBA8UNorm;
 
             case VGFXTextureFormat_RGB10A2UNorm:
-                return DXGI_FORMAT_R10G10B10A2_UNORM;
+                return VGFXTextureFormat_RGB10A2UNorm;
         }
 
-        return DXGI_FORMAT_B8G8R8A8_UNORM;
+        return VGFXTextureFormat_BGRA8UNorm;
     }
 
     constexpr DXGI_FORMAT GetTypelessFormatFromDepthFormat(VGFXTextureFormat format)

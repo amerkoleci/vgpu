@@ -91,6 +91,7 @@ typedef struct VGPUCommandBuffer_T {
     void (*popDebugGroup)(VGPUCommandBufferImpl* driverData);
     void (*insertDebugMarker)(VGPUCommandBufferImpl* driverData, const char* debugLabel);
 
+    VGPUTexture(*acquireSwapchainTexture)(VGPUCommandBufferImpl* driverData, VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight);
     void (*beginRenderPass)(VGPUCommandBufferImpl* driverData, const VGFXRenderPassDesc* desc);
     void (*endRenderPass)(VGPUCommandBufferImpl* driverData);
 
@@ -115,8 +116,7 @@ typedef struct VGPUDevice_T
 
     VGPUSwapChain(*createSwapChain)(VGFXRenderer* driverData, void* windowHandle, const VGPUSwapChainDesc* desc);
     void(*destroySwapChain)(VGFXRenderer* driverData, VGPUSwapChain swapChain);
-    void (*getSwapChainSize)(VGFXRenderer* driverData, VGPUSwapChain swapChain, VGPUSize2D* pSize);
-    VGPUTexture(*acquireNextTexture)(VGFXRenderer* driverData, VGPUSwapChain swapChain);
+    VGFXTextureFormat(*getSwapChainFormat)(VGFXRenderer* driverData, VGPUSwapChain swapChain);
 
     VGPUCommandBuffer(*beginCommandBuffer)(VGFXRenderer* driverData, const char* label);
     void (*submit)(VGFXRenderer* driverData, VGPUCommandBuffer* commandBuffers, uint32_t count);
@@ -132,6 +132,7 @@ typedef struct VGPUDevice_T
 ASSIGN_COMMAND_BUFFER_FUNC(pushDebugGroup, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(popDebugGroup, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(insertDebugMarker, name) \
+ASSIGN_COMMAND_BUFFER_FUNC(acquireSwapchainTexture, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(beginRenderPass, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(endRenderPass, name) 
 
@@ -148,8 +149,7 @@ ASSIGN_DRIVER_FUNC(createTexture, name) \
 ASSIGN_DRIVER_FUNC(destroyTexture, name) \
 ASSIGN_DRIVER_FUNC(createSwapChain, name) \
 ASSIGN_DRIVER_FUNC(destroySwapChain, name) \
-ASSIGN_DRIVER_FUNC(getSwapChainSize, name) \
-ASSIGN_DRIVER_FUNC(acquireNextTexture, name) \
+ASSIGN_DRIVER_FUNC(getSwapChainFormat, name) \
 ASSIGN_DRIVER_FUNC(beginCommandBuffer, name) \
 ASSIGN_DRIVER_FUNC(submit, name) \
 

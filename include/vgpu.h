@@ -285,13 +285,14 @@ typedef enum VGPUFeature {
     _VGPU_FEATURE_FORCE_U32 = 0x7FFFFFFF
 } VGPUFeature;
 
-typedef enum VGFXLoadOp {
-    VGFXLoadOp_DontCare = 0,
-    VGFXLoadOp_Load,
-    VGFXLoadOp_Clear,
+typedef enum VGPULoadOp {
+    VGPU_LOAD_OP_DONT_CARE = 0,
+    VGPU_LOAD_OP_LOAD,
+    VGPU_LOAD_OP_CLEAR,
 
-    _VGFXLoadOp_Force32 = 0x7FFFFFFF
-} VGFXLoadOp;
+    _VGPU_LOAD_OP_COUNT,
+    _VGPU_LOAD_OP_FORCE_U32 = 0x7FFFFFFF
+} VGPULoadOp;
 
 typedef enum VGFXStoreOp {
     VGFXStoreOp_DontCare = 0,
@@ -300,12 +301,12 @@ typedef enum VGFXStoreOp {
     _VGFXStoreOp_Force32 = 0x7FFFFFFF
 } VGFXStoreOp;
 
-typedef struct VGFXColor {
+typedef struct VGPUColor {
     float r;
     float g;
     float b;
     float a;
-} VGFXColor;
+} VGPUColor;
 
 typedef struct VGPUSize2D {
     uint32_t width;
@@ -333,30 +334,30 @@ typedef struct VGPUViewport {
     float maxDepth;
 } VGPUViewport;
 
-typedef struct VGFXRenderPassColorAttachment {
+typedef struct VGPURenderPassColorAttachment {
     VGPUTexture texture;
     uint32_t level;
     uint32_t slice;
-    VGFXLoadOp loadOp;
+    VGPULoadOp loadOp;
     VGFXStoreOp storeOp;
-    VGFXColor clearColor;
-} VGFXRenderPassColorAttachment;
+    VGPUColor clearColor;
+} VGPURenderPassColorAttachment;
 
 typedef struct VGFXRenderPassDepthStencilAttachment {
     VGPUTexture texture;
     uint32_t level;
     uint32_t slice;
-    VGFXLoadOp depthLoadOp;
+    VGPULoadOp depthLoadOp;
     VGFXStoreOp depthStoreOp;
     float clearDepth;
-    VGFXLoadOp stencilLoadOp;
+    VGPULoadOp stencilLoadOp;
     VGFXStoreOp stencilStoreOp;
     uint8_t clearStencil;
 } VGFXRenderPassDepthStencilAttachment;
 
 typedef struct VGFXRenderPassDesc {
     uint32_t colorAttachmentCount;
-    const VGFXRenderPassColorAttachment* colorAttachments;
+    const VGPURenderPassColorAttachment* colorAttachments;
     const VGFXRenderPassDepthStencilAttachment* depthStencilAttachment;
 } VGFXRenderPassDesc;
 
@@ -458,8 +459,7 @@ VGFX_API void vgfxDestroyTexture(VGPUDevice device, VGPUTexture texture);
 /* SwapChain */
 VGFX_API VGPUSwapChain vgpuCreateSwapChain(VGPUDevice device, void* windowHandle, const VGPUSwapChainDesc* desc);
 VGFX_API void vgpuDestroySwapChain(VGPUDevice device, VGPUSwapChain swapChain);
-VGFX_API void vgfxSwapChainGetSize(VGPUDevice device, VGPUSwapChain swapChain, VGPUSize2D* pSize);
-VGFX_API VGPUTexture vgfxSwapChainAcquireNextTexture(VGPUDevice device, VGPUSwapChain swapChain);
+VGFX_API VGFXTextureFormat vgpuSwapChainGetFormat(VGPUDevice device, VGPUSwapChain swapChain);
 
 /* Commands */
 VGFX_API VGPUCommandBuffer vgpuBeginCommandBuffer(VGPUDevice device, const char* label);
@@ -467,6 +467,7 @@ VGFX_API void vgpuPushDebugGroup(VGPUCommandBuffer commandBuffer, const char* gr
 VGFX_API void vgpuPopDebugGroup(VGPUCommandBuffer commandBuffer);
 VGFX_API void vgpuInsertDebugMarker(VGPUCommandBuffer commandBuffer, const char* debugLabel);
 
+VGFX_API VGPUTexture vgpuAcquireSwapchainTexture(VGPUCommandBuffer commandBuffer, VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight);
 VGFX_API void vgpuBeginRenderPass(VGPUCommandBuffer commandBuffer, const VGFXRenderPassDesc* desc);
 VGFX_API void vgpuEndRenderPass(VGPUCommandBuffer commandBuffer);
 VGFX_API void vgpuSubmit(VGPUDevice device, VGPUCommandBuffer* commandBuffers, uint32_t count);

@@ -277,20 +277,11 @@ void vgpuDestroySwapChain(VGPUDevice device, VGPUSwapChain swapChain)
     device->destroySwapChain(device->driverData, swapChain);
 }
 
-void vgfxSwapChainGetSize(VGPUDevice device, VGPUSwapChain swapChain, VGPUSize2D* pSize)
+VGFXTextureFormat vgpuSwapChainGetFormat(VGPUDevice device, VGPUSwapChain swapChain)
 {
-    NULL_RETURN(device);
-    NULL_RETURN(swapChain);
-    NULL_RETURN(pSize);
-
-    device->getSwapChainSize(device->driverData, swapChain, pSize);
+    return device->getSwapChainFormat(device->driverData, swapChain);
 }
 
-VGPUTexture vgfxSwapChainAcquireNextTexture(VGPUDevice device, VGPUSwapChain swapChain)
-{
-    NULL_RETURN_NULL(device);
-    return device->acquireNextTexture(device->driverData, swapChain);
-}
 
 /* Commands */
 VGPUCommandBuffer vgpuBeginCommandBuffer(VGPUDevice device, const char* label)
@@ -317,6 +308,11 @@ void vgpuInsertDebugMarker(VGPUCommandBuffer commandBuffer, const char* debugLab
     NULL_RETURN(debugLabel);
 
     commandBuffer->insertDebugMarker(commandBuffer->driverData, debugLabel);
+}
+
+VGPUTexture vgpuAcquireSwapchainTexture(VGPUCommandBuffer commandBuffer, VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight)
+{
+    return commandBuffer->acquireSwapchainTexture(commandBuffer->driverData, swapChain, pWidth, pHeight);
 }
 
 void vgpuBeginRenderPass(VGPUCommandBuffer commandBuffer, const VGFXRenderPassDesc* desc)

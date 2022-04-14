@@ -103,6 +103,7 @@ struct VGFXD3D11SwapChain
     IDXGISwapChain1* handle = nullptr;
     uint32_t width = 0;
     uint32_t height = 0;
+    VGFXTextureFormat format;
     uint32_t syncInterval;
     VGPUTexture backbufferTexture;
 };
@@ -799,7 +800,7 @@ static VGPUSwapChain d3d11_createSwapChain(VGFXRenderer* driverData, void* windo
     DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
     swapChainDesc.Width = desc->width;
     swapChainDesc.Height = desc->height;
-    swapChainDesc.Format = ToDXGISwapChainFormat(desc->format);
+    swapChainDesc.Format = ToDXGIFormat(ToDXGISwapChainFormat(desc->format));
     swapChainDesc.Stereo = FALSE;
     swapChainDesc.SampleDesc.Count = 1;
     swapChainDesc.SampleDesc.Quality = 0;
@@ -851,6 +852,7 @@ static VGPUSwapChain d3d11_createSwapChain(VGFXRenderer* driverData, void* windo
 
     VGFXD3D11SwapChain* swapChain = new VGFXD3D11SwapChain();
     swapChain->handle = handle;
+    swapChain->format = ToDXGISwapChainFormat(desc->format);
     swapChain->syncInterval = PresentModeToSwapInterval(desc->presentMode);
     d3d11_updateSwapChain(renderer, swapChain);
     return (VGPUSwapChain)swapChain;
@@ -868,20 +870,10 @@ static void d3d11_destroySwapChain(VGFXRenderer* driverData, VGPUSwapChain swapC
     delete d3dSwapChain;
 }
 
-static void d3d11_getSwapChainSize(VGFXRenderer*, VGPUSwapChain swapChain, VGPUSize2D* pSize)
+static VGFXTextureFormat d3d11_getSwapChainFormat(VGFXRenderer*, VGPUSwapChain swapChain)
 {
     VGFXD3D11SwapChain* d3dSwapChain = (VGFXD3D11SwapChain*)swapChain;
-    pSize->width = d3dSwapChain->width;
-    pSize->height = d3dSwapChain->height;
-}
-
-static VGPUTexture d3d11_acquireNextTexture(VGFXRenderer* driverData, VGPUSwapChain swapChain)
-{
-    VGFXD3D11Renderer* renderer = (VGFXD3D11Renderer*)driverData;
-    VGFXD3D11SwapChain* d3dSwapChain = (VGFXD3D11SwapChain*)swapChain;
-
-    renderer->swapChains.push_back(d3dSwapChain);
-    return d3dSwapChain->backbufferTexture;
+    return d3dSwapChain->format;
 }
 
 /* Command Buffer */
@@ -915,6 +907,15 @@ static void d3d11_insertDebugMarker(VGPUCommandBufferImpl* driverData, const cha
     }
 }
 
+static VGPUTexture d3d11_acquireSwapchainTexture(VGPUCommandBufferImpl* driverData, VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight)
+{
+    VGFXD3D11Renderer* renderer = (VGFXD3D11Renderer*)driverData;
+    VGFXD3D11SwapChain* d3dSwapChain = (VGFXD3D11SwapChain*)swapChain;
+
+    renderer->swapChains.push_back(d3dSwapChain);
+    return d3dSwapChain->backbufferTexture;
+}
+
 static void d3d11_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGFXRenderPassDesc* info)
 {
     D3D11CommandBuffer* commandBuffer = (D3D11CommandBuffer*)driverData;
@@ -927,7 +928,7 @@ static void d3d11_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGFXR
 
     for (uint32_t i = 0; i < info->colorAttachmentCount; ++i)
     {
-        const VGFXRenderPassColorAttachment* attachment = &info->colorAttachments[i];
+        const VGPURenderPassColorAttachment* attachment = &info->colorAttachments[i];
         VGFXD3D11Texture* texture = (VGFXD3D11Texture*)attachment->texture;
         const uint32_t level = attachment->level;
         const uint32_t slice = attachment->slice;
@@ -936,7 +937,7 @@ static void d3d11_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGFXR
 
         switch (attachment->loadOp)
         {
-            case VGFXLoadOp_Clear:
+            case VGPU_LOAD_OP_CLEAR:
                 commandBuffer->context->ClearRenderTargetView(RTVs[i], &attachment->clearColor.r);
                 break;
 
@@ -962,13 +963,13 @@ static void d3d11_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGFXR
         float clearDepth = 0.0f;
         uint8_t clearStencil = 0u;
 
-        if (attachment->depthLoadOp == VGFXLoadOp_Clear)
+        if (attachment->depthLoadOp == VGPU_LOAD_OP_CLEAR)
         {
             clearFlags |= D3D11_CLEAR_DEPTH;
             clearDepth = attachment->clearDepth;
         }
 
-        if (attachment->stencilLoadOp == VGFXLoadOp_Clear)
+        if (attachment->stencilLoadOp == VGPU_LOAD_OP_CLEAR)
         {
             clearFlags |= D3D11_CLEAR_STENCIL;
             clearStencil = attachment->clearStencil;
