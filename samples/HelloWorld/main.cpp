@@ -55,10 +55,10 @@ void init_gfx(GLFWwindow* window)
     //    deviceDesc.preferredBackend = VGPU_BACKEND_TYPE_VULKAN;
     //}
 
-    //if (vgpuIsSupported(VGPU_BACKEND_TYPE_D3D11))
-    //{
-    //    deviceDesc.preferredBackend = VGPU_BACKEND_TYPE_D3D11;
-    //}
+    if (vgpuIsSupported(VGPU_BACKEND_TYPE_D3D11))
+    {
+        deviceDesc.preferredBackend = VGPU_BACKEND_TYPE_D3D11;
+    }
 
     void* windowHandle = nullptr;
 #if defined(__EMSCRIPTEN__)
@@ -84,7 +84,7 @@ void init_gfx(GLFWwindow* window)
     VGPUSwapChainDesc swapChainDesc{};
     swapChainDesc.width = (uint32_t)width;
     swapChainDesc.height = (uint32_t)height;
-    swapChainDesc.presentMode = VGFXPresentMode_Fifo;
+    swapChainDesc.presentMode = VGPU_PRESENT_MODE_FIFO;
     swapChain = vgpuCreateSwapChain(device, windowHandle, &swapChainDesc);
 }
 
@@ -144,7 +144,6 @@ void draw_frame()
     renderPass.colorAttachmentCount = 1u;
     renderPass.colorAttachments = &colorAttachment;
     vgpuBeginRenderPass(commandBuffer, &renderPass);
-    //vgfxBeginRenderPassSwapChain(device, swapChain);
     vgpuEndRenderPass(commandBuffer);
     vgpuSubmit(device, &commandBuffer, 1u);
     vgpuFrame(device);
@@ -161,7 +160,7 @@ int main()
         return EXIT_FAILURE;
     }
 
-    VGPU_SetLogCallback(vgpu_log);
+    //VGPU_SetLogCallback(vgpu_log);
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     GLFWwindow* window = glfwCreateWindow(1280, 720, "Hello World", NULL, NULL);

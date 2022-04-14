@@ -193,4 +193,32 @@ namespace
                 return ToDXGIFormat(format);
         }
     }
+
+    constexpr uint32_t PresentModeToBufferCount(VGPUPresentMode mode)
+    {
+        switch (mode)
+        {
+            case VGPU_PRESENT_MODE_IMMEDIATE:
+            case VGPU_PRESENT_MODE_FIFO:
+                return 2;
+            case VGPU_PRESENT_MODE_MAILBOX:
+                return 3;
+            default:
+                return 2;
+        }
+    }
+
+    constexpr uint32_t PresentModeToSwapInterval(VGPUPresentMode mode)
+    {
+        switch (mode)
+        {
+            case VGPU_PRESENT_MODE_IMMEDIATE:
+            case VGPU_PRESENT_MODE_MAILBOX:
+                return 0;
+
+            case VGPU_PRESENT_MODE_FIFO:
+            default:
+                return 1;
+        }
+    }
 }

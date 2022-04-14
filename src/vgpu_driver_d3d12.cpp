@@ -148,8 +148,8 @@ struct VGFXD3D12SwapChain
     IDXGISwapChain3* handle = nullptr;
     uint32_t width = 0;
     uint32_t height = 0;
-    bool vsync = false;
-    std::vector<VGFXTexture> backbufferTextures;
+    uint32_t syncInterval;
+    std::vector<VGPUTexture> backbufferTextures;
 };
 
 struct VGFXD3D12UploadContext
@@ -168,6 +168,7 @@ struct D3D12CommandBuffer
 {
     VGFXD3D12Renderer* renderer;
     D3D12_COMMAND_LIST_TYPE type;
+    bool hasLabel;
 
     ID3D12CommandAllocator* commandAllocators[VGPU_MAX_INFLIGHT_FRAMES];
     ID3D12GraphicsCommandList4* commandList;
@@ -534,7 +535,7 @@ static void d3d12_updateSwapChain(VGFXD3D12Renderer* renderer, VGFXD3D12SwapChai
         texture->rtv = renderer->rtvAllocator.Allocate();
         renderer->device->CreateRenderTargetView(texture->handle, &rtvDesc, texture->rtv);
 
-        swapChain->backbufferTextures[i] = (VGFXTexture)texture;
+        swapChain->backbufferTextures[i] = (VGPUTexture)texture;
     }
 }
 
@@ -715,17 +716,17 @@ static void d3d12_getLimits(VGFXRenderer* driverData, VGPULimits* limits)
 }
 
 /* Buffer */
-static VGFXBuffer d3d12_createBuffer(VGFXRenderer* driverData, const VGFXBufferDesc* desc, const void* pInitialData)
+static VGPUBuffer d3d12_createBuffer(VGFXRenderer* driverData, const VGFXBufferDesc* desc, const void* pInitialData)
 {
     return nullptr;
 }
 
-static void d3d12_destroyBuffer(VGFXRenderer* driverData, VGFXBuffer resource)
+static void d3d12_destroyBuffer(VGFXRenderer* driverData, VGPUBuffer resource)
 {
 }
 
 /* Texture */
-static VGFXTexture d3d12_createTexture(VGFXRenderer* driverData, const VGFXTextureDesc* desc)
+static VGPUTexture d3d12_createTexture(VGFXRenderer* driverData, const VGFXTextureDesc* desc)
 {
     VGFXD3D12Renderer* renderer = (VGFXD3D12Renderer*)driverData;
 
@@ -819,10 +820,10 @@ static VGFXTexture d3d12_createTexture(VGFXRenderer* driverData, const VGFXTextu
         D3D12SetName(texture->handle, desc->label);
     }
 
-    return (VGFXTexture)texture;
+    return (VGPUTexture)texture;
 }
 
-static void d3d12_destroyTexture(VGFXRenderer* driverData, VGFXTexture texture)
+static void d3d12_destroyTexture(VGFXRenderer* driverData, VGPUTexture texture)
 {
     VGFXD3D12Renderer* renderer = (VGFXD3D12Renderer*)driverData;
     VGFXD3D12Texture* d3dTexture = (VGFXD3D12Texture*)texture;
@@ -833,19 +834,19 @@ static void d3d12_destroyTexture(VGFXRenderer* driverData, VGFXTexture texture)
 }
 
 /* SwapChain */
-static VGPUSwapChain d3d12_createSwapChain(VGFXRenderer* driverData, void* windowHandle, const VGPUSwapChainDesc* info)
+static VGPUSwapChain d3d12_createSwapChain(VGFXRenderer* driverData, void* windowHandle, const VGPUSwapChainDesc* desc)
 {
     VGFXD3D12Renderer* renderer = (VGFXD3D12Renderer*)driverData;
 
     DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
-    swapChainDesc.Width = info->width;
-    swapChainDesc.Height = info->height;
-    swapChainDesc.Format = ToDXGISwapChainFormat(info->format);
+    swapChainDesc.Width = desc->width;
+    swapChainDesc.Height = desc->height;
+    swapChainDesc.Format = ToDXGISwapChainFormat(desc->format);
     swapChainDesc.Stereo = FALSE;
     swapChainDesc.SampleDesc.Count = 1;
     swapChainDesc.SampleDesc.Quality = 0;
     swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    swapChainDesc.BufferCount = VGPU_MAX_INFLIGHT_FRAMES;
+    swapChainDesc.BufferCount = PresentModeToBufferCount(desc->presentMode);
     swapChainDesc.Scaling = DXGI_SCALING_STRETCH;
     swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
     swapChainDesc.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
@@ -928,7 +929,7 @@ static VGPUSwapChain d3d12_createSwapChain(VGFXRenderer* driverData, void* windo
 
     VGFXD3D12SwapChain* swapChain = new VGFXD3D12SwapChain();
     swapChain->handle = handle;
-    swapChain->vsync = info->presentMode == VGFXPresentMode_Fifo;
+    swapChain->syncInterval = PresentModeToSwapInterval(desc->presentMode);
     d3d12_updateSwapChain(renderer, swapChain);
     return (VGPUSwapChain)swapChain;
 }
@@ -954,13 +955,39 @@ static void d3d12_getSwapChainSize(VGFXRenderer*, VGPUSwapChain swapChain, VGPUS
     pSize->height = d3dSwapChain->height;
 }
 
-static VGFXTexture d3d12_acquireNextTexture(VGFXRenderer* driverData, VGPUSwapChain swapChain)
+static VGPUTexture d3d12_acquireNextTexture(VGFXRenderer* driverData, VGPUSwapChain swapChain)
 {
     VGFXD3D12Renderer* renderer = (VGFXD3D12Renderer*)driverData;
     VGFXD3D12SwapChain* d3d12SwapChain = (VGFXD3D12SwapChain*)swapChain;
 
     renderer->swapChains.push_back(d3d12SwapChain);
     return d3d12SwapChain->backbufferTextures[d3d12SwapChain->handle->GetCurrentBackBufferIndex()];
+}
+
+static const UINT PIX_EVENT_UNICODE_VERSION = 0;
+
+static void d3d12_pushDebugGroup(VGPUCommandBufferImpl* driverData, const char* groupLabel)
+{
+    D3D12CommandBuffer* commandBuffer = (D3D12CommandBuffer*)driverData;
+
+    std::wstring wide_name = UTF8ToWStr(groupLabel);
+    UINT size = static_cast<UINT>((strlen(groupLabel) + 1) * sizeof(wchar_t));
+    commandBuffer->commandList->BeginEvent(PIX_EVENT_UNICODE_VERSION, wide_name.c_str(), size);
+}
+
+static void d3d12_popDebugGroup(VGPUCommandBufferImpl* driverData)
+{
+    D3D12CommandBuffer* commandBuffer = (D3D12CommandBuffer*)driverData;
+    commandBuffer->commandList->EndEvent();
+}
+
+static void d3d12_insertDebugMarker(VGPUCommandBufferImpl* driverData, const char* markerLabel)
+{
+    D3D12CommandBuffer* commandBuffer = (D3D12CommandBuffer*)driverData;
+
+    std::wstring wide_name = UTF8ToWStr(markerLabel);
+    UINT size = static_cast<UINT>((strlen(markerLabel) + 1) * sizeof(wchar_t));
+    commandBuffer->commandList->SetMarker(PIX_EVENT_UNICODE_VERSION, wide_name.c_str(), size);
 }
 
 static void d3d12_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGFXRenderPassDesc* desc)
@@ -1075,6 +1102,13 @@ static VGPUCommandBuffer d3d12_beginCommandBuffer(VGFXRenderer* driverData, cons
     impl->commandList->OMSetBlendFactor(defaultBlendFactor);
     impl->commandList->OMSetStencilRef(0);
 
+    impl->hasLabel = false;
+    if (label)
+    {
+        d3d12_pushDebugGroup((VGPUCommandBufferImpl*)impl, label);
+        impl->hasLabel = true;
+    }
+
     return renderer->commandBuffers.back();
 }
 
@@ -1087,6 +1121,11 @@ static void d3d12_submit(VGFXRenderer* driverData, VGPUCommandBuffer* commandBuf
     for (uint32_t i = 0; i < count; i += 1)
     {
         D3D12CommandBuffer* commandBuffer = (D3D12CommandBuffer*)commandBuffers[i]->driverData;
+
+        if (commandBuffer->hasLabel)
+        {
+            d3d12_popDebugGroup((VGPUCommandBufferImpl*)commandBuffer);
+        }
 
         hr = commandBuffer->commandList->Close();
         if (FAILED(hr))
@@ -1109,14 +1148,16 @@ static void d3d12_submit(VGFXRenderer* driverData, VGPUCommandBuffer* commandBuf
     {
         VGFXD3D12SwapChain* swapChain = renderer->swapChains[i];
 
-        if (swapChain->vsync)
+        UINT presentFlags = 0;
+        BOOL fullscreen = FALSE;
+        swapChain->handle->GetFullscreenState(&fullscreen, nullptr);
+
+        if (!swapChain->syncInterval && !fullscreen)
         {
-            hr = swapChain->handle->Present(1, 0);
+            presentFlags = DXGI_PRESENT_ALLOW_TEARING;
         }
-        else
-        {
-            hr = swapChain->handle->Present(0, renderer->tearingSupported ? DXGI_PRESENT_ALLOW_TEARING : 0);
-        }
+
+        hr = swapChain->handle->Present(swapChain->syncInterval, presentFlags);
 
         // If the device was reset we must completely reinitialize the renderer.
         if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET)
@@ -1410,8 +1451,8 @@ static VGPUDevice d3d12_createDevice(const VGPUDeviceDesc* info)
 
                 infoQueue->AddStorageFilterEntries(&filter);
                 infoQueue->AddApplicationMessage(D3D12_MESSAGE_SEVERITY_MESSAGE, "D3D12 Debug Filters setup");
+                }
             }
-        }
 
         // Create allocator
         D3D12MA::ALLOCATOR_DESC allocatorDesc = {};
@@ -1478,7 +1519,7 @@ static VGPUDevice d3d12_createDevice(const VGPUDeviceDesc* info)
 
         vgfxLogInfo("VGPU Driver: D3D12");
         vgfxLogInfo("D3D12 Adapter: %S", adapterDesc.Description);
-    }
+        }
 
     // Create command queues
     {
@@ -1523,11 +1564,11 @@ static VGPUDevice d3d12_createDevice(const VGPUDeviceDesc* info)
         }
     }
 
-    VGFXDevice_T* device = (VGFXDevice_T*)VGFX_MALLOC(sizeof(VGFXDevice_T));
+    VGPUDevice_T* device = (VGPUDevice_T*)VGFX_MALLOC(sizeof(VGPUDevice_T));
     ASSIGN_DRIVER(d3d12);
     device->driverData = (VGFXRenderer*)renderer;
     return device;
-}
+    }
 
 VGFXDriver D3D12_Driver = {
     VGPU_BACKEND_TYPE_D3D12,

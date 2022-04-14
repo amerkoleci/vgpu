@@ -8,12 +8,6 @@
 #include <stdio.h>
 #include <stdarg.h>
 
-#if defined(_WIN32)
-typedef struct HINSTANCE__* HINSTANCE;
-typedef struct HWND__* HWND;
-typedef struct IUnknown IUnknown;
-#endif
-
 #ifndef VGFX_MALLOC
 #   include <stdlib.h>
 #   define VGFX_MALLOC(s) malloc(s)
@@ -93,6 +87,10 @@ typedef struct VGFXRenderer VGFXRenderer;
 typedef struct VGPUCommandBufferImpl VGPUCommandBufferImpl;
 
 typedef struct VGPUCommandBuffer_T {
+    void (*pushDebugGroup)(VGPUCommandBufferImpl* driverData, const char* groupLabel);
+    void (*popDebugGroup)(VGPUCommandBufferImpl* driverData);
+    void (*insertDebugMarker)(VGPUCommandBufferImpl* driverData, const char* debugLabel);
+
     void (*beginRenderPass)(VGPUCommandBufferImpl* driverData, const VGFXRenderPassDesc* desc);
     void (*endRenderPass)(VGPUCommandBufferImpl* driverData);
 
@@ -100,7 +98,7 @@ typedef struct VGPUCommandBuffer_T {
     VGPUCommandBufferImpl* driverData;
 } VGPUCommandBuffer_T;
 
-typedef struct VGFXDevice_T
+typedef struct VGPUDevice_T
 {
     void (*destroyDevice)(VGPUDevice device);
     uint64_t(*frame)(VGFXRenderer* driverData);
@@ -109,28 +107,31 @@ typedef struct VGFXDevice_T
     void (*getAdapterProperties)(VGFXRenderer* driverData, VGPUAdapterProperties* properties);
     void (*getLimits)(VGFXRenderer* driverData, VGPULimits* limits);
 
-    VGFXBuffer(*createBuffer)(VGFXRenderer* driverData, const VGFXBufferDesc* desc, const void* pInitialData);
-    void(*destroyBuffer)(VGFXRenderer* driverData, VGFXBuffer resource);
+    VGPUBuffer(*createBuffer)(VGFXRenderer* driverData, const VGFXBufferDesc* desc, const void* pInitialData);
+    void(*destroyBuffer)(VGFXRenderer* driverData, VGPUBuffer resource);
 
-    VGFXTexture(*createTexture)(VGFXRenderer* driverData, const VGFXTextureDesc* desc);
-    void(*destroyTexture)(VGFXRenderer* driverData, VGFXTexture texture);
+    VGPUTexture(*createTexture)(VGFXRenderer* driverData, const VGFXTextureDesc* desc);
+    void(*destroyTexture)(VGFXRenderer* driverData, VGPUTexture texture);
 
     VGPUSwapChain(*createSwapChain)(VGFXRenderer* driverData, void* windowHandle, const VGPUSwapChainDesc* desc);
     void(*destroySwapChain)(VGFXRenderer* driverData, VGPUSwapChain swapChain);
     void (*getSwapChainSize)(VGFXRenderer* driverData, VGPUSwapChain swapChain, VGPUSize2D* pSize);
-    VGFXTexture(*acquireNextTexture)(VGFXRenderer* driverData, VGPUSwapChain swapChain);
+    VGPUTexture(*acquireNextTexture)(VGFXRenderer* driverData, VGPUSwapChain swapChain);
 
     VGPUCommandBuffer(*beginCommandBuffer)(VGFXRenderer* driverData, const char* label);
     void (*submit)(VGFXRenderer* driverData, VGPUCommandBuffer* commandBuffers, uint32_t count);
 
     /* Opaque pointer for the Driver */
     VGFXRenderer* driverData;
-} VGFXDevice_T;
+} VGPUDevice_T;
 
 #define ASSIGN_DRIVER_FUNC(func, name) device->func = name##_##func;
 #define ASSIGN_COMMAND_BUFFER_FUNC(func, name) commandBuffer->func = name##_##func;
 
 #define ASSIGN_COMMAND_BUFFER(name) \
+ASSIGN_COMMAND_BUFFER_FUNC(pushDebugGroup, name) \
+ASSIGN_COMMAND_BUFFER_FUNC(popDebugGroup, name) \
+ASSIGN_COMMAND_BUFFER_FUNC(insertDebugMarker, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(beginRenderPass, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(endRenderPass, name) 
 

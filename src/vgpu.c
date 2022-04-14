@@ -210,7 +210,7 @@ static VGFXBufferDesc _vgfxBufferDescDef(const VGFXBufferDesc* desc)
     return def;
 }
 
-VGFXBuffer vgfxCreateBuffer(VGPUDevice device, const VGFXBufferDesc* desc, const void* pInitialData)
+VGPUBuffer vgpuCreateBuffer(VGPUDevice device, const VGFXBufferDesc* desc, const void* pInitialData)
 {
      NULL_RETURN_NULL(device);
      NULL_RETURN_NULL(desc);
@@ -219,7 +219,7 @@ VGFXBuffer vgfxCreateBuffer(VGPUDevice device, const VGFXBufferDesc* desc, const
      return device->createBuffer(device->driverData, &desc_def, pInitialData);
 }
 
-void vgfxDestroyBuffer(VGPUDevice device, VGFXBuffer buffer)
+void vgpuDestroyBuffer(VGPUDevice device, VGPUBuffer buffer)
 {
     NULL_RETURN(device);
     NULL_RETURN(buffer);
@@ -242,7 +242,7 @@ static VGFXTextureDesc _vgfxTextureDescDef(const VGFXTextureDesc* desc)
     return def;
 }
 
-VGFXTexture vgfxCreateTexture(VGPUDevice device, const VGFXTextureDesc* desc)
+VGPUTexture vgfxCreateTexture(VGPUDevice device, const VGFXTextureDesc* desc)
 {
     NULL_RETURN_NULL(device);
     NULL_RETURN_NULL(desc);
@@ -251,7 +251,7 @@ VGFXTexture vgfxCreateTexture(VGPUDevice device, const VGFXTextureDesc* desc)
     return device->createTexture(device->driverData, &desc_def);
 }
 
-void vgfxDestroyTexture(VGPUDevice device, VGFXTexture texture)
+void vgfxDestroyTexture(VGPUDevice device, VGPUTexture texture)
 {
     NULL_RETURN(device);
     NULL_RETURN(texture);
@@ -286,7 +286,7 @@ void vgfxSwapChainGetSize(VGPUDevice device, VGPUSwapChain swapChain, VGPUSize2D
     device->getSwapChainSize(device->driverData, swapChain, pSize);
 }
 
-VGFXTexture vgfxSwapChainAcquireNextTexture(VGPUDevice device, VGPUSwapChain swapChain)
+VGPUTexture vgfxSwapChainAcquireNextTexture(VGPUDevice device, VGPUSwapChain swapChain)
 {
     NULL_RETURN_NULL(device);
     return device->acquireNextTexture(device->driverData, swapChain);
@@ -298,6 +298,25 @@ VGPUCommandBuffer vgpuBeginCommandBuffer(VGPUDevice device, const char* label)
     NULL_RETURN_NULL(device);
 
     return device->beginCommandBuffer(device->driverData, label);
+}
+
+void vgpuPushDebugGroup(VGPUCommandBuffer commandBuffer, const char* groupLabel)
+{
+    NULL_RETURN(groupLabel);
+
+    commandBuffer->pushDebugGroup(commandBuffer->driverData, groupLabel);
+}
+
+void vgpuPopDebugGroup(VGPUCommandBuffer commandBuffer)
+{
+    commandBuffer->popDebugGroup(commandBuffer->driverData);
+}
+
+void vgpuInsertDebugMarker(VGPUCommandBuffer commandBuffer, const char* debugLabel)
+{
+    NULL_RETURN(debugLabel);
+
+    commandBuffer->insertDebugMarker(commandBuffer->driverData, debugLabel);
 }
 
 void vgpuBeginRenderPass(VGPUCommandBuffer commandBuffer, const VGFXRenderPassDesc* desc)

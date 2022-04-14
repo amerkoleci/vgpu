@@ -103,15 +103,18 @@ struct VGFXD3D11SwapChain
     IDXGISwapChain1* handle = nullptr;
     uint32_t width = 0;
     uint32_t height = 0;
-    bool vsync = false;
-    VGFXTexture backbufferTexture;
+    uint32_t syncInterval;
+    VGPUTexture backbufferTexture;
 };
 
 typedef struct D3D11CommandBuffer
 {
     VGFXD3D11Renderer* renderer;
     bool recording;
+    bool hasLabel;
+
     ID3D11DeviceContext1* context;
+    ID3DUserDefinedAnnotation* userDefinedAnnotation;
     ID3D11CommandList* commandList;
 } D3D11CommandBuffer;
 
@@ -375,6 +378,11 @@ static void d3d11_destroyDevice(VGPUDevice device)
     {
         D3D11CommandBuffer* commandBuffer = (D3D11CommandBuffer*)renderer->contextPool[i]->driverData;
         commandBuffer->commandList->Release();
+        if (commandBuffer->userDefinedAnnotation)
+        {
+            commandBuffer->userDefinedAnnotation->Release();
+        }
+
         commandBuffer->context->Release();
         VGFX_FREE(renderer->contextPool[i]);
     }
@@ -431,14 +439,16 @@ static uint64_t d3d11_frame(VGFXRenderer* driverData)
     {
         VGFXD3D11SwapChain* swapChain = renderer->swapChains[i];
 
-        if (swapChain->vsync)
+        UINT presentFlags = 0;
+        BOOL fullscreen = FALSE;
+        swapChain->handle->GetFullscreenState(&fullscreen, nullptr);
+
+        if (!swapChain->syncInterval && !fullscreen)
         {
-            hr = swapChain->handle->Present(1, 0);
+            presentFlags = DXGI_PRESENT_ALLOW_TEARING;
         }
-        else
-        {
-            hr = swapChain->handle->Present(0, renderer->tearingSupported ? DXGI_PRESENT_ALLOW_TEARING : 0);
-        }
+
+        hr = swapChain->handle->Present(swapChain->syncInterval, presentFlags);
     }
     renderer->swapChains.clear();
 
@@ -560,7 +570,7 @@ static void d3d11_getLimits(VGFXRenderer* driverData, VGPULimits* limits)
 }
 
 /* Buffer */
-static VGFXBuffer d3d11_createBuffer(VGFXRenderer* driverData, const VGFXBufferDesc* desc, const void* pInitialData)
+static VGPUBuffer d3d11_createBuffer(VGFXRenderer* driverData, const VGFXBufferDesc* desc, const void* pInitialData)
 {
     VGFXD3D11Renderer* renderer = (VGFXD3D11Renderer*)driverData;
 
@@ -636,10 +646,10 @@ static VGFXBuffer d3d11_createBuffer(VGFXRenderer* driverData, const VGFXBufferD
         D3D11SetName(buffer->handle, desc->label);
     }
 
-    return (VGFXBuffer)buffer;
+    return (VGPUBuffer)buffer;
 }
 
-static void d3d11_destroyBuffer(VGFXRenderer* driverData, VGFXBuffer resource)
+static void d3d11_destroyBuffer(VGFXRenderer* driverData, VGPUBuffer resource)
 {
     VGFXD3D11Buffer* d3dBuffer = (VGFXD3D11Buffer*)resource;
     SafeRelease(d3dBuffer->handle);
@@ -647,7 +657,7 @@ static void d3d11_destroyBuffer(VGFXRenderer* driverData, VGFXBuffer resource)
 }
 
 /* Texture */
-static VGFXTexture d3d11_createTexture(VGFXRenderer* driverData, const VGFXTextureDesc* desc)
+static VGPUTexture d3d11_createTexture(VGFXRenderer* driverData, const VGFXTextureDesc* desc)
 {
     VGFXD3D11Renderer* renderer = (VGFXD3D11Renderer*)driverData;
 
@@ -738,10 +748,10 @@ static VGFXTexture d3d11_createTexture(VGFXRenderer* driverData, const VGFXTextu
         D3D11SetName(texture->handle, desc->label);
     }
 
-    return (VGFXTexture)texture;
+    return (VGPUTexture)texture;
 }
 
-static void d3d11_destroyTexture(VGFXRenderer*, VGFXTexture texture)
+static void d3d11_destroyTexture(VGFXRenderer*, VGPUTexture texture)
 {
     VGFXD3D11Texture* d3d11Texture = (VGFXD3D11Texture*)texture;
     for (auto& it : d3d11Texture->rtvCache)
@@ -779,22 +789,22 @@ static void d3d11_updateSwapChain(VGFXD3D11Renderer* renderer, VGFXD3D11SwapChai
 
     hr = swapChain->handle->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&texture->handle);
     VGFX_ASSERT(SUCCEEDED(hr));
-    swapChain->backbufferTexture = (VGFXTexture)texture;
+    swapChain->backbufferTexture = (VGPUTexture)texture;
 }
 
-static VGPUSwapChain d3d11_createSwapChain(VGFXRenderer* driverData, void* windowHandle, const VGPUSwapChainDesc* info)
+static VGPUSwapChain d3d11_createSwapChain(VGFXRenderer* driverData, void* windowHandle, const VGPUSwapChainDesc* desc)
 {
     VGFXD3D11Renderer* renderer = (VGFXD3D11Renderer*)driverData;
 
     DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
-    swapChainDesc.Width = info->width;
-    swapChainDesc.Height = info->height;
-    swapChainDesc.Format = ToDXGISwapChainFormat(info->format);
+    swapChainDesc.Width = desc->width;
+    swapChainDesc.Height = desc->height;
+    swapChainDesc.Format = ToDXGISwapChainFormat(desc->format);
     swapChainDesc.Stereo = FALSE;
     swapChainDesc.SampleDesc.Count = 1;
     swapChainDesc.SampleDesc.Quality = 0;
     swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    swapChainDesc.BufferCount = VGPU_MAX_INFLIGHT_FRAMES;
+    swapChainDesc.BufferCount = PresentModeToBufferCount(desc->presentMode);
     swapChainDesc.Scaling = DXGI_SCALING_STRETCH;
     swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
     swapChainDesc.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
@@ -841,7 +851,7 @@ static VGPUSwapChain d3d11_createSwapChain(VGFXRenderer* driverData, void* windo
 
     VGFXD3D11SwapChain* swapChain = new VGFXD3D11SwapChain();
     swapChain->handle = handle;
-    swapChain->vsync = info->presentMode == VGFXPresentMode_Fifo;
+    swapChain->syncInterval = PresentModeToSwapInterval(desc->presentMode);
     d3d11_updateSwapChain(renderer, swapChain);
     return (VGPUSwapChain)swapChain;
 }
@@ -865,7 +875,7 @@ static void d3d11_getSwapChainSize(VGFXRenderer*, VGPUSwapChain swapChain, VGPUS
     pSize->height = d3dSwapChain->height;
 }
 
-static VGFXTexture d3d11_acquireNextTexture(VGFXRenderer* driverData, VGPUSwapChain swapChain)
+static VGPUTexture d3d11_acquireNextTexture(VGFXRenderer* driverData, VGPUSwapChain swapChain)
 {
     VGFXD3D11Renderer* renderer = (VGFXD3D11Renderer*)driverData;
     VGFXD3D11SwapChain* d3dSwapChain = (VGFXD3D11SwapChain*)swapChain;
@@ -875,6 +885,36 @@ static VGFXTexture d3d11_acquireNextTexture(VGFXRenderer* driverData, VGPUSwapCh
 }
 
 /* Command Buffer */
+static void d3d11_pushDebugGroup(VGPUCommandBufferImpl* driverData, const char* groupLabel)
+{
+    D3D11CommandBuffer* commandBuffer = (D3D11CommandBuffer*)driverData;
+    if (commandBuffer->userDefinedAnnotation)
+    {
+        std::wstring wide_name = UTF8ToWStr(groupLabel);
+        commandBuffer->userDefinedAnnotation->BeginEvent(wide_name.c_str());
+    }
+}
+
+static void d3d11_popDebugGroup(VGPUCommandBufferImpl* driverData)
+{
+    D3D11CommandBuffer* commandBuffer = (D3D11CommandBuffer*)driverData;
+    if (commandBuffer->userDefinedAnnotation)
+    {
+        commandBuffer->userDefinedAnnotation->EndEvent();
+    }
+}
+
+static void d3d11_insertDebugMarker(VGPUCommandBufferImpl* driverData, const char* markerLabel)
+{
+    D3D11CommandBuffer* commandBuffer = (D3D11CommandBuffer*)driverData;
+
+    if (commandBuffer->userDefinedAnnotation)
+    {
+        std::wstring wide_name = UTF8ToWStr(markerLabel);
+        commandBuffer->userDefinedAnnotation->SetMarker(wide_name.c_str());
+    }
+}
+
 static void d3d11_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGFXRenderPassDesc* info)
 {
     D3D11CommandBuffer* commandBuffer = (D3D11CommandBuffer*)driverData;
@@ -973,7 +1013,7 @@ static VGPUCommandBuffer d3d11_beginCommandBuffer(VGFXRenderer* driverData, cons
         impl = new D3D11CommandBuffer();
         impl->renderer = renderer;
 
-        const HRESULT hr = renderer->device->CreateDeferredContext1(
+        HRESULT hr = renderer->device->CreateDeferredContext1(
             0,
             &impl->context
         );
@@ -983,6 +1023,8 @@ static VGPUCommandBuffer d3d11_beginCommandBuffer(VGFXRenderer* driverData, cons
             vgfxLogError("Could not create deferred context for command buffer");
             return nullptr;
         }
+
+        hr = impl->context->QueryInterface(&impl->userDefinedAnnotation);
 
         commandBuffer = (VGPUCommandBuffer_T*)VGFX_MALLOC(sizeof(VGPUCommandBuffer_T));
         ASSIGN_COMMAND_BUFFER(d3d11);
@@ -1002,6 +1044,13 @@ static VGPUCommandBuffer d3d11_beginCommandBuffer(VGFXRenderer* driverData, cons
 
     impl->recording = true;
 
+    impl->hasLabel = false;
+    if (label)
+    {
+        d3d11_pushDebugGroup((VGPUCommandBufferImpl*)impl, label);
+        impl->hasLabel = true;
+    }
+
     ReleaseSRWLockExclusive(&renderer->commandBufferAcquisitionMutex);
 
     return commandBuffer;
@@ -1015,6 +1064,11 @@ static void d3d11_submit(VGFXRenderer* driverData, VGPUCommandBuffer* commandBuf
     for (uint32_t i = 0; i < count; i += 1)
     {
         D3D11CommandBuffer* commandBuffer = (D3D11CommandBuffer*)commandBuffers[i]->driverData;
+
+        if (commandBuffer->hasLabel)
+        {
+            d3d11_popDebugGroup((VGPUCommandBufferImpl*)commandBuffer);
+        }
 
         /* Serialize the commands into a command list */
         hr = commandBuffer->context->FinishCommandList(
@@ -1413,7 +1467,7 @@ static VGPUDevice d3d11_createDevice(const VGPUDeviceDesc* info)
         vgfxLogInfo("D3D11 Adapter: WARP");
     }
 
-    VGFXDevice_T* device = (VGFXDevice_T*)VGFX_MALLOC(sizeof(VGFXDevice_T));
+    VGPUDevice_T* device = (VGPUDevice_T*)VGFX_MALLOC(sizeof(VGPUDevice_T));
     ASSIGN_DRIVER(d3d11);
 
     device->driverData = (VGFXRenderer*)renderer;
