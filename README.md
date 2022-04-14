@@ -1,4 +1,4 @@
-[![Build status](https://github.com/amerkoleci/vgfx/workflows/Build/badge.svg)](https://github.com/amerkoleci/vgfx/actions)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://github.com/amerkoleci/vgfx/blob/main/LICENSE)
+[![Build status](https://github.com/amerkoleci/vgpu/workflows/Build/badge.svg)](https://github.com/amerkoleci/vgpu/actions)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://github.com/amerkoleci/vgpu/blob/main/LICENSE)
 
-**vgfx** is a cross-platform graphics library.
+**vgpu** is a cross-platform gpu library.

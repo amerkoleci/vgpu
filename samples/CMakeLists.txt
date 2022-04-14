@@ -12,7 +12,7 @@ function(add_sample sample_name)
         target_compile_definitions(${sample_name} PRIVATE GLFW_INCLUDE_NONE)
         target_link_libraries(${sample_name} glfw)
     endif ()
-    target_link_libraries(${sample_name} vgfx)
+    target_link_libraries(${sample_name} vgpu)
 
     #if (WIN32)
     #    set_target_properties(${sample_name} PROPERTIES WIN32_EXECUTABLE TRUE)
@@ -25,7 +25,7 @@ function(add_sample sample_name)
     set_property(TARGET ${sample_name} PROPERTY FOLDER "Samples")
     set_property(TARGET ${sample_name} PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
 
-    if (VGFX_INSTALL)
+    if (VGPU_INSTALL)
         install(
             TARGETS ${sample_name}
             RUNTIME DESTINATION bin

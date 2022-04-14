@@ -4,9 +4,9 @@
 #ifndef _VGFX_H
 #define _VGFX_H
 
-#if defined(VGFX_SHARED_LIBRARY)
+#if defined(VGPU_SHARED_LIBRARY)
 #    if defined(_WIN32)
-#        if defined(VGFX_IMPLEMENTATION)
+#        if defined(VGPU_IMPLEMENTATION)
 #            define _VGFX_EXPORT __declspec(dllexport)
 #        else
 #            define _VGFX_EXPORT __declspec(dllimport)
@@ -282,16 +282,17 @@ typedef enum VGFXPresentMode {
     _VGFXPresentMode_Force32 = 0x7FFFFFFF
 } VGFXPresentMode;
 
-typedef enum VGFXFeature {
-    VGFXFeature_Compute = 0,
-    VGFXFeature_IndependentBlend,
-    VGFXFeature_TextureCubeArray,
-    VGFXFeature_TextureCompressionBC,
-    VGFXFeature_TextureCompressionETC2,
-    VGFXFeature_TextureCompressionASTC,
+typedef enum VGPUFeature {
+    VGPU_FEATURE_COMPUTE = 0,
+    VGPU_FEATURE_INDEPENDENT_BLEND,
+    VGPU_FEATURE_TEXTURE_CUBE_ARRAY,
+    VGPU_FEATURE_TEXTURE_COMPRESSION_BC,
+    VGPU_FEATURE_TEXTURE_COMPRESSION_ETC2,
+    VGPU_FEATURE_TEXTURE_COMPRESSION_ASTC,
 
-    _VGFXFeature_Force32 = 0x7FFFFFFF
-} VGFXFeature;
+    _VGPU_FEATURE_COUNT,
+    _VGPU_FEATURE_FORCE_U32 = 0x7FFFFFFF
+} VGPUFeature;
 
 typedef enum VGFXLoadOp {
     VGFXLoadOp_DontCare = 0,
@@ -405,16 +406,16 @@ typedef struct VGFXDeviceDesc {
     VGFXValidationMode validationMode;
 } VGFXDeviceDesc;
 
-typedef struct VGFXAdapterProperties {
+typedef struct VGPUAdapterProperties {
     uint32_t vendorID;
     uint32_t deviceID;
     const char* name;
     const char* driverDescription;
     VGFXAdapterType adapterType;
     VGFXBackendType backendType;
-} VGFXAdapterProperties;
+} VGPUAdapterProperties;
 
-typedef struct VGFXLimits {
+typedef struct VGPULimits {
     uint32_t maxTextureDimension1D;
     uint32_t maxTextureDimension2D;
     uint32_t maxTextureDimension3D;
@@ -441,7 +442,7 @@ typedef struct VGFXLimits {
     uint32_t maxComputeWorkGroupSizeY;
     uint32_t maxComputeWorkGroupSizeZ;
     uint32_t maxComputeWorkGroupsPerDimension;
-} VGFXLimits;
+} VGPULimits;
 
 typedef void (VGFX_CALL* vgfxLogFunc)(VGFXLogLevel level, const char* message);
 VGFX_API void vgfxSetLogFunc(vgfxLogFunc func);
@@ -457,9 +458,9 @@ VGFX_API VGFXDevice vgfxCreateDevice(const VGFXDeviceDesc* desc);
 VGFX_API void vgfxDestroyDevice(VGFXDevice device);
 VGFX_API void vgfxFrame(VGFXDevice device);
 VGFX_API void vgfxWaitIdle(VGFXDevice device);
-VGFX_API bool vgfxHasFeature(VGFXDevice device, VGFXFeature feature);
-VGFX_API void vgfxGetAdapterProperties(VGFXDevice device, VGFXAdapterProperties* properties);
-VGFX_API void vgfxGetLimits(VGFXDevice device, VGFXLimits* limits);
+VGFX_API bool vgpuQueryFeature(VGFXDevice device, VGPUFeature feature);
+VGFX_API void vgpuGetAdapterProperties(VGFXDevice device, VGPUAdapterProperties* properties);
+VGFX_API void vgpuGetLimits(VGFXDevice device, VGPULimits* limits);
 
 /* Buffer */
 VGFX_API VGFXBuffer vgfxCreateBuffer(VGFXDevice device, const VGFXBufferDesc* desc, const void* pInitialData);

@@ -16,7 +16,7 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 # Project declaration
-project (vgfx C CXX)
+project (vgpu C CXX)
 
 # Build Type
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
@@ -40,23 +40,23 @@ endif()
 # Options
 include(CMakeDependentOption)
 
-option(VGFX_BUILD_SHARED "Build vgfx as a shared library (DLL or .so)" ON)
-option(VGFX_INSTALL "Generate install rules for vgfx" ON)
-cmake_dependent_option(VGFX_VULKAN_DRIVER "Build the Vulkan backend" ON "NOT EMSCRIPTEN" OFF)
-cmake_dependent_option(VGFX_D3D11_DRIVER "Build the D3D11 backend" ON "WIN32" OFF)
-cmake_dependent_option(VGFX_D3D12_DRIVER "Build the D3D12 backend" ON "WIN32" OFF)
-cmake_dependent_option(VGFX_WEBGPU_DRIVER "Build the WebGPU backend" ON "EMSCRIPTEN" OFF)
-option(VGFX_SAMPLES "Build samples" ON)
+option(VGPU_BUILD_SHARED "Build vgpu as a shared library (DLL or .so)" ON)
+option(VGPU_INSTALL "Generate install rules for vgpu" ON)
+cmake_dependent_option(VGPU_VULKAN_DRIVER "Build the Vulkan backend" ON "NOT EMSCRIPTEN" OFF)
+cmake_dependent_option(VGPU_D3D11_DRIVER "Build the D3D11 backend" ON "WIN32" OFF)
+cmake_dependent_option(VGPU_D3D12_DRIVER "Build the D3D12 backend" ON "WIN32" OFF)
+cmake_dependent_option(VGPU_WEBGPU_DRIVER "Build the WebGPU backend" ON "EMSCRIPTEN" OFF)
+option(VGPU_SAMPLES "Build samples" ON)
 
-if (VGFX_BUILD_SHARED)
+if (VGPU_BUILD_SHARED)
     set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 endif()
 
 # Build version
-set (VGFX_VERSION_MAJOR 0)
-set (VGFX_VERSION_MINOR 1)
-set (VGFX_VERSION_PATCH 0)
-set (VGPU_VERSION ${VGFX_VERSION_MAJOR}.${VGFX_VERSION_MINOR}.${VGFX_VERSION_PATCH})
+set (VGPU_VERSION_MAJOR 0)
+set (VGPU_VERSION_MINOR 1)
+set (VGPU_VERSION_PATCH 0)
+set (VGPU_VERSION ${VGPU_VERSION_MAJOR}.${VGPU_VERSION_MINOR}.${VGPU_VERSION_PATCH})
 
 execute_process(COMMAND git rev-list --count HEAD
     OUTPUT_VARIABLE VGPU_REVISION_ID
@@ -105,7 +105,7 @@ if(EMSCRIPTEN)
 endif ()
 
 if (IOS OR EMSCRIPTEN)
-    set(VGFX_BUILD_SHARED OFF CACHE BOOL "Always Disable shared library on (IOS, WEB)" FORCE)
+    set(VGPU_BUILD_SHARED OFF CACHE BOOL "Always Disable shared library on (IOS, WEB)" FORCE)
 endif ()
 
 # Third party
@@ -113,21 +113,21 @@ add_subdirectory(third_party)
 
 # Setup library
 set(SOURCE_FILES
-    include/vgfx.h
-    src/vgfx_driver.h
-    src/vgfx.c
-    src/vgfx_driver_vulkan.cpp
-    src/vgfx_driver_d3d.h
-    src/vgfx_driver_d3d11.cpp
-    src/vgfx_driver_d3d12.cpp
-    src/vgfx_driver_webgpu.cpp
+    include/vgpu.h
+    src/vgpu_driver.h
+    src/vgpu.c
+    src/vgpu_driver_vulkan.cpp
+    src/vgpu_driver_d3d.h
+    src/vgpu_driver_d3d11.cpp
+    src/vgpu_driver_d3d12.cpp
+    src/vgpu_driver_webgpu.cpp
 )
 
-if (VGFX_BUILD_SHARED)
+if (VGPU_BUILD_SHARED)
     add_library(${PROJECT_NAME} SHARED ${SOURCE_FILES})
     target_compile_definitions(${PROJECT_NAME}
-        PUBLIC VGFX_SHARED_LIBRARY=1
-        PRIVATE VGFX_IMPLEMENTATION=1
+        PUBLIC VGPU_SHARED_LIBRARY=1
+        PRIVATE VGPU_IMPLEMENTATION=1
     )
 else()
     add_library(${PROJECT_NAME} STATIC ${SOURCE_FILES})
@@ -152,7 +152,7 @@ if(MSVC)
     target_compile_options(${PROJECT_NAME} PRIVATE /MP)
 endif ()
 
-if (VGFX_VULKAN_DRIVER)
+if (VGPU_VULKAN_DRIVER)
     if(ANDROID)
         target_compile_definitions(${PROJECT_NAME} PRIVATE VK_USE_PLATFORM_ANDROID_KHR)
     elseif(WIN32)
@@ -178,29 +178,29 @@ if (VGFX_VULKAN_DRIVER)
 	    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/lib/vma/include>
     )
 
-    target_compile_definitions(${PROJECT_NAME} PRIVATE VGFX_VULKAN_DRIVER=1)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE VGPU_VULKAN_DRIVER=1)
     target_link_libraries(${PROJECT_NAME} PRIVATE vulkan spirv-reflect)
 endif ()
 
-if (VGFX_D3D12_DRIVER)
+if (VGPU_D3D12_DRIVER)
     target_sources(${PROJECT_NAME} PRIVATE
-        src/lib/D3D12MemoryAllocator/D3D12MemAlloc.cpp
-        src/lib/D3D12MemoryAllocator/D3D12MemAlloc.h
+        src/lib/D3D12MemoryAllocator/src/D3D12MemAlloc.cpp
+        src/lib/D3D12MemoryAllocator/include/D3D12MemAlloc.h
     )
 
     target_include_directories(${PROJECT_NAME} PRIVATE
-	    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/lib/D3D12MemoryAllocator>
+	    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/lib/D3D12MemoryAllocator/include>
     )
 
-    target_compile_definitions(${PROJECT_NAME} PRIVATE VGFX_D3D12_DRIVER=1)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE VGPU_D3D12_DRIVER=1)
 endif ()
 
-if (VGFX_D3D11_DRIVER)
-    target_compile_definitions(${PROJECT_NAME} PRIVATE VGFX_D3D11_DRIVER=1)
+if (VGPU_D3D11_DRIVER)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE VGPU_D3D11_DRIVER=1)
 endif ()
 
-if (VGFX_WEBGPU_DRIVER)
-    target_compile_definitions(${PROJECT_NAME} PRIVATE VGFX_WEBGPU_DRIVER=1)
+if (VGPU_WEBGPU_DRIVER)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE VGPU_WEBGPU_DRIVER=1)
 endif ()
 
 # Include directories
@@ -211,19 +211,19 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 )
 
 # Soname
-set_target_properties(vgfx PROPERTIES
-    OUTPUT_NAME "vgfx"
+set_target_properties(vgpu PROPERTIES
+    OUTPUT_NAME "vgpu"
 	VERSION ${VGPU_VERSION}
-	SOVERSION ${VGFX_VERSION_MAJOR}
+	SOVERSION ${VGPU_VERSION_MAJOR}
 )
 
 # Samples
-if (VGFX_SAMPLES)
+if (VGPU_SAMPLES)
     add_subdirectory(samples)
 endif ()
 
 # Install
-if (VGFX_INSTALL)
+if (VGPU_INSTALL)
     # README.md and license
     install (FILES
         ${CMAKE_CURRENT_SOURCE_DIR}/README.md
@@ -249,19 +249,19 @@ message(STATUS "GIT ChangeSet: ${VGPU_CHANGE_SET}")
 message(STATUS "GIT ChangeSet Date: ${VGPU_CHANGE_SET_DATE}")
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 
-if (VGFX_BUILD_SHARED)
+if (VGPU_BUILD_SHARED)
     message(STATUS "  Library         SHARED")
 else ()
     message(STATUS "  Library         STATIC")
 endif ()
 
 message(STATUS "  Backends:")
-if (VGFX_VULKAN_DRIVER)
+if (VGPU_VULKAN_DRIVER)
     message(STATUS "      - Vulkan")
 endif()
-if (VGFX_D3D12_DRIVER)
+if (VGPU_D3D12_DRIVER)
     message(STATUS "      - Direct3D12")
 endif ()
-if (VGFX_D3D12_DRIVER)
+if (VGPU_D3D12_DRIVER)
     message(STATUS "      - Direct3D11")
 endif ()

@@ -18,7 +18,7 @@
 #endif
 #include <cstdio>
 #include <cstdlib>
-#include <vgfx.h>
+#include <vgpu.h>
 
 VGFXSurface surface = nullptr;
 VGFXDevice device = nullptr;
@@ -75,11 +75,11 @@ void init_gfx(GLFWwindow* window)
 
     device = vgfxCreateDevice(&deviceDesc);
 
-    VGFXAdapterProperties adapterProps;
-    vgfxGetAdapterProperties(device, &adapterProps);
+    VGPUAdapterProperties adapterProps;
+    vgpuGetAdapterProperties(device, &adapterProps);
 
-    VGFXLimits limits;
-    vgfxGetLimits(device, &limits);
+    VGPULimits limits;
+    vgpuGetLimits(device, &limits);
 
     int width = 0;
     int height = 0;

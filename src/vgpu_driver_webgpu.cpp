@@ -1,9 +1,9 @@
 // Copyright © Amer Koleci and Contributors.
 // Licensed under the MIT License (MIT). See LICENSE in the repository root for more information.
 
-#if defined(VGFX_WEBGPU_DRIVER)
+#if defined(VGPU_WEBGPU_DRIVER)
 
-#include "vgfx_driver.h"
+#include "vgpu_driver.h"
 
 #if defined(__EMSCRIPTEN__)
 #include <emscripten/html5_webgpu.h>
@@ -151,4 +151,4 @@ VGFXDriver webgpu_driver = {
     webgpu_createDevice
 };
 
-#endif /* VGFX_WEBGPU_DRIVER */
+#endif /* VGPU_WEBGPU_DRIVER */

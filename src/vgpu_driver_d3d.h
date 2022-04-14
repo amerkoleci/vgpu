@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "vgfx_driver.h"
+#include "vgpu_driver.h"
 
 #define NOMINMAX
 #define NODRAWTEXT

@@ -1,9 +1,9 @@
 // Copyright © Amer Koleci and Contributors.
 // Licensed under the MIT License (MIT). See LICENSE in the repository root for more information.
 
-#if defined(VGFX_D3D11_DRIVER)
+#if defined(VGPU_D3D11_DRIVER)
 
-#include "vgfx_driver_d3d.h"
+#include "vgpu_driver_d3d.h"
 #define D3D11_NO_HELPERS
 #include <d3d11_1.h>
 #include <dxgi1_6.h>
@@ -443,18 +443,18 @@ static void d3d11_waitIdle(VGFXRenderer* driverData)
     renderer->context->Flush();
 }
 
-static bool d3d11_hasFeature(VGFXRenderer* driverData, VGFXFeature feature) {
+static bool d3d11_hasFeature(VGFXRenderer* driverData, VGPUFeature feature) {
     VGFXD3D11Renderer* renderer = (VGFXD3D11Renderer*)driverData;
     switch (feature)
     {
-        case VGFXFeature_Compute:
-        case VGFXFeature_IndependentBlend:
-        case VGFXFeature_TextureCubeArray:
-        case VGFXFeature_TextureCompressionBC:
+        case VGPU_FEATURE_COMPUTE:
+        case VGPU_FEATURE_INDEPENDENT_BLEND:
+        case VGPU_FEATURE_TEXTURE_CUBE_ARRAY:
+        case VGPU_FEATURE_TEXTURE_COMPRESSION_BC:
             return true;
 
-        case VGFXFeature_TextureCompressionETC2:
-        case VGFXFeature_TextureCompressionASTC:
+        case VGPU_FEATURE_TEXTURE_COMPRESSION_ETC2:
+        case VGPU_FEATURE_TEXTURE_COMPRESSION_ASTC:
             return false;
 
         default:
@@ -462,7 +462,7 @@ static bool d3d11_hasFeature(VGFXRenderer* driverData, VGFXFeature feature) {
     }
 }
 
-static void d3d11_getAdapterProperties(VGFXRenderer* driverData, VGFXAdapterProperties* properties)
+static void d3d11_getAdapterProperties(VGFXRenderer* driverData, VGPUAdapterProperties* properties)
 {
     VGFXD3D11Renderer* renderer = (VGFXD3D11Renderer*)driverData;
 
@@ -474,7 +474,7 @@ static void d3d11_getAdapterProperties(VGFXRenderer* driverData, VGFXAdapterProp
     properties->backendType = VGFXBackendType_D3D11;
 }
 
-static void d3d11_getLimits(VGFXRenderer* driverData, VGFXLimits* limits)
+static void d3d11_getLimits(VGFXRenderer* driverData, VGPULimits* limits)
 {
     VGFXD3D11Renderer* renderer = (VGFXD3D11Renderer*)driverData;
 
@@ -1272,4 +1272,4 @@ VGFXDriver d3d11_driver = {
     d3d11_createDevice
 };
 
-#endif /* VGFX_D3D11_DRIVER */
+#endif /* VGPU_D3D11_DRIVER */

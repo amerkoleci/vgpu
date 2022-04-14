@@ -1,7 +1,7 @@
 // Copyright © Amer Koleci and Contributors.
 // Licensed under the MIT License (MIT). See LICENSE in the repository root for more information.
 
-#include "vgfx_driver.h"
+#include "vgpu_driver.h"
 #if defined(__EMSCRIPTEN__)
 #   include <emscripten.h>
 #elif defined(_WIN32)
@@ -75,16 +75,16 @@ void vgfxSetLogFunc(vgfxLogFunc func)
 }
 
 static const VGFXDriver* drivers[] = {
-#if defined(VGFX_D3D12_DRIVER)
+#if defined(VGPU_D3D12_DRIVER)
     &d3d12_driver,
 #endif
-#if defined(VGFX_D3D11_DRIVER)
+#if defined(VGPU_D3D11_DRIVER)
     &d3d11_driver,
 #endif
-#if defined(VGFX_VULKAN_DRIVER)
+#if defined(VGPU_VULKAN_DRIVER)
     &vulkan_driver,
 #endif
-#if defined(VGFX_WEBGPU_DRIVER)
+#if defined(VGPU_WEBGPU_DRIVER)
     &webgpu_driver,
 #endif
     NULL
@@ -236,7 +236,7 @@ void vgfxWaitIdle(VGFXDevice device)
     device->waitIdle(device->driverData);
 }
 
-bool vgfxHasFeature(VGFXDevice device, VGFXFeature feature)
+bool vgpuQueryFeature(VGFXDevice device, VGPUFeature feature)
 {
     if (device == NULL) {
         return false;
@@ -245,7 +245,7 @@ bool vgfxHasFeature(VGFXDevice device, VGFXFeature feature)
     return device->hasFeature(device->driverData, feature);
 }
 
-void vgfxGetAdapterProperties(VGFXDevice device, VGFXAdapterProperties* properties)
+void vgpuGetAdapterProperties(VGFXDevice device, VGPUAdapterProperties* properties)
 {
     NULL_RETURN(device);
     NULL_RETURN(properties);
@@ -253,7 +253,7 @@ void vgfxGetAdapterProperties(VGFXDevice device, VGFXAdapterProperties* properti
     device->getAdapterProperties(device->driverData, properties);
 }
 
-void vgfxGetLimits(VGFXDevice device, VGFXLimits* limits)
+void vgpuGetLimits(VGFXDevice device, VGPULimits* limits)
 {
     NULL_RETURN(device);
     NULL_RETURN(limits);

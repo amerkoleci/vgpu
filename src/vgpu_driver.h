@@ -1,10 +1,10 @@
 // Copyright © Amer Koleci and Contributors.
 // Licensed under the MIT License (MIT). See LICENSE in the repository root for more information.
 
-#ifndef _VGFX_DRIVER_H_
-#define _VGFX_DRIVER_H_
+#ifndef _VGPU_DRIVER_H_
+#define _VGPU_DRIVER_H_
 
-#include "vgfx.h"
+#include "vgpu.h"
 #include <stdio.h>
 #include <stdarg.h>
 
@@ -114,9 +114,9 @@ typedef struct VGFXDevice_T
     void (*destroyDevice)(VGFXDevice device);
     void (*frame)(VGFXRenderer* driverData);
     void (*waitIdle)(VGFXRenderer* driverData);
-    bool (*hasFeature)(VGFXRenderer* driverData, VGFXFeature feature);
-    void (*getAdapterProperties)(VGFXRenderer* driverData, VGFXAdapterProperties* properties);
-    void (*getLimits)(VGFXRenderer* driverData, VGFXLimits* limits);
+    bool (*hasFeature)(VGFXRenderer* driverData, VGPUFeature feature);
+    void (*getAdapterProperties)(VGFXRenderer* driverData, VGPUAdapterProperties* properties);
+    void (*getLimits)(VGFXRenderer* driverData, VGPULimits* limits);
 
     VGFXBuffer(*createBuffer)(VGFXRenderer* driverData, const VGFXBufferDesc* desc, const void* pInitialData);
     void(*destroyBuffer)(VGFXRenderer* driverData, VGFXBuffer resource);
@@ -168,4 +168,4 @@ _VGFX_EXTERN VGFXDriver d3d12_driver;
 _VGFX_EXTERN VGFXDriver d3d11_driver;
 _VGFX_EXTERN VGFXDriver webgpu_driver;
 
-#endif /* _VGFX_DRIVER_H_ */
+#endif /* _VGPU_DRIVER_H_ */

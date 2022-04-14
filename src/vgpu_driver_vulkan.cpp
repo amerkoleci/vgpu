@@ -1,9 +1,9 @@
 // Copyright © Amer Koleci and Contributors.
 // Licensed under the MIT License (MIT). See LICENSE in the repository root for more information.
 
-#if defined(VGFX_VULKAN_DRIVER)
+#if defined(VGPU_VULKAN_DRIVER)
 
-#include "vgfx_driver.h"
+#include "vgpu_driver.h"
 
 #if defined(VK_USE_PLATFORM_WIN32_KHR)
 #   define NOMINMAX
@@ -1322,26 +1322,26 @@ static void vulkan_waitIdle(VGFXRenderer* driverData) {
     VK_CHECK(vkDeviceWaitIdle(renderer->device));
 }
 
-static bool vulkan_hasFeature(VGFXRenderer* driverData, VGFXFeature feature) {
+static bool vulkan_hasFeature(VGFXRenderer* driverData, VGPUFeature feature) {
     VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
     switch (feature)
     {
-        case VGFXFeature_Compute:
+        case VGPU_FEATURE_COMPUTE:
             return true;
 
-        case VGFXFeature_IndependentBlend:
+        case VGPU_FEATURE_INDEPENDENT_BLEND:
             return renderer->features2.features.independentBlend == VK_TRUE;
 
-        case VGFXFeature_TextureCubeArray:
+        case VGPU_FEATURE_TEXTURE_CUBE_ARRAY:
             return renderer->features2.features.imageCubeArray == VK_TRUE;
 
-        case VGFXFeature_TextureCompressionBC:
+        case VGPU_FEATURE_TEXTURE_COMPRESSION_BC:
             return renderer->features2.features.textureCompressionBC;
 
-        case VGFXFeature_TextureCompressionETC2:
+        case VGPU_FEATURE_TEXTURE_COMPRESSION_ETC2:
             return renderer->features2.features.textureCompressionETC2;
 
-        case VGFXFeature_TextureCompressionASTC:
+        case VGPU_FEATURE_TEXTURE_COMPRESSION_ASTC:
             return renderer->features2.features.textureCompressionASTC_LDR;
 
         default:
@@ -1349,7 +1349,7 @@ static bool vulkan_hasFeature(VGFXRenderer* driverData, VGFXFeature feature) {
     }
 }
 
-static void vulkan_getAdapterProperties(VGFXRenderer* driverData, VGFXAdapterProperties* properties)
+static void vulkan_getAdapterProperties(VGFXRenderer* driverData, VGPUAdapterProperties* properties)
 {
     VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
 
@@ -1377,7 +1377,7 @@ static void vulkan_getAdapterProperties(VGFXRenderer* driverData, VGFXAdapterPro
     properties->backendType = VGFXBackendType_Vulkan;
 }
 
-static void vulkan_getLimits(VGFXRenderer* driverData, VGFXLimits* limits)
+static void vulkan_getLimits(VGFXRenderer* driverData, VGPULimits* limits)
 {
     VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
 
@@ -3084,4 +3084,4 @@ VGFXDriver vulkan_driver = {
     vulkan_createDevice
 };
 
-#endif /* VGFX_VULKAN_DRIVER */
+#endif /* VGPU_VULKAN_DRIVER */
