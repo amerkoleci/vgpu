@@ -24,7 +24,7 @@ VGFXSurface surface = nullptr;
 VGFXDevice device = nullptr;
 VGFXSwapChain swapChain = nullptr;
 
-inline void vgfx_log(VGFXLogLevel level, const char* message)
+inline void vgpu_log(VGFXLogLevel level, const char* message)
 {
 }
 
@@ -163,7 +163,7 @@ int main()
         return EXIT_FAILURE;
     }
 
-    vgfxSetLogFunc(vgfx_log);
+    vgpuSetLogFunc(vgpu_log);
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     GLFWwindow* window = glfwCreateWindow(1280, 720, "Hello World", NULL, NULL);

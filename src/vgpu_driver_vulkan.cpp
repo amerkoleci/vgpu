@@ -3078,7 +3078,7 @@ static VGFXDevice vulkan_createDevice(const VGFXDeviceDesc* info)
     return device;
 }
 
-VGFXDriver vulkan_driver = {
+VGFXDriver Vulkan_Driver = {
     VGFXBackendType_Vulkan,
     vulkan_isSupported,
     vulkan_createDevice

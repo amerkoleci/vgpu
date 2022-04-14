@@ -12,7 +12,7 @@
 
 #define MAX_MESSAGE_SIZE 1024
 
-static void gfxDefaultLogCallback(VGFXLogLevel level, const char* message)
+static void VGPU_DefaultLogCallback(VGFXLogLevel level, const char* message)
 {
 #if defined(__EMSCRIPTEN__)
     switch (level)
@@ -37,7 +37,7 @@ static void gfxDefaultLogCallback(VGFXLogLevel level, const char* message)
 #endif
 }
 
-static vgfxLogFunc s_LogFunc = gfxDefaultLogCallback;
+static VGPU_LogFunc s_LogFunc = VGPU_DefaultLogCallback;
 
 void vgfxLogInfo(const char* format, ...)
 {
@@ -69,20 +69,20 @@ void vgfxLogError(const char* format, ...)
     s_LogFunc(VGFXLogLevel_Error, msg);
 }
 
-void vgfxSetLogFunc(vgfxLogFunc func)
+void vgpuSetLogFunc(VGPU_LogFunc func)
 {
     s_LogFunc = func;
 }
 
 static const VGFXDriver* drivers[] = {
 #if defined(VGPU_D3D12_DRIVER)
-    &d3d12_driver,
+    &D3D12_Driver,
 #endif
 #if defined(VGPU_D3D11_DRIVER)
-    &d3d11_driver,
+    &D3D11_Driver,
 #endif
 #if defined(VGPU_VULKAN_DRIVER)
-    &vulkan_driver,
+    &Vulkan_Driver,
 #endif
 #if defined(VGPU_WEBGPU_DRIVER)
     &webgpu_driver,

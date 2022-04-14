@@ -1473,7 +1473,7 @@ static VGFXDevice d3d12_createDevice(const VGFXDeviceDesc* info)
     return device;
 }
 
-VGFXDriver d3d12_driver = {
+VGFXDriver D3D12_Driver = {
     VGFXBackendType_D3D12,
     d3d12_isSupported,
     d3d12_createDevice

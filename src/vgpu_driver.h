@@ -55,9 +55,9 @@ typedef struct IUnknown IUnknown;
 #define VGFX_ENABLE_WARNINGS() __pragma(warning(pop))
 #endif
 
-_VGFX_EXTERN void vgfxLogInfo(const char* format, ...);
-_VGFX_EXTERN void vgfxLogWarn(const char* format, ...);
-_VGFX_EXTERN void vgfxLogError(const char* format, ...);
+_VGPU_EXTERN void vgfxLogInfo(const char* format, ...);
+_VGPU_EXTERN void vgfxLogWarn(const char* format, ...);
+_VGPU_EXTERN void vgfxLogError(const char* format, ...);
 
 #ifdef __cplusplus
 #include <functional>
@@ -163,9 +163,9 @@ typedef struct VGFXDriver
     VGFXDevice(*createDevice)(const VGFXDeviceDesc* desc);
 } VGFXDriver;
 
-_VGFX_EXTERN VGFXDriver vulkan_driver;
-_VGFX_EXTERN VGFXDriver d3d12_driver;
-_VGFX_EXTERN VGFXDriver d3d11_driver;
-_VGFX_EXTERN VGFXDriver webgpu_driver;
+_VGPU_EXTERN VGFXDriver Vulkan_Driver;
+_VGPU_EXTERN VGFXDriver D3D12_Driver;
+_VGPU_EXTERN VGFXDriver D3D11_Driver;
+_VGPU_EXTERN VGFXDriver webgpu_driver;
 
 #endif /* _VGPU_DRIVER_H_ */

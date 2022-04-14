@@ -1,5 +1,5 @@
 # Graphics backend dependencies
-if(VGFX_VULKAN_DRIVER)
+if(VGPU_VULKAN_DRIVER)
     # vulkan
     add_library(vulkan INTERFACE)
     set(VULKAN_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vulkan/include)
@@ -24,7 +24,7 @@ if(VGFX_VULKAN_DRIVER)
     set_property(TARGET spirv-reflect PROPERTY FOLDER "ThirdParty")
 endif()
 
-if (VGFX_SAMPLES)
+if (VGPU_SAMPLES)
     # Windowing
     if(ANDROID)
         # native_app_glue
@@ -49,4 +49,4 @@ if (VGFX_SAMPLES)
         set_property(TARGET glfw PROPERTY FOLDER "ThirdParty")
         unset(LIB_SUFFIX CACHE)
     endif()
-endif (VGFX_SAMPLES)
+endif ()

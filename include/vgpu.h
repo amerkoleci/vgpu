@@ -23,21 +23,21 @@
 #endif
 
 #ifdef __cplusplus
-#    define _VGFX_EXTERN extern "C"
+#    define _VGPU_EXTERN extern "C"
 #else
-#    define _VGFX_EXTERN extern
+#    define _VGPU_EXTERN extern
 #endif
 
-#define VGFX_API _VGFX_EXTERN _VGFX_EXPORT
+#define VGFX_API _VGPU_EXTERN _VGFX_EXPORT
 
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
 
 #ifdef _WIN32
-#   define VGFX_CALL __cdecl
+#   define VGPU_CALL __cdecl
 #else
-#   define VGFX_CALL
+#   define VGPU_CALL
 #endif
 
 /* Version API */
@@ -444,8 +444,8 @@ typedef struct VGPULimits {
     uint32_t maxComputeWorkGroupsPerDimension;
 } VGPULimits;
 
-typedef void (VGFX_CALL* vgfxLogFunc)(VGFXLogLevel level, const char* message);
-VGFX_API void vgfxSetLogFunc(vgfxLogFunc func);
+typedef void (VGPU_CALL* VGPU_LogFunc)(VGFXLogLevel level, const char* message);
+VGFX_API void vgpuSetLogFunc(VGPU_LogFunc func);
 
 VGFX_API VGFXSurface vgfxCreateSurfaceWin32(void* hinstance, void* hwnd);
 VGFX_API VGFXSurface vgfxCreateSurfaceXlib(void* display, uint32_t window);

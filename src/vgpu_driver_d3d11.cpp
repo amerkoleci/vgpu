@@ -1266,7 +1266,7 @@ static VGFXDevice d3d11_createDevice(const VGFXDeviceDesc* info)
     return device;
 }
 
-VGFXDriver d3d11_driver = {
+VGFXDriver D3D11_Driver = {
     VGFXBackendType_D3D11,
     d3d11_isSupported,
     d3d11_createDevice
