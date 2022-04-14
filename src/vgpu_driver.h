@@ -91,28 +91,10 @@ namespace
 
 typedef struct VGFXRenderer VGFXRenderer;
 
-typedef struct VGFXSurface_T
-{
-    VGFXSurfaceType type;
-#if defined(_WIN32)
-    HINSTANCE hinstance;
-    HWND window;
-    IUnknown* coreWindowOrSwapChainPanel;
-#elif defined(__EMSCRIPTEN__)
-    const char* selector;
-#elif defined(__ANDROID__)
-    struct ANativeWindow* window;
-#elif defined(__linux__)
-    void* display;
-    uint32_t window;
-#endif
-
-} VGFXSurface_T;
-
 typedef struct VGFXDevice_T
 {
-    void (*destroyDevice)(VGFXDevice device);
-    void (*frame)(VGFXRenderer* driverData);
+    void (*destroyDevice)(VGPUDevice device);
+    uint64_t(*frame)(VGFXRenderer* driverData);
     void (*waitIdle)(VGFXRenderer* driverData);
     bool (*hasFeature)(VGFXRenderer* driverData, VGPUFeature feature);
     void (*getAdapterProperties)(VGFXRenderer* driverData, VGPUAdapterProperties* properties);
@@ -124,10 +106,10 @@ typedef struct VGFXDevice_T
     VGFXTexture(*createTexture)(VGFXRenderer* driverData, const VGFXTextureDesc* desc);
     void(*destroyTexture)(VGFXRenderer* driverData, VGFXTexture texture);
 
-    VGFXSwapChain(*createSwapChain)(VGFXRenderer* driverData, VGFXSurface surface, const VGFXSwapChainDesc* desc);
-    void(*destroySwapChain)(VGFXRenderer* driverData, VGFXSwapChain swapChain);
-    void (*getSwapChainSize)(VGFXRenderer* driverData, VGFXSwapChain swapChain, VGFXSize2D* pSize);
-    VGFXTexture(*acquireNextTexture)(VGFXRenderer* driverData, VGFXSwapChain swapChain);
+    VGPUSwapChain(*createSwapChain)(VGFXRenderer* driverData, void* windowHandle, const VGPUSwapChainDesc* desc);
+    void(*destroySwapChain)(VGFXRenderer* driverData, VGPUSwapChain swapChain);
+    void (*getSwapChainSize)(VGFXRenderer* driverData, VGPUSwapChain swapChain, VGPUSize2D* pSize);
+    VGFXTexture(*acquireNextTexture)(VGFXRenderer* driverData, VGPUSwapChain swapChain);
 
     void (*beginRenderPass)(VGFXRenderer* driverData, const VGFXRenderPassDesc* desc);
     void (*endRenderPass)(VGFXRenderer* driverData);
@@ -158,9 +140,9 @@ ASSIGN_DRIVER_FUNC(endRenderPass, name) \
 
 typedef struct VGFXDriver
 {
-    VGFXBackendType backend;
+    VGPUBackendType backend;
     bool (*isSupported)(void);
-    VGFXDevice(*createDevice)(const VGFXDeviceDesc* desc);
+    VGPUDevice(*createDevice)(const VGPUDeviceDesc* desc);
 } VGFXDriver;
 
 _VGPU_EXTERN VGFXDriver Vulkan_Driver;

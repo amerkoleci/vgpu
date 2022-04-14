@@ -37,7 +37,7 @@ static void VGPU_DefaultLogCallback(VGFXLogLevel level, const char* message)
 #endif
 }
 
-static VGPU_LogFunc s_LogFunc = VGPU_DefaultLogCallback;
+static VGPULogCallback s_LogFunc = VGPU_DefaultLogCallback;
 
 void vgfxLogInfo(const char* format, ...)
 {
@@ -69,7 +69,7 @@ void vgfxLogError(const char* format, ...)
     s_LogFunc(VGFXLogLevel_Error, msg);
 }
 
-void vgpuSetLogFunc(VGPU_LogFunc func)
+void VGPU_SetLogCallback(VGPULogCallback func)
 {
     s_LogFunc = func;
 }
@@ -93,70 +93,7 @@ static const VGFXDriver* drivers[] = {
 #define NULL_RETURN(name) if (name == NULL) { return; }
 #define NULL_RETURN_NULL(name) if (name == NULL) { return NULL; }
 
-VGFXSurface vgfxAllocSurface(VGFXSurfaceType type) {
-    VGFXSurface surface = (VGFXSurface_T*)VGFX_MALLOC(sizeof(VGFXSurface_T));
-    surface->type = type;
-    return surface;
-}
-
-VGFXSurface vgfxCreateSurfaceWin32(void* hinstance, void* hwnd)
-{
-    VGFXSurface surface = vgfxAllocSurface(VGFXSurfaceType_Win32);
-#if defined(_WIN32)
-    surface->hinstance = (HINSTANCE)hinstance;
-    surface->window = (HWND)hwnd;
-    if (!IsWindow(surface->window))
-    {
-        VGFX_FREE(surface);
-        return NULL;
-    }
-#else
-    _VGFX_UNUSED(hinstance);
-    _VGFX_UNUSED(hwnd);
-#endif
-    return surface;
-}
-
-VGFXSurface vgfxCreateSurfaceXlib(void* display, uint32_t window)
-{
-    VGFXSurface surface = vgfxAllocSurface(VGFXSurfaceType_Xlib);
-#if defined(__linux__)
-    surface->display = display;
-    surface->window = window;
-#else
-    _VGFX_UNUSED(display);
-    _VGFX_UNUSED(window);
-#endif
-    return surface;
-}
-
-VGFXSurface vgfxCreateSurfaceWeb(const char* selector)
-{
-    VGFXSurface surface = vgfxAllocSurface(VGFXSurfaceType_Web);
-#if defined(__EMSCRIPTEN__)
-    surface->selector = selector;
-#else
-    _VGFX_UNUSED(selector);
-#endif
-    return surface;
-}
-
-void vgfxDestroySurface(VGFXSurface surface)
-{
-    NULL_RETURN(surface);
-    VGFX_FREE(surface);
-}
-
-VGFXSurfaceType vgfxGetSurfaceType(VGFXSurface surface)
-{
-    if (surface == NULL) {
-        return VGFXSurfaceType_Unknown;
-    }
-
-    return surface->type;
-}
-
-bool vgfxIsSupported(VGFXBackendType backend)
+bool vgpuIsSupported(VGPUBackendType backend)
 {
     for (uint32_t i = 0; i < _VGFX_COUNT_OF(drivers); ++i)
     {
@@ -172,14 +109,14 @@ bool vgfxIsSupported(VGFXBackendType backend)
     return false;
 }
 
-VGFXDevice vgfxCreateDevice(const VGFXDeviceDesc* desc)
+VGPUDevice vgpuCreateDevice(const VGPUDeviceDesc* desc)
 {
     NULL_RETURN_NULL(desc);
 
-    VGFXBackendType backend = desc->preferredBackend;
+    VGPUBackendType backend = desc->preferredBackend;
 
 retry:
-    if (backend == VGFXBackendType_Default)
+    if (backend == VGPU_BACKEND_TYPE_DEFAULT)
     {
         for (uint32_t i = 0; i < _VGFX_COUNT_OF(drivers); ++i)
         {
@@ -208,7 +145,7 @@ retry:
                 else
                 {
                     vgfxLogWarn("Wanted API not supported, fallback to default");
-                    backend = VGFXBackendType_Default;
+                    backend = VGPU_BACKEND_TYPE_DEFAULT;
                     goto retry;
                 }
             }
@@ -218,25 +155,29 @@ retry:
     return NULL;
 }
 
-void vgfxDestroyDevice(VGFXDevice device)
+void vgpuDestroyDevice(VGPUDevice device)
 {
     NULL_RETURN(device);
     device->destroyDevice(device);
 }
 
-void vgfxFrame(VGFXDevice device)
+uint64_t vgpuFrame(VGPUDevice device)
 {
-    NULL_RETURN(device);
-    device->frame(device->driverData);
+    if (device == NULL)
+    {
+        return (uint64_t)(-1);
+    }
+
+    return device->frame(device->driverData);
 }
 
-void vgfxWaitIdle(VGFXDevice device)
+void vgpuWaitIdle(VGPUDevice device)
 {
     NULL_RETURN(device);
     device->waitIdle(device->driverData);
 }
 
-bool vgpuQueryFeature(VGFXDevice device, VGPUFeature feature)
+bool vgpuQueryFeature(VGPUDevice device, VGPUFeature feature)
 {
     if (device == NULL) {
         return false;
@@ -245,7 +186,7 @@ bool vgpuQueryFeature(VGFXDevice device, VGPUFeature feature)
     return device->hasFeature(device->driverData, feature);
 }
 
-void vgpuGetAdapterProperties(VGFXDevice device, VGPUAdapterProperties* properties)
+void vgpuGetAdapterProperties(VGPUDevice device, VGPUAdapterProperties* properties)
 {
     NULL_RETURN(device);
     NULL_RETURN(properties);
@@ -253,7 +194,7 @@ void vgpuGetAdapterProperties(VGFXDevice device, VGPUAdapterProperties* properti
     device->getAdapterProperties(device->driverData, properties);
 }
 
-void vgpuGetLimits(VGFXDevice device, VGPULimits* limits)
+void vgpuGetLimits(VGPUDevice device, VGPULimits* limits)
 {
     NULL_RETURN(device);
     NULL_RETURN(limits);
@@ -269,7 +210,7 @@ static VGFXBufferDesc _vgfxBufferDescDef(const VGFXBufferDesc* desc)
     return def;
 }
 
-VGFXBuffer vgfxCreateBuffer(VGFXDevice device, const VGFXBufferDesc* desc, const void* pInitialData)
+VGFXBuffer vgfxCreateBuffer(VGPUDevice device, const VGFXBufferDesc* desc, const void* pInitialData)
 {
      NULL_RETURN_NULL(device);
      NULL_RETURN_NULL(desc);
@@ -278,7 +219,7 @@ VGFXBuffer vgfxCreateBuffer(VGFXDevice device, const VGFXBufferDesc* desc, const
      return device->createBuffer(device->driverData, &desc_def, pInitialData);
 }
 
-void vgfxDestroyBuffer(VGFXDevice device, VGFXBuffer buffer)
+void vgfxDestroyBuffer(VGPUDevice device, VGFXBuffer buffer)
 {
     NULL_RETURN(device);
     NULL_RETURN(buffer);
@@ -290,7 +231,7 @@ void vgfxDestroyBuffer(VGFXDevice device, VGFXBuffer buffer)
 static VGFXTextureDesc _vgfxTextureDescDef(const VGFXTextureDesc* desc)
 {
     VGFXTextureDesc def = *desc;
-    def.type = _VGFX_DEF(def.type, VGFXTextureType2D);
+    def.type = _VGFX_DEF(def.type, VGPU_TEXTURE_TYPE_2D);
     def.format = _VGFX_DEF(def.type, VGFXTextureFormat_RGBA8UNorm);
     //def.usage = _VGFX_DEF(def.type, VGFXTextureUsage_ShaderRead);
     def.width = _VGFX_DEF(def.width, 1);
@@ -301,7 +242,7 @@ static VGFXTextureDesc _vgfxTextureDescDef(const VGFXTextureDesc* desc)
     return def;
 }
 
-VGFXTexture vgfxCreateTexture(VGFXDevice device, const VGFXTextureDesc* desc)
+VGFXTexture vgfxCreateTexture(VGPUDevice device, const VGFXTextureDesc* desc)
 {
     NULL_RETURN_NULL(device);
     NULL_RETURN_NULL(desc);
@@ -310,7 +251,7 @@ VGFXTexture vgfxCreateTexture(VGFXDevice device, const VGFXTextureDesc* desc)
     return device->createTexture(device->driverData, &desc_def);
 }
 
-void vgfxDestroyTexture(VGFXDevice device, VGFXTexture texture)
+void vgfxDestroyTexture(VGPUDevice device, VGFXTexture texture)
 {
     NULL_RETURN(device);
     NULL_RETURN(texture);
@@ -319,16 +260,16 @@ void vgfxDestroyTexture(VGFXDevice device, VGFXTexture texture)
 }
 
 /* SwapChain */
-VGFXSwapChain vgfxCreateSwapChain(VGFXDevice device, VGFXSurface surface, const VGFXSwapChainDesc* desc)
+VGPUSwapChain vgpuCreateSwapChain(VGPUDevice device, void* windowHandle, const VGPUSwapChainDesc* desc)
 {
     NULL_RETURN_NULL(device);
-    NULL_RETURN_NULL(surface);
+    NULL_RETURN_NULL(windowHandle);
     NULL_RETURN_NULL(desc);
 
-    return device->createSwapChain(device->driverData, surface, desc);
+    return device->createSwapChain(device->driverData, windowHandle, desc);
 }
 
-void vgfxDestroySwapChain(VGFXDevice device, VGFXSwapChain swapChain)
+void vgpuDestroySwapChain(VGPUDevice device, VGPUSwapChain swapChain)
 {
     NULL_RETURN(device);
     NULL_RETURN(swapChain);
@@ -336,7 +277,7 @@ void vgfxDestroySwapChain(VGFXDevice device, VGFXSwapChain swapChain)
     device->destroySwapChain(device->driverData, swapChain);
 }
 
-void vgfxSwapChainGetSize(VGFXDevice device, VGFXSwapChain swapChain, VGFXSize2D* pSize)
+void vgfxSwapChainGetSize(VGPUDevice device, VGPUSwapChain swapChain, VGPUSize2D* pSize)
 {
     NULL_RETURN(device);
     NULL_RETURN(swapChain);
@@ -345,14 +286,14 @@ void vgfxSwapChainGetSize(VGFXDevice device, VGFXSwapChain swapChain, VGFXSize2D
     device->getSwapChainSize(device->driverData, swapChain, pSize);
 }
 
-VGFXTexture vgfxSwapChainAcquireNextTexture(VGFXDevice device, VGFXSwapChain swapChain)
+VGFXTexture vgfxSwapChainAcquireNextTexture(VGPUDevice device, VGPUSwapChain swapChain)
 {
     NULL_RETURN_NULL(device);
     return device->acquireNextTexture(device->driverData, swapChain);
 }
 
 /* Commands */
-void vgfxBeginRenderPass(VGFXDevice device, const VGFXRenderPassDesc* desc)
+void vgfxBeginRenderPass(VGPUDevice device, const VGFXRenderPassDesc* desc)
 {
     NULL_RETURN(device);
     NULL_RETURN(desc);
@@ -360,7 +301,7 @@ void vgfxBeginRenderPass(VGFXDevice device, const VGFXRenderPassDesc* desc)
     device->beginRenderPass(device->driverData, desc);
 }
 
-void vgfxEndRenderPass(VGFXDevice device)
+void vgfxEndRenderPass(VGPUDevice device)
 {
     NULL_RETURN(device);
 

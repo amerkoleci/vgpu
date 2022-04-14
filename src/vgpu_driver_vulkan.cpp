@@ -681,7 +681,7 @@ static void vulkan_SetObjectName(VGFXVulkanRenderer* renderer, VkObjectType type
     VK_CHECK(vkSetDebugUtilsObjectNameEXT(renderer->device, &info));
 }
 
-static VkSurfaceKHR vulkan_createSurface(VGFXVulkanRenderer* renderer, VGFXSurface surface)
+static VkSurfaceKHR vulkan_createSurface(VGFXVulkanRenderer* renderer, void* windowHandle)
 {
     VkResult result = VK_SUCCESS;
     VkSurfaceKHR vk_surface = VK_NULL_HANDLE;
@@ -696,31 +696,31 @@ static VkSurfaceKHR vulkan_createSurface(VGFXVulkanRenderer* renderer, VGFXSurfa
 #elif defined(VK_USE_PLATFORM_WIN32_KHR)
     VkWin32SurfaceCreateInfoKHR createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
-    createInfo.hinstance = surface->hinstance;
-    createInfo.hwnd = surface->window;
+    createInfo.hinstance = GetModuleHandle(nullptr);
+    createInfo.hwnd = (HWND)windowHandle;
     result = vkCreateWin32SurfaceKHR(instance, &createInfo, nullptr, &vk_surface);
 #elif defined(VK_USE_PLATFORM_METAL_EXT)
     VkMetalSurfaceCreateInfoEXT createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_METAL_SURFACE_CREATE_INFO_EXT;
-    createInfo.pLayer = (const CAMetalLayer*)surface->pLayer;
+    createInfo.pLayer = (const CAMetalLayer*)windowHandle;
     result = vkCreateMetalSurfaceEXT(instance, &createInfo, nullptr, &vk_surface);
 #elif defined(VK_USE_PLATFORM_XCB_KHR)
     VkXcbSurfaceCreateInfoKHR createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR;
-    createInfo.connection = renderer->GetXCBConnection(static_cast<Display*>(surface->display));
-    createInfo.window = surface->window;
+    //createInfo.connection = renderer->GetXCBConnection(static_cast<Display*>(surface->display));
+    createInfo.window = (xcb_window_t)windowHandle;
     result = vkCreateXcbSurfaceKHR(instance, &createInfo, nullptr, &vk_surface);
 #elif defined(VK_USE_PLATFORM_XLIB_KHR)
     VkXlibSurfaceCreateInfoKHR createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR;
-    createInfo.dpy = (Display*)surface->display;
-    createInfo.window = (Window)surface->window;
+    //createInfo.dpy = (Display*)surface->display;
+    createInfo.window = (Window)windowHandle;
     result = vkCreateXlibSurfaceKHR(instance, &createInfo, nullptr, &vk_surface);
 #elif defined(VK_USE_PLATFORM_WAYLAND_KHR)
     VkWaylandSurfaceCreateInfoKHR createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR;
     createInfo.display = display;
-    createInfo.surface = window;
+    createInfo.surface = (wl_surface*)windowHandle;
     result = vkCreateWaylandSurfaceKHR(instance, &createInfo, nullptr, &vk_surface);
 #elif defined(VK_USE_PLATFORM_DISPLAY_KHR)
 #elif defined(VK_USE_PLATFORM_HEADLESS_EXT)
@@ -1104,7 +1104,7 @@ static void vulkan_ProcessDeletionQueue(VGFXVulkanRenderer* renderer)
     renderer->destroyMutex.unlock();
 }
 
-static void vulkan_destroyDevice(VGFXDevice device)
+static void vulkan_destroyDevice(VGPUDevice device)
 {
     VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)device->driverData;
     VK_CHECK(vkDeviceWaitIdle(renderer->device));
@@ -1191,7 +1191,7 @@ static void vulkan_destroyDevice(VGFXDevice device)
     VGFX_FREE(device);
 }
 
-static void vulkan_frame(VGFXRenderer* driverData)
+static uint64_t vulkan_frame(VGFXRenderer* driverData)
 {
     VkResult result = VK_SUCCESS;
     VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
@@ -1315,6 +1315,9 @@ static void vulkan_frame(VGFXRenderer* driverData)
 
     renderer->submitInits = false;
     renderer->initLocker.unlock();
+
+    // Return current frame
+    return renderer->frameCount - 1;
 }
 
 static void vulkan_waitIdle(VGFXRenderer* driverData) {
@@ -1361,20 +1364,23 @@ static void vulkan_getAdapterProperties(VGFXRenderer* driverData, VGPUAdapterPro
     switch (renderer->properties2.properties.deviceType)
     {
         case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU:
-            properties->adapterType = VGFXAdapterType_IntegratedGPU;
+            properties->adapterType = VGPU_ADAPTER_TYPE_INTEGRATED_GPU;
             break;
         case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:
-            properties->adapterType = VGFXAdapterType_DiscreteGPU;
+            properties->adapterType = VGPU_ADAPTER_TYPE_DISCRETE_GPU;
+            break;
+        case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU:
+            properties->adapterType = VGPU_ADAPTER_TYPE_VIRTUAL_GPU;
             break;
         case VK_PHYSICAL_DEVICE_TYPE_CPU:
-            properties->adapterType = VGFXAdapterType_CPU;
+            properties->adapterType = VGPU_ADAPTER_TYPE_CPU;
             break;
         default:
-            properties->adapterType = VGFXAdapterType_Unknown;
+            properties->adapterType = VGPU_ADAPTER_TYPE_OTHER;
             break;
     }
 
-    properties->backendType = VGFXBackendType_Vulkan;
+    properties->backendType = VGPU_BACKEND_TYPE_VULKAN;
 }
 
 static void vulkan_getLimits(VGFXRenderer* driverData, VGPULimits* limits)
@@ -1584,7 +1590,7 @@ static VGFXTexture vulkan_createTexture(VGFXRenderer* driverData, const VGFXText
     imageInfo.format = ToVk(desc->format);
     imageInfo.extent.width = desc->width;
     imageInfo.extent.height = desc->height;
-    if (desc->type == VGFXTextureType3D)
+    if (desc->type == VGPU_TEXTURE_TYPE_3D)
     {
         imageInfo.imageType = VK_IMAGE_TYPE_3D;
         imageInfo.extent.depth = desc->depthOrArraySize;
@@ -1838,10 +1844,10 @@ static void vulkan_updateSwapChain(VGFXVulkanRenderer* renderer, VGFXVulkanSwapC
     swapChain->height = createInfo.imageExtent.height;
 }
 
-static VGFXSwapChain vulkan_createSwapChain(VGFXRenderer* driverData, VGFXSurface surface, const VGFXSwapChainDesc* info)
+static VGPUSwapChain vulkan_createSwapChain(VGFXRenderer* driverData, void* windowHandle, const VGPUSwapChainDesc* info)
 {
     VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
-    VkSurfaceKHR vk_surface = vulkan_createSurface(renderer, surface);
+    VkSurfaceKHR vk_surface = vulkan_createSurface(renderer, windowHandle);
     if (vk_surface == VK_NULL_HANDLE)
     {
         return nullptr;
@@ -1862,10 +1868,10 @@ static VGFXSwapChain vulkan_createSwapChain(VGFXRenderer* driverData, VGFXSurfac
     swapChain->vsync = info->presentMode == VGFXPresentMode_Fifo;
     vulkan_updateSwapChain(renderer, swapChain);
 
-    return (VGFXSwapChain)swapChain;
+    return (VGPUSwapChain)swapChain;
 }
 
-static void vulkan_destroySwapChain(VGFXRenderer* driverData, VGFXSwapChain swapChain)
+static void vulkan_destroySwapChain(VGFXRenderer* driverData, VGPUSwapChain swapChain)
 {
     VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
     VGFXVulkanSwapChain* vulkanSwapChain = (VGFXVulkanSwapChain*)swapChain;
@@ -1903,14 +1909,14 @@ static void vulkan_destroySwapChain(VGFXRenderer* driverData, VGFXSwapChain swap
     delete vulkanSwapChain;
 }
 
-static void vulkan_getSwapChainSize(VGFXRenderer*, VGFXSwapChain swapChain, VGFXSize2D* pSize)
+static void vulkan_getSwapChainSize(VGFXRenderer*, VGPUSwapChain swapChain, VGPUSize2D* pSize)
 {
     VGFXVulkanSwapChain* vulkanSwapChain = (VGFXVulkanSwapChain*)swapChain;
     pSize->width = vulkanSwapChain->width;
     pSize->height = vulkanSwapChain->height;
 }
 
-static VGFXTexture vulkan_acquireNextTexture(VGFXRenderer* driverData, VGFXSwapChain swapChain)
+static VGFXTexture vulkan_acquireNextTexture(VGFXRenderer* driverData, VGPUSwapChain swapChain)
 {
     VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
     VGFXVulkanSwapChain* vulkanSwapChain = (VGFXVulkanSwapChain*)swapChain;
@@ -2161,7 +2167,7 @@ static bool vulkan_isSupported(void)
     return true;
 }
 
-static VGFXDevice vulkan_createDevice(const VGFXDeviceDesc* info)
+static VGPUDevice vulkan_createDevice(const VGPUDeviceDesc* info)
 {
     VGFXVulkanRenderer* renderer = new VGFXVulkanRenderer();
 
@@ -2250,7 +2256,7 @@ static VGFXDevice vulkan_createDevice(const VGFXDeviceDesc* info)
 #   pragma error Platform not supported
 #endif
 
-        if (info->validationMode != VGFXValidationMode_Disabled)
+        if (info->validationMode != VGPU_VALIDATION_MODE_DISABLED)
         {
             // Determine the optimal validation layers to enable that are necessary for useful debugging
             std::vector<const char*> optimalValidationLyers = GetOptimalValidationLayers(availableInstanceLayers);
@@ -2259,7 +2265,7 @@ static VGFXDevice vulkan_createDevice(const VGFXDeviceDesc* info)
 
 #if defined(_DEBUG)
         bool validationFeatures = false;
-        if (info->validationMode == VGFXValidationMode_GPU)
+        if (info->validationMode == VGPU_VALIDATION_MODE_GPU)
         {
             uint32_t layerInstanceExtensionCount;
             VK_CHECK(vkEnumerateInstanceExtensionProperties("VK_LAYER_KHRONOS_validation", &layerInstanceExtensionCount, nullptr));
@@ -2295,14 +2301,14 @@ static VGFXDevice vulkan_createDevice(const VGFXDeviceDesc* info)
 
         VkDebugUtilsMessengerCreateInfoEXT debugUtilsCreateInfo{};
 
-        if (info->validationMode != VGFXValidationMode_Disabled && renderer->debugUtils)
+        if (info->validationMode != VGPU_VALIDATION_MODE_DISABLED && renderer->debugUtils)
         {
             debugUtilsCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
             debugUtilsCreateInfo.pNext = nullptr;
             debugUtilsCreateInfo.flags = 0;
 
             debugUtilsCreateInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-            if (info->validationMode == VGFXValidationMode_Verbose)
+            if (info->validationMode == VGPU_VALIDATION_MODE_VERBOSE)
             {
                 debugUtilsCreateInfo.messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT;
             }
@@ -2337,7 +2343,7 @@ static VGFXDevice vulkan_createDevice(const VGFXDeviceDesc* info)
 
         volkLoadInstanceOnly(renderer->instance);
 
-        if (info->validationMode != VGFXValidationMode_Disabled && renderer->debugUtils)
+        if (info->validationMode != VGPU_VALIDATION_MODE_DISABLED && renderer->debugUtils)
         {
             result = vkCreateDebugUtilsMessengerEXT(renderer->instance, &debugUtilsCreateInfo, nullptr, &renderer->debugUtilsMessenger);
             if (result != VK_SUCCESS)
@@ -3079,7 +3085,7 @@ static VGFXDevice vulkan_createDevice(const VGFXDeviceDesc* info)
 }
 
 VGFXDriver Vulkan_Driver = {
-    VGFXBackendType_Vulkan,
+    VGPU_BACKEND_TYPE_VULKAN,
     vulkan_isSupported,
     vulkan_createDevice
 };

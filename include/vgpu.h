@@ -52,76 +52,66 @@ enum {
     VGFX_MAX_VERTEX_ATTRIBUTES = 16,
 };
 
-typedef struct VGFXSurface_T* VGFXSurface;
-typedef struct VGFXDevice_T* VGFXDevice;
+typedef struct VGFXDevice_T* VGPUDevice;
 typedef struct VGFXBuffer_T* VGFXBuffer;
 typedef struct VGFXTexture_T* VGFXTexture;
 typedef struct VGFXSampler_T* VGFXSampler;
-typedef struct VGFXSwapChain_T* VGFXSwapChain;
+typedef struct VGFXSwapChain_T* VGPUSwapChain;
 
 typedef enum VGFXLogLevel {
     VGFXLogLevel_Info = 0,
     VGFXLogLevel_Warn,
     VGFXLogLevel_Error,
 
-    VGFXLogLevel_Count,
-    VGFXLogLevel_Force32 = 0x7FFFFFFF
+    _VGPU_LOG_LEVEL_COUNT,
+    _VGPU_LOG_LEVEL_FORCE_U32 = 0x7FFFFFFF
 } VGFXLogLevel;
 
-typedef enum VGFXBackendType {
-    VGFXBackendType_Default = 0,
-    VGFXBackendType_Vulkan,
-    VGFXBackendType_D3D12,
-    VGFXBackendType_D3D11,
-    VGFXBackendType_WebGPU,
+typedef enum VGPUBackendType {
+    VGPU_BACKEND_TYPE_DEFAULT = 0,
+    VGPU_BACKEND_TYPE_VULKAN,
+    VGPU_BACKEND_TYPE_D3D12,
+    VGPU_BACKEND_TYPE_D3D11,
+    VGPU_BACKEND_TYPE_WEBGPU,
 
-    _VGFXBackendType_Count,
-    _VGFXBackendType_Force32 = 0x7FFFFFFF
-} VGFXBackendType;
+    _VGPU_BACKEND_TYPE_COUNT,
+    _VGPU_BACKEND_TYPE_FORCE_U32 = 0x7FFFFFFF
+} VGPUBackendType;
 
-typedef enum VGFXValidationMode {
+typedef enum VGPUValidationMode {
     /// No validation is enabled.
-    VGFXValidationMode_Disabled = 0,
+    VGPU_VALIDATION_MODE_DISABLED = 0,
     /// Print warnings and errors
-    VGFXValidationMode_Enabled,
+    VGPU_VALIDATION_MODE_ENABLED,
     /// Print all warnings, errors and info messages
-    VGFXValidationMode_Verbose,
+    VGPU_VALIDATION_MODE_VERBOSE,
     /// Enable GPU-based validation
-    VGFXValidationMode_GPU,
+    VGPU_VALIDATION_MODE_GPU,
 
-    _VGFXValidationMode_Count,
-    _VGFXValidationMode_Force32 = 0x7FFFFFFF
-} VGFXValidationMode;
+    _VGPU_VALIDATION_MODE_COUNT,
+    _VGPU_VALIDATION_MODE_FORCE_U32 = 0x7FFFFFFF
+} VGPUValidationMode;
 
-typedef enum VGFXAdapterType {
-    VGFXAdapterType_DiscreteGPU = 0x00000000,
-    VGFXAdapterType_IntegratedGPU = 0x00000001,
-    VGFXAdapterType_CPU = 0x00000002,
-    VGFXAdapterType_Unknown = 0x00000003,
+typedef enum VGPUAdapterType {
+    VGPU_ADAPTER_TYPE_OTHER = 0,
+    VGPU_ADAPTER_TYPE_INTEGRATED_GPU,
+    VGPU_ADAPTER_TYPE_DISCRETE_GPU,
+    VGPU_ADAPTER_TYPE_VIRTUAL_GPU,
+    VGPU_ADAPTER_TYPE_CPU,
 
-    _VGFXAdapterType_Count,
-    _VGFXAdapterType_Force32 = 0x7FFFFFFF
-} VGFXAdapterType;
+    _VGPU_ADAPTER_TYPE_COUNT,
+    _VGPU_ADAPTER_TYPE_FORCE_U32 = 0x7FFFFFFF
+} VGPUAdapterType;
 
-typedef enum VGFXSurfaceType {
-    VGFXSurfaceType_Unknown = 0,
-    VGFXSurfaceType_Win32,
-    VGFXSurfaceType_CoreWindow,
-    VGFXSurfaceType_SwapChainPanel,
-    VGFXSurfaceType_Xlib,
-    VGFXSurfaceType_Web,
+typedef enum VGPUTextureType {
+    _VGPU_TEXTURE_TYPE_DEFAULT = 0,
+    VGPU_TEXTURE_TYPE_1D,
+    VGPU_TEXTURE_TYPE_2D,
+    VGPU_TEXTURE_TYPE_3D,
 
-    _VGFXSurfaceType_Count,
-    _VGFXSurfaceType_Force32 = 0x7FFFFFFF
-} VGFXSurfaceType;
-
-typedef enum VGFXTextureType {
-    VGFXTextureType2D,
-    VGFXTextureType3D,
-
-    _VGFXTextureType_Count,
-    _VGFXTextureType_Force32 = 0x7FFFFFFF
-} VGFXTextureType;
+    _VGPU_TEXTURE_TYPE_COUNT,
+    _VGPU_TEXTURE_TYPE_FORCE_U32 = 0x7FFFFFFF
+} VGPUTextureType;
 
 typedef enum VGFXBufferUsage {
     VGFXBufferUsage_None = 0x00,
@@ -316,16 +306,16 @@ typedef struct VGFXColor {
     float a;
 } VGFXColor;
 
-typedef struct VGFXSize2D {
+typedef struct VGPUSize2D {
     uint32_t width;
     uint32_t height;
-} VGFXSize2D;
+} VGPUSize2D;
 
-typedef struct VGFXSize3D {
+typedef struct VGPUSize3D {
     uint32_t width;
     uint32_t height;
     uint32_t depth;
-} VGFXSize3D;
+} VGPUSize3D;
 
 typedef struct VGFXViewport {
     /// Top left x coordinate.
@@ -377,7 +367,7 @@ typedef struct VGFXBufferDesc {
 
 typedef struct VGFXTextureDesc {
     const char* label;
-    VGFXTextureType type;
+    VGPUTextureType type;
     VGFXTextureFormat format;
     VGFXTextureUsage usage;
     uint32_t width;
@@ -387,32 +377,32 @@ typedef struct VGFXTextureDesc {
     uint32_t sampleCount;
 } VGFXTextureDesc;
 
-typedef struct VGFXSamplerDesc
+typedef struct VGPUSamplerDesc
 {
     const char* label;
-} VGFXSamplerDesc;
+} VGPUSamplerDesc;
 
-typedef struct VGFXSwapChainDesc
+typedef struct VGPUSwapChainDesc
 {
     VGFXTextureFormat format;
     uint32_t width;
     uint32_t height;
     VGFXPresentMode presentMode;
-} VGFXSwapChainDesc;
+} VGPUSwapChainDesc;
 
-typedef struct VGFXDeviceDesc {
+typedef struct VGPUDeviceDesc {
     const char* label;
-    VGFXBackendType preferredBackend;
-    VGFXValidationMode validationMode;
-} VGFXDeviceDesc;
+    VGPUBackendType preferredBackend;
+    VGPUValidationMode validationMode;
+} VGPUDeviceDesc;
 
 typedef struct VGPUAdapterProperties {
     uint32_t vendorID;
     uint32_t deviceID;
     const char* name;
     const char* driverDescription;
-    VGFXAdapterType adapterType;
-    VGFXBackendType backendType;
+    VGPUAdapterType adapterType;
+    VGPUBackendType backendType;
 } VGPUAdapterProperties;
 
 typedef struct VGPULimits {
@@ -444,41 +434,35 @@ typedef struct VGPULimits {
     uint32_t maxComputeWorkGroupsPerDimension;
 } VGPULimits;
 
-typedef void (VGPU_CALL* VGPU_LogFunc)(VGFXLogLevel level, const char* message);
-VGFX_API void vgpuSetLogFunc(VGPU_LogFunc func);
+typedef void (VGPU_CALL* VGPULogCallback)(VGFXLogLevel level, const char* message);
+VGFX_API void VGPU_SetLogCallback(VGPULogCallback func);
 
-VGFX_API VGFXSurface vgfxCreateSurfaceWin32(void* hinstance, void* hwnd);
-VGFX_API VGFXSurface vgfxCreateSurfaceXlib(void* display, uint32_t window);
-VGFX_API VGFXSurface vgfxCreateSurfaceWeb(const char* selector);
-VGFX_API void vgfxDestroySurface(VGFXSurface surface);
-VGFX_API VGFXSurfaceType vgfxGetSurfaceType(VGFXSurface surface);
-
-VGFX_API bool vgfxIsSupported(VGFXBackendType backend);
-VGFX_API VGFXDevice vgfxCreateDevice(const VGFXDeviceDesc* desc);
-VGFX_API void vgfxDestroyDevice(VGFXDevice device);
-VGFX_API void vgfxFrame(VGFXDevice device);
-VGFX_API void vgfxWaitIdle(VGFXDevice device);
-VGFX_API bool vgpuQueryFeature(VGFXDevice device, VGPUFeature feature);
-VGFX_API void vgpuGetAdapterProperties(VGFXDevice device, VGPUAdapterProperties* properties);
-VGFX_API void vgpuGetLimits(VGFXDevice device, VGPULimits* limits);
+VGFX_API bool vgpuIsSupported(VGPUBackendType backend);
+VGFX_API VGPUDevice vgpuCreateDevice(const VGPUDeviceDesc* desc);
+VGFX_API void vgpuDestroyDevice(VGPUDevice device);
+VGFX_API uint64_t vgpuFrame(VGPUDevice device);
+VGFX_API void vgpuWaitIdle(VGPUDevice device);
+VGFX_API bool vgpuQueryFeature(VGPUDevice device, VGPUFeature feature);
+VGFX_API void vgpuGetAdapterProperties(VGPUDevice device, VGPUAdapterProperties* properties);
+VGFX_API void vgpuGetLimits(VGPUDevice device, VGPULimits* limits);
 
 /* Buffer */
-VGFX_API VGFXBuffer vgfxCreateBuffer(VGFXDevice device, const VGFXBufferDesc* desc, const void* pInitialData);
-VGFX_API void vgfxDestroyBuffer(VGFXDevice device, VGFXBuffer buffer);
+VGFX_API VGFXBuffer vgfxCreateBuffer(VGPUDevice device, const VGFXBufferDesc* desc, const void* pInitialData);
+VGFX_API void vgfxDestroyBuffer(VGPUDevice device, VGFXBuffer buffer);
 
 /* Texture */
-VGFX_API VGFXTexture vgfxCreateTexture(VGFXDevice device, const VGFXTextureDesc* desc);
-VGFX_API void vgfxDestroyTexture(VGFXDevice device, VGFXTexture texture);
+VGFX_API VGFXTexture vgfxCreateTexture(VGPUDevice device, const VGFXTextureDesc* desc);
+VGFX_API void vgfxDestroyTexture(VGPUDevice device, VGFXTexture texture);
 
 /* SwapChain */
-VGFX_API VGFXSwapChain vgfxCreateSwapChain(VGFXDevice device, VGFXSurface surface, const VGFXSwapChainDesc* desc);
-VGFX_API void vgfxDestroySwapChain(VGFXDevice device, VGFXSwapChain swapChain);
-VGFX_API void vgfxSwapChainGetSize(VGFXDevice device, VGFXSwapChain swapChain, VGFXSize2D* pSize);
-VGFX_API VGFXTexture vgfxSwapChainAcquireNextTexture(VGFXDevice device, VGFXSwapChain swapChain);
+VGFX_API VGPUSwapChain vgpuCreateSwapChain(VGPUDevice device, void* windowHandle, const VGPUSwapChainDesc* desc);
+VGFX_API void vgpuDestroySwapChain(VGPUDevice device, VGPUSwapChain swapChain);
+VGFX_API void vgfxSwapChainGetSize(VGPUDevice device, VGPUSwapChain swapChain, VGPUSize2D* pSize);
+VGFX_API VGFXTexture vgfxSwapChainAcquireNextTexture(VGPUDevice device, VGPUSwapChain swapChain);
 
 /* Commands */
-VGFX_API void vgfxBeginRenderPass(VGFXDevice device, const VGFXRenderPassDesc* desc);
-VGFX_API void vgfxEndRenderPass(VGFXDevice device);
+VGFX_API void vgfxBeginRenderPass(VGPUDevice device, const VGFXRenderPassDesc* desc);
+VGFX_API void vgfxEndRenderPass(VGPUDevice device);
 
 /* Helper functions */
 typedef struct VGFXFormatInfo {

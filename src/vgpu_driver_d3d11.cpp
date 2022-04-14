@@ -114,11 +114,14 @@ struct VGFXD3D11Renderer
     uint32_t deviceID;
     std::string adapterName;
     std::string driverDescription;
-    VGFXAdapterType adapterType;
+    VGPUAdapterType adapterType;
 
     ID3D11Device1* device = nullptr;
     ID3D11DeviceContext1* context = nullptr;
     D3D_FEATURE_LEVEL featureLevel{};
+
+    uint32_t frameIndex = 0;
+    uint64_t frameCount = 0;
 
     // Current frame present swap chains
     std::vector<VGFXD3D11SwapChain*> swapChains;
@@ -349,7 +352,7 @@ static ID3D11DepthStencilView* d3d11_GetDSV(
     return it->second;
 }
 
-static void d3d11_destroyDevice(VGFXDevice device)
+static void d3d11_destroyDevice(VGPUDevice device)
 {
     VGFXD3D11Renderer* renderer = (VGFXD3D11Renderer*)device->driverData;
 
@@ -394,7 +397,7 @@ static void d3d11_destroyDevice(VGFXDevice device)
     VGFX_FREE(device);
 }
 
-static void d3d11_frame(VGFXRenderer* driverData)
+static uint64_t d3d11_frame(VGFXRenderer* driverData)
 {
     HRESULT hr = S_OK;
     VGFXD3D11Renderer* renderer = (VGFXD3D11Renderer*)driverData;
@@ -431,10 +434,15 @@ static void d3d11_frame(VGFXRenderer* driverData)
         if (FAILED(hr))
         {
             vgfxLogError("Failed to process frame");
-            return;
+            return (uint64_t)(-1);
         }
-
     }
+
+    renderer->frameCount++;
+    renderer->frameIndex = renderer->frameCount % VGFX_MAX_INFLIGHT_FRAMES;
+
+    // Return current frame
+    return renderer->frameCount - 1;
 }
 
 static void d3d11_waitIdle(VGFXRenderer* driverData)
@@ -471,7 +479,7 @@ static void d3d11_getAdapterProperties(VGFXRenderer* driverData, VGPUAdapterProp
     properties->name = renderer->adapterName.c_str();
     properties->driverDescription = renderer->driverDescription.c_str();
     properties->adapterType = renderer->adapterType;
-    properties->backendType = VGFXBackendType_D3D11;
+    properties->backendType = VGPU_BACKEND_TYPE_D3D11;
 }
 
 static void d3d11_getLimits(VGFXRenderer* driverData, VGPULimits* limits)
@@ -658,7 +666,7 @@ static VGFXTexture d3d11_createTexture(VGFXRenderer* driverData, const VGFXTextu
     texture->viewFormat = ToDXGIFormat(desc->format);
 
     HRESULT hr = E_FAIL;
-    if (desc->type == VGFXTextureType3D)
+    if (desc->type == VGPU_TEXTURE_TYPE_3D)
     {
         D3D11_TEXTURE3D_DESC d3d_desc = {};
         d3d_desc.Width = desc->width;
@@ -749,7 +757,7 @@ static void d3d11_updateSwapChain(VGFXD3D11Renderer* renderer, VGFXD3D11SwapChai
     swapChain->backbufferTexture = (VGFXTexture)texture;
 }
 
-static VGFXSwapChain d3d11_createSwapChain(VGFXRenderer* driverData, VGFXSurface surface, const VGFXSwapChainDesc* info)
+static VGPUSwapChain d3d11_createSwapChain(VGFXRenderer* driverData, void* windowHandle, const VGPUSwapChainDesc* info)
 {
     VGFXD3D11Renderer* renderer = (VGFXD3D11Renderer*)driverData;
 
@@ -775,7 +783,7 @@ static VGFXSwapChain d3d11_createSwapChain(VGFXRenderer* driverData, VGFXSurface
     // Create a swap chain for the window.
     HRESULT hr = renderer->factory->CreateSwapChainForHwnd(
         renderer->device,
-        surface->window,
+        (HWND)windowHandle,
         &swapChainDesc,
         &fsSwapChainDesc,
         nullptr,
@@ -788,7 +796,7 @@ static VGFXSwapChain d3d11_createSwapChain(VGFXRenderer* driverData, VGFXSurface
     }
 
     // This class does not support exclusive full-screen mode and prevents DXGI from responding to the ALT+ENTER shortcut
-    hr = renderer->factory->MakeWindowAssociation(surface->window, DXGI_MWA_NO_ALT_ENTER);
+    hr = renderer->factory->MakeWindowAssociation((HWND)windowHandle, DXGI_MWA_NO_ALT_ENTER);
     if (FAILED(hr))
     {
         return false;
@@ -810,10 +818,10 @@ static VGFXSwapChain d3d11_createSwapChain(VGFXRenderer* driverData, VGFXSurface
     swapChain->handle = handle;
     swapChain->vsync = info->presentMode == VGFXPresentMode_Fifo;
     d3d11_updateSwapChain(renderer, swapChain);
-    return (VGFXSwapChain)swapChain;
+    return (VGPUSwapChain)swapChain;
 }
 
-static void d3d11_destroySwapChain(VGFXRenderer* driverData, VGFXSwapChain swapChain)
+static void d3d11_destroySwapChain(VGFXRenderer* driverData, VGPUSwapChain swapChain)
 {
     _VGFX_UNUSED(driverData);
     VGFXD3D11SwapChain* d3dSwapChain = (VGFXD3D11SwapChain*)swapChain;
@@ -825,14 +833,14 @@ static void d3d11_destroySwapChain(VGFXRenderer* driverData, VGFXSwapChain swapC
     delete d3dSwapChain;
 }
 
-static void d3d11_getSwapChainSize(VGFXRenderer*, VGFXSwapChain swapChain, VGFXSize2D* pSize)
+static void d3d11_getSwapChainSize(VGFXRenderer*, VGPUSwapChain swapChain, VGPUSize2D* pSize)
 {
     VGFXD3D11SwapChain* d3dSwapChain = (VGFXD3D11SwapChain*)swapChain;
     pSize->width = d3dSwapChain->width;
     pSize->height = d3dSwapChain->height;
 }
 
-static VGFXTexture d3d11_acquireNextTexture(VGFXRenderer* driverData, VGFXSwapChain swapChain)
+static VGFXTexture d3d11_acquireNextTexture(VGFXRenderer* driverData, VGPUSwapChain swapChain)
 {
     VGFXD3D11Renderer* renderer = (VGFXD3D11Renderer*)driverData;
     VGFXD3D11SwapChain* d3dSwapChain = (VGFXD3D11SwapChain*)swapChain;
@@ -1000,14 +1008,14 @@ static bool d3d11_isSupported(void)
     return true;
 }
 
-static VGFXDevice d3d11_createDevice(const VGFXDeviceDesc* info)
+static VGPUDevice d3d11_createDevice(const VGPUDeviceDesc* info)
 {
     VGFX_ASSERT(info);
 
     VGFXD3D11Renderer* renderer = new VGFXD3D11Renderer();
 
     DWORD dxgiFactoryFlags = 0;
-    if (info->validationMode != VGFXValidationMode_Disabled)
+    if (info->validationMode != VGPU_VALIDATION_MODE_DISABLED)
     {
 #if defined(_DEBUG) && WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
         ComPtr<IDXGIInfoQueue> dxgiInfoQueue;
@@ -1094,7 +1102,7 @@ static VGFXDevice d3d11_createDevice(const VGFXDeviceDesc* info)
     }
 
     UINT creationFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
-    if (info->validationMode != VGFXValidationMode_Disabled)
+    if (info->validationMode != VGPU_VALIDATION_MODE_DISABLED)
     {
         if (SdkLayersAvailable())
         {
@@ -1171,26 +1179,46 @@ static VGFXDevice d3d11_createDevice(const VGFXDeviceDesc* info)
         return nullptr;
     }
 
-    if (info->validationMode != VGFXValidationMode_Disabled)
+    if (info->validationMode != VGPU_VALIDATION_MODE_DISABLED)
     {
         ComPtr<ID3D11Debug> d3dDebug;
         if (SUCCEEDED(tempDevice.As(&d3dDebug)))
         {
-            ComPtr<ID3D11InfoQueue> d3dInfoQueue;
-            if (SUCCEEDED(d3dDebug.As(&d3dInfoQueue)))
+            ComPtr<ID3D11InfoQueue> infoQueue;
+            if (SUCCEEDED(d3dDebug.As(&infoQueue)))
             {
 #ifdef _DEBUG
-                d3dInfoQueue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_CORRUPTION, true);
-                d3dInfoQueue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_ERROR, true);
+                infoQueue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_CORRUPTION, true);
+                infoQueue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_ERROR, true);
 #endif
-                D3D11_MESSAGE_ID hide[] =
+                std::vector<D3D11_MESSAGE_SEVERITY> enabledSeverities;
+                std::vector<D3D11_MESSAGE_ID> disabledMessages;
+
+                // These severities should be seen all the time
+                enabledSeverities.push_back(D3D11_MESSAGE_SEVERITY_CORRUPTION);
+                enabledSeverities.push_back(D3D11_MESSAGE_SEVERITY_ERROR);
+                enabledSeverities.push_back(D3D11_MESSAGE_SEVERITY_WARNING);
+                enabledSeverities.push_back(D3D11_MESSAGE_SEVERITY_MESSAGE);
+
+                if (info->validationMode == VGPU_VALIDATION_MODE_VERBOSE)
                 {
-                    D3D11_MESSAGE_ID_SETPRIVATEDATA_CHANGINGPARAMS,
-                };
+                    // Verbose only filters
+                    enabledSeverities.push_back(D3D11_MESSAGE_SEVERITY_INFO);
+                }
+
+                disabledMessages.push_back(D3D11_MESSAGE_ID_SETPRIVATEDATA_CHANGINGPARAMS);
+
                 D3D11_INFO_QUEUE_FILTER filter = {};
-                filter.DenyList.NumIDs = _countof(hide);
-                filter.DenyList.pIDList = hide;
-                d3dInfoQueue->AddStorageFilterEntries(&filter);
+                filter.AllowList.NumSeverities = static_cast<UINT>(enabledSeverities.size());
+                filter.AllowList.pSeverityList = enabledSeverities.data();
+                filter.DenyList.NumIDs = static_cast<UINT>(disabledMessages.size());
+                filter.DenyList.pIDList = disabledMessages.data();
+
+                // Clear out the existing filters since we're taking full control of them
+                infoQueue->PushEmptyStorageFilter();
+
+                infoQueue->AddStorageFilterEntries(&filter);
+                infoQueue->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_MESSAGE, "D3D11 Debug Filters setup");
             }
         }
     }
@@ -1221,16 +1249,21 @@ static VGFXDevice d3d11_createDevice(const VGFXDeviceDesc* info)
         DXGI_ADAPTER_DESC1 adapterDesc;
         dxgiAdapter->GetDesc1(&adapterDesc);
 
+        D3D11_FEATURE_DATA_D3D11_OPTIONS2 options2 = {};
+        HRESULT hr = renderer->device->CheckFeatureSupport(D3D11_FEATURE_D3D11_OPTIONS2, &options2, sizeof(options2));
+
         renderer->vendorID = adapterDesc.VendorId;
         renderer->deviceID = adapterDesc.DeviceId;
         renderer->adapterName = WCharToUTF8(adapterDesc.Description);
 
         if (adapterDesc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)
         {
-            renderer->adapterType = VGFXAdapterType_CPU;
+            renderer->adapterType = VGPU_ADAPTER_TYPE_CPU;
         }
-        else {
-            renderer->adapterType = /*(arch.UMA == TRUE) ? VGFXAdapterType_IntegratedGPU :*/ VGFXAdapterType_DiscreteGPU;
+        else
+        {
+
+            renderer->adapterType = options2.UnifiedMemoryArchitecture ? VGPU_ADAPTER_TYPE_INTEGRATED_GPU : VGPU_ADAPTER_TYPE_DISCRETE_GPU;
         }
 
         // Convert the adapter's D3D12 driver version to a readable string like "24.21.13.9793".
@@ -1255,7 +1288,7 @@ static VGFXDevice d3d11_createDevice(const VGFXDeviceDesc* info)
     else
     {
         renderer->adapterName = "WARP";
-        renderer->adapterType = VGFXAdapterType_CPU;
+        renderer->adapterType = VGPU_ADAPTER_TYPE_CPU;
         vgfxLogInfo("D3D11 Adapter: WARP");
     }
 
@@ -1267,7 +1300,7 @@ static VGFXDevice d3d11_createDevice(const VGFXDeviceDesc* info)
 }
 
 VGFXDriver D3D11_Driver = {
-    VGFXBackendType_D3D11,
+    VGPU_BACKEND_TYPE_D3D11,
     d3d11_isSupported,
     d3d11_createDevice
 };

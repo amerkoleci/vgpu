@@ -173,7 +173,7 @@ struct VGFXD3D12Renderer
     uint32_t deviceID;
     std::string adapterName;
     std::string driverDescription;
-    VGFXAdapterType adapterType;
+    VGPUAdapterType adapterType;
 
     ID3D12Fence* frameFence = nullptr;
     HANDLE frameFenceEvent = INVALID_HANDLE_VALUE;
@@ -377,10 +377,10 @@ static void d3d12_UploadSubmit(VGFXD3D12Renderer* renderer, VGFXD3D12UploadConte
     renderer->uploadLocker.unlock();
 }
 
-static void d3d12_destroyDevice(VGFXDevice device)
+static void d3d12_destroyDevice(VGPUDevice device)
 {
     // Wait idle
-    vgfxWaitIdle(device);
+    vgpuWaitIdle(device);
 
     VGFXD3D12Renderer* renderer = (VGFXD3D12Renderer*)device->driverData;
 
@@ -519,7 +519,7 @@ static void d3d12_updateSwapChain(VGFXD3D12Renderer* renderer, VGFXD3D12SwapChai
     }
 }
 
-static void d3d12_frame(VGFXRenderer* driverData)
+static uint64_t d3d12_frame(VGFXRenderer* driverData)
 {
     HRESULT hr = S_OK;
     VGFXD3D12Renderer* renderer = (VGFXD3D12Renderer*)driverData;
@@ -543,7 +543,7 @@ static void d3d12_frame(VGFXRenderer* driverData)
     if (FAILED(hr))
     {
         vgfxLogError("Failed to close command list");
-        return;
+        return (uint64_t)(-1);
     }
 
     ID3D12CommandList* commandLists[] = { renderer->graphicsCommandList };
@@ -581,7 +581,7 @@ static void d3d12_frame(VGFXRenderer* driverData)
         if (FAILED(hr))
         {
             vgfxLogError("Failed to process frame");
-            return;
+            return (uint64_t)(-1);
         }
 
         renderer->frameCount++;
@@ -591,7 +591,7 @@ static void d3d12_frame(VGFXRenderer* driverData)
         if (FAILED(hr))
         {
             vgfxLogError("Failed to signal frame");
-            return;
+            return (uint64_t)(-1);
         }
 
         // Wait for the GPU to catch up before we stomp an executing command buffer
@@ -621,6 +621,9 @@ static void d3d12_frame(VGFXRenderer* driverData)
         renderer->commandAllocators[renderer->frameIndex]->Reset();
         renderer->graphicsCommandList->Reset(renderer->commandAllocators[renderer->frameIndex], nullptr);
     }
+
+    // Return current frame
+    return renderer->frameCount - 1;
 }
 
 static void d3d12_waitIdle(VGFXRenderer* driverData)
@@ -671,7 +674,7 @@ static void d3d12_getAdapterProperties(VGFXRenderer* driverData, VGPUAdapterProp
     properties->name = renderer->adapterName.c_str();
     properties->driverDescription = renderer->driverDescription.c_str();
     properties->adapterType = renderer->adapterType;
-    properties->backendType = VGFXBackendType_D3D12;
+    properties->backendType = VGPU_BACKEND_TYPE_D3D12;
 }
 
 static void d3d12_getLimits(VGFXRenderer* driverData, VGPULimits* limits)
@@ -777,7 +780,7 @@ static VGFXTexture d3d12_createTexture(VGFXRenderer* driverData, const VGFXTextu
     allocationDesc.HeapType = D3D12_HEAP_TYPE_DEFAULT;
 
     D3D12_RESOURCE_DESC resourceDesc;
-    if (desc->type == VGFXTextureType3D)
+    if (desc->type == VGPU_TEXTURE_TYPE_3D)
     {
         resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE3D;
     }
@@ -795,7 +798,6 @@ static VGFXTexture d3d12_createTexture(VGFXRenderer* driverData, const VGFXTextu
     resourceDesc.SampleDesc.Quality = 0;
     resourceDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
     resourceDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
-
 
     if (desc->usage & VGFXTextureUsage_ShaderWrite)
     {
@@ -878,7 +880,7 @@ static void d3d12_destroyTexture(VGFXRenderer* driverData, VGFXTexture texture)
 }
 
 /* SwapChain */
-static VGFXSwapChain d3d12_createSwapChain(VGFXRenderer* driverData, VGFXSurface surface, const VGFXSwapChainDesc* info)
+static VGPUSwapChain d3d12_createSwapChain(VGFXRenderer* driverData, void* windowHandle, const VGPUSwapChainDesc* info)
 {
     VGFXD3D12Renderer* renderer = (VGFXD3D12Renderer*)driverData;
 
@@ -896,81 +898,71 @@ static VGFXSwapChain d3d12_createSwapChain(VGFXRenderer* driverData, VGFXSurface
     swapChainDesc.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
     swapChainDesc.Flags = renderer->tearingSupported ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0u;
 
+    HRESULT hr = S_OK;
+    ComPtr<IDXGISwapChain1> tempSwapChain;
+#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
     DXGI_SWAP_CHAIN_FULLSCREEN_DESC fsSwapChainDesc = {};
     fsSwapChainDesc.Windowed = TRUE;
 
-    HRESULT hr = S_OK;
-    ComPtr<IDXGISwapChain1> tempSwapChain;
-    ComPtr<ISwapChainPanelNative> swapChainPanelNative;
-    switch (surface->type)
-    {
-        case VGFXSurfaceType_Win32:
-            hr = renderer->factory->CreateSwapChainForHwnd(
-                renderer->graphicsQueue,
-                surface->window,
-                &swapChainDesc,
-                &fsSwapChainDesc,
-                nullptr,
-                tempSwapChain.GetAddressOf()
-            );
-            break;
-
-        case VGFXSurfaceType_CoreWindow:
-            swapChainDesc.Scaling = DXGI_SCALING_ASPECT_RATIO_STRETCH;
-
-            hr = renderer->factory->CreateSwapChainForCoreWindow(
-                renderer->graphicsQueue,
-                surface->coreWindowOrSwapChainPanel,
-                &swapChainDesc,
-                nullptr,
-                tempSwapChain.GetAddressOf()
-            );
-            break;
-
-        case VGFXSurfaceType_SwapChainPanel:
-            swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
-            swapChainDesc.Scaling = DXGI_SCALING_ASPECT_RATIO_STRETCH;
-            hr = renderer->factory->CreateSwapChainForComposition(
-                renderer->graphicsQueue,
-                &swapChainDesc,
-                nullptr,
-                tempSwapChain.GetAddressOf()
-            );
-
-            hr = tempSwapChain.As(&swapChainPanelNative);
-            if (FAILED(hr))
-            {
-                vgfxLogError("Failed to get ISwapChainPanelNative from IDXGISwapChain1");
-                return nullptr;
-            }
-
-            hr = swapChainPanelNative->SetSwapChain(tempSwapChain.Get());
-            if (FAILED(hr))
-            {
-                vgfxLogError("Failed to set ISwapChainPanelNative - SwapChain");
-                return nullptr;
-            }
-            break;
-
-        default:
-            vgfxLogError("D3D12: Surface type not supported");
-            return nullptr;
-    }
+    hr = renderer->factory->CreateSwapChainForHwnd(
+        renderer->graphicsQueue,
+        (HWND)windowHandle,
+        &swapChainDesc,
+        &fsSwapChainDesc,
+        nullptr,
+        tempSwapChain.GetAddressOf()
+    );
 
     if (FAILED(hr))
     {
-        return false;
+        return nullptr;
     }
 
-#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
-    if (surface->type == VGFXSurfaceType_Win32)
+    // This class does not support exclusive full-screen mode and prevents DXGI from responding to the ALT+ENTER shortcut
+    hr = renderer->factory->MakeWindowAssociation((HWND)windowHandle, DXGI_MWA_NO_ALT_ENTER);
+    if (FAILED(hr))
     {
-        // This class does not support exclusive full-screen mode and prevents DXGI from responding to the ALT+ENTER shortcut
-        hr = renderer->factory->MakeWindowAssociation(surface->window, DXGI_MWA_NO_ALT_ENTER);
-        if (FAILED(hr))
-        {
-            return nullptr;
-        }
+        return nullptr;
+    }
+#else
+    swapChainDesc.Scaling = DXGI_SCALING_ASPECT_RATIO_STRETCH;
+
+    hr = renderer->factory->CreateSwapChainForCoreWindow(
+        renderer->graphicsQueue,
+        surface->coreWindowOrSwapChainPanel,
+        &swapChainDesc,
+        nullptr,
+        tempSwapChain.GetAddressOf()
+    );
+
+    if (FAILED(hr))
+    {
+        return nullptr;
+    }
+
+    // SwapChain panel
+    ComPtr<ISwapChainPanelNative> swapChainPanelNative;
+    swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
+    swapChainDesc.Scaling = DXGI_SCALING_ASPECT_RATIO_STRETCH;
+    hr = renderer->factory->CreateSwapChainForComposition(
+        renderer->graphicsQueue,
+        &swapChainDesc,
+        nullptr,
+        tempSwapChain.GetAddressOf()
+    );
+
+    hr = tempSwapChain.As(&swapChainPanelNative);
+    if (FAILED(hr))
+    {
+        vgfxLogError("Failed to get ISwapChainPanelNative from IDXGISwapChain1");
+        return nullptr;
+    }
+
+    hr = swapChainPanelNative->SetSwapChain(tempSwapChain.Get());
+    if (FAILED(hr))
+    {
+        vgfxLogError("Failed to set ISwapChainPanelNative - SwapChain");
+        return nullptr;
     }
 #endif
 
@@ -985,10 +977,10 @@ static VGFXSwapChain d3d12_createSwapChain(VGFXRenderer* driverData, VGFXSurface
     swapChain->handle = handle;
     swapChain->vsync = info->presentMode == VGFXPresentMode_Fifo;
     d3d12_updateSwapChain(renderer, swapChain);
-    return (VGFXSwapChain)swapChain;
+    return (VGPUSwapChain)swapChain;
 }
 
-static void d3d12_destroySwapChain(VGFXRenderer* driverData, VGFXSwapChain swapChain)
+static void d3d12_destroySwapChain(VGFXRenderer* driverData, VGPUSwapChain swapChain)
 {
     VGFXD3D12SwapChain* d3d12SwapChain = (VGFXD3D12SwapChain*)swapChain;
 
@@ -1002,14 +994,14 @@ static void d3d12_destroySwapChain(VGFXRenderer* driverData, VGFXSwapChain swapC
     delete d3d12SwapChain;
 }
 
-static void d3d12_getSwapChainSize(VGFXRenderer*, VGFXSwapChain swapChain, VGFXSize2D* pSize)
+static void d3d12_getSwapChainSize(VGFXRenderer*, VGPUSwapChain swapChain, VGPUSize2D* pSize)
 {
     VGFXD3D12SwapChain* d3dSwapChain = (VGFXD3D12SwapChain*)swapChain;
     pSize->width = d3dSwapChain->width;
     pSize->height = d3dSwapChain->height;
 }
 
-static VGFXTexture d3d12_acquireNextTexture(VGFXRenderer* driverData, VGFXSwapChain swapChain)
+static VGFXTexture d3d12_acquireNextTexture(VGFXRenderer* driverData, VGPUSwapChain swapChain)
 {
     VGFXD3D12Renderer* renderer = (VGFXD3D12Renderer*)driverData;
     VGFXD3D12SwapChain* d3d12SwapChain = (VGFXD3D12SwapChain*)swapChain;
@@ -1138,21 +1130,21 @@ static bool d3d12_isSupported(void)
     return false;
 }
 
-static VGFXDevice d3d12_createDevice(const VGFXDeviceDesc* info)
+static VGPUDevice d3d12_createDevice(const VGPUDeviceDesc* info)
 {
     VGFX_ASSERT(info);
 
     VGFXD3D12Renderer* renderer = new VGFXD3D12Renderer();
 
     DWORD dxgiFactoryFlags = 0;
-    if (info->validationMode != VGFXValidationMode_Disabled)
+    if (info->validationMode != VGPU_VALIDATION_MODE_DISABLED)
     {
         ComPtr<ID3D12Debug> debugController;
         if (SUCCEEDED(vgfxD3D12GetDebugInterface(IID_PPV_ARGS(debugController.GetAddressOf()))))
         {
             debugController->EnableDebugLayer();
 
-            if (info->validationMode == VGFXValidationMode_GPU)
+            if (info->validationMode == VGPU_VALIDATION_MODE_GPU)
             {
                 ComPtr<ID3D12Debug1> debugController1;
                 if (SUCCEEDED(debugController.As(&debugController1)))
@@ -1283,7 +1275,7 @@ static VGFXDevice d3d12_createDevice(const VGFXDeviceDesc* info)
             renderer->device->SetName(wide_name.c_str());
         }
 
-        if (info->validationMode != VGFXValidationMode_Disabled)
+        if (info->validationMode != VGPU_VALIDATION_MODE_DISABLED)
         {
             // Configure debug device (if active).
             ComPtr<ID3D12InfoQueue> infoQueue;
@@ -1301,7 +1293,7 @@ static VGFXDevice d3d12_createDevice(const VGFXDeviceDesc* info)
                 enabledSeverities.push_back(D3D12_MESSAGE_SEVERITY_WARNING);
                 enabledSeverities.push_back(D3D12_MESSAGE_SEVERITY_MESSAGE);
 
-                if (info->validationMode == VGFXValidationMode_Verbose)
+                if (info->validationMode == VGPU_VALIDATION_MODE_VERBOSE)
                 {
                     // Verbose only filters
                     enabledSeverities.push_back(D3D12_MESSAGE_SEVERITY_INFO);
@@ -1358,10 +1350,10 @@ static VGFXDevice d3d12_createDevice(const VGFXDeviceDesc* info)
 
         if (adapterDesc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)
         {
-            renderer->adapterType = VGFXAdapterType_CPU;
+            renderer->adapterType = VGPU_ADAPTER_TYPE_CPU;
         }
         else {
-            renderer->adapterType = (arch.UMA == TRUE) ? VGFXAdapterType_IntegratedGPU : VGFXAdapterType_DiscreteGPU;
+            renderer->adapterType = (arch.UMA == TRUE) ? VGPU_ADAPTER_TYPE_INTEGRATED_GPU : VGPU_ADAPTER_TYPE_DISCRETE_GPU;
         }
 
         // Convert the adapter's D3D12 driver version to a readable string like "24.21.13.9793".
@@ -1397,7 +1389,7 @@ static VGFXDevice d3d12_createDevice(const VGFXDeviceDesc* info)
             renderer->featureLevel = D3D_FEATURE_LEVEL_11_0;
         }
 
-        vgfxLogInfo("vgfx driver: D3D12");
+        vgfxLogInfo("VGPU driver: D3D12");
         vgfxLogInfo("D3D12 Adapter: %S", adapterDesc.Description);
     }
 
@@ -1474,7 +1466,7 @@ static VGFXDevice d3d12_createDevice(const VGFXDeviceDesc* info)
 }
 
 VGFXDriver D3D12_Driver = {
-    VGFXBackendType_D3D12,
+    VGPU_BACKEND_TYPE_D3D12,
     d3d12_isSupported,
     d3d12_createDevice
 };

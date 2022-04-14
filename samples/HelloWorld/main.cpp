@@ -20,9 +20,8 @@
 #include <cstdlib>
 #include <vgpu.h>
 
-VGFXSurface surface = nullptr;
-VGFXDevice device = nullptr;
-VGFXSwapChain swapChain = nullptr;
+VGPUDevice device = nullptr;
+VGPUSwapChain swapChain = nullptr;
 
 inline void vgpu_log(VGFXLogLevel level, const char* message)
 {
@@ -45,10 +44,10 @@ void init_gfx()
 void init_gfx(GLFWwindow* window)
 #endif
 {
-    VGFXDeviceDesc deviceDesc{};
+    VGPUDeviceDesc deviceDesc{};
     deviceDesc.label = "test device";
 #ifdef _DEBUG
-    deviceDesc.validationMode = VGFXValidationMode_Enabled;
+    deviceDesc.validationMode = VGPU_VALIDATION_MODE_ENABLED;
 #endif
 
     //if (vgfxIsSupported(VGFXBackendType_D3D11))
@@ -56,24 +55,21 @@ void init_gfx(GLFWwindow* window)
     //    deviceDesc.preferredBackend = VGFXBackendType_D3D11;
     //}
 
-    //if (vgfxIsSupported(VGFXBackendType_Vulkan))
-    //{
-    //    deviceDesc.preferredBackend = VGFXBackendType_Vulkan;
-    //}
+    if (vgpuIsSupported(VGPU_BACKEND_TYPE_VULKAN))
+    {
+        deviceDesc.preferredBackend = VGPU_BACKEND_TYPE_VULKAN;
+    }
 
+    void* windowHandle = nullptr;
 #if defined(__EMSCRIPTEN__)
-    surface = vgfxCreateSurfaceWeb("canvas");
+    windowHandle = "canvas";
 #elif defined(GLFW_EXPOSE_NATIVE_WIN32)
-    HINSTANCE hinstance = GetModuleHandle(NULL);
-    HWND hwnd = glfwGetWin32Window(window);
-    surface = vgfxCreateSurfaceWin32(hinstance, hwnd);
+    windowHandle = glfwGetWin32Window(window);
 #elif defined(GLFW_EXPOSE_NATIVE_X11)
-    Display* x11_display = glfwGetX11Display();
-    Window x11_window = glfwGetX11Window(window);
-    surface = vgfxCreateSurfaceXlib(x11_display, x11_window);
+    windowHandle = (void*)(uintptr_t)glfwGetX11Window(window);
 #endif
 
-    device = vgfxCreateDevice(&deviceDesc);
+    device = vgpuCreateDevice(&deviceDesc);
 
     VGPUAdapterProperties adapterProps;
     vgpuGetAdapterProperties(device, &adapterProps);
@@ -85,11 +81,11 @@ void init_gfx(GLFWwindow* window)
     int height = 0;
     glfwGetWindowSize(window, &width, &height);
 
-    VGFXSwapChainDesc swapChainDesc{};
+    VGPUSwapChainDesc swapChainDesc{};
     swapChainDesc.width = (uint32_t)width;
     swapChainDesc.height = (uint32_t)height;
     swapChainDesc.presentMode = VGFXPresentMode_Fifo;
-    swapChain = vgfxCreateSwapChain(device, surface, &swapChainDesc);
+    swapChain = vgpuCreateSwapChain(device, windowHandle, &swapChainDesc);
 }
 
 #if defined(__EMSCRIPTEN__)
@@ -130,7 +126,7 @@ KEEP_IN_MODULE void _glue_main_()
 
 void draw_frame()
 {
-    VGFXSize2D size;
+    VGPUSize2D size;
     vgfxSwapChainGetSize(device, swapChain, &size);
 
     VGFXRenderPassColorAttachment colorAttachment = {};
@@ -149,7 +145,7 @@ void draw_frame()
     //vgfxBeginRenderPassSwapChain(device, swapChain);
     vgfxEndRenderPass(device);
 
-    vgfxFrame(device);
+    vgpuFrame(device);
 }
 
 int main()
@@ -163,7 +159,7 @@ int main()
         return EXIT_FAILURE;
     }
 
-    vgpuSetLogFunc(vgpu_log);
+    VGPU_SetLogCallback(vgpu_log);
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     GLFWwindow* window = glfwCreateWindow(1280, 720, "Hello World", NULL, NULL);
@@ -175,10 +171,9 @@ int main()
         glfwPollEvents();
     }
 
-    vgfxWaitIdle(device);
-    vgfxDestroySwapChain(device, swapChain);
-    vgfxDestroyDevice(device);
-    vgfxDestroySurface(surface);
+    vgpuWaitIdle(device);
+    vgpuDestroySwapChain(device, swapChain);
+    vgpuDestroyDevice(device);
     glfwDestroyWindow(window);
     glfwTerminate();
 #endif
