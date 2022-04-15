@@ -92,7 +92,7 @@ typedef struct VGPUCommandBuffer_T {
     void (*insertDebugMarker)(VGPUCommandBufferImpl* driverData, const char* debugLabel);
 
     VGPUTexture(*acquireSwapchainTexture)(VGPUCommandBufferImpl* driverData, VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight);
-    void (*beginRenderPass)(VGPUCommandBufferImpl* driverData, const VGFXRenderPassDesc* desc);
+    void (*beginRenderPass)(VGPUCommandBufferImpl* driverData, const VGPURenderPassDesc* desc);
     void (*endRenderPass)(VGPUCommandBufferImpl* driverData);
 
     /* Opaque pointer for the Driver */
@@ -108,7 +108,7 @@ typedef struct VGPUDevice_T
     void (*getAdapterProperties)(VGFXRenderer* driverData, VGPUAdapterProperties* properties);
     void (*getLimits)(VGFXRenderer* driverData, VGPULimits* limits);
 
-    VGPUBuffer(*createBuffer)(VGFXRenderer* driverData, const VGFXBufferDesc* desc, const void* pInitialData);
+    VGPUBuffer(*createBuffer)(VGFXRenderer* driverData, const VGPUBufferDesc* desc, const void* pInitialData);
     void(*destroyBuffer)(VGFXRenderer* driverData, VGPUBuffer resource);
 
     VGPUTexture(*createTexture)(VGFXRenderer* driverData, const VGFXTextureDesc* desc);

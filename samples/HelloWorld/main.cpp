@@ -50,10 +50,10 @@ void init_gfx(GLFWwindow* window)
     deviceDesc.validationMode = VGPU_VALIDATION_MODE_ENABLED;
 #endif
 
-    if (vgpuIsSupported(VGPU_BACKEND_TYPE_VULKAN))
-    {
-        deviceDesc.preferredBackend = VGPU_BACKEND_TYPE_VULKAN;
-    }
+    //if (vgpuIsSupported(VGPU_BACKEND_TYPE_VULKAN))
+    //{
+    //    deviceDesc.preferredBackend = VGPU_BACKEND_TYPE_VULKAN;
+    //}
 
     //if (vgpuIsSupported(VGPU_BACKEND_TYPE_D3D11))
     //{
@@ -141,7 +141,7 @@ void draw_frame()
     colorAttachment.clearColor.b = 0.3f;
     colorAttachment.clearColor.a = 1.0f;
 
-    VGFXRenderPassDesc renderPass{};
+    VGPURenderPassDesc renderPass{};
     renderPass.colorAttachmentCount = 1u;
     renderPass.colorAttachments = &colorAttachment;
     vgpuBeginRenderPass(commandBuffer, &renderPass);

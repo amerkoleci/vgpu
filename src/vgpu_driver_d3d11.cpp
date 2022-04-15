@@ -27,6 +27,9 @@ namespace
     using PFN_DXGI_GET_DEBUG_INTERFACE1 = decltype(&DXGIGetDebugInterface1);
     static PFN_DXGI_GET_DEBUG_INTERFACE1 vgfxDXGIGetDebugInterface1 = nullptr;
 #endif
+#else
+#define vgfxCreateDXGIFactory2 CreateDXGIFactory2
+#define vgfxD3D11CreateDevice D3D11CreateDevice
 #endif
 
     static constexpr D3D_FEATURE_LEVEL s_featureLevels[] =
@@ -75,11 +78,6 @@ namespace
     }
 }
 
-#if !WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
-#define vgfxCreateDXGIFactory2 CreateDXGIFactory2
-#define vgfxD3D11CreateDevice D3D11CreateDevice
-#endif
-
 struct VGFXD3D11Renderer;
 
 struct VGFXD3D11Buffer
@@ -98,7 +96,7 @@ struct VGFXD3D11Texture
     std::unordered_map<size_t, ID3D11DepthStencilView*> dsvCache;
 };
 
-struct VGFXD3D11SwapChain
+struct D3D11SwapChain
 {
     IDXGISwapChain1* handle = nullptr;
     uint32_t width = 0;
@@ -108,7 +106,7 @@ struct VGFXD3D11SwapChain
     VGPUTexture backbufferTexture;
 };
 
-typedef struct D3D11CommandBuffer
+struct D3D11CommandBuffer
 {
     VGFXD3D11Renderer* renderer;
     bool recording;
@@ -117,7 +115,10 @@ typedef struct D3D11CommandBuffer
     ID3D11DeviceContext1* context;
     ID3DUserDefinedAnnotation* userDefinedAnnotation;
     ID3D11CommandList* commandList;
-} D3D11CommandBuffer;
+
+    // Current frame present swap chains
+    std::vector<D3D11SwapChain*> swapChains;
+};
 
 struct VGFXD3D11Renderer
 {
@@ -141,9 +142,6 @@ struct VGFXD3D11Renderer
     std::queue<VGPUCommandBuffer_T*> availableContexts;
     SRWLOCK contextLock = SRWLOCK_INIT;
     SRWLOCK commandBufferAcquisitionMutex = SRWLOCK_INIT;
-
-    // Current frame present swap chains
-    std::vector<VGFXD3D11SwapChain*> swapChains;
 };
 
 static ID3D11RenderTargetView* d3d11_GetRTV(
@@ -435,44 +433,6 @@ static uint64_t d3d11_frame(VGFXRenderer* driverData)
     HRESULT hr = S_OK;
     VGFXD3D11Renderer* renderer = (VGFXD3D11Renderer*)driverData;
 
-    // Present acquired SwapChains
-    for (size_t i = 0, count = renderer->swapChains.size(); i < count && SUCCEEDED(hr); ++i)
-    {
-        VGFXD3D11SwapChain* swapChain = renderer->swapChains[i];
-
-        UINT presentFlags = 0;
-        BOOL fullscreen = FALSE;
-        swapChain->handle->GetFullscreenState(&fullscreen, nullptr);
-
-        if (!swapChain->syncInterval && !fullscreen)
-        {
-            presentFlags = DXGI_PRESENT_ALLOW_TEARING;
-        }
-
-        hr = swapChain->handle->Present(swapChain->syncInterval, presentFlags);
-    }
-    renderer->swapChains.clear();
-
-    // If the device was reset we must completely reinitialize the renderer.
-    if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET)
-    {
-#ifdef _DEBUG
-        char buff[64] = {};
-        sprintf_s(buff, "Device Lost on Present: Reason code 0x%08X\n",
-            static_cast<unsigned int>((hr == DXGI_ERROR_DEVICE_REMOVED) ? renderer->device->GetDeviceRemovedReason() : hr));
-        OutputDebugStringA(buff);
-#endif
-        //HandleDeviceLost();
-    }
-    else
-    {
-        if (FAILED(hr))
-        {
-            vgfxLogError("Failed to process frame");
-            return (uint64_t)(-1);
-        }
-    }
-
     renderer->frameCount++;
     renderer->frameIndex = renderer->frameCount % VGPU_MAX_INFLIGHT_FRAMES;
 
@@ -571,7 +531,7 @@ static void d3d11_getLimits(VGFXRenderer* driverData, VGPULimits* limits)
 }
 
 /* Buffer */
-static VGPUBuffer d3d11_createBuffer(VGFXRenderer* driverData, const VGFXBufferDesc* desc, const void* pInitialData)
+static VGPUBuffer d3d11_createBuffer(VGFXRenderer* driverData, const VGPUBufferDesc* desc, const void* pInitialData)
 {
     VGFXD3D11Renderer* renderer = (VGFXD3D11Renderer*)driverData;
 
@@ -770,7 +730,7 @@ static void d3d11_destroyTexture(VGFXRenderer*, VGPUTexture texture)
 }
 
 /* SwapChain */
-static void d3d11_updateSwapChain(VGFXD3D11Renderer* renderer, VGFXD3D11SwapChain* swapChain)
+static void d3d11_updateSwapChain(VGFXD3D11Renderer* renderer, D3D11SwapChain* swapChain)
 {
     HRESULT hr = S_OK;
 
@@ -797,60 +757,15 @@ static VGPUSwapChain d3d11_createSwapChain(VGFXRenderer* driverData, void* windo
 {
     VGFXD3D11Renderer* renderer = (VGFXD3D11Renderer*)driverData;
 
-    DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
-    swapChainDesc.Width = desc->width;
-    swapChainDesc.Height = desc->height;
-    swapChainDesc.Format = ToDXGIFormat(ToDXGISwapChainFormat(desc->format));
-    swapChainDesc.Stereo = FALSE;
-    swapChainDesc.SampleDesc.Count = 1;
-    swapChainDesc.SampleDesc.Quality = 0;
-    swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    swapChainDesc.BufferCount = PresentModeToBufferCount(desc->presentMode);
-    swapChainDesc.Scaling = DXGI_SCALING_STRETCH;
-    swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-    swapChainDesc.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
-    swapChainDesc.Flags = renderer->tearingSupported ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0u;
-
     IDXGISwapChain1* handle = nullptr;
-#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
-    DXGI_SWAP_CHAIN_FULLSCREEN_DESC fsSwapChainDesc = {};
-    fsSwapChainDesc.Windowed = TRUE;
-
-    // Create a swap chain for the window.
-    HRESULT hr = renderer->factory->CreateSwapChainForHwnd(
-        renderer->device,
-        (HWND)windowHandle,
-        &swapChainDesc,
-        &fsSwapChainDesc,
-        nullptr,
-        &handle
-    );
-
-    if (FAILED(hr))
+    if (!d3d_CreateSwapChain(
+        renderer->factory.Get(), renderer->tearingSupported, renderer->device,
+        windowHandle, desc, &handle))
     {
-        return false;
+        return nullptr;
     }
 
-    // This class does not support exclusive full-screen mode and prevents DXGI from responding to the ALT+ENTER shortcut
-    hr = renderer->factory->MakeWindowAssociation((HWND)windowHandle, DXGI_MWA_NO_ALT_ENTER);
-    if (FAILED(hr))
-    {
-        return false;
-    }
-
-#else
-    swapChainDesc.Scaling = DXGI_SCALING_ASPECT_RATIO_STRETCH;
-
-    HRESULT hr = renderer->factory->CreateSwapChainForCoreWindow(
-        renderer->device,
-        surface->window,
-        &swapChainDesc,
-        nullptr,
-        &handle
-    );
-#endif
-
-    VGFXD3D11SwapChain* swapChain = new VGFXD3D11SwapChain();
+    D3D11SwapChain* swapChain = new D3D11SwapChain();
     swapChain->handle = handle;
     swapChain->format = ToDXGISwapChainFormat(desc->format);
     swapChain->syncInterval = PresentModeToSwapInterval(desc->presentMode);
@@ -861,7 +776,7 @@ static VGPUSwapChain d3d11_createSwapChain(VGFXRenderer* driverData, void* windo
 static void d3d11_destroySwapChain(VGFXRenderer* driverData, VGPUSwapChain swapChain)
 {
     _VGFX_UNUSED(driverData);
-    VGFXD3D11SwapChain* d3dSwapChain = (VGFXD3D11SwapChain*)swapChain;
+    D3D11SwapChain* d3dSwapChain = (D3D11SwapChain*)swapChain;
 
     d3d11_destroyTexture(nullptr, d3dSwapChain->backbufferTexture);
     d3dSwapChain->backbufferTexture = nullptr;
@@ -872,7 +787,7 @@ static void d3d11_destroySwapChain(VGFXRenderer* driverData, VGPUSwapChain swapC
 
 static VGFXTextureFormat d3d11_getSwapChainFormat(VGFXRenderer*, VGPUSwapChain swapChain)
 {
-    VGFXD3D11SwapChain* d3dSwapChain = (VGFXD3D11SwapChain*)swapChain;
+    D3D11SwapChain* d3dSwapChain = (D3D11SwapChain*)swapChain;
     return d3dSwapChain->format;
 }
 
@@ -909,14 +824,35 @@ static void d3d11_insertDebugMarker(VGPUCommandBufferImpl* driverData, const cha
 
 static VGPUTexture d3d11_acquireSwapchainTexture(VGPUCommandBufferImpl* driverData, VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight)
 {
-    VGFXD3D11Renderer* renderer = (VGFXD3D11Renderer*)driverData;
-    VGFXD3D11SwapChain* d3dSwapChain = (VGFXD3D11SwapChain*)swapChain;
+    D3D11CommandBuffer* commandBuffer = (D3D11CommandBuffer*)driverData;
+    D3D11SwapChain* d3dSwapChain = (D3D11SwapChain*)swapChain;
 
-    renderer->swapChains.push_back(d3dSwapChain);
+    HRESULT hr = S_OK;
+
+    /* Check for window size changes and resize the swapchain if needed. */
+    DXGI_SWAP_CHAIN_DESC1 swapChainDesc;
+    d3dSwapChain->handle->GetDesc1(&swapChainDesc);
+
+    if (d3dSwapChain->width != swapChainDesc.Width ||
+        d3dSwapChain->height != swapChainDesc.Height)
+    {
+        //hr = d3d11_ResizeSwapchain(renderer);
+        //ERROR_CHECK_RETURN("Could not resize swapchain", NULL);
+    }
+
+    if (pWidth) {
+        *pWidth = d3dSwapChain->width;
+    }
+
+    if (pHeight) {
+        *pHeight = d3dSwapChain->height;
+    }
+
+    commandBuffer->swapChains.push_back(d3dSwapChain);
     return d3dSwapChain->backbufferTexture;
 }
 
-static void d3d11_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGFXRenderPassDesc* info)
+static void d3d11_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGPURenderPassDesc* info)
 {
     D3D11CommandBuffer* commandBuffer = (D3D11CommandBuffer*)driverData;
 
@@ -952,7 +888,7 @@ static void d3d11_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGFXR
 
     if (info->depthStencilAttachment)
     {
-        const VGFXRenderPassDepthStencilAttachment* attachment = info->depthStencilAttachment;
+        const VGPURenderPassDepthStencilAttachment* attachment = info->depthStencilAttachment;
         VGFXD3D11Texture* texture = (VGFXD3D11Texture*)attachment->texture;
         const uint32_t level = attachment->level;
         const uint32_t slice = attachment->slice;
@@ -1093,17 +1029,38 @@ static void d3d11_submit(VGFXRenderer* driverData, VGPUCommandBuffer* commandBuf
         renderer->availableContexts.push(commandBuffers[i]);
         ReleaseSRWLockExclusive(&renderer->commandBufferAcquisitionMutex);
 
-        /* Present, if applicable */
-        //if (commandBuffer->swapchainData)
-        //{
-        //    SDL_LockMutex(renderer->contextLock);
-        //    IDXGISwapChain_Present(
-        //        commandBuffer->swapchainData->swapchain,
-        //        1, /* FIXME: Assumes vsync! */
-        //        0
-        //    );
-        //    SDL_UnlockMutex(renderer->contextLock);
-        //}
+        /* Present acquired SwapChains */
+        AcquireSRWLockExclusive(&renderer->contextLock);
+        for (size_t i = 0, count = commandBuffer->swapChains.size(); i < count && SUCCEEDED(hr); ++i)
+        {
+            D3D11SwapChain* swapChain = commandBuffer->swapChains[i];
+
+            UINT presentFlags = 0;
+            BOOL fullscreen = FALSE;
+            swapChain->handle->GetFullscreenState(&fullscreen, nullptr);
+
+            if (!swapChain->syncInterval && !fullscreen)
+            {
+                presentFlags = DXGI_PRESENT_ALLOW_TEARING;
+            }
+
+            hr = swapChain->handle->Present(swapChain->syncInterval, presentFlags);
+
+            // If the device was reset we must completely reinitialize the renderer.
+            if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET)
+            {
+#ifdef _DEBUG
+                char buff[64] = {};
+                sprintf_s(buff, "Device Lost on Present: Reason code 0x%08X\n",
+                    static_cast<unsigned int>((hr == DXGI_ERROR_DEVICE_REMOVED) ? renderer->device->GetDeviceRemovedReason() : hr));
+                OutputDebugStringA(buff);
+#endif
+                //HandleDeviceLost();
+                return;
+            }
+        }
+        commandBuffer->swapChains.clear();
+        ReleaseSRWLockExclusive(&renderer->contextLock);
     }
 }
 

@@ -343,7 +343,7 @@ typedef struct VGPURenderPassColorAttachment {
     VGPUColor clearColor;
 } VGPURenderPassColorAttachment;
 
-typedef struct VGFXRenderPassDepthStencilAttachment {
+typedef struct VGPURenderPassDepthStencilAttachment {
     VGPUTexture texture;
     uint32_t level;
     uint32_t slice;
@@ -353,19 +353,19 @@ typedef struct VGFXRenderPassDepthStencilAttachment {
     VGPULoadOp stencilLoadOp;
     VGFXStoreOp stencilStoreOp;
     uint8_t clearStencil;
-} VGFXRenderPassDepthStencilAttachment;
+} VGPURenderPassDepthStencilAttachment;
 
-typedef struct VGFXRenderPassDesc {
+typedef struct VGPURenderPassDesc {
     uint32_t colorAttachmentCount;
     const VGPURenderPassColorAttachment* colorAttachments;
-    const VGFXRenderPassDepthStencilAttachment* depthStencilAttachment;
-} VGFXRenderPassDesc;
+    const VGPURenderPassDepthStencilAttachment* depthStencilAttachment;
+} VGPURenderPassDesc;
 
-typedef struct VGFXBufferDesc {
+typedef struct VGPUBufferDesc {
     const char* label;
     VGFXBufferUsage usage;
     uint64_t size;
-} VGFXBufferDesc;
+} VGPUBufferDesc;
 
 typedef struct VGFXTextureDesc {
     const char* label;
@@ -449,7 +449,7 @@ VGFX_API void vgpuGetAdapterProperties(VGPUDevice device, VGPUAdapterProperties*
 VGFX_API void vgpuGetLimits(VGPUDevice device, VGPULimits* limits);
 
 /* Buffer */
-VGFX_API VGPUBuffer vgpuCreateBuffer(VGPUDevice device, const VGFXBufferDesc* desc, const void* pInitialData);
+VGFX_API VGPUBuffer vgpuCreateBuffer(VGPUDevice device, const VGPUBufferDesc* desc, const void* pInitialData);
 VGFX_API void vgpuDestroyBuffer(VGPUDevice device, VGPUBuffer buffer);
 
 /* Texture */
@@ -468,7 +468,7 @@ VGFX_API void vgpuPopDebugGroup(VGPUCommandBuffer commandBuffer);
 VGFX_API void vgpuInsertDebugMarker(VGPUCommandBuffer commandBuffer, const char* debugLabel);
 
 VGFX_API VGPUTexture vgpuAcquireSwapchainTexture(VGPUCommandBuffer commandBuffer, VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight);
-VGFX_API void vgpuBeginRenderPass(VGPUCommandBuffer commandBuffer, const VGFXRenderPassDesc* desc);
+VGFX_API void vgpuBeginRenderPass(VGPUCommandBuffer commandBuffer, const VGPURenderPassDesc* desc);
 VGFX_API void vgpuEndRenderPass(VGPUCommandBuffer commandBuffer);
 VGFX_API void vgpuSubmit(VGPUDevice device, VGPUCommandBuffer* commandBuffers, uint32_t count);
 

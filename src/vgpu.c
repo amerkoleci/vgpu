@@ -203,19 +203,19 @@ void vgpuGetLimits(VGPUDevice device, VGPULimits* limits)
 }
 
 /* Buffer */
-static VGFXBufferDesc _vgfxBufferDescDef(const VGFXBufferDesc* desc)
+static VGPUBufferDesc _vgfxBufferDescDef(const VGPUBufferDesc* desc)
 {
-    VGFXBufferDesc def = *desc;
+    VGPUBufferDesc def = *desc;
     def.size = _VGFX_DEF(def.size, 4);
     return def;
 }
 
-VGPUBuffer vgpuCreateBuffer(VGPUDevice device, const VGFXBufferDesc* desc, const void* pInitialData)
+VGPUBuffer vgpuCreateBuffer(VGPUDevice device, const VGPUBufferDesc* desc, const void* pInitialData)
 {
      NULL_RETURN_NULL(device);
      NULL_RETURN_NULL(desc);
 
-     VGFXBufferDesc desc_def = _vgfxBufferDescDef(desc);
+     VGPUBufferDesc desc_def = _vgfxBufferDescDef(desc);
      return device->createBuffer(device->driverData, &desc_def, pInitialData);
 }
 
@@ -315,7 +315,7 @@ VGPUTexture vgpuAcquireSwapchainTexture(VGPUCommandBuffer commandBuffer, VGPUSwa
     return commandBuffer->acquireSwapchainTexture(commandBuffer->driverData, swapChain, pWidth, pHeight);
 }
 
-void vgpuBeginRenderPass(VGPUCommandBuffer commandBuffer, const VGFXRenderPassDesc* desc)
+void vgpuBeginRenderPass(VGPUCommandBuffer commandBuffer, const VGPURenderPassDesc* desc)
 {
     NULL_RETURN(desc);
 

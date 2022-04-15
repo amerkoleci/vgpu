@@ -42,7 +42,7 @@ include(CMakeDependentOption)
 
 option(VGPU_BUILD_SHARED "Build vgpu as a shared library (DLL or .so)" ON)
 option(VGPU_INSTALL "Generate install rules for vgpu" ON)
-cmake_dependent_option(VGPU_VULKAN_DRIVER "Build the Vulkan backend" ON "NOT EMSCRIPTEN" OFF)
+cmake_dependent_option(VGPU_VULKAN_DRIVER "Build the Vulkan backend" ON "NOT EMSCRIPTEN;NOT WINDOWS_STORE" OFF)
 cmake_dependent_option(VGPU_D3D11_DRIVER "Build the D3D11 backend" ON "WIN32" OFF)
 cmake_dependent_option(VGPU_D3D12_DRIVER "Build the D3D12 backend" ON "WIN32" OFF)
 cmake_dependent_option(VGPU_WEBGPU_DRIVER "Build the WebGPU backend" ON "EMSCRIPTEN" OFF)
@@ -138,8 +138,12 @@ if(MINGW)
     target_link_libraries(${PROJECT_NAME} PRIVATE -static-libgcc)
 endif()
 
-if(MSVC)
-     # Use fast floating point model
+if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    target_compile_options(${PROJECT_NAME} PRIVATE -Wpedantic -Wextra)
+endif()
+
+if (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+    # Use fast floating point model
     target_compile_options(${PROJECT_NAME} PRIVATE /fp:fast)
 
     # Set warning level 3
@@ -150,6 +154,20 @@ if(MSVC)
 
     # Multiprocessor compiler
     target_compile_options(${PROJECT_NAME} PRIVATE /MP)
+
+    target_compile_options(${PROJECT_NAME} PRIVATE /sdl /permissive- /JMC- /Zc:__cplusplus)
+
+    if(ENABLE_CODE_ANALYSIS)
+      target_compile_options(${PROJECT_NAME} PRIVATE /analyze)
+    endif()
+
+    if (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 19.24)
+        target_compile_options(${PROJECT_NAME} PRIVATE /ZH:SHA_256)
+    endif()
+
+    if (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 19.26)
+        target_compile_options(${PROJECT_NAME} PRIVATE /Zc:preprocessor /wd5104 /wd5105)
+    endif()
 endif ()
 
 if (VGPU_VULKAN_DRIVER)

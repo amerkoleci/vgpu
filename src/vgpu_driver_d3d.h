@@ -19,13 +19,15 @@
 #else
 #   include <dxgiformat.h>
 #endif
-#include <d3dcommon.h>
+#include <dxgi1_2.h>
 
 #if defined(_DEBUG) && WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
 #   include <dxgidebug.h>
 #endif
 
 #include <string>
+
+#define SAFE_RELEASE(obj) if ((obj)) { (obj)->Release(); (obj) = nullptr; }
 
 namespace
 {
@@ -220,5 +222,94 @@ namespace
             default:
                 return 1;
         }
+    }
+
+    static inline bool d3d_CreateSwapChain(
+        IDXGIFactory2* dxgiFactory,
+        bool tearingSupported,
+        IUnknown* deviceOrCommandQueue,
+        void* windowHandle,
+        const VGPUSwapChainDesc* desc,
+        IDXGISwapChain1** ppSwapChain)
+    {
+        DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
+        swapChainDesc.Width = desc->width;
+        swapChainDesc.Height = desc->height;
+        swapChainDesc.Format = ToDXGIFormat(ToDXGISwapChainFormat(desc->format));
+        swapChainDesc.Stereo = FALSE;
+        swapChainDesc.SampleDesc.Count = 1;
+        swapChainDesc.SampleDesc.Quality = 0;
+        swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+        swapChainDesc.BufferCount = PresentModeToBufferCount(desc->presentMode);
+        swapChainDesc.Scaling = DXGI_SCALING_STRETCH;
+        swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+        swapChainDesc.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
+        swapChainDesc.Flags = tearingSupported ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0u;
+
+#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
+        DXGI_SWAP_CHAIN_FULLSCREEN_DESC fsSwapChainDesc = {};
+        fsSwapChainDesc.Windowed = TRUE;
+
+        // Create a swap chain for the window.
+        HRESULT hr = dxgiFactory->CreateSwapChainForHwnd(
+            deviceOrCommandQueue,
+            (HWND)windowHandle,
+            &swapChainDesc,
+            &fsSwapChainDesc,
+            nullptr,
+            ppSwapChain
+        );
+
+        if (FAILED(hr))
+        {
+            return false;
+        }
+
+        // This class does not support exclusive full-screen mode and prevents DXGI from responding to the ALT+ENTER shortcut
+        hr = dxgiFactory->MakeWindowAssociation((HWND)windowHandle, DXGI_MWA_NO_ALT_ENTER);
+#else
+        swapChainDesc.Scaling = DXGI_SCALING_ASPECT_RATIO_STRETCH;
+
+        IUnknown* window = static_cast<IUnknown*>(windowHandle);
+
+        HRESULT hr = dxgiFactory->CreateSwapChainForCoreWindow(
+            deviceOrCommandQueue,
+            window,
+            &swapChainDesc,
+            nullptr,
+            ppSwapChain
+        );
+
+        // SwapChain panel
+        //ComPtr<ISwapChainPanelNative> swapChainPanelNative;
+        //swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
+        //swapChainDesc.Scaling = DXGI_SCALING_ASPECT_RATIO_STRETCH;
+        //hr = renderer->factory->CreateSwapChainForComposition(
+        //    renderer->graphicsQueue,
+        //    &swapChainDesc,
+        //    nullptr,
+        //    tempSwapChain.GetAddressOf()
+        //);
+        //
+        //hr = tempSwapChain.As(&swapChainPanelNative);
+        //if (FAILED(hr))
+        //{
+        //    vgfxLogError("Failed to get ISwapChainPanelNative from IDXGISwapChain1");
+        //    return nullptr;
+        //}
+        //
+        //hr = swapChainPanelNative->SetSwapChain(tempSwapChain.Get());
+        //if (FAILED(hr))
+        //{
+        //    vgfxLogError("Failed to set ISwapChainPanelNative - SwapChain");
+        //    return nullptr;
+        //}
+#endif
+        if (FAILED(hr))
+        {
+            return false;
+        }
+
+        return true;
     }
 }

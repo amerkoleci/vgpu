@@ -789,7 +789,7 @@ static VkImageView vulkan_GetRTV(VGFXVulkanRenderer* renderer, VulkanTexture* te
     return vulkan_GetView(renderer, texture, level, 1, slice, 1);
 }
 
-static VkRenderPass vulkan_RequestRenderPass(VGFXVulkanRenderer* renderer, const VGFXRenderPassDesc* info)
+static VkRenderPass vulkan_RequestRenderPass(VGFXVulkanRenderer* renderer, const VGPURenderPassDesc* info)
 {
     size_t hash = 0;
     hash_combine(hash, info->colorAttachmentCount);
@@ -850,7 +850,7 @@ static VkRenderPass vulkan_RequestRenderPass(VGFXVulkanRenderer* renderer, const
         VkAttachmentReference2* depthStencilAttachment = nullptr;
         if (hasDepthStencil)
         {
-            const VGFXRenderPassDepthStencilAttachment* attachment = info->depthStencilAttachment;
+            const VGPURenderPassDepthStencilAttachment* attachment = info->depthStencilAttachment;
             VulkanTexture* texture = (VulkanTexture*)attachment->texture;
 
             auto& attachmentDesc = attachmentDescriptions[subpass.colorAttachmentCount];
@@ -932,7 +932,7 @@ static VkRenderPass vulkan_RequestRenderPass(VGFXVulkanRenderer* renderer, const
 static VkFramebuffer vulkan_RequestFramebuffer(
     VGFXVulkanRenderer* renderer,
     VkRenderPass renderPass,
-    const VGFXRenderPassDesc* info,
+    const VGPURenderPassDesc* info,
     uint32_t* width, uint32_t* height)
 {
     *width = UINT32_MAX;
@@ -1348,7 +1348,7 @@ static void vulkan_getLimits(VGFXRenderer* driverData, VGPULimits* limits)
 }
 
 /* Buffer */
-static VGPUBuffer vulkan_createBuffer(VGFXRenderer* driverData, const VGFXBufferDesc* desc, const void* pInitialData)
+static VGPUBuffer vulkan_createBuffer(VGFXRenderer* driverData, const VGPUBufferDesc* desc, const void* pInitialData)
 {
     VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
 
@@ -1948,14 +1948,6 @@ static VGPUTexture vulkan_acquireSwapchainTexture(VGPUCommandBufferImpl* driverD
 
     VulkanTexture* swapchainTexture = vulkanSwapChain->backbufferTextures[vulkanSwapChain->imageIndex];
 
-    if (pWidth) {
-        *pWidth = vulkanSwapChain->extent.width;
-    }
-
-    if (pHeight) {
-        *pHeight = vulkanSwapChain->extent.height;
-    }
-
     // Transition from undefined -> render target
     VkImageSubresourceRange range{};
     range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -1971,21 +1963,31 @@ static VGPUTexture vulkan_acquireSwapchainTexture(VGPUCommandBufferImpl* driverD
         VK_IMAGE_LAYOUT_UNDEFINED,
         VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, range);
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        range
+    );
 
     commandBuffer->swapChains.push_back(vulkanSwapChain);
+
+    if (pWidth) {
+        *pWidth = vulkanSwapChain->extent.width;
+    }
+
+    if (pHeight) {
+        *pHeight = vulkanSwapChain->extent.height;
+    }
 
     return (VGPUTexture)swapchainTexture;
 }
 
-static void vulkan_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGFXRenderPassDesc* desc)
+static void vulkan_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGPURenderPassDesc* desc)
 {
     VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
 
     if (commandBuffer->renderer->dynamicRendering)
     {
-        VkRenderingInfoKHR renderingInfo = {};
-        renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
+        VkRenderingInfo renderingInfo = {};
+        renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
         renderingInfo.pNext = VK_NULL_HANDLE;
         renderingInfo.flags = 0u;
         renderingInfo.renderArea.extent = { UINT32_MAX, UINT32_MAX };
@@ -2024,7 +2026,7 @@ static void vulkan_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGFX
 
         if (desc->depthStencilAttachment != nullptr)
         {
-            const VGFXRenderPassDepthStencilAttachment* attachment = desc->depthStencilAttachment;
+            const VGPURenderPassDepthStencilAttachment* attachment = desc->depthStencilAttachment;
             VulkanTexture* texture = (VulkanTexture*)attachment->texture;
             const uint32_t level = attachment->level;
             const uint32_t slice = attachment->slice;
