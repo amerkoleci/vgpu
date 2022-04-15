@@ -5,15 +5,6 @@
 
 #include "vgpu_driver.h"
 
-#define NOMINMAX
-#define NODRAWTEXT
-#define NOGDI
-#define NOBITMAP
-#define NOMCX
-#define NOSERVICE
-#define NOHELP
-#define WIN32_LEAN_AND_MEAN
-#include <Windows.h>
 #ifdef USING_DIRECTX_HEADERS
 #   include <directx/dxgiformat.h>
 #else

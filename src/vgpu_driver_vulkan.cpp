@@ -5,17 +5,6 @@
 
 #include "vgpu_driver.h"
 
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
-#   define NOMINMAX
-#   define NODRAWTEXT
-#   define NOGDI
-#   define NOBITMAP
-#   define NOMCX
-#   define NOSERVICE
-#   define NOHELP
-#   define WIN32_LEAN_AND_MEAN
-#endif
-
 VGFX_DISABLE_WARNINGS()
 #include "volk.h"
 #define VMA_IMPLEMENTATION

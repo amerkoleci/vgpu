@@ -170,6 +170,10 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
     endif()
 endif ()
 
+if (WIN32)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+endif ()
+
 if (VGPU_VULKAN_DRIVER)
     if(ANDROID)
         target_compile_definitions(${PROJECT_NAME} PRIVATE VK_USE_PLATFORM_ANDROID_KHR)
