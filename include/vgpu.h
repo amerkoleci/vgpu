@@ -59,14 +59,14 @@ typedef struct VGPUSampler_T* VGPUSampler;
 typedef struct VGPUSwapChain_T* VGPUSwapChain;
 typedef struct VGPUCommandBuffer_T* VGPUCommandBuffer;
 
-typedef enum VGFXLogLevel {
+typedef enum VGPULogLevel {
     VGFXLogLevel_Info = 0,
     VGFXLogLevel_Warn,
     VGFXLogLevel_Error,
 
     _VGPU_LOG_LEVEL_COUNT,
     _VGPU_LOG_LEVEL_FORCE_U32 = 0x7FFFFFFF
-} VGFXLogLevel;
+} VGPULogLevel;
 
 typedef enum VGPUBackendType {
     VGPU_BACKEND_TYPE_DEFAULT = 0,
@@ -286,19 +286,20 @@ typedef enum VGPUFeature {
 } VGPUFeature;
 
 typedef enum VGPULoadOp {
-    VGPU_LOAD_OP_DONT_CARE = 0,
-    VGPU_LOAD_OP_LOAD,
-    VGPU_LOAD_OP_CLEAR,
+    VGPU_LOAD_OP_LOAD = 0,
+    VGPU_LOAD_OP_CLEAR = 1,
+    VGPU_LOAD_OP_DISCARD = 2,
 
     _VGPU_LOAD_OP_COUNT,
     _VGPU_LOAD_OP_FORCE_U32 = 0x7FFFFFFF
 } VGPULoadOp;
 
 typedef enum VGFXStoreOp {
-    VGFXStoreOp_DontCare = 0,
-    VGFXStoreOp_Store,
+    VGPU_STORE_OP_STORE = 0,
+    VGPU_STORE_OP_DISCARD = 1,
 
-    _VGFXStoreOp_Force32 = 0x7FFFFFFF
+    _VGPU_STORE_OP_COUNT,
+    _VGPU_STORE_OP_FORCE_U32 = 0x7FFFFFFF
 } VGFXStoreOp;
 
 typedef struct VGPUColor {
@@ -334,6 +335,30 @@ typedef struct VGPUViewport {
     float maxDepth;
 } VGPUViewport;
 
+typedef struct VGPUDispatchIndirectCommand
+{
+    uint32_t x;
+    uint32_t y;
+    uint32_t z;
+} VGPUDispatchIndirectCommand;
+
+typedef struct VGPUDrawIndirectCommand
+{
+    uint32_t vertexCount;
+    uint32_t instanceCount;
+    uint32_t vertexStart;
+    uint32_t baseInstance;
+} VGPUDrawIndirectCommand;
+
+typedef struct VGPUDrawIndexedIndirectCommand
+{
+    uint32_t indexCount;
+    uint32_t instanceCount;
+    uint32_t startIndex;
+    int32_t  baseVertex;
+    uint32_t baseInstance;
+} VGPUDrawIndexedIndirectCommand;
+
 typedef struct VGPURenderPassColorAttachment {
     VGPUTexture texture;
     uint32_t level;
@@ -356,6 +381,8 @@ typedef struct VGPURenderPassDepthStencilAttachment {
 } VGPURenderPassDepthStencilAttachment;
 
 typedef struct VGPURenderPassDesc {
+    uint32_t width;
+    uint32_t height;
     uint32_t colorAttachmentCount;
     const VGPURenderPassColorAttachment* colorAttachments;
     const VGPURenderPassDepthStencilAttachment* depthStencilAttachment;
@@ -363,11 +390,11 @@ typedef struct VGPURenderPassDesc {
 
 typedef struct VGPUBufferDesc {
     const char* label;
-    VGFXBufferUsage usage;
     uint64_t size;
+    VGFXBufferUsage usage;
 } VGPUBufferDesc;
 
-typedef struct VGFXTextureDesc {
+typedef struct VGPUTextureDesc {
     const char* label;
     VGPUTextureType type;
     VGFXTextureFormat format;
@@ -377,7 +404,7 @@ typedef struct VGFXTextureDesc {
     uint32_t depthOrArraySize;
     uint32_t mipLevelCount;
     uint32_t sampleCount;
-} VGFXTextureDesc;
+} VGPUTextureDesc;
 
 typedef struct VGPUSamplerDesc
 {
@@ -436,7 +463,7 @@ typedef struct VGPULimits {
     uint32_t maxComputeWorkGroupsPerDimension;
 } VGPULimits;
 
-typedef void (VGPU_CALL* VGPULogCallback)(VGFXLogLevel level, const char* message);
+typedef void (VGPU_CALL* VGPULogCallback)(VGPULogLevel level, const char* message);
 VGFX_API void VGPU_SetLogCallback(VGPULogCallback func);
 
 VGFX_API bool vgpuIsSupported(VGPUBackendType backend);
@@ -453,8 +480,8 @@ VGFX_API VGPUBuffer vgpuCreateBuffer(VGPUDevice device, const VGPUBufferDesc* de
 VGFX_API void vgpuDestroyBuffer(VGPUDevice device, VGPUBuffer buffer);
 
 /* Texture */
-VGFX_API VGPUTexture vgfxCreateTexture(VGPUDevice device, const VGFXTextureDesc* desc);
-VGFX_API void vgfxDestroyTexture(VGPUDevice device, VGPUTexture texture);
+VGFX_API VGPUTexture vgfxCreateTexture(VGPUDevice device, const VGPUTextureDesc* desc);
+VGFX_API void vgpuDestroyTexture(VGPUDevice device, VGPUTexture texture);
 
 /* SwapChain */
 VGFX_API VGPUSwapChain vgpuCreateSwapChain(VGPUDevice device, void* windowHandle, const VGPUSwapChainDesc* desc);
@@ -470,6 +497,8 @@ VGFX_API void vgpuInsertDebugMarker(VGPUCommandBuffer commandBuffer, const char*
 VGFX_API VGPUTexture vgpuAcquireSwapchainTexture(VGPUCommandBuffer commandBuffer, VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight);
 VGFX_API void vgpuBeginRenderPass(VGPUCommandBuffer commandBuffer, const VGPURenderPassDesc* desc);
 VGFX_API void vgpuEndRenderPass(VGPUCommandBuffer commandBuffer);
+VGFX_API void vgpuDraw(VGPUCommandBuffer commandBuffer, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t baseInstance);
+
 VGFX_API void vgpuSubmit(VGPUDevice device, VGPUCommandBuffer* commandBuffers, uint32_t count);
 
 /* Helper functions */

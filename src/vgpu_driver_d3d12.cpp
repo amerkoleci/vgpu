@@ -149,6 +149,9 @@ struct D3D12Resource
     D3D12_RESOURCE_STATES state = D3D12_RESOURCE_STATE_COMMON;
     D3D12_RESOURCE_STATES transitioningState = (D3D12_RESOURCE_STATES)-1;
     D3D12_GPU_VIRTUAL_ADDRESS gpuVirtualAddress = 0u;
+    uint32_t width = 0;
+    uint32_t height = 0;
+    DXGI_FORMAT dxgiFormat = DXGI_FORMAT_UNKNOWN;
     D3D12_CPU_DESCRIPTOR_HANDLE rtv{};
 };
 
@@ -158,6 +161,7 @@ struct VGFXD3D12SwapChain
     uint32_t width = 0;
     uint32_t height = 0;
     VGFXTextureFormat format;
+    VGFXTextureFormat textureFormat;
     uint32_t syncInterval;
     std::vector<D3D12Resource*> backbufferTextures;
 };
@@ -186,7 +190,10 @@ struct D3D12CommandBuffer
     D3D12_RESOURCE_BARRIER resourceBarriers[16];
     UINT numBarriersToFlush;
 
-    D3D12_CPU_DESCRIPTOR_HANDLE RTVs[VGPU_MAX_COLOR_ATTACHMENTS] = {};
+    uint32_t numRTVS = 0;
+    D3D12_RENDER_PASS_RENDER_TARGET_DESC RTVs[VGPU_MAX_COLOR_ATTACHMENTS] = {};
+    D3D12_RENDER_PASS_DEPTH_STENCIL_DESC DSV = {};
+    bool insideRenderPass;
 
     std::vector<VGFXD3D12SwapChain*> swapChains;
 };
@@ -536,6 +543,9 @@ static void d3d12_updateSwapChain(VGFXD3D12Renderer* renderer, VGFXD3D12SwapChai
     {
         D3D12Resource* texture = new D3D12Resource();
         texture->state = D3D12_RESOURCE_STATE_PRESENT;
+        texture->width = swapChainDesc.Width;
+        texture->height = swapChainDesc.Height;
+        texture->dxgiFormat = ToDXGIFormat(swapChain->textureFormat);
         hr = swapChain->handle->GetBuffer(i, IID_PPV_ARGS(&texture->handle));
         VGFX_ASSERT(SUCCEEDED(hr));
 
@@ -544,7 +554,7 @@ static void d3d12_updateSwapChain(VGFXD3D12Renderer* renderer, VGFXD3D12SwapChai
         texture->handle->SetName(name);
 
         D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
-        rtvDesc.Format = swapChainDesc.Format;
+        rtvDesc.Format = texture->dxgiFormat;
         rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
 
         texture->rtv = renderer->rtvAllocator.Allocate();
@@ -620,18 +630,18 @@ static bool d3d12_hasFeature(VGFXRenderer* driverData, VGPUFeature feature) {
     VGFXD3D12Renderer* renderer = (VGFXD3D12Renderer*)driverData;
     switch (feature)
     {
-        case VGPU_FEATURE_COMPUTE:
-        case VGPU_FEATURE_INDEPENDENT_BLEND:
-        case VGPU_FEATURE_TEXTURE_CUBE_ARRAY:
-        case VGPU_FEATURE_TEXTURE_COMPRESSION_BC:
-            return true;
+    case VGPU_FEATURE_COMPUTE:
+    case VGPU_FEATURE_INDEPENDENT_BLEND:
+    case VGPU_FEATURE_TEXTURE_CUBE_ARRAY:
+    case VGPU_FEATURE_TEXTURE_COMPRESSION_BC:
+        return true;
 
-        case VGPU_FEATURE_TEXTURE_COMPRESSION_ETC2:
-        case VGPU_FEATURE_TEXTURE_COMPRESSION_ASTC:
-            return false;
+    case VGPU_FEATURE_TEXTURE_COMPRESSION_ETC2:
+    case VGPU_FEATURE_TEXTURE_COMPRESSION_ASTC:
+        return false;
 
-        default:
-            return false;
+    default:
+        return false;
     }
 }
 
@@ -670,25 +680,25 @@ static void d3d12_getLimits(VGFXRenderer* driverData, VGPULimits* limits)
     uint32_t maxSamplersPerStage;
     switch (featureData.ResourceBindingTier)
     {
-        case D3D12_RESOURCE_BINDING_TIER_1:
-            maxCBVsPerStage = 14;
-            maxSRVsPerStage = 128;
-            maxUAVsAllStages = 64;
-            maxSamplersPerStage = 16;
-            break;
-        case D3D12_RESOURCE_BINDING_TIER_2:
-            maxCBVsPerStage = 14;
-            maxSRVsPerStage = 1'000'000;
-            maxUAVsAllStages = 64;
-            maxSamplersPerStage = 2048;
-            break;
-        case D3D12_RESOURCE_BINDING_TIER_3:
-        default:
-            maxCBVsPerStage = 1'100'000;
-            maxSRVsPerStage = 1'100'000;
-            maxUAVsAllStages = 1'100'000;
-            maxSamplersPerStage = 2048;
-            break;
+    case D3D12_RESOURCE_BINDING_TIER_1:
+        maxCBVsPerStage = 14;
+        maxSRVsPerStage = 128;
+        maxUAVsAllStages = 64;
+        maxSamplersPerStage = 16;
+        break;
+    case D3D12_RESOURCE_BINDING_TIER_2:
+        maxCBVsPerStage = 14;
+        maxSRVsPerStage = 1'000'000;
+        maxUAVsAllStages = 64;
+        maxSamplersPerStage = 2048;
+        break;
+    case D3D12_RESOURCE_BINDING_TIER_3:
+    default:
+        maxCBVsPerStage = 1'100'000;
+        maxSRVsPerStage = 1'100'000;
+        maxUAVsAllStages = 1'100'000;
+        maxSamplersPerStage = 2048;
+        break;
     }
 
     uint32_t maxUAVsPerStage = maxUAVsAllStages / 2;
@@ -741,7 +751,7 @@ static void d3d12_destroyBuffer(VGFXRenderer* driverData, VGPUBuffer resource)
 }
 
 /* Texture */
-static VGPUTexture d3d12_createTexture(VGFXRenderer* driverData, const VGFXTextureDesc* desc)
+static VGPUTexture d3d12_createTexture(VGFXRenderer* driverData, const VGPUTextureDesc* desc)
 {
     VGFXD3D12Renderer* renderer = (VGFXD3D12Renderer*)driverData;
 
@@ -813,6 +823,9 @@ static VGPUTexture d3d12_createTexture(VGFXRenderer* driverData, const VGFXTextu
     // TODO: TextureLayout/State
     D3D12Resource* texture = new D3D12Resource();
     texture->state = D3D12_RESOURCE_STATE_COMMON;
+    texture->width = desc->width;
+    texture->height = desc->height;
+    texture->dxgiFormat = resourceDesc.Format;
 
     HRESULT hr = renderer->allocator->CreateResource(
         &allocationDesc,
@@ -872,6 +885,7 @@ static VGPUSwapChain d3d12_createSwapChain(VGFXRenderer* driverData, void* windo
     VGFXD3D12SwapChain* swapChain = new VGFXD3D12SwapChain();
     swapChain->handle = handle;
     swapChain->format = ToDXGISwapChainFormat(desc->format);
+    swapChain->textureFormat = desc->format;
     swapChain->syncInterval = PresentModeToSwapInterval(desc->presentMode);
     d3d12_updateSwapChain(renderer, swapChain);
     return (VGPUSwapChain)swapChain;
@@ -1017,33 +1031,93 @@ static void d3d12_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGPUR
 {
     D3D12CommandBuffer* commandBuffer = (D3D12CommandBuffer*)driverData;
 
+    uint32_t width = _VGPU_DEF(desc->width, UINT32_MAX);
+    uint32_t height = _VGPU_DEF(desc->height, UINT32_MAX);
+    uint32_t numRTVS = 0;
+    D3D12_RENDER_PASS_FLAGS renderPassFlags = D3D12_RENDER_PASS_FLAG_NONE;
+
     for (uint32_t i = 0; i < desc->colorAttachmentCount; ++i)
     {
-        const VGPURenderPassColorAttachment attachment = desc->colorAttachments[i];
-        D3D12Resource* texture = (D3D12Resource*)attachment.texture;
+        const VGPURenderPassColorAttachment* attachment = &desc->colorAttachments[i];
+        D3D12Resource* texture = (D3D12Resource*)attachment->texture;
+        uint32_t level = attachment->level;
+        uint32_t slice = attachment->slice;
 
-        commandBuffer->RTVs[i] = texture->rtv;
+        commandBuffer->RTVs[i].cpuDescriptor = texture->rtv;
 
         // Transition to RenderTarget
         d3d12_TransitionResource(commandBuffer, texture, D3D12_RESOURCE_STATE_RENDER_TARGET, true);
 
-        switch (attachment.loadOp)
+        switch (attachment->loadOp)
         {
-            case VGPU_LOAD_OP_CLEAR:
-                commandBuffer->commandList->ClearRenderTargetView(commandBuffer->RTVs[i], &attachment.clearColor.r, 0, nullptr);
-                break;
+        case VGPU_LOAD_OP_LOAD:
+            commandBuffer->RTVs[numRTVS].BeginningAccess.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_PRESERVE;
+            break;
 
-            default:
-                break;
+        case VGPU_LOAD_OP_CLEAR:
+            commandBuffer->RTVs[numRTVS].BeginningAccess.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR;
+            commandBuffer->RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Format = texture->dxgiFormat;
+            commandBuffer->RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Color[0] = attachment->clearColor.r;
+            commandBuffer->RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Color[1] = attachment->clearColor.g;
+            commandBuffer->RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Color[2] = attachment->clearColor.b;
+            commandBuffer->RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Color[3] = attachment->clearColor.a;
+            break;
+
+        default:
+        case VGPU_LOAD_OP_DISCARD:
+            commandBuffer->RTVs[numRTVS].BeginningAccess.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_DISCARD;
+            break;
         }
+
+        switch (attachment->storeOp)
+        {
+        default:
+        case VGPU_STORE_OP_STORE:
+            commandBuffer->RTVs[numRTVS].EndingAccess.Type = D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_PRESERVE;
+            break;
+
+        case VGPU_STORE_OP_DISCARD:
+            commandBuffer->RTVs[numRTVS].EndingAccess.Type = D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_DISCARD;
+            break;
+        }
+
+        width = _VGPU_MIN(width, _VGPU_MAX(1U, texture->width >> level));
+        height = _VGPU_MIN(height, _VGPU_MAX(1U, texture->height >> level));
+
+        numRTVS++;
     }
 
-    commandBuffer->commandList->OMSetRenderTargets(desc->colorAttachmentCount, commandBuffer->RTVs, FALSE, nullptr);
+    commandBuffer->numRTVS = numRTVS;
+    commandBuffer->commandList->BeginRenderPass(numRTVS, commandBuffer->RTVs, nullptr, renderPassFlags);
+
+    // Set the viewport.
+    static constexpr float defaultBlendFactor[4] = { 0, 0, 0, 0 };
+    D3D12_VIEWPORT viewport = { 0.f, 0.f, float(width), float(height), 0.0f, 1.0f };
+    D3D12_RECT scissorRect = { 0, 0, LONG(width), LONG(height) };
+    commandBuffer->commandList->RSSetViewports(1, &viewport);
+    commandBuffer->commandList->RSSetScissorRects(1, &scissorRect);
+    commandBuffer->commandList->OMSetBlendFactor(defaultBlendFactor);
+    commandBuffer->commandList->OMSetStencilRef(0);
+    commandBuffer->insideRenderPass = true;
 }
 
 static void d3d12_endRenderPass(VGPUCommandBufferImpl* driverData)
 {
     D3D12CommandBuffer* commandBuffer = (D3D12CommandBuffer*)driverData;
+    commandBuffer->commandList->EndRenderPass();
+    commandBuffer->insideRenderPass = false;
+}
+
+static void d3d12_prepareDraw(D3D12CommandBuffer* commandBuffer)
+{
+    VGFX_ASSERT(commandBuffer->insideRenderPass);
+}
+
+static void d3d12_draw(VGPUCommandBufferImpl* driverData, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t baseInstance)
+{
+    D3D12CommandBuffer* commandBuffer = (D3D12CommandBuffer*)driverData;
+    d3d12_prepareDraw(commandBuffer);
+    commandBuffer->commandList->DrawInstanced(vertexCount, instanceCount, vertexStart, baseInstance);
 }
 
 static VGPUCommandBuffer d3d12_beginCommandBuffer(VGFXRenderer* driverData, const char* label)
@@ -1063,15 +1137,11 @@ static VGPUCommandBuffer d3d12_beginCommandBuffer(VGFXRenderer* driverData, cons
 
         for (uint32_t i = 0; i < VGPU_MAX_INFLIGHT_FRAMES; ++i)
         {
-            hr = renderer->device->CreateCommandAllocator(
-                impl->type, IID_PPV_ARGS(&impl->commandAllocators[i])
-            );
+            hr = renderer->device->CreateCommandAllocator(impl->type, IID_PPV_ARGS(&impl->commandAllocators[i]));
             VGFX_ASSERT(SUCCEEDED(hr));
         }
 
-        hr = renderer->device->CreateCommandList1(0,
-            impl->type,
-            D3D12_COMMAND_LIST_FLAG_NONE,
+        hr = renderer->device->CreateCommandList1(0, impl->type, D3D12_COMMAND_LIST_FLAG_NONE,
             IID_PPV_ARGS(&impl->commandList)
         );
         VGFX_ASSERT(SUCCEEDED(hr));
@@ -1100,6 +1170,9 @@ static VGPUCommandBuffer d3d12_beginCommandBuffer(VGFXRenderer* driverData, cons
     //    renderer->samplerHeap.handle
     //};
     //impl->commandList->SetDescriptorHeaps(static_cast<UINT>(std::size(heaps)), heaps);
+
+    impl->numRTVS = 0;
+    impl->insideRenderPass = false;
 
     static constexpr float defaultBlendFactor[4] = { 0, 0, 0, 0 };
     impl->commandList->OMSetBlendFactor(defaultBlendFactor);

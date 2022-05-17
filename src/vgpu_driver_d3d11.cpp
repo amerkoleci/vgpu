@@ -80,7 +80,7 @@ namespace
 
 struct VGFXD3D11Renderer;
 
-struct VGFXD3D11Buffer
+struct D3D11Buffer
 {
     ID3D11Buffer* handle = nullptr;
 };
@@ -90,8 +90,7 @@ struct VGFXD3D11Texture
     ID3D11Resource* handle = nullptr;
     uint32_t width = 0;
     uint32_t height = 0;
-    DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
-    DXGI_FORMAT viewFormat = DXGI_FORMAT_UNKNOWN;
+    VGFXTextureFormat format = VGFXTextureFormat_Undefined;
     std::unordered_map<size_t, ID3D11RenderTargetView*> rtvCache;
     std::unordered_map<size_t, ID3D11DepthStencilView*> dsvCache;
 };
@@ -102,6 +101,7 @@ struct D3D11SwapChain
     uint32_t width = 0;
     uint32_t height = 0;
     VGFXTextureFormat format;
+    VGFXTextureFormat textureFormat;
     uint32_t syncInterval;
     VGPUTexture backbufferTexture;
 };
@@ -115,6 +115,7 @@ struct D3D11CommandBuffer
     ID3D11DeviceContext1* context;
     ID3DUserDefinedAnnotation* userDefinedAnnotation;
     ID3D11CommandList* commandList;
+    bool insideRenderPass;
 
     // Current frame present swap chains
     std::vector<D3D11SwapChain*> swapChains;
@@ -147,17 +148,11 @@ struct VGFXD3D11Renderer
 static ID3D11RenderTargetView* d3d11_GetRTV(
     VGFXD3D11Renderer* renderer,
     VGFXD3D11Texture* texture,
-    DXGI_FORMAT format,
     uint32_t mipLevel,
     uint32_t slice)
 {
-    if (format == DXGI_FORMAT_UNKNOWN)
-    {
-        format = texture->viewFormat;
-    }
-
     size_t hash = 0;
-    hash_combine(hash, format);
+    //hash_combine(hash, format);
     hash_combine(hash, mipLevel);
     hash_combine(hash, slice);
 
@@ -168,7 +163,7 @@ static ID3D11RenderTargetView* d3d11_GetRTV(
         texture->handle->GetType(&type);
 
         D3D11_RENDER_TARGET_VIEW_DESC viewDesc = {};
-        viewDesc.Format = format;
+        viewDesc.Format = ToDXGIFormat(texture->format);
 
         switch (type)
         {
@@ -261,22 +256,14 @@ static ID3D11RenderTargetView* d3d11_GetRTV(
     return it->second;
 }
 
-static ID3D11DepthStencilView* d3d11_GetDSV(
-    VGFXD3D11Renderer* renderer,
-    VGFXD3D11Texture* texture,
-    DXGI_FORMAT format,
+static ID3D11DepthStencilView* d3d11_GetDSV(VGFXD3D11Renderer* renderer, VGFXD3D11Texture* texture,
     uint32_t mipLevel,
     uint32_t slice)
 {
-    if (format == DXGI_FORMAT_UNKNOWN)
-    {
-        format = texture->viewFormat;
-    }
-
     size_t hash = 0;
     hash_combine(hash, mipLevel);
     hash_combine(hash, slice);
-    hash_combine(hash, format);
+    //hash_combine(hash, format);
 
     auto it = texture->dsvCache.find(hash);
     if (it == texture->dsvCache.end())
@@ -285,7 +272,7 @@ static ID3D11DepthStencilView* d3d11_GetDSV(
         texture->handle->GetType(&type);
 
         D3D11_DEPTH_STENCIL_VIEW_DESC viewDesc = {};
-        viewDesc.Format = format;
+        viewDesc.Format = ToDXGIFormat(texture->format);
 
         switch (type)
         {
@@ -590,8 +577,7 @@ static VGPUBuffer d3d11_createBuffer(VGFXRenderer* driverData, const VGPUBufferD
         pInitData = &initialData;
     }
 
-    VGFXD3D11Buffer* buffer = new VGFXD3D11Buffer();
-
+    D3D11Buffer* buffer = new D3D11Buffer();
     HRESULT hr = renderer->device->CreateBuffer(&d3d_desc, pInitData, &buffer->handle);
 
     if (FAILED(hr))
@@ -612,13 +598,13 @@ static VGPUBuffer d3d11_createBuffer(VGFXRenderer* driverData, const VGPUBufferD
 
 static void d3d11_destroyBuffer(VGFXRenderer* driverData, VGPUBuffer resource)
 {
-    VGFXD3D11Buffer* d3dBuffer = (VGFXD3D11Buffer*)resource;
+    D3D11Buffer* d3dBuffer = (D3D11Buffer*)resource;
     SafeRelease(d3dBuffer->handle);
     delete d3dBuffer;
 }
 
 /* Texture */
-static VGPUTexture d3d11_createTexture(VGFXRenderer* driverData, const VGFXTextureDesc* desc)
+static VGPUTexture d3d11_createTexture(VGFXRenderer* driverData, const VGPUTextureDesc* desc)
 {
     VGFXD3D11Renderer* renderer = (VGFXD3D11Renderer*)driverData;
 
@@ -658,8 +644,7 @@ static VGPUTexture d3d11_createTexture(VGFXRenderer* driverData, const VGFXTextu
     VGFXD3D11Texture* texture = new VGFXD3D11Texture();
     texture->width = desc->width;
     texture->height = desc->height;
-    texture->format = format;
-    texture->viewFormat = ToDXGIFormat(desc->format);
+    texture->format = desc->format;
 
     HRESULT hr = E_FAIL;
     if (desc->type == VGPU_TEXTURE_TYPE_3D)
@@ -744,9 +729,7 @@ static void d3d11_updateSwapChain(VGFXD3D11Renderer* renderer, D3D11SwapChain* s
     VGFXD3D11Texture* texture = new VGFXD3D11Texture();
     texture->width = swapChainDesc.Width;
     texture->height = swapChainDesc.Height;
-    // TODO: Handle srgb
-    texture->format = swapChainDesc.Format;
-    texture->viewFormat = swapChainDesc.Format;
+    texture->format = swapChain->textureFormat;
 
     hr = swapChain->handle->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&texture->handle);
     VGFX_ASSERT(SUCCEEDED(hr));
@@ -768,6 +751,7 @@ static VGPUSwapChain d3d11_createSwapChain(VGFXRenderer* driverData, void* windo
     D3D11SwapChain* swapChain = new D3D11SwapChain();
     swapChain->handle = handle;
     swapChain->format = ToDXGISwapChainFormat(desc->format);
+    swapChain->textureFormat = desc->format;
     swapChain->syncInterval = PresentModeToSwapInterval(desc->presentMode);
     d3d11_updateSwapChain(renderer, swapChain);
     return (VGPUSwapChain)swapChain;
@@ -869,7 +853,7 @@ static void d3d11_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGPUR
         const uint32_t level = attachment->level;
         const uint32_t slice = attachment->slice;
 
-        RTVs[i] = d3d11_GetRTV(commandBuffer->renderer, texture, DXGI_FORMAT_UNKNOWN, level, slice);
+        RTVs[i] = d3d11_GetRTV(commandBuffer->renderer, texture, level, slice);
 
         switch (attachment->loadOp)
         {
@@ -881,8 +865,8 @@ static void d3d11_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGPUR
                 break;
         }
 
-        width = std::min(width, std::max(1U, texture->width >> level));
-        height = std::min(height, std::max(1U, texture->height >> level));
+        width = _VGPU_MIN(width, _VGPU_MAX(1U, texture->width >> level));
+        height = _VGPU_MIN(height, _VGPU_MAX(1U, texture->height >> level));
         numRTVs++;
     }
 
@@ -893,7 +877,7 @@ static void d3d11_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGPUR
         const uint32_t level = attachment->level;
         const uint32_t slice = attachment->slice;
 
-        DSV = d3d11_GetDSV(commandBuffer->renderer, texture, DXGI_FORMAT_UNKNOWN, level, slice);
+        DSV = d3d11_GetDSV(commandBuffer->renderer, texture, level, slice);
 
         UINT clearFlags = {};
         float clearDepth = 0.0f;
@@ -916,8 +900,8 @@ static void d3d11_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGPUR
             commandBuffer->context->ClearDepthStencilView(DSV, clearFlags, clearDepth, clearStencil);
         }
 
-        width = std::min(width, std::max(1U, texture->width >> level));
-        height = std::min(height, std::max(1U, texture->height >> level));
+        width = _VGPU_MIN(width, _VGPU_MAX(1U, texture->width >> level));
+        height = _VGPU_MIN(height, _VGPU_MAX(1U, texture->height >> level));
     }
 
     commandBuffer->context->OMSetRenderTargets(numRTVs, RTVs, DSV);
@@ -927,11 +911,32 @@ static void d3d11_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGPUR
     D3D11_RECT scissorRect = { 0, 0, static_cast<long>(width), static_cast<long>(height) };
     commandBuffer->context->RSSetViewports(1, &viewport);
     commandBuffer->context->RSSetScissorRects(1, &scissorRect);
+    commandBuffer->insideRenderPass = true;
 }
 
 static void d3d11_endRenderPass(VGPUCommandBufferImpl* driverData)
 {
     D3D11CommandBuffer* commandBuffer = (D3D11CommandBuffer*)driverData;
+    commandBuffer->insideRenderPass = false;
+}
+
+static void d3d11_prepareDraw(D3D11CommandBuffer* commandBuffer)
+{
+    VGFX_ASSERT(commandBuffer->insideRenderPass);
+}
+
+static void d3d11_draw(VGPUCommandBufferImpl* driverData, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t baseInstance)
+{
+    D3D11CommandBuffer* commandBuffer = (D3D11CommandBuffer*)driverData;
+    d3d11_prepareDraw(commandBuffer);
+    if (instanceCount > 1)
+    {
+        commandBuffer->context->DrawInstanced(vertexCount, instanceCount, vertexStart, baseInstance);
+    }
+    else
+    {
+        commandBuffer->context->Draw(vertexCount, vertexStart);
+    }
 }
 
 static VGPUCommandBuffer d3d11_beginCommandBuffer(VGFXRenderer* driverData, const char* label)

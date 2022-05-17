@@ -23,7 +23,7 @@
 VGPUDevice device = nullptr;
 VGPUSwapChain swapChain = nullptr;
 
-inline void vgpu_log(VGFXLogLevel level, const char* message)
+inline void vgpu_log(VGPULogLevel level, const char* message)
 {
 }
 
@@ -84,6 +84,7 @@ void init_gfx(GLFWwindow* window)
     VGPUSwapChainDesc swapChainDesc{};
     swapChainDesc.width = (uint32_t)width;
     swapChainDesc.height = (uint32_t)height;
+    swapChainDesc.format = VGFXTextureFormat_BGRA8UNormSrgb;
     swapChainDesc.presentMode = VGPU_PRESENT_MODE_FIFO;
     swapChain = vgpuCreateSwapChain(device, windowHandle, &swapChainDesc);
 }
@@ -135,7 +136,7 @@ void draw_frame()
     VGPURenderPassColorAttachment colorAttachment = {};
     colorAttachment.texture = vgpuAcquireSwapchainTexture(commandBuffer, swapChain, &width, &height);
     colorAttachment.loadOp = VGPU_LOAD_OP_CLEAR;
-    colorAttachment.storeOp = VGFXStoreOp_Store;
+    colorAttachment.storeOp = VGPU_STORE_OP_STORE;
     colorAttachment.clearColor.r = 0.3f;
     colorAttachment.clearColor.g = 0.3f;
     colorAttachment.clearColor.b = 0.3f;

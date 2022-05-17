@@ -10,7 +10,7 @@
 
 #define MAX_MESSAGE_SIZE 1024
 
-static void VGPU_DefaultLogCallback(VGFXLogLevel level, const char* message)
+static void VGPU_DefaultLogCallback(VGPULogLevel level, const char* message)
 {
 #if defined(__EMSCRIPTEN__)
     switch (level)
@@ -93,7 +93,7 @@ static const VGFXDriver* drivers[] = {
 
 bool vgpuIsSupported(VGPUBackendType backend)
 {
-    for (uint32_t i = 0; i < _VGFX_COUNT_OF(drivers); ++i)
+    for (uint32_t i = 0; i < _VGPU_COUNT_OF(drivers); ++i)
     {
         if (!drivers[i])
             break;
@@ -116,7 +116,7 @@ VGPUDevice vgpuCreateDevice(const VGPUDeviceDesc* desc)
 retry:
     if (backend == VGPU_BACKEND_TYPE_DEFAULT)
     {
-        for (uint32_t i = 0; i < _VGFX_COUNT_OF(drivers); ++i)
+        for (uint32_t i = 0; i < _VGPU_COUNT_OF(drivers); ++i)
         {
             if (!drivers[i])
                 break;
@@ -129,7 +129,7 @@ retry:
     }
     else
     {
-        for (uint32_t i = 0; i < _VGFX_COUNT_OF(drivers); ++i)
+        for (uint32_t i = 0; i < _VGPU_COUNT_OF(drivers); ++i)
         {
             if (!drivers[i])
                 break;
@@ -201,10 +201,10 @@ void vgpuGetLimits(VGPUDevice device, VGPULimits* limits)
 }
 
 /* Buffer */
-static VGPUBufferDesc _vgfxBufferDescDef(const VGPUBufferDesc* desc)
+static VGPUBufferDesc _vgpuBufferDescDef(const VGPUBufferDesc* desc)
 {
     VGPUBufferDesc def = *desc;
-    def.size = _VGFX_DEF(def.size, 4);
+    def.size = _VGPU_DEF(def.size, 4);
     return def;
 }
 
@@ -213,7 +213,7 @@ VGPUBuffer vgpuCreateBuffer(VGPUDevice device, const VGPUBufferDesc* desc, const
      NULL_RETURN_NULL(device);
      NULL_RETURN_NULL(desc);
 
-     VGPUBufferDesc desc_def = _vgfxBufferDescDef(desc);
+     VGPUBufferDesc desc_def = _vgpuBufferDescDef(desc);
      return device->createBuffer(device->driverData, &desc_def, pInitialData);
 }
 
@@ -226,30 +226,30 @@ void vgpuDestroyBuffer(VGPUDevice device, VGPUBuffer buffer)
 }
 
 /* Texture */
-static VGFXTextureDesc _vgfxTextureDescDef(const VGFXTextureDesc* desc)
+static VGPUTextureDesc _vgpuTextureDescDef(const VGPUTextureDesc* desc)
 {
-    VGFXTextureDesc def = *desc;
-    def.type = _VGFX_DEF(def.type, VGPU_TEXTURE_TYPE_2D);
-    def.format = _VGFX_DEF(def.type, VGFXTextureFormat_RGBA8UNorm);
-    //def.usage = _VGFX_DEF(def.type, VGFXTextureUsage_ShaderRead);
-    def.width = _VGFX_DEF(def.width, 1);
-    def.height = _VGFX_DEF(def.height, 1);
-    def.depthOrArraySize = _VGFX_DEF(def.depthOrArraySize, 1);
-    def.mipLevelCount = _VGFX_DEF(def.mipLevelCount, 1);
-    def.sampleCount = _VGFX_DEF(def.sampleCount, 1);
+    VGPUTextureDesc def = *desc;
+    def.type = _VGPU_DEF(def.type, VGPU_TEXTURE_TYPE_2D);
+    def.format = _VGPU_DEF(def.type, VGFXTextureFormat_RGBA8UNorm);
+    //def.usage = _VGPU_DEF(def.type, VGFXTextureUsage_ShaderRead);
+    def.width = _VGPU_DEF(def.width, 1);
+    def.height = _VGPU_DEF(def.height, 1);
+    def.depthOrArraySize = _VGPU_DEF(def.depthOrArraySize, 1);
+    def.mipLevelCount = _VGPU_DEF(def.mipLevelCount, 1);
+    def.sampleCount = _VGPU_DEF(def.sampleCount, 1);
     return def;
 }
 
-VGPUTexture vgfxCreateTexture(VGPUDevice device, const VGFXTextureDesc* desc)
+VGPUTexture vgfxCreateTexture(VGPUDevice device, const VGPUTextureDesc* desc)
 {
     NULL_RETURN_NULL(device);
     NULL_RETURN_NULL(desc);
 
-    VGFXTextureDesc desc_def = _vgfxTextureDescDef(desc);
+    VGPUTextureDesc desc_def = _vgpuTextureDescDef(desc);
     return device->createTexture(device->driverData, &desc_def);
 }
 
-void vgfxDestroyTexture(VGPUDevice device, VGPUTexture texture)
+void vgpuDestroyTexture(VGPUDevice device, VGPUTexture texture)
 {
     NULL_RETURN(device);
     NULL_RETURN(texture);
@@ -258,13 +258,24 @@ void vgfxDestroyTexture(VGPUDevice device, VGPUTexture texture)
 }
 
 /* SwapChain */
+static VGPUSwapChainDesc _vgpuSwapChainDescDef(const VGPUSwapChainDesc* desc)
+{
+    VGPUSwapChainDesc def = *desc;
+    def.format = _VGPU_DEF(def.format, VGFXTextureFormat_BGRA8UNorm);
+    def.width = _VGPU_DEF(def.width, 0);
+    def.height = _VGPU_DEF(def.height, 0);
+    def.presentMode = _VGPU_DEF(def.presentMode, VGPU_PRESENT_MODE_IMMEDIATE);
+    return def;
+}
+
 VGPUSwapChain vgpuCreateSwapChain(VGPUDevice device, void* windowHandle, const VGPUSwapChainDesc* desc)
 {
     NULL_RETURN_NULL(device);
     NULL_RETURN_NULL(windowHandle);
     NULL_RETURN_NULL(desc);
 
-    return device->createSwapChain(device->driverData, windowHandle, desc);
+    VGPUSwapChainDesc def = _vgpuSwapChainDescDef(desc);
+    return device->createSwapChain(device->driverData, windowHandle, &def);
 }
 
 void vgpuDestroySwapChain(VGPUDevice device, VGPUSwapChain swapChain)
@@ -323,6 +334,11 @@ void vgpuBeginRenderPass(VGPUCommandBuffer commandBuffer, const VGPURenderPassDe
 void vgpuEndRenderPass(VGPUCommandBuffer commandBuffer)
 {
     commandBuffer->endRenderPass(commandBuffer->driverData);
+}
+
+void vgpuDraw(VGPUCommandBuffer commandBuffer, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t baseInstance)
+{
+    commandBuffer->draw(commandBuffer->driverData, vertexStart, vertexCount, instanceCount, baseInstance);
 }
 
 void vgpuSubmit(VGPUDevice device, VGPUCommandBuffer* commandBuffers, uint32_t count)

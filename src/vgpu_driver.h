@@ -23,8 +23,10 @@
 #define _VGFX_UNUSED(x) (void)(x)
 #endif
 
-#define _VGFX_COUNT_OF(arr) (sizeof(arr) / sizeof((arr)[0]))
-#define _VGFX_DEF(val, def) (((val) == 0) ? (def) : (val))
+#define _VGPU_COUNT_OF(arr) (sizeof(arr) / sizeof((arr)[0]))
+#define _VGPU_DEF(val, def) (((val) == 0) ? (def) : (val))
+#define _VGPU_MIN(a,b) (((a)<(b))?(a):(b))
+#define _VGPU_MAX(a,b) (((a)>(b))?(a):(b))
 
 #if defined(__clang__)
 // CLANG ENABLE/DISABLE WARNING DEFINITION
@@ -94,6 +96,7 @@ typedef struct VGPUCommandBuffer_T {
     VGPUTexture(*acquireSwapchainTexture)(VGPUCommandBufferImpl* driverData, VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight);
     void (*beginRenderPass)(VGPUCommandBufferImpl* driverData, const VGPURenderPassDesc* desc);
     void (*endRenderPass)(VGPUCommandBufferImpl* driverData);
+    void (*draw)(VGPUCommandBufferImpl* driverData, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t baseInstance);
 
     /* Opaque pointer for the Driver */
     VGPUCommandBufferImpl* driverData;
@@ -111,7 +114,7 @@ typedef struct VGPUDevice_T
     VGPUBuffer(*createBuffer)(VGFXRenderer* driverData, const VGPUBufferDesc* desc, const void* pInitialData);
     void(*destroyBuffer)(VGFXRenderer* driverData, VGPUBuffer resource);
 
-    VGPUTexture(*createTexture)(VGFXRenderer* driverData, const VGFXTextureDesc* desc);
+    VGPUTexture(*createTexture)(VGFXRenderer* driverData, const VGPUTextureDesc* desc);
     void(*destroyTexture)(VGFXRenderer* driverData, VGPUTexture texture);
 
     VGPUSwapChain(*createSwapChain)(VGFXRenderer* driverData, void* windowHandle, const VGPUSwapChainDesc* desc);
@@ -134,7 +137,8 @@ ASSIGN_COMMAND_BUFFER_FUNC(popDebugGroup, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(insertDebugMarker, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(acquireSwapchainTexture, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(beginRenderPass, name) \
-ASSIGN_COMMAND_BUFFER_FUNC(endRenderPass, name) 
+ASSIGN_COMMAND_BUFFER_FUNC(endRenderPass, name) \
+ASSIGN_COMMAND_BUFFER_FUNC(draw, name) 
 
 #define ASSIGN_DRIVER(name) \
 ASSIGN_DRIVER_FUNC(destroyDevice, name) \

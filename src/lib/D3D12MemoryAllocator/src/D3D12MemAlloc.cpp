@@ -6582,6 +6582,8 @@ AllocatorPimpl::AllocatorPimpl(const ALLOCATION_CALLBACKS& allocationCallbacks, 
 
 HRESULT AllocatorPimpl::Init(const ALLOCATOR_DESC& desc)
 {
+    bool notZeroedSupported = false;
+
 #if D3D12MA_DXGI_1_4
     desc.pAdapter->QueryInterface(D3D12MA_IID_PPV_ARGS(&m_Adapter3));
 #endif
@@ -6592,6 +6594,12 @@ HRESULT AllocatorPimpl::Init(const ALLOCATOR_DESC& desc)
 
 #ifdef __ID3D12Device8_INTERFACE_DEFINED__
     m_Device->QueryInterface(D3D12MA_IID_PPV_ARGS(&m_Device8));
+    
+    D3D12_FEATURE_DATA_D3D12_OPTIONS7 options7 = {};
+    if(SUCCEEDED(m_Device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS7, &options7, sizeof(options7))))
+    {
+        notZeroedSupported = true;
+    }
 #endif
 
     HRESULT hr = m_Adapter->GetDesc(&m_AdapterDesc);
@@ -6624,8 +6632,10 @@ HRESULT AllocatorPimpl::Init(const ALLOCATOR_DESC& desc)
         CalcDefaultPoolParams(heapProps.Type, heapFlags, i);
 
 #ifdef __ID3D12Device8_INTERFACE_DEFINED__
-        if (desc.Flags & ALLOCATOR_FLAG_DEFAULT_POOLS_NOT_ZEROED)
+        if ((desc.Flags & ALLOCATOR_FLAG_DEFAULT_POOLS_NOT_ZEROED) != 0 && notZeroedSupported)
+        {
             heapFlags |= D3D12_HEAP_FLAG_CREATE_NOT_ZEROED;
+        }
 #endif
 
         m_BlockVectors[i] = D3D12MA_NEW(GetAllocs(), BlockVector)(

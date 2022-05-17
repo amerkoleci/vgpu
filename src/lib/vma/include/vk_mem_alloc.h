@@ -976,7 +976,7 @@ typedef struct VmaVulkanFunctions
 #if VMA_DEDICATED_ALLOCATION || VMA_VULKAN_VERSION >= 1001000
     /// Fetch "vkGetBufferMemoryRequirements2" on Vulkan >= 1.1, fetch "vkGetBufferMemoryRequirements2KHR" when using VK_KHR_dedicated_allocation extension.
     PFN_vkGetBufferMemoryRequirements2KHR VMA_NULLABLE vkGetBufferMemoryRequirements2KHR;
-    /// Fetch "vkGetImageMemoryRequirements 2" on Vulkan >= 1.1, fetch "vkGetImageMemoryRequirements2KHR" when using VK_KHR_dedicated_allocation extension.
+    /// Fetch "vkGetImageMemoryRequirements2" on Vulkan >= 1.1, fetch "vkGetImageMemoryRequirements2KHR" when using VK_KHR_dedicated_allocation extension.
     PFN_vkGetImageMemoryRequirements2KHR VMA_NULLABLE vkGetImageMemoryRequirements2KHR;
 #endif
 #if VMA_BIND_MEMORY2 || VMA_VULKAN_VERSION >= 1001000
@@ -3376,44 +3376,6 @@ static inline bool VmaStrIsEmpty(const char* pStr)
 {
     return pStr == VMA_NULL || *pStr == '\0';
 }
-
-#ifndef VMA_SORT
-template<typename Iterator, typename Compare>
-Iterator VmaQuickSortPartition(Iterator beg, Iterator end, Compare cmp)
-{
-    Iterator centerValue = end; --centerValue;
-    Iterator insertIndex = beg;
-    for (Iterator memTypeIndex = beg; memTypeIndex < centerValue; ++memTypeIndex)
-    {
-        if (cmp(*memTypeIndex, *centerValue))
-        {
-            if (insertIndex != memTypeIndex)
-            {
-                VMA_SWAP(*memTypeIndex, *insertIndex);
-            }
-            ++insertIndex;
-        }
-    }
-    if (insertIndex != centerValue)
-    {
-        VMA_SWAP(*insertIndex, *centerValue);
-    }
-    return insertIndex;
-}
-
-template<typename Iterator, typename Compare>
-void VmaQuickSort(Iterator beg, Iterator end, Compare cmp)
-{
-    if (beg < end)
-    {
-        Iterator it = VmaQuickSortPartition<Iterator, Compare>(beg, end, cmp);
-        VmaQuickSort<Iterator, Compare>(beg, it, cmp);
-        VmaQuickSort<Iterator, Compare>(it + 1, end, cmp);
-    }
-}
-
-#define VMA_SORT(beg, end, cmp) VmaQuickSort(beg, end, cmp)
-#endif // VMA_SORT
 
 /*
 Returns true if two memory blocks occupy overlapping pages.
@@ -10928,7 +10890,7 @@ public:
     uint32_t GetAlgorithm() const { return m_Algorithm; }
     bool HasExplicitBlockSize() const { return m_ExplicitBlockSize; }
     float GetPriority() const { return m_Priority; }
-    void* const GetAllocationNextPtr() const { return m_pMemoryAllocateNext; }
+    const void* GetAllocationNextPtr() const { return m_pMemoryAllocateNext; }
     // To be used only while the m_Mutex is locked. Used during defragmentation.
     size_t GetBlockCount() const { return m_Blocks.size(); }
     // To be used only while the m_Mutex is locked. Used during defragmentation.
@@ -15906,6 +15868,7 @@ void VmaAllocator_T::UpdateVulkanBudget()
 void VmaAllocator_T::FillAllocation(const VmaAllocation hAllocation, uint8_t pattern)
 {
     if(VMA_DEBUG_INITIALIZE_ALLOCATIONS &&
+        hAllocation->IsMappingAllowed() &&
         (m_MemProps.memoryTypes[hAllocation->GetMemoryTypeIndex()].propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != 0)
     {
         void* pData = VMA_NULL;
@@ -18823,14 +18786,14 @@ To do it, define macro `VMA_DEBUG_INITIALIZE_ALLOCATIONS` to 1.
 #include "vk_mem_alloc.h"
 \endcode
 
-It makes memory of all new allocations initialized to bit pattern `0xDCDCDCDC`.
+It makes memory of new allocations initialized to bit pattern `0xDCDCDCDC`.
 Before an allocation is destroyed, its memory is filled with bit pattern `0xEFEFEFEF`.
 Memory is automatically mapped and unmapped if necessary.
 
 If you find these values while debugging your program, good chances are that you incorrectly
 read Vulkan memory that is allocated but not initialized, or already freed, respectively.
 
-Memory initialization works only with memory types that are `HOST_VISIBLE`.
+Memory initialization works only with memory types that are `HOST_VISIBLE` and with allocations that can be mapped.
 It works also with dedicated allocations.
 
 \section debugging_memory_usage_margins Margins
