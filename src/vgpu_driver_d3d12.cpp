@@ -50,7 +50,7 @@ namespace
 
 #if defined(_DEBUG)
     using PFN_DXGI_GET_DEBUG_INTERFACE1 = decltype(&DXGIGetDebugInterface1);
-    static PFN_DXGI_GET_DEBUG_INTERFACE1 vgfxDXGIGetDebugInterface1 = nullptr;
+    static PFN_DXGI_GET_DEBUG_INTERFACE1 vgpuDXGIGetDebugInterface1 = nullptr;
 #endif
 #endif
 
@@ -108,7 +108,7 @@ struct VGFXD3D12DescriptorAllocator
     {
         heaps.emplace_back();
         HRESULT hr = device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&heaps.back()));
-        VGFX_ASSERT(SUCCEEDED(hr));
+        VGPU_ASSERT(SUCCEEDED(hr));
         D3D12_CPU_DESCRIPTOR_HANDLE heap_start = heaps.back()->GetCPUDescriptorHandleForHeapStart();
         for (UINT i = 0; i < desc.NumDescriptors; ++i)
         {
@@ -125,7 +125,7 @@ struct VGFXD3D12DescriptorAllocator
         {
             BlockAllocate();
         }
-        VGFX_ASSERT(!freelist.empty());
+        VGPU_ASSERT(!freelist.empty());
         D3D12_CPU_DESCRIPTOR_HANDLE handle = freelist.back();
         freelist.pop_back();
         locker.unlock();
@@ -316,13 +316,13 @@ static VGFXD3D12UploadContext d3d12_AllocateUpload(VGFXD3D12Renderer* renderer, 
         VGFXD3D12UploadContext context;
 
         hr = renderer->device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COPY, IID_PPV_ARGS(&context.commandAllocator));
-        VGFX_ASSERT(SUCCEEDED(hr));
+        VGPU_ASSERT(SUCCEEDED(hr));
         hr = renderer->device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COPY, context.commandAllocator, nullptr, IID_PPV_ARGS(&context.commandList));
-        VGFX_ASSERT(SUCCEEDED(hr));
+        VGPU_ASSERT(SUCCEEDED(hr));
         hr = context.commandList->Close();
-        VGFX_ASSERT(SUCCEEDED(hr));
+        VGPU_ASSERT(SUCCEEDED(hr));
         hr = renderer->device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&context.fence));
-        VGFX_ASSERT(SUCCEEDED(hr));
+        VGPU_ASSERT(SUCCEEDED(hr));
 
         renderer->uploadFreeList.push_back(context);
     }
@@ -375,18 +375,18 @@ static VGFXD3D12UploadContext d3d12_AllocateUpload(VGFXD3D12Renderer* renderer, 
             &context.uploadBufferAllocation,
             IID_PPV_ARGS(&context.uploadBuffer)
         );
-        VGFX_ASSERT(SUCCEEDED(hr));
+        VGPU_ASSERT(SUCCEEDED(hr));
 
         D3D12_RANGE readRange = {};
         hr = context.uploadBuffer->Map(0, &readRange, &context.uploadBufferData);
-        VGFX_ASSERT(SUCCEEDED(hr));
+        VGPU_ASSERT(SUCCEEDED(hr));
     }
 
     // Begin command list in valid state
     hr = context.commandAllocator->Reset();
-    VGFX_ASSERT(SUCCEEDED(hr));
+    VGPU_ASSERT(SUCCEEDED(hr));
     hr = context.commandList->Reset(context.commandAllocator, nullptr);
-    VGFX_ASSERT(SUCCEEDED(hr));
+    VGPU_ASSERT(SUCCEEDED(hr));
 
     return context;
 }
@@ -394,7 +394,7 @@ static VGFXD3D12UploadContext d3d12_AllocateUpload(VGFXD3D12Renderer* renderer, 
 static void d3d12_UploadSubmit(VGFXD3D12Renderer* renderer, VGFXD3D12UploadContext context)
 {
     HRESULT hr = context.commandList->Close();
-    VGFX_ASSERT(SUCCEEDED(hr));
+    VGPU_ASSERT(SUCCEEDED(hr));
 
     ID3D12CommandList* commandlists[] = {
         context.commandList
@@ -402,11 +402,11 @@ static void d3d12_UploadSubmit(VGFXD3D12Renderer* renderer, VGFXD3D12UploadConte
     renderer->copyQueue->ExecuteCommandLists(1, commandlists);
 
     hr = renderer->copyQueue->Signal(context.fence, 1);
-    VGFX_ASSERT(SUCCEEDED(hr));
+    VGPU_ASSERT(SUCCEEDED(hr));
     hr = context.fence->SetEventOnCompletion(1, nullptr);
-    VGFX_ASSERT(SUCCEEDED(hr));
+    VGPU_ASSERT(SUCCEEDED(hr));
     hr = context.fence->Signal(0);
-    VGFX_ASSERT(SUCCEEDED(hr));
+    VGPU_ASSERT(SUCCEEDED(hr));
 
     renderer->uploadLocker.lock();
     renderer->uploadFreeList.push_back(context);
@@ -420,7 +420,7 @@ static void d3d12_destroyDevice(VGPUDevice device)
 
     VGFXD3D12Renderer* renderer = (VGFXD3D12Renderer*)device->driverData;
 
-    VGFX_ASSERT(renderer->frameCount == renderer->GPUFrameCount);
+    VGPU_ASSERT(renderer->frameCount == renderer->GPUFrameCount);
     renderer->shuttingDown = true;
 
     renderer->frameCount = UINT64_MAX;
@@ -435,12 +435,12 @@ static void d3d12_destroyDevice(VGPUDevice device)
     {
         ComPtr<ID3D12Fence> fence;
         HRESULT hr = renderer->device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence));
-        VGFX_ASSERT(SUCCEEDED(hr));
+        VGPU_ASSERT(SUCCEEDED(hr));
 
         hr = renderer->copyQueue->Signal(fence.Get(), 1);
-        VGFX_ASSERT(SUCCEEDED(hr));
+        VGPU_ASSERT(SUCCEEDED(hr));
         hr = fence->SetEventOnCompletion(1, nullptr);
-        VGFX_ASSERT(SUCCEEDED(hr));
+        VGPU_ASSERT(SUCCEEDED(hr));
 
         for (auto& item : renderer->uploadFreeList)
         {
@@ -516,8 +516,8 @@ static void d3d12_destroyDevice(VGPUDevice device)
 #if defined(_DEBUG) && WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
     {
         ComPtr<IDXGIDebug1> dxgiDebug;
-        if (vgfxDXGIGetDebugInterface1 != nullptr
-            && SUCCEEDED(vgfxDXGIGetDebugInterface1(0, IID_PPV_ARGS(&dxgiDebug))))
+        if (vgpuDXGIGetDebugInterface1 != nullptr
+            && SUCCEEDED(vgpuDXGIGetDebugInterface1(0, IID_PPV_ARGS(&dxgiDebug))))
         {
             dxgiDebug->ReportLiveObjects(VGFX_DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_FLAGS(DXGI_DEBUG_RLO_SUMMARY | DXGI_DEBUG_RLO_IGNORE_INTERNAL));
         }
@@ -525,7 +525,7 @@ static void d3d12_destroyDevice(VGPUDevice device)
 #endif
 
     delete renderer;
-    VGFX_FREE(device);
+    VGPU_FREE(device);
 }
 
 static void d3d12_updateSwapChain(VGFXD3D12Renderer* renderer, VGFXD3D12SwapChain* swapChain)
@@ -534,7 +534,7 @@ static void d3d12_updateSwapChain(VGFXD3D12Renderer* renderer, VGFXD3D12SwapChai
 
     DXGI_SWAP_CHAIN_DESC1 swapChainDesc;
     hr = swapChain->handle->GetDesc1(&swapChainDesc);
-    VGFX_ASSERT(SUCCEEDED(hr));
+    VGPU_ASSERT(SUCCEEDED(hr));
 
     swapChain->width = swapChainDesc.Width;
     swapChain->height = swapChainDesc.Height;
@@ -547,7 +547,7 @@ static void d3d12_updateSwapChain(VGFXD3D12Renderer* renderer, VGFXD3D12SwapChai
         texture->height = swapChainDesc.Height;
         texture->dxgiFormat = ToDXGIFormat(swapChain->textureFormat);
         hr = swapChain->handle->GetBuffer(i, IID_PPV_ARGS(&texture->handle));
-        VGFX_ASSERT(SUCCEEDED(hr));
+        VGPU_ASSERT(SUCCEEDED(hr));
 
         wchar_t name[25] = {};
         swprintf_s(name, L"Render target %u", i);
@@ -576,13 +576,13 @@ static uint64_t d3d12_frame(VGFXRenderer* driverData)
     hr = renderer->graphicsQueue->Signal(renderer->frameFence, renderer->frameCount);
     if (FAILED(hr))
     {
-        vgfxLogError("Failed to signal frame");
+        vgpuLogError("Failed to signal frame");
         return (uint64_t)(-1);
     }
 
     // Wait for the GPU to catch up before we stomp an executing command buffer
     const uint64_t gpuLag = renderer->frameCount - renderer->GPUFrameCount;
-    VGFX_ASSERT(gpuLag <= VGPU_MAX_INFLIGHT_FRAMES);
+    VGPU_ASSERT(gpuLag <= VGPU_MAX_INFLIGHT_FRAMES);
     if (gpuLag >= VGPU_MAX_INFLIGHT_FRAMES)
     {
         // Make sure that the previous frame is finished
@@ -610,7 +610,7 @@ static void d3d12_waitIdle(VGFXRenderer* driverData)
     VGFXD3D12Renderer* renderer = (VGFXD3D12Renderer*)driverData;
 
     // Wait for the GPU to fully catch up with the CPU
-    VGFX_ASSERT(renderer->frameCount >= renderer->GPUFrameCount);
+    VGPU_ASSERT(renderer->frameCount >= renderer->GPUFrameCount);
     if (renderer->frameCount > renderer->GPUFrameCount)
     {
         if (renderer->frameFence->GetCompletedValue() < renderer->frameCount)
@@ -778,18 +778,18 @@ static VGPUTexture d3d12_createTexture(VGFXRenderer* driverData, const VGPUTextu
     resourceDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
     resourceDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
 
-    if (desc->usage & VGFXTextureUsage_ShaderWrite)
+    if (desc->usage & VGPU_TEXTURE_USAGE_SHADER_WRITE)
     {
         resourceDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     }
 
-    if (desc->usage & VGFXTextureUsage_RenderTarget)
+    if (desc->usage & VGPU_TEXTURE_USAGE_RENDER_TARGET)
     {
-        if (vgfxIsDepthStencilFormat(desc->format))
+        if (vgpuIsDepthStencilFormat(desc->format))
         {
             resourceDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
 
-            if (!(desc->usage & VGFXTextureUsage_ShaderRead))
+            if (!(desc->usage & VGPU_TEXTURE_USAGE_SHADER_READ))
             {
                 resourceDesc.Flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
             }
@@ -803,10 +803,10 @@ static VGPUTexture d3d12_createTexture(VGFXRenderer* driverData, const VGPUTextu
     D3D12_CLEAR_VALUE clearValue = {};
     D3D12_CLEAR_VALUE* pClearValue = nullptr;
 
-    if (desc->usage & VGFXTextureUsage_RenderTarget)
+    if (desc->usage & VGPU_TEXTURE_USAGE_RENDER_TARGET)
     {
         clearValue.Format = resourceDesc.Format;
-        if (vgfxIsDepthStencilFormat(desc->format))
+        if (vgpuIsDepthStencilFormat(desc->format))
         {
             clearValue.DepthStencil.Depth = 1.0f;
         }
@@ -814,7 +814,7 @@ static VGPUTexture d3d12_createTexture(VGFXRenderer* driverData, const VGPUTextu
     }
 
     // If shader read/write and depth format, set to typeless
-    if (vgfxIsDepthFormat(desc->format) && desc->usage & (VGFXTextureUsage_ShaderRead | VGFXTextureUsage_ShaderWrite))
+    if (vgpuIsDepthFormat(desc->format) && desc->usage & (VGPU_TEXTURE_USAGE_SHADER_READ | VGPU_TEXTURE_USAGE_SHADER_WRITE))
     {
         resourceDesc.Format = GetTypelessFormatFromDepthFormat(desc->format);
         pClearValue = nullptr;
@@ -838,7 +838,7 @@ static VGPUTexture d3d12_createTexture(VGFXRenderer* driverData, const VGPUTextu
 
     if (FAILED(hr))
     {
-        vgfxLogError("D3D11: Failed to create texture");
+        vgpuLogError("D3D11: Failed to create texture");
         delete texture;
         return nullptr;
     }
@@ -952,13 +952,13 @@ static void d3d12_TransitionResource(D3D12CommandBuffer* commandBuffer, D3D12Res
 
     if (commandBuffer->type == D3D12_COMMAND_LIST_TYPE_COMPUTE)
     {
-        VGFX_ASSERT((oldState & VALID_COMPUTE_QUEUE_RESOURCE_STATES) == oldState);
-        VGFX_ASSERT((newState & VALID_COMPUTE_QUEUE_RESOURCE_STATES) == newState);
+        VGPU_ASSERT((oldState & VALID_COMPUTE_QUEUE_RESOURCE_STATES) == oldState);
+        VGPU_ASSERT((newState & VALID_COMPUTE_QUEUE_RESOURCE_STATES) == newState);
     }
 
     if (oldState != newState)
     {
-        VGFX_ASSERT(commandBuffer->numBarriersToFlush < 16 && "Exceeded arbitrary limit on buffered barriers");
+        VGPU_ASSERT(commandBuffer->numBarriersToFlush < 16 && "Exceeded arbitrary limit on buffered barriers");
         D3D12_RESOURCE_BARRIER& BarrierDesc = commandBuffer->resourceBarriers[commandBuffer->numBarriersToFlush++];
 
         BarrierDesc.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
@@ -1110,7 +1110,7 @@ static void d3d12_endRenderPass(VGPUCommandBufferImpl* driverData)
 
 static void d3d12_prepareDraw(D3D12CommandBuffer* commandBuffer)
 {
-    VGFX_ASSERT(commandBuffer->insideRenderPass);
+    VGPU_ASSERT(commandBuffer->insideRenderPass);
 }
 
 static void d3d12_draw(VGPUCommandBufferImpl* driverData, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t baseInstance)
@@ -1138,15 +1138,15 @@ static VGPUCommandBuffer d3d12_beginCommandBuffer(VGFXRenderer* driverData, cons
         for (uint32_t i = 0; i < VGPU_MAX_INFLIGHT_FRAMES; ++i)
         {
             hr = renderer->device->CreateCommandAllocator(impl->type, IID_PPV_ARGS(&impl->commandAllocators[i]));
-            VGFX_ASSERT(SUCCEEDED(hr));
+            VGPU_ASSERT(SUCCEEDED(hr));
         }
 
         hr = renderer->device->CreateCommandList1(0, impl->type, D3D12_COMMAND_LIST_FLAG_NONE,
             IID_PPV_ARGS(&impl->commandList)
         );
-        VGFX_ASSERT(SUCCEEDED(hr));
+        VGPU_ASSERT(SUCCEEDED(hr));
 
-        VGPUCommandBuffer_T* commandBuffer = (VGPUCommandBuffer_T*)VGFX_MALLOC(sizeof(VGPUCommandBuffer_T));
+        VGPUCommandBuffer_T* commandBuffer = (VGPUCommandBuffer_T*)VGPU_MALLOC(sizeof(VGPUCommandBuffer_T));
         ASSIGN_COMMAND_BUFFER(d3d12);
         commandBuffer->driverData = (VGPUCommandBufferImpl*)impl;
 
@@ -1161,9 +1161,9 @@ static VGPUCommandBuffer d3d12_beginCommandBuffer(VGFXRenderer* driverData, cons
 
     // Start the command list in a default state.
     hr = impl->commandAllocators[renderer->frameIndex]->Reset();
-    VGFX_ASSERT(SUCCEEDED(hr));
+    VGPU_ASSERT(SUCCEEDED(hr));
     hr = impl->commandList->Reset(impl->commandAllocators[renderer->frameIndex], nullptr);
-    VGFX_ASSERT(SUCCEEDED(hr));
+    VGPU_ASSERT(SUCCEEDED(hr));
 
     //ID3D12DescriptorHeap* heaps[2] = {
     //    renderer->resourceHeap.handle,
@@ -1226,7 +1226,7 @@ static void d3d12_submit(VGFXRenderer* driverData, VGPUCommandBuffer* commandBuf
         hr = commandBuffer->commandList->Close();
         if (FAILED(hr))
         {
-            vgfxLogError("Failed to close command list");
+            vgpuLogError("Failed to close command list");
             return;
         }
 
@@ -1300,7 +1300,7 @@ static bool d3d12_isSupported(void)
     }
 
 #if defined(_DEBUG)
-    vgfxDXGIGetDebugInterface1 = (PFN_DXGI_GET_DEBUG_INTERFACE1)GetProcAddress(dxgiDLL, "DXGIGetDebugInterface1");
+    vgpuDXGIGetDebugInterface1 = (PFN_DXGI_GET_DEBUG_INTERFACE1)GetProcAddress(dxgiDLL, "DXGIGetDebugInterface1");
 #endif
 
     vgfxD3D12GetDebugInterface = (PFN_D3D12_GET_DEBUG_INTERFACE)GetProcAddress(d3d12DLL, "D3D12GetDebugInterface");
@@ -1355,7 +1355,7 @@ static bool d3d12_isSupported(void)
 
 static VGPUDevice d3d12_createDevice(const VGPUDeviceDesc* info)
 {
-    VGFX_ASSERT(info);
+    VGPU_ASSERT(info);
 
     VGFXD3D12Renderer* renderer = new VGFXD3D12Renderer();
 
@@ -1390,7 +1390,8 @@ static VGPUDevice d3d12_createDevice(const VGPUDeviceDesc* info)
 
 #if defined(_DEBUG) && WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
         ComPtr<IDXGIInfoQueue> dxgiInfoQueue;
-        if (SUCCEEDED(vgfxDXGIGetDebugInterface1(0, IID_PPV_ARGS(dxgiInfoQueue.GetAddressOf()))))
+        if (vgpuDXGIGetDebugInterface1 != nullptr &&
+            SUCCEEDED(vgpuDXGIGetDebugInterface1(0, IID_PPV_ARGS(dxgiInfoQueue.GetAddressOf()))))
         {
             dxgiFactoryFlags = DXGI_CREATE_FACTORY_DEBUG;
 
@@ -1483,10 +1484,10 @@ static VGPUDevice d3d12_createDevice(const VGPUDeviceDesc* info)
                 break;
         }
 
-        VGFX_ASSERT(dxgiAdapter != nullptr);
+        VGPU_ASSERT(dxgiAdapter != nullptr);
         if (dxgiAdapter == nullptr)
         {
-            vgfxLogError("DXGI: No capable adapter found!");
+            vgpuLogError("DXGI: No capable adapter found!");
             delete renderer;
             return nullptr;
         }
@@ -1612,8 +1613,8 @@ static VGPUDevice d3d12_createDevice(const VGPUDeviceDesc* info)
             renderer->featureLevel = D3D_FEATURE_LEVEL_11_0;
         }
 
-        vgfxLogInfo("VGPU Driver: D3D12");
-        vgfxLogInfo("D3D12 Adapter: %S", adapterDesc.Description);
+        vgpuLogInfo("VGPU Driver: D3D12");
+        vgpuLogInfo("D3D12 Adapter: %S", adapterDesc.Description);
     }
 
     // Create command queues
@@ -1659,7 +1660,7 @@ static VGPUDevice d3d12_createDevice(const VGPUDeviceDesc* info)
         }
     }
 
-    VGPUDevice_T* device = (VGPUDevice_T*)VGFX_MALLOC(sizeof(VGPUDevice_T));
+    VGPUDevice_T* device = (VGPUDevice_T*)VGPU_MALLOC(sizeof(VGPUDevice_T));
     ASSIGN_DRIVER(d3d12);
     device->driverData = (VGFXRenderer*)renderer;
     return device;

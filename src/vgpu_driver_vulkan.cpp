@@ -5,12 +5,12 @@
 
 #include "vgpu_driver.h"
 
-VGFX_DISABLE_WARNINGS()
+VGPU_DISABLE_WARNINGS()
 #include "volk.h"
 #define VMA_IMPLEMENTATION
 #include "vk_mem_alloc.h"
 #include <spirv_reflect.h>
-VGFX_ENABLE_WARNINGS()
+VGPU_ENABLE_WARNINGS()
 #include <vector>
 #include <deque>
 #include <mutex>
@@ -71,7 +71,7 @@ namespace
         const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
         void* pUserData)
     {
-        _VGFX_UNUSED(pUserData);
+        _VGPU_UNUSED(pUserData);
 
         const char* messageTypeStr = "General";
 
@@ -83,11 +83,11 @@ namespace
         // Log debug messge
         if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
         {
-            vgfxLogWarn("Vulkan - %s: %s", messageTypeStr, pCallbackData->pMessage);
+            vgpuLogWarn("Vulkan - %s: %s", messageTypeStr, pCallbackData->pMessage);
         }
         else if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
         {
-            vgfxLogError("Vulkan - %s: %s", messageTypeStr, pCallbackData->pMessage);
+            vgpuLogError("Vulkan - %s: %s", messageTypeStr, pCallbackData->pMessage);
         }
 
         return VK_FALSE;
@@ -109,7 +109,7 @@ namespace
 
             if (!found)
             {
-                vgfxLogWarn("Validation Layer '%s' not found", layer);
+                vgpuLogWarn("Validation Layer '%s' not found", layer);
                 return false;
             }
         }
@@ -147,7 +147,7 @@ namespace
                 return validation_layers;
             }
 
-            vgfxLogWarn("Couldn't enable validation layers (see log for error) - falling back");
+            vgpuLogWarn("Couldn't enable validation layers (see log for error) - falling back");
         }
 
         // Else return nothing
@@ -503,11 +503,11 @@ namespace
 		VkResult err = x; \
 		if (err) \
 		{ \
-			vgfxLogError("Detected Vulkan error: %s", ToString(err)); \
+			vgpuLogError("Detected Vulkan error: %s", ToString(err)); \
 		} \
 	} while (0)
 
-#define VK_LOG_ERROR(result, message) vgfxLogError("Vulkan: %s, error: %s", message, ToString(result));
+#define VK_LOG_ERROR(result, message) vgpuLogError("Vulkan: %s, error: %s", message, ToString(result));
 
 struct VGFXVulkanRenderer;
 
@@ -1147,7 +1147,7 @@ static void vulkan_destroyDevice(VGPUDevice device)
 
         //if (stats.total.usedBytes > 0)
         //{
-        //    vgfxLogError("Total device memory leaked: {} bytes.", stats.total.usedBytes);
+        //    vgpuLogError("Total device memory leaked: {} bytes.", stats.total.usedBytes);
         //}
 
         vmaDestroyAllocator(renderer->allocator);
@@ -1181,7 +1181,7 @@ static void vulkan_destroyDevice(VGPUDevice device)
 #endif
 
     delete renderer;
-    VGFX_FREE(device);
+    VGPU_FREE(device);
 }
 
 static uint64_t vulkan_frame(VGFXRenderer* driverData)
@@ -1202,25 +1202,24 @@ static uint64_t vulkan_frame(VGFXRenderer* driverData)
         if (renderer->frameCount >= VGPU_MAX_INFLIGHT_FRAMES)
         {
             result = vkWaitForFences(renderer->device, 1, &frame.fence, VK_TRUE, 0xFFFFFFFFFFFFFFFF);
-            VGFX_ASSERT(result == VK_SUCCESS);
+            VGPU_ASSERT(result == VK_SUCCESS);
 
             result = vkResetFences(renderer->device, 1, &frame.fence);
-            VGFX_ASSERT(result == VK_SUCCESS);
+            VGPU_ASSERT(result == VK_SUCCESS);
         }
-
 
         // Safe delete deferred destroys
         vulkan_ProcessDeletionQueue(renderer);
 
         // Restart transition command buffers first.
         result = vkResetCommandPool(renderer->device, frame.initCommandPool, 0);
-        VGFX_ASSERT(result == VK_SUCCESS);
+        VGPU_ASSERT(result == VK_SUCCESS);
 
         VkCommandBufferBeginInfo beginInfo = {};
         beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
         result = vkBeginCommandBuffer(frame.initCommandBuffer, &beginInfo);
-        VGFX_ASSERT(result == VK_SUCCESS);
+        VGPU_ASSERT(result == VK_SUCCESS);
     }
 
     renderer->submitInits = false;
@@ -1352,35 +1351,35 @@ static VGPUBuffer vulkan_createBuffer(VGFXRenderer* driverData, const VGPUBuffer
     bufferInfo.size = desc->size;
     bufferInfo.usage = 0;
 
-    if (desc->usage & VGFXBufferUsage_Vertex)
+    if (desc->usage & VGPU_BUFFER_USAGE_VERTEX)
     {
         bufferInfo.usage |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
     }
 
-    if (desc->usage & VGFXBufferUsage_Index)
+    if (desc->usage & VGPU_BUFFER_USAGE_INDEX)
     {
         bufferInfo.usage |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
     }
 
-    if (desc->usage & VGFXBufferUsage_Uniform)
+    if (desc->usage & VGPU_BUFFER_USAGE_UNIFORM)
     {
         bufferInfo.size = VmaAlignUp(bufferInfo.size, renderer->properties2.properties.limits.minUniformBufferOffsetAlignment);
         bufferInfo.usage |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
     }
 
-    if (desc->usage & VGFXBufferUsage_ShaderRead)
+    if (desc->usage & VGPU_BUFFER_USAGE_SHADER_READ)
     {
         bufferInfo.usage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
         bufferInfo.usage |= VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT;
     }
 
-    if (desc->usage & VGFXBufferUsage_ShaderWrite)
+    if (desc->usage & VGPU_BUFFER_USAGE_SHADER_WRITE)
     {
         bufferInfo.usage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
         bufferInfo.usage |= VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT;
     }
 
-    if (desc->usage & VGFXBufferUsage_Indirect)
+    if (desc->usage & VGPU_BUFFER_USAGE_INDIRECT)
     {
         bufferInfo.usage |= VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
     }
@@ -1398,7 +1397,7 @@ static VGPUBuffer vulkan_createBuffer(VGFXRenderer* driverData, const VGPUBuffer
     //}
 
     if (renderer->features_1_2.bufferDeviceAddress == VK_TRUE &&
-        desc->usage & (VGFXBufferUsage_Vertex | VGFXBufferUsage_Index/* | VGFXBufferUsage_RayTracing*/))
+        desc->usage & (VGPU_BUFFER_USAGE_VERTEX | VGPU_BUFFER_USAGE_INDEX/* | VGFXBufferUsage_RayTracing*/))
     {
         bufferInfo.usage |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
     }
@@ -1527,15 +1526,15 @@ static VGPUTexture vulkan_createTexture(VGFXRenderer* driverData, const VGPUText
     imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
     imageInfo.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 
-    if (desc->usage & VGFXTextureUsage_ShaderRead)
+    if (desc->usage & VGPU_TEXTURE_USAGE_SHADER_READ)
         imageInfo.usage |= VK_IMAGE_USAGE_SAMPLED_BIT;
 
-    if (desc->usage & VGFXTextureUsage_ShaderWrite)
+    if (desc->usage & VGPU_TEXTURE_USAGE_SHADER_WRITE)
         imageInfo.usage |= VK_IMAGE_USAGE_STORAGE_BIT;
 
-    if (desc->usage & VGFXTextureUsage_RenderTarget)
+    if (desc->usage & VGPU_TEXTURE_USAGE_RENDER_TARGET)
     {
-        if (vgfxIsDepthStencilFormat(desc->format))
+        if (vgpuIsDepthStencilFormat(desc->format))
         {
             imageInfo.usage |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
         }
@@ -1586,7 +1585,7 @@ static VGPUTexture vulkan_createTexture(VGFXRenderer* driverData, const VGPUText
 
     if (result != VK_SUCCESS)
     {
-        vgfxLogError("Vulkan: Failed to create texture");
+        vgpuLogError("Vulkan: Failed to create texture");
         delete texture;
         return nullptr;
     }
@@ -1750,13 +1749,13 @@ static void vulkan_updateSwapChain(VGFXVulkanRenderer* renderer, VulkanSwapChain
     if (swapChain->acquireSemaphore == VK_NULL_HANDLE)
     {
         result = vkCreateSemaphore(renderer->device, &semaphoreInfo, nullptr, &swapChain->acquireSemaphore);
-        VGFX_ASSERT(result == VK_SUCCESS);
+        VGPU_ASSERT(result == VK_SUCCESS);
     }
 
     if (swapChain->releaseSemaphore == VK_NULL_HANDLE)
     {
         result = vkCreateSemaphore(renderer->device, &semaphoreInfo, nullptr, &swapChain->releaseSemaphore);
-        VGFX_ASSERT(result == VK_SUCCESS);
+        VGPU_ASSERT(result == VK_SUCCESS);
     }
 
     if (createInfo.imageFormat == VK_FORMAT_B8G8R8A8_UNORM)
@@ -2148,7 +2147,7 @@ static void vulkan_endRenderPass(VGPUCommandBufferImpl* driverData)
 
 static void vulkan_prepareDraw(VulkanCommandBuffer* commandBuffer)
 {
-    VGFX_ASSERT(commandBuffer->insideRenderPass);
+    VGPU_ASSERT(commandBuffer->insideRenderPass);
 }
 
 static void vulkan_draw(VGPUCommandBufferImpl* driverData, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t baseInstance)
@@ -2188,7 +2187,7 @@ static VGPUCommandBuffer vulkan_beginCommandBuffer(VGFXRenderer* driverData, con
             //binderPools[i].Init(device);
         }
 
-        VGPUCommandBuffer_T* commandBuffer = (VGPUCommandBuffer_T*)VGFX_MALLOC(sizeof(VGPUCommandBuffer_T));
+        VGPUCommandBuffer_T* commandBuffer = (VGPUCommandBuffer_T*)VGPU_MALLOC(sizeof(VGPUCommandBuffer_T));
         ASSIGN_COMMAND_BUFFER(vulkan);
         commandBuffer->driverData = (VGPUCommandBufferImpl*)impl;
 
@@ -2260,7 +2259,7 @@ static void vulkan_submit(VGFXRenderer* driverData, VGPUCommandBuffer* commandBu
         if (renderer->submitInits)
         {
             result = vkEndCommandBuffer(frame.initCommandBuffer);
-            VGFX_ASSERT(result == VK_SUCCESS);
+            VGPU_ASSERT(result == VK_SUCCESS);
             submitCommandBuffers.push_back(frame.initCommandBuffer);
         }
 
@@ -2303,7 +2302,7 @@ static void vulkan_submit(VGFXRenderer* driverData, VGPUCommandBuffer* commandBu
             }
 
             result = vkEndCommandBuffer(commandBuffer->handle);
-            VGFX_ASSERT(result == VK_SUCCESS);
+            VGPU_ASSERT(result == VK_SUCCESS);
             submitCommandBuffers.push_back(commandBuffer->handle);
         }
 
@@ -2319,7 +2318,7 @@ static void vulkan_submit(VGFXRenderer* driverData, VGPUCommandBuffer* commandBu
         submitInfo.pSignalSemaphores = signalSemaphores.data();
 
         result = vkQueueSubmit(renderer->graphicsQueue, 1, &submitInfo, frame.fence);
-        VGFX_ASSERT(result == VK_SUCCESS);
+        VGPU_ASSERT(result == VK_SUCCESS);
 
         if (!presentSwapChains.empty())
         {
@@ -2340,7 +2339,7 @@ static void vulkan_submit(VGFXRenderer* driverData, VGPUCommandBuffer* commandBu
                 }
                 else
                 {
-                    VGFX_ASSERT(false);
+                    VGPU_ASSERT(false);
                 }
             }
         }
@@ -2559,7 +2558,7 @@ static VGPUDevice vulkan_createDevice(const VGPUDeviceDesc* info)
         }
 
 #ifdef _DEBUG
-        vgfxLogInfo("Created VkInstance with version: %d.%d.%d",
+        vgpuLogInfo("Created VkInstance with version: %d.%d.%d",
             VK_VERSION_MAJOR(appInfo.apiVersion),
             VK_VERSION_MINOR(appInfo.apiVersion),
             VK_VERSION_PATCH(appInfo.apiVersion)
@@ -2567,18 +2566,18 @@ static VGPUDevice vulkan_createDevice(const VGPUDeviceDesc* info)
 
         if (createInfo.enabledLayerCount)
         {
-            vgfxLogInfo("Enabled %d Validation Layers:", createInfo.enabledLayerCount);
+            vgpuLogInfo("Enabled %d Validation Layers:", createInfo.enabledLayerCount);
 
             for (uint32_t i = 0; i < createInfo.enabledLayerCount; ++i)
             {
-                vgfxLogInfo("	\t%s", createInfo.ppEnabledLayerNames[i]);
+                vgpuLogInfo("	\t%s", createInfo.ppEnabledLayerNames[i]);
             }
         }
 
-        vgfxLogInfo("Enabled %d Instance Extensions:", createInfo.enabledExtensionCount);
+        vgpuLogInfo("Enabled %d Instance Extensions:", createInfo.enabledExtensionCount);
         for (uint32_t i = 0; i < createInfo.enabledExtensionCount; ++i)
         {
-            vgfxLogInfo("	\t%s", createInfo.ppEnabledExtensionNames[i]);
+            vgpuLogInfo("	\t%s", createInfo.ppEnabledExtensionNames[i]);
         }
 #endif
     }
@@ -2590,7 +2589,7 @@ static VGPUDevice vulkan_createDevice(const VGPUDeviceDesc* info)
 
         if (deviceCount == 0)
         {
-            vgfxLogError("Vulkan: Failed to find GPUs with Vulkan support");
+            vgpuLogError("Vulkan: Failed to find GPUs with Vulkan support");
             delete renderer;
             return nullptr;
         }
@@ -2705,7 +2704,7 @@ static VGPUDevice vulkan_createDevice(const VGPUDeviceDesc* info)
 
             if (physicalDeviceExt.accelerationStructure)
             {
-                VGFX_ASSERT(physicalDeviceExt.deferred_host_operations);
+                VGPU_ASSERT(physicalDeviceExt.deferred_host_operations);
 
                 // Required by VK_KHR_acceleration_structure
                 enabledExtensions.push_back(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME);
@@ -2745,7 +2744,7 @@ static VGPUDevice vulkan_createDevice(const VGPUDeviceDesc* info)
 
             if (physicalDeviceExt.fragment_shading_rate)
             {
-                VGFX_ASSERT(physicalDeviceExt.renderPass2 == true);
+                VGPU_ASSERT(physicalDeviceExt.renderPass2 == true);
                 enabledExtensions.push_back(VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME);
                 renderer->fragment_shading_rate_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_FEATURES_KHR;
                 *features_chain = &renderer->fragment_shading_rate_features;
@@ -2833,7 +2832,7 @@ static VGPUDevice vulkan_createDevice(const VGPUDeviceDesc* info)
 
         if (renderer->physicalDevice == VK_NULL_HANDLE)
         {
-            vgfxLogError("Vulkan: Failed to find a suitable GPU");
+            vgpuLogError("Vulkan: Failed to find a suitable GPU");
             delete renderer;
             return nullptr;
         }
@@ -2889,7 +2888,7 @@ static VGPUDevice vulkan_createDevice(const VGPUDeviceDesc* info)
         if (!FindVacantQueue(renderer->graphicsQueueFamily, graphicsQueueIndex,
             VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT, 0, 0.5f))
         {
-            vgfxLogError("Vulkan: Could not find suitable graphics queue.");
+            vgpuLogError("Vulkan: Could not find suitable graphics queue.");
             delete renderer;
             return nullptr;
         }
@@ -2953,10 +2952,10 @@ static VGPUDevice vulkan_createDevice(const VGPUDeviceDesc* info)
         vkGetDeviceQueue(renderer->device, renderer->copyQueueFamily, copyQueueIndex, &renderer->copyQueue);
 
 #ifdef _DEBUG
-        vgfxLogInfo("Enabled %d Device Extensions:", createInfo.enabledExtensionCount);
+        vgpuLogInfo("Enabled %d Device Extensions:", createInfo.enabledExtensionCount);
         for (uint32_t i = 0; i < createInfo.enabledExtensionCount; ++i)
         {
-            vgfxLogInfo("	\t%s", createInfo.ppEnabledExtensionNames[i]);
+            vgpuLogInfo("	\t%s", createInfo.ppEnabledExtensionNames[i]);
         }
 #endif
 
@@ -3095,7 +3094,7 @@ static VGPUDevice vulkan_createDevice(const VGPUDeviceDesc* info)
         VmaAllocationCreateInfo bufferAllocInfo = {};
         bufferAllocInfo.preferredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
         VkResult result = vmaCreateBuffer(renderer->allocator, &bufferInfo, &bufferAllocInfo, &renderer->nullBuffer, &renderer->nullBufferAllocation, nullptr);
-        VGFX_ASSERT(result == VK_SUCCESS);
+        VGPU_ASSERT(result == VK_SUCCESS);
 
         VkBufferViewCreateInfo bufferViewInfo = {};
         bufferViewInfo.sType = VK_STRUCTURE_TYPE_BUFFER_VIEW_CREATE_INFO;
@@ -3103,7 +3102,7 @@ static VGPUDevice vulkan_createDevice(const VGPUDeviceDesc* info)
         bufferViewInfo.range = VK_WHOLE_SIZE;
         bufferViewInfo.buffer = renderer->nullBuffer;
         result = vkCreateBufferView(renderer->device, &bufferViewInfo, nullptr, &renderer->nullBufferView);
-        VGFX_ASSERT(result == VK_SUCCESS);
+        VGPU_ASSERT(result == VK_SUCCESS);
 
         VkImageCreateInfo imageInfo = {};
         imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -3123,19 +3122,19 @@ static VGPUDevice vulkan_createDevice(const VGPUDeviceDesc* info)
         allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
         imageInfo.imageType = VK_IMAGE_TYPE_1D;
         result = vmaCreateImage(renderer->allocator, &imageInfo, &allocInfo, &renderer->nullImage1D, &renderer->nullImageAllocation1D, nullptr);
-        VGFX_ASSERT(result == VK_SUCCESS);
+        VGPU_ASSERT(result == VK_SUCCESS);
 
         imageInfo.imageType = VK_IMAGE_TYPE_2D;
         imageInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
         imageInfo.arrayLayers = 6;
         result = vmaCreateImage(renderer->allocator, &imageInfo, &allocInfo, &renderer->nullImage2D, &renderer->nullImageAllocation2D, nullptr);
-        VGFX_ASSERT(result == VK_SUCCESS);
+        VGPU_ASSERT(result == VK_SUCCESS);
 
         imageInfo.imageType = VK_IMAGE_TYPE_3D;
         imageInfo.flags = 0;
         imageInfo.arrayLayers = 1;
         result = vmaCreateImage(renderer->allocator, &imageInfo, &allocInfo, &renderer->nullImage3D, &renderer->nullImageAllocation3D, nullptr);
-        VGFX_ASSERT(result == VK_SUCCESS);
+        VGPU_ASSERT(result == VK_SUCCESS);
 
         // Transitions:
         renderer->initLocker.lock();
@@ -3200,51 +3199,51 @@ static VGPUDevice vulkan_createDevice(const VGPUDeviceDesc* info)
         imageViewInfo.subresourceRange.baseMipLevel = 0;
         imageViewInfo.subresourceRange.levelCount = 1;
         result = vkCreateImageView(renderer->device, &imageViewInfo, nullptr, &renderer->nullImageView1D);
-        VGFX_ASSERT(result == VK_SUCCESS);
+        VGPU_ASSERT(result == VK_SUCCESS);
 
         imageViewInfo.image = renderer->nullImage1D;
         imageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_1D_ARRAY;
         result = vkCreateImageView(renderer->device, &imageViewInfo, nullptr, &renderer->nullImageView1DArray);
-        VGFX_ASSERT(result == VK_SUCCESS);
+        VGPU_ASSERT(result == VK_SUCCESS);
 
         imageViewInfo.image = renderer->nullImage2D;
         imageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
         result = vkCreateImageView(renderer->device, &imageViewInfo, nullptr, &renderer->nullImageView2D);
-        VGFX_ASSERT(result == VK_SUCCESS);
+        VGPU_ASSERT(result == VK_SUCCESS);
 
         imageViewInfo.image = renderer->nullImage2D;
         imageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
         result = vkCreateImageView(renderer->device, &imageViewInfo, nullptr, &renderer->nullImageView2DArray);
-        VGFX_ASSERT(result == VK_SUCCESS);
+        VGPU_ASSERT(result == VK_SUCCESS);
 
         imageViewInfo.image = renderer->nullImage2D;
         imageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
         imageViewInfo.subresourceRange.layerCount = 6;
         result = vkCreateImageView(renderer->device, &imageViewInfo, nullptr, &renderer->nullImageViewCube);
-        VGFX_ASSERT(result == VK_SUCCESS);
+        VGPU_ASSERT(result == VK_SUCCESS);
 
         imageViewInfo.image = renderer->nullImage2D;
         imageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_CUBE_ARRAY;
         imageViewInfo.subresourceRange.layerCount = 6;
         result = vkCreateImageView(renderer->device, &imageViewInfo, nullptr, &renderer->nullImageViewCubeArray);
-        VGFX_ASSERT(result == VK_SUCCESS);
+        VGPU_ASSERT(result == VK_SUCCESS);
 
         imageViewInfo.image = renderer->nullImage3D;
         imageViewInfo.subresourceRange.layerCount = 1;
         imageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_3D;
         result = vkCreateImageView(renderer->device, &imageViewInfo, nullptr, &renderer->nullImageView3D);
-        VGFX_ASSERT(result == VK_SUCCESS);
+        VGPU_ASSERT(result == VK_SUCCESS);
 
         VkSamplerCreateInfo samplerInfo = {};
         samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
         result = vkCreateSampler(renderer->device, &samplerInfo, nullptr, &renderer->nullSampler);
-        VGFX_ASSERT(result == VK_SUCCESS);
+        VGPU_ASSERT(result == VK_SUCCESS);
     }
 
-    vgfxLogInfo("VGPU Driver: Vulkan");
-    vgfxLogInfo("Vulkan Adapter: %s", renderer->properties2.properties.deviceName);
+    vgpuLogInfo("VGPU Driver: Vulkan");
+    vgpuLogInfo("Vulkan Adapter: %s", renderer->properties2.properties.deviceName);
 
-    VGPUDevice_T* device = (VGPUDevice_T*)VGFX_MALLOC(sizeof(VGPUDevice_T));
+    VGPUDevice_T* device = (VGPUDevice_T*)VGPU_MALLOC(sizeof(VGPUDevice_T));
     ASSIGN_DRIVER(vulkan);
 
     device->driverData = (VGFXRenderer*)renderer;

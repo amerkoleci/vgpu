@@ -182,7 +182,7 @@ namespace
                 return DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS;
 
             default:
-                VGFX_ASSERT(vgfxIsDepthFormat(format) == false);
+                VGPU_ASSERT(vgpuIsDepthFormat(format) == false);
                 return ToDXGIFormat(format);
         }
     }
@@ -285,14 +285,14 @@ namespace
         //hr = tempSwapChain.As(&swapChainPanelNative);
         //if (FAILED(hr))
         //{
-        //    vgfxLogError("Failed to get ISwapChainPanelNative from IDXGISwapChain1");
+        //    vgpuLogError("Failed to get ISwapChainPanelNative from IDXGISwapChain1");
         //    return nullptr;
         //}
         //
         //hr = swapChainPanelNative->SetSwapChain(tempSwapChain.Get());
         //if (FAILED(hr))
         //{
-        //    vgfxLogError("Failed to set ISwapChainPanelNative - SwapChain");
+        //    vgpuLogError("Failed to set ISwapChainPanelNative - SwapChain");
         //    return nullptr;
         //}
 #endif

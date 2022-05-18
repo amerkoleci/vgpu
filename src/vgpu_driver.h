@@ -8,20 +8,18 @@
 #include <stdio.h>
 #include <stdarg.h>
 
-#ifndef VGFX_MALLOC
+#ifndef VGPU_MALLOC
 #   include <stdlib.h>
-#   define VGFX_MALLOC(s) malloc(s)
-#   define VGFX_FREE(p) free(p)
+#   define VGPU_MALLOC(s) malloc(s)
+#   define VGPU_FREE(p) free(p)
 #endif
 
-#ifndef VGFX_ASSERT
+#ifndef VGPU_ASSERT
 #   include <assert.h>
-#   define VGFX_ASSERT(c) assert(c)
+#   define VGPU_ASSERT(c) assert(c)
 #endif
 
-#ifndef _VGFX_UNUSED
-#define _VGFX_UNUSED(x) (void)(x)
-#endif
+#define _VGPU_UNUSED(x) (void)(x)
 
 #define _VGPU_COUNT_OF(arr) (sizeof(arr) / sizeof((arr)[0]))
 #define _VGPU_DEF(val, def) (((val) == 0) ? (def) : (val))
@@ -30,30 +28,30 @@
 
 #if defined(__clang__)
 // CLANG ENABLE/DISABLE WARNING DEFINITION
-#define VGFX_DISABLE_WARNINGS() \
+#define VGPU_DISABLE_WARNINGS() \
     _Pragma("clang diagnostic push")\
 	_Pragma("clang diagnostic ignored \"-Wall\"") \
 	_Pragma("clang diagnostic ignored \"-Wextra\"") \
 	_Pragma("clang diagnostic ignored \"-Wtautological-compare\"")
 
-#define VGFX_ENABLE_WARNINGS() _Pragma("clang diagnostic pop")
+#define VGPU_ENABLE_WARNINGS() _Pragma("clang diagnostic pop")
 #elif defined(__GNUC__) || defined(__GNUG__)
 // GCC ENABLE/DISABLE WARNING DEFINITION
-#	define VGFX_DISABLE_WARNINGS() \
+#	define VGPU_DISABLE_WARNINGS() \
 	_Pragma("GCC diagnostic push") \
 	_Pragma("GCC diagnostic ignored \"-Wall\"") \
 	_Pragma("GCC diagnostic ignored \"-Wextra\"") \
 	_Pragma("GCC diagnostic ignored \"-Wtautological-compare\"")
 
-#define VGFX_ENABLE_WARNINGS() _Pragma("GCC diagnostic pop")
+#define VGPU_ENABLE_WARNINGS() _Pragma("GCC diagnostic pop")
 #elif defined(_MSC_VER)
-#define VGFX_DISABLE_WARNINGS() __pragma(warning(push, 0))
-#define VGFX_ENABLE_WARNINGS() __pragma(warning(pop))
+#define VGPU_DISABLE_WARNINGS() __pragma(warning(push, 0))
+#define VGPU_ENABLE_WARNINGS() __pragma(warning(pop))
 #endif
 
-_VGPU_EXTERN void vgfxLogInfo(const char* format, ...);
-_VGPU_EXTERN void vgfxLogWarn(const char* format, ...);
-_VGPU_EXTERN void vgfxLogError(const char* format, ...);
+_VGPU_EXTERN void vgpuLogInfo(const char* format, ...);
+_VGPU_EXTERN void vgpuLogWarn(const char* format, ...);
+_VGPU_EXTERN void vgpuLogError(const char* format, ...);
 
 #ifdef __cplusplus
 #include <functional>

@@ -25,7 +25,7 @@ namespace
 
 #if defined(_DEBUG)
     using PFN_DXGI_GET_DEBUG_INTERFACE1 = decltype(&DXGIGetDebugInterface1);
-    static PFN_DXGI_GET_DEBUG_INTERFACE1 vgfxDXGIGetDebugInterface1 = nullptr;
+    static PFN_DXGI_GET_DEBUG_INTERFACE1 vgpuDXGIGetDebugInterface1 = nullptr;
 #endif
 #else
 #define vgfxCreateDXGIFactory2 CreateDXGIFactory2
@@ -237,7 +237,7 @@ static ID3D11RenderTargetView* d3d11_GetRTV(
             break;
 
             default:
-                vgfxLogError("D3D11: Invalid texture dimension");
+                vgpuLogError("D3D11: Invalid texture dimension");
                 return nullptr;
         }
 
@@ -245,7 +245,7 @@ static ID3D11RenderTargetView* d3d11_GetRTV(
         const HRESULT hr = renderer->device->CreateRenderTargetView(texture->handle, &viewDesc, &newView);
         if (FAILED(hr))
         {
-            vgfxLogError("D3D11: Failed to create RenderTargetView");
+            vgpuLogError("D3D11: Failed to create RenderTargetView");
             return nullptr;
         }
 
@@ -333,11 +333,11 @@ static ID3D11DepthStencilView* d3d11_GetDSV(VGFXD3D11Renderer* renderer, VGFXD3D
             break;
 
             case D3D11_RESOURCE_DIMENSION_TEXTURE3D:
-                vgfxLogError("D3D11: Cannot create 3D texture DSV");
+                vgpuLogError("D3D11: Cannot create 3D texture DSV");
                 return nullptr;
 
             default:
-                vgfxLogError("D3D11: Invalid texture dimension");
+                vgpuLogError("D3D11: Invalid texture dimension");
                 return nullptr;
         }
 
@@ -345,7 +345,7 @@ static ID3D11DepthStencilView* d3d11_GetDSV(VGFXD3D11Renderer* renderer, VGFXD3D
         const HRESULT hr = renderer->device->CreateDepthStencilView(texture->handle, &viewDesc, &newView);
         if (FAILED(hr))
         {
-            vgfxLogError("D3D11: Failed to create DepthStencilView");
+            vgpuLogError("D3D11: Failed to create DepthStencilView");
             return nullptr;
         }
 
@@ -370,7 +370,7 @@ static void d3d11_destroyDevice(VGPUDevice device)
         }
 
         commandBuffer->context->Release();
-        VGFX_FREE(renderer->contextPool[i]);
+        VGPU_FREE(renderer->contextPool[i]);
     }
     renderer->contextPool.clear();
 
@@ -403,8 +403,8 @@ static void d3d11_destroyDevice(VGPUDevice device)
 #if defined(_DEBUG) && WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
     {
         ComPtr<IDXGIDebug1> dxgiDebug;
-        if (vgfxDXGIGetDebugInterface1 != nullptr
-            && SUCCEEDED(vgfxDXGIGetDebugInterface1(0, IID_PPV_ARGS(&dxgiDebug))))
+        if (vgpuDXGIGetDebugInterface1 != nullptr
+            && SUCCEEDED(vgpuDXGIGetDebugInterface1(0, IID_PPV_ARGS(&dxgiDebug))))
         {
             dxgiDebug->ReportLiveObjects(VGFX_DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_FLAGS(DXGI_DEBUG_RLO_SUMMARY | DXGI_DEBUG_RLO_IGNORE_INTERNAL));
         }
@@ -412,7 +412,7 @@ static void d3d11_destroyDevice(VGPUDevice device)
 #endif
 
     delete renderer;
-    VGFX_FREE(device);
+    VGPU_FREE(device);
 }
 
 static uint64_t d3d11_frame(VGFXRenderer* driverData)
@@ -530,7 +530,7 @@ static VGPUBuffer d3d11_createBuffer(VGFXRenderer* driverData, const VGPUBufferD
     d3d_desc.MiscFlags = 0;
     d3d_desc.StructureByteStride = 0;
 
-    if (desc->usage & VGFXBufferUsage_Uniform)
+    if (desc->usage & VGPU_BUFFER_USAGE_UNIFORM)
     {
         d3d_desc.BindFlags |= D3D11_BIND_CONSTANT_BUFFER;
         d3d_desc.Usage = D3D11_USAGE_DYNAMIC;
@@ -538,29 +538,29 @@ static VGPUBuffer d3d11_createBuffer(VGFXRenderer* driverData, const VGPUBufferD
     }
     else
     {
-        if (desc->usage & VGFXBufferUsage_Vertex)
+        if (desc->usage & VGPU_BUFFER_USAGE_VERTEX)
         {
             d3d_desc.BindFlags |= D3D11_BIND_VERTEX_BUFFER;
         }
 
-        if (desc->usage & VGFXBufferUsage_Index)
+        if (desc->usage & VGPU_BUFFER_USAGE_INDEX)
         {
             d3d_desc.BindFlags |= D3D11_BIND_INDEX_BUFFER;
         }
 
         // TODO: understand D3D11_RESOURCE_MISC_BUFFER_STRUCTURED usage
-        if (desc->usage & VGFXBufferUsage_ShaderRead)
+        if (desc->usage & VGPU_BUFFER_USAGE_SHADER_READ)
         {
             d3d_desc.BindFlags |= D3D11_BIND_SHADER_RESOURCE;
             d3d_desc.MiscFlags |= D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS;
         }
-        if (desc->usage & VGFXBufferUsage_ShaderWrite)
+        if (desc->usage & VGPU_BUFFER_USAGE_SHADER_WRITE)
         {
             d3d_desc.BindFlags |= D3D11_BIND_UNORDERED_ACCESS;
             d3d_desc.MiscFlags |= D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS;
         }
 
-        if (desc->usage & VGFXBufferUsage_Indirect)
+        if (desc->usage & VGPU_BUFFER_USAGE_INDIRECT)
         {
             d3d_desc.MiscFlags |= D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS;
         }
@@ -582,7 +582,7 @@ static VGPUBuffer d3d11_createBuffer(VGFXRenderer* driverData, const VGPUBufferD
 
     if (FAILED(hr))
     {
-        vgfxLogError("D3D11: Failed to create buffer");
+        vgpuLogError("D3D11: Failed to create buffer");
         delete buffer;
         return nullptr;
     }
@@ -613,19 +613,19 @@ static VGPUTexture d3d11_createTexture(VGFXRenderer* driverData, const VGPUTextu
     UINT cpuAccessFlags = 0u;
     DXGI_FORMAT format = ToDXGIFormat(desc->format);
 
-    if (desc->usage & VGFXTextureUsage_ShaderRead)
+    if (desc->usage & VGPU_TEXTURE_USAGE_SHADER_READ)
     {
         bindFlags |= D3D11_BIND_SHADER_RESOURCE;
     }
 
-    if (desc->usage & VGFXTextureUsage_ShaderWrite)
+    if (desc->usage & VGPU_TEXTURE_USAGE_SHADER_WRITE)
     {
         bindFlags |= D3D11_BIND_UNORDERED_ACCESS;
     }
 
-    if (desc->usage & VGFXTextureUsage_RenderTarget)
+    if (desc->usage & VGPU_TEXTURE_USAGE_RENDER_TARGET)
     {
-        if (vgfxIsDepthStencilFormat(desc->format))
+        if (vgpuIsDepthStencilFormat(desc->format))
         {
             bindFlags |= D3D11_BIND_DEPTH_STENCIL;
         }
@@ -636,7 +636,7 @@ static VGPUTexture d3d11_createTexture(VGFXRenderer* driverData, const VGPUTextu
     }
 
     // If shader read/write and depth format, set to typeless
-    if (vgfxIsDepthFormat(desc->format) && desc->usage & (VGFXTextureUsage_ShaderRead | VGFXTextureUsage_ShaderWrite))
+    if (vgpuIsDepthFormat(desc->format) && desc->usage & (VGPU_TEXTURE_USAGE_SHADER_READ | VGPU_TEXTURE_USAGE_SHADER_WRITE))
     {
         format = GetTypelessFormatFromDepthFormat(desc->format);
     }
@@ -684,7 +684,7 @@ static VGPUTexture d3d11_createTexture(VGFXRenderer* driverData, const VGPUTextu
 
     if (FAILED(hr))
     {
-        vgfxLogError("D3D11: Failed to create texture");
+        vgpuLogError("D3D11: Failed to create texture");
         delete texture;
         return nullptr;
     }
@@ -721,7 +721,7 @@ static void d3d11_updateSwapChain(VGFXD3D11Renderer* renderer, D3D11SwapChain* s
 
     DXGI_SWAP_CHAIN_DESC1 swapChainDesc;
     hr = swapChain->handle->GetDesc1(&swapChainDesc);
-    VGFX_ASSERT(SUCCEEDED(hr));
+    VGPU_ASSERT(SUCCEEDED(hr));
 
     swapChain->width = swapChainDesc.Width;
     swapChain->height = swapChainDesc.Height;
@@ -732,7 +732,7 @@ static void d3d11_updateSwapChain(VGFXD3D11Renderer* renderer, D3D11SwapChain* s
     texture->format = swapChain->textureFormat;
 
     hr = swapChain->handle->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&texture->handle);
-    VGFX_ASSERT(SUCCEEDED(hr));
+    VGPU_ASSERT(SUCCEEDED(hr));
     swapChain->backbufferTexture = (VGPUTexture)texture;
 }
 
@@ -759,7 +759,7 @@ static VGPUSwapChain d3d11_createSwapChain(VGFXRenderer* driverData, void* windo
 
 static void d3d11_destroySwapChain(VGFXRenderer* driverData, VGPUSwapChain swapChain)
 {
-    _VGFX_UNUSED(driverData);
+    _VGPU_UNUSED(driverData);
     D3D11SwapChain* d3dSwapChain = (D3D11SwapChain*)swapChain;
 
     d3d11_destroyTexture(nullptr, d3dSwapChain->backbufferTexture);
@@ -922,7 +922,7 @@ static void d3d11_endRenderPass(VGPUCommandBufferImpl* driverData)
 
 static void d3d11_prepareDraw(D3D11CommandBuffer* commandBuffer)
 {
-    VGFX_ASSERT(commandBuffer->insideRenderPass);
+    VGPU_ASSERT(commandBuffer->insideRenderPass);
 }
 
 static void d3d11_draw(VGPUCommandBufferImpl* driverData, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t baseInstance)
@@ -962,13 +962,13 @@ static VGPUCommandBuffer d3d11_beginCommandBuffer(VGFXRenderer* driverData, cons
         if (FAILED(hr))
         {
             ReleaseSRWLockExclusive(&renderer->commandBufferAcquisitionMutex);
-            vgfxLogError("Could not create deferred context for command buffer");
+            vgpuLogError("Could not create deferred context for command buffer");
             return nullptr;
         }
 
         hr = impl->context->QueryInterface(&impl->userDefinedAnnotation);
 
-        commandBuffer = (VGPUCommandBuffer_T*)VGFX_MALLOC(sizeof(VGPUCommandBuffer_T));
+        commandBuffer = (VGPUCommandBuffer_T*)VGPU_MALLOC(sizeof(VGPUCommandBuffer_T));
         ASSIGN_COMMAND_BUFFER(d3d11);
         commandBuffer->driverData = (VGPUCommandBufferImpl*)impl;
 
@@ -1019,7 +1019,7 @@ static void d3d11_submit(VGFXRenderer* driverData, VGPUCommandBuffer* commandBuf
         );
         if (FAILED(hr))
         {
-            vgfxLogError("Could not finish command list recording");
+            vgpuLogError("Could not finish command list recording");
             continue;
         }
 
@@ -1097,7 +1097,7 @@ static bool d3d11_isSupported(void)
     }
 
 #if defined(_DEBUG)
-    vgfxDXGIGetDebugInterface1 = (PFN_DXGI_GET_DEBUG_INTERFACE1)GetProcAddress(dxgiDLL, "DXGIGetDebugInterface1");
+    vgpuDXGIGetDebugInterface1 = (PFN_DXGI_GET_DEBUG_INTERFACE1)GetProcAddress(dxgiDLL, "DXGIGetDebugInterface1");
 #endif
 
     vgfxD3D11CreateDevice = (PFN_D3D11_CREATE_DEVICE)GetProcAddress(d3d11DLL, "D3D11CreateDevice");
@@ -1148,7 +1148,7 @@ static bool d3d11_isSupported(void)
 
 static VGPUDevice d3d11_createDevice(const VGPUDeviceDesc* info)
 {
-    VGFX_ASSERT(info);
+    VGPU_ASSERT(info);
 
     VGFXD3D11Renderer* renderer = new VGFXD3D11Renderer();
 
@@ -1157,7 +1157,8 @@ static VGPUDevice d3d11_createDevice(const VGPUDeviceDesc* info)
     {
 #if defined(_DEBUG) && WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
         ComPtr<IDXGIInfoQueue> dxgiInfoQueue;
-        if (SUCCEEDED(vgfxDXGIGetDebugInterface1(0, IID_PPV_ARGS(&dxgiInfoQueue))))
+        if (vgpuDXGIGetDebugInterface1 != nullptr &&
+            SUCCEEDED(vgpuDXGIGetDebugInterface1(0, IID_PPV_ARGS(&dxgiInfoQueue))))
         {
             dxgiFactoryFlags = DXGI_CREATE_FACTORY_DEBUG;
 
@@ -1231,10 +1232,10 @@ static VGPUDevice d3d11_createDevice(const VGPUDeviceDesc* info)
         break;
     }
 
-    VGFX_ASSERT(dxgiAdapter != nullptr);
+    VGPU_ASSERT(dxgiAdapter != nullptr);
     if (dxgiAdapter == nullptr)
     {
-        vgfxLogError("DXGI: No capable adapter found!");
+        vgpuLogError("DXGI: No capable adapter found!");
         delete renderer;
         return nullptr;
     }
@@ -1381,7 +1382,7 @@ static VGPUDevice d3d11_createDevice(const VGPUDeviceDesc* info)
     }
 
     // Init capabilities.
-    vgfxLogInfo("VGPU Driver: D3D11");
+    vgpuLogInfo("VGPU Driver: D3D11");
     if (dxgiAdapter != nullptr)
     {
         DXGI_ADAPTER_DESC1 adapterDesc;
@@ -1421,16 +1422,16 @@ static VGPUDevice d3d11_createDevice(const VGPUDeviceDesc* info)
             renderer->driverDescription = o.str();
         }
 
-        vgfxLogInfo("D3D11 Adapter: %S", adapterDesc.Description);
+        vgpuLogInfo("D3D11 Adapter: %S", adapterDesc.Description);
     }
     else
     {
         renderer->adapterName = "WARP";
         renderer->adapterType = VGPU_ADAPTER_TYPE_CPU;
-        vgfxLogInfo("D3D11 Adapter: WARP");
+        vgpuLogInfo("D3D11 Adapter: WARP");
     }
 
-    VGPUDevice_T* device = (VGPUDevice_T*)VGFX_MALLOC(sizeof(VGPUDevice_T));
+    VGPUDevice_T* device = (VGPUDevice_T*)VGPU_MALLOC(sizeof(VGPUDevice_T));
     ASSIGN_DRIVER(d3d11);
 
     device->driverData = (VGFXRenderer*)renderer;
