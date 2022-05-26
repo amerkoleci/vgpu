@@ -342,97 +342,69 @@ namespace
         case VGFXTextureFormat_RGBA16SNorm:      return VK_FORMAT_R16G16B16A16_SNORM;
         case VGFXTextureFormat_RGBA16Float:      return VK_FORMAT_R16G16B16A16_SFLOAT;
             // 128-Bit formats
-        case VGFXTextureFormat_RGBA32UInt:       return VK_FORMAT_R32G32B32A32_UINT;
-        case VGFXTextureFormat_RGBA32SInt:       return VK_FORMAT_R32G32B32A32_SINT;
-        case VGFXTextureFormat_RGBA32Float:      return VK_FORMAT_R32G32B32A32_SFLOAT;
+        case VGPUTextureFormat_RGBA32UInt:       return VK_FORMAT_R32G32B32A32_UINT;
+        case VGPUTextureFormat_RGBA32SInt:       return VK_FORMAT_R32G32B32A32_SINT;
+        case VGPUTextureFormat_RGBA32Float:      return VK_FORMAT_R32G32B32A32_SFLOAT;
             // Depth-stencil formats
-        case VGFXTextureFormat_Depth16UNorm:     return VK_FORMAT_D16_UNORM;
-        case VGFXTextureFormat_Depth32Float:     return VK_FORMAT_D32_SFLOAT;
-        case VGFXTextureFormat_Depth24UNormStencil8: return VK_FORMAT_D24_UNORM_S8_UINT;
-        case VGFXTextureFormat_Depth32FloatStencil8: return VK_FORMAT_D32_SFLOAT_S8_UINT;
+        case VGPUTextureFormat_Depth16UNorm:     return VK_FORMAT_D16_UNORM;
+        case VGPUTextureFormat_Depth32Float:     return VK_FORMAT_D32_SFLOAT;
+        case VGPUTextureFormat_Depth24UNormStencil8: return VK_FORMAT_D24_UNORM_S8_UINT;
+        case VGPUTextureFormat_Depth32FloatStencil8: return VK_FORMAT_D32_SFLOAT_S8_UINT;
             // Compressed BC formats
-        case VGFXTextureFormat_BC1UNorm:         return VK_FORMAT_BC1_RGBA_UNORM_BLOCK;
-        case VGFXTextureFormat_BC1UNormSrgb:     return VK_FORMAT_BC1_RGBA_SRGB_BLOCK;
-        case VGFXTextureFormat_BC2UNorm:         return VK_FORMAT_BC2_UNORM_BLOCK;
-        case VGFXTextureFormat_BC2UNormSrgb:     return VK_FORMAT_BC2_SRGB_BLOCK;
-        case VGFXTextureFormat_BC3UNorm:         return VK_FORMAT_BC3_UNORM_BLOCK;
-        case VGFXTextureFormat_BC3UNormSrgb:     return VK_FORMAT_BC3_SRGB_BLOCK;
-        case VGFXTextureFormat_BC4SNorm:            return VK_FORMAT_BC4_SNORM_BLOCK;
-        case VGFXTextureFormat_BC4UNorm:            return VK_FORMAT_BC4_UNORM_BLOCK;
-        case VGFXTextureFormat_BC5SNorm:           return VK_FORMAT_BC5_SNORM_BLOCK;
-        case VGFXTextureFormat_BC5UNorm:           return VK_FORMAT_BC5_UNORM_BLOCK;
-        case VGFXTextureFormat_BC6HUFloat:        return VK_FORMAT_BC6H_UFLOAT_BLOCK;
-        case VGFXTextureFormat_BC6HSFloat:         return VK_FORMAT_BC6H_SFLOAT_BLOCK;
-        case VGFXTextureFormat_BC7UNorm:         return VK_FORMAT_BC7_UNORM_BLOCK;
-        case VGFXTextureFormat_BC7UNormSrgb:     return VK_FORMAT_BC7_SRGB_BLOCK;
+        case VGPUTextureFormat_BC1UNorm:         return VK_FORMAT_BC1_RGBA_UNORM_BLOCK;
+        case VGPUTextureFormat_BC1UNormSrgb:     return VK_FORMAT_BC1_RGBA_SRGB_BLOCK;
+        case VGPUTextureFormat_BC2UNorm:         return VK_FORMAT_BC2_UNORM_BLOCK;
+        case VGPUTextureFormat_BC2UNormSrgb:     return VK_FORMAT_BC2_SRGB_BLOCK;
+        case VGPUTextureFormat_BC3UNorm:         return VK_FORMAT_BC3_UNORM_BLOCK;
+        case VGPUTextureFormat_BC3UNormSrgb:     return VK_FORMAT_BC3_SRGB_BLOCK;
+        case VGPUTextureFormat_BC4SNorm:            return VK_FORMAT_BC4_SNORM_BLOCK;
+        case VGPUTextureFormat_BC4UNorm:            return VK_FORMAT_BC4_UNORM_BLOCK;
+        case VGPUTextureFormat_BC5SNorm:           return VK_FORMAT_BC5_SNORM_BLOCK;
+        case VGPUTextureFormat_BC5UNorm:           return VK_FORMAT_BC5_UNORM_BLOCK;
+        case VGPUTextureFormat_BC6HUFloat:        return VK_FORMAT_BC6H_UFLOAT_BLOCK;
+        case VGPUTextureFormat_BC6HSFloat:         return VK_FORMAT_BC6H_SFLOAT_BLOCK;
+        case VGPUTextureFormat_BC7UNorm:         return VK_FORMAT_BC7_UNORM_BLOCK;
+        case VGPUTextureFormat_BC7UNormSrgb:     return VK_FORMAT_BC7_SRGB_BLOCK;
             // EAC/ETC compressed formats
-        case VGFXTextureFormat_ETC2RGB8UNorm:            return VK_FORMAT_ETC2_R8G8B8_UNORM_BLOCK;
-        case VGFXTextureFormat_ETC2RGB8UNormSrgb:        return VK_FORMAT_ETC2_R8G8B8_SRGB_BLOCK;
-        case VGFXTextureFormat_ETC2RGB8A1UNorm:          return VK_FORMAT_ETC2_R8G8B8A1_UNORM_BLOCK;
-        case VGFXTextureFormat_ETC2RGB8A1UNormSrgb:      return VK_FORMAT_ETC2_R8G8B8A1_SRGB_BLOCK;
-        case VGFXTextureFormat_ETC2RGBA8UNorm:           return VK_FORMAT_ETC2_R8G8B8A8_UNORM_BLOCK;
-        case VGFXTextureFormat_ETC2RGBA8UNormSrgb:       return VK_FORMAT_ETC2_R8G8B8A8_SRGB_BLOCK;
-        case VGFXTextureFormat_EACR11UNorm:              return VK_FORMAT_EAC_R11_UNORM_BLOCK;
-        case VGFXTextureFormat_EACR11SNorm:              return VK_FORMAT_EAC_R11_SNORM_BLOCK;
-        case VGFXTextureFormat_EACRG11UNorm:             return VK_FORMAT_EAC_R11G11_UNORM_BLOCK;
-        case VGFXTextureFormat_EACRG11SNorm:             return VK_FORMAT_EAC_R11G11_SNORM_BLOCK;
+        case VGPUTextureFormat_ETC2RGB8UNorm:            return VK_FORMAT_ETC2_R8G8B8_UNORM_BLOCK;
+        case VGPUTextureFormat_ETC2RGB8UNormSrgb:        return VK_FORMAT_ETC2_R8G8B8_SRGB_BLOCK;
+        case VGPUTextureFormat_ETC2RGB8A1UNorm:          return VK_FORMAT_ETC2_R8G8B8A1_UNORM_BLOCK;
+        case VGPUTextureFormat_ETC2RGB8A1UNormSrgb:      return VK_FORMAT_ETC2_R8G8B8A1_SRGB_BLOCK;
+        case VGPUTextureFormat_ETC2RGBA8UNorm:           return VK_FORMAT_ETC2_R8G8B8A8_UNORM_BLOCK;
+        case VGPUTextureFormat_ETC2RGBA8UNormSrgb:       return VK_FORMAT_ETC2_R8G8B8A8_SRGB_BLOCK;
+        case VGPUTextureFormat_EACR11UNorm:              return VK_FORMAT_EAC_R11_UNORM_BLOCK;
+        case VGPUTextureFormat_EACR11SNorm:              return VK_FORMAT_EAC_R11_SNORM_BLOCK;
+        case VGPUTextureFormat_EACRG11UNorm:             return VK_FORMAT_EAC_R11G11_UNORM_BLOCK;
+        case VGPUTextureFormat_EACRG11SNorm:             return VK_FORMAT_EAC_R11G11_SNORM_BLOCK;
             // ASTC compressed formats
-        case VGFXTextureFormat_ASTC4x4UNorm:
-            return VK_FORMAT_ASTC_4x4_UNORM_BLOCK;
-        case VGFXTextureFormat_ASTC4x4UNormSrgb:
-            return VK_FORMAT_ASTC_4x4_SRGB_BLOCK;
-        case VGFXTextureFormat_ASTC5x4UNorm:
-            return VK_FORMAT_ASTC_5x4_UNORM_BLOCK;
-        case VGFXTextureFormat_ASTC5x4UNormSrgb:
-            return VK_FORMAT_ASTC_5x4_SRGB_BLOCK;
-        case VGFXTextureFormat_ASTC5x5UNorm:
-            return VK_FORMAT_ASTC_5x5_UNORM_BLOCK;
-        case VGFXTextureFormat_ASTC5x5UNormSrgb:
-            return VK_FORMAT_ASTC_5x5_SRGB_BLOCK;
-        case VGFXTextureFormat_ASTC6x5UNorm:
-            return VK_FORMAT_ASTC_6x5_UNORM_BLOCK;
-        case VGFXTextureFormat_ASTC6x5UNormSrgb:
-            return VK_FORMAT_ASTC_6x5_SRGB_BLOCK;
-        case VGFXTextureFormat_ASTC6x6UNorm:
-            return VK_FORMAT_ASTC_6x6_UNORM_BLOCK;
-        case VGFXTextureFormat_ASTC6x6UNormSrgb:
-            return VK_FORMAT_ASTC_6x6_SRGB_BLOCK;
-        case VGFXTextureFormat_ASTC8x5UNorm:
-            return VK_FORMAT_ASTC_8x5_UNORM_BLOCK;
-        case VGFXTextureFormat_ASTC8x5UNormSrgb:
-            return VK_FORMAT_ASTC_8x5_SRGB_BLOCK;
-        case VGFXTextureFormat_ASTC8x6UNorm:
-            return VK_FORMAT_ASTC_8x6_UNORM_BLOCK;
-        case VGFXTextureFormat_ASTC8x6UNormSrgb:
-            return VK_FORMAT_ASTC_8x6_SRGB_BLOCK;
-        case VGFXTextureFormat_ASTC8x8UNorm:
-            return VK_FORMAT_ASTC_8x8_UNORM_BLOCK;
-        case VGFXTextureFormat_ASTC8x8UNormSrgb:
-            return VK_FORMAT_ASTC_8x8_SRGB_BLOCK;
-        case VGFXTextureFormat_ASTC10x5UNorm:
-            return VK_FORMAT_ASTC_10x5_UNORM_BLOCK;
-        case VGFXTextureFormat_ASTC10x5UNormSrgb:
-            return VK_FORMAT_ASTC_10x5_SRGB_BLOCK;
-        case VGFXTextureFormat_ASTC10x6UNorm:
-            return VK_FORMAT_ASTC_10x6_UNORM_BLOCK;
-        case VGFXTextureFormat_ASTC10x6UNormSrgb:
-            return VK_FORMAT_ASTC_10x6_SRGB_BLOCK;
-        case VGFXTextureFormat_ASTC10x8UNorm:
-            return VK_FORMAT_ASTC_10x8_UNORM_BLOCK;
-        case VGFXTextureFormat_ASTC10x8UNormSrgb:
-            return VK_FORMAT_ASTC_10x8_SRGB_BLOCK;
-        case VGFXTextureFormat_ASTC10x10UNorm:
-            return VK_FORMAT_ASTC_10x10_UNORM_BLOCK;
-        case VGFXTextureFormat_ASTC10x10UNormSrgb:
-            return VK_FORMAT_ASTC_10x10_SRGB_BLOCK;
-        case VGFXTextureFormat_ASTC12x10UNorm:
-            return VK_FORMAT_ASTC_12x10_UNORM_BLOCK;
-        case VGFXTextureFormat_ASTC12x10UNormSrgb:
-            return VK_FORMAT_ASTC_12x10_SRGB_BLOCK;
-        case VGFXTextureFormat_ASTC12x12UNorm:
-            return VK_FORMAT_ASTC_12x12_UNORM_BLOCK;
-        case VGFXTextureFormat_ASTC12x12UNormSrgb:
-            return VK_FORMAT_ASTC_12x12_SRGB_BLOCK;
+        case VGPUTextureFormat_ASTC4x4UNorm:            return VK_FORMAT_ASTC_4x4_UNORM_BLOCK;
+        case VGPUTextureFormat_ASTC4x4UNormSrgb:        return VK_FORMAT_ASTC_4x4_SRGB_BLOCK;
+        case VGPUTextureFormat_ASTC5x4UNorm:            return VK_FORMAT_ASTC_5x4_UNORM_BLOCK;
+        case VGPUTextureFormat_ASTC5x4UNormSrgb:        return VK_FORMAT_ASTC_5x4_SRGB_BLOCK;
+        case VGPUTextureFormat_ASTC5x5UNorm:            return VK_FORMAT_ASTC_5x5_UNORM_BLOCK;
+        case VGPUTextureFormat_ASTC5x5UNormSrgb:        return VK_FORMAT_ASTC_5x5_SRGB_BLOCK;
+        case VGPUTextureFormat_ASTC6x5UNorm:            return VK_FORMAT_ASTC_6x5_UNORM_BLOCK;
+        case VGPUTextureFormat_ASTC6x5UNormSrgb:        return VK_FORMAT_ASTC_6x5_SRGB_BLOCK;
+        case VGPUTextureFormat_ASTC6x6UNorm:            return VK_FORMAT_ASTC_6x6_UNORM_BLOCK;
+        case VGPUTextureFormat_ASTC6x6UNormSrgb:        return VK_FORMAT_ASTC_6x6_SRGB_BLOCK;
+        case VGPUTextureFormat_ASTC8x5UNorm:            return VK_FORMAT_ASTC_8x5_UNORM_BLOCK;
+        case VGPUTextureFormat_ASTC8x5UNormSrgb:        return VK_FORMAT_ASTC_8x5_SRGB_BLOCK;
+        case VGPUTextureFormat_ASTC8x6UNorm:            return VK_FORMAT_ASTC_8x6_UNORM_BLOCK;
+        case VGPUTextureFormat_ASTC8x6UNormSrgb:        return VK_FORMAT_ASTC_8x6_SRGB_BLOCK;
+        case VGPUTextureFormat_ASTC8x8UNorm:            return VK_FORMAT_ASTC_8x8_UNORM_BLOCK;
+        case VGPUTextureFormat_ASTC8x8UNormSrgb:        return VK_FORMAT_ASTC_8x8_SRGB_BLOCK;
+        case VGPUTextureFormat_ASTC10x5UNorm:           return VK_FORMAT_ASTC_10x5_UNORM_BLOCK;
+        case VGPUTextureFormat_ASTC10x5UNormSrgb:       return VK_FORMAT_ASTC_10x5_SRGB_BLOCK;
+        case VGPUTextureFormat_ASTC10x6UNorm:           return VK_FORMAT_ASTC_10x6_UNORM_BLOCK;
+        case VGPUTextureFormat_ASTC10x6UNormSrgb:       return VK_FORMAT_ASTC_10x6_SRGB_BLOCK;
+        case VGPUTextureFormat_ASTC10x8UNorm:           return VK_FORMAT_ASTC_10x8_UNORM_BLOCK;
+        case VGPUTextureFormat_ASTC10x8UNormSrgb:       return VK_FORMAT_ASTC_10x8_SRGB_BLOCK;
+        case VGPUTextureFormat_ASTC10x10UNorm:          return VK_FORMAT_ASTC_10x10_UNORM_BLOCK;
+        case VGPUTextureFormat_ASTC10x10UNormSrgb:      return VK_FORMAT_ASTC_10x10_SRGB_BLOCK;
+        case VGPUTextureFormat_ASTC12x10UNorm:          return VK_FORMAT_ASTC_12x10_UNORM_BLOCK;
+        case VGPUTextureFormat_ASTC12x10UNormSrgb:      return VK_FORMAT_ASTC_12x10_SRGB_BLOCK;
+        case VGPUTextureFormat_ASTC12x12UNorm:          return VK_FORMAT_ASTC_12x12_UNORM_BLOCK;
+        case VGPUTextureFormat_ASTC12x12UNormSrgb:      return VK_FORMAT_ASTC_12x12_SRGB_BLOCK;
 
         default:
             return VK_FORMAT_UNDEFINED;
@@ -1802,8 +1774,6 @@ static VGPUSwapChain vulkan_createSwapChain(VGFXRenderer* driverData, void* wind
 
     VulkanSwapChain* swapChain = new VulkanSwapChain();
     swapChain->surface = vk_surface;
-    swapChain->extent.width = info->width;
-    swapChain->extent.height = info->height;
     swapChain->colorFormat = info->format;
     swapChain->vsync = info->presentMode == VGPU_PRESENT_MODE_FIFO;
     vulkan_updateSwapChain(renderer, swapChain);

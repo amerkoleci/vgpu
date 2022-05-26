@@ -10,7 +10,7 @@
 #include <dxgi1_6.h>
 #define D3D11_NO_HELPERS
 #include <d3d11_1.h>
-#include <windows.ui.xaml.media.dxinterop.h>
+//#include <windows.ui.xaml.media.dxinterop.h>
 #include <wrl/client.h>
 #include <vector>
 #include <deque>
@@ -162,13 +162,17 @@ struct D3D12Resource
     D3D12_CPU_DESCRIPTOR_HANDLE rtv{};
 };
 
-struct VGFXD3D12SwapChain
+struct D3D12_SwapChain
 {
+#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
+    HWND window = nullptr;
+#else
+    IUnknown* window = nullptr;
+#endif
     IDXGISwapChain3* handle = nullptr;
-    uint32_t width = 0;
-    uint32_t height = 0;
     VGFXTextureFormat format;
     VGFXTextureFormat textureFormat;
+    uint32_t backBufferCount;
     uint32_t syncInterval;
     std::vector<D3D12Resource*> backbufferTextures;
 };
@@ -202,7 +206,7 @@ struct D3D12CommandBuffer
     D3D12_RENDER_PASS_DEPTH_STENCIL_DESC DSV = {};
     bool insideRenderPass;
 
-    std::vector<VGFXD3D12SwapChain*> swapChains;
+    std::vector<D3D12_SwapChain*> swapChains;
 };
 
 struct VGFXD3D12Renderer
@@ -535,7 +539,7 @@ static void d3d12_destroyDevice(VGPUDevice device)
     VGPU_FREE(device);
 }
 
-static void d3d12_updateSwapChain(VGFXD3D12Renderer* renderer, VGFXD3D12SwapChain* swapChain)
+static void d3d12_updateSwapChain(VGFXD3D12Renderer* renderer, D3D12_SwapChain* swapChain)
 {
     HRESULT hr = S_OK;
 
@@ -543,8 +547,6 @@ static void d3d12_updateSwapChain(VGFXD3D12Renderer* renderer, VGFXD3D12SwapChai
     hr = swapChain->handle->GetDesc1(&swapChainDesc);
     VGPU_ASSERT(SUCCEEDED(hr));
 
-    swapChain->width = swapChainDesc.Width;
-    swapChain->height = swapChainDesc.Height;
     swapChain->backbufferTextures.resize(swapChainDesc.BufferCount);
     for (uint32_t i = 0; i < swapChainDesc.BufferCount; ++i)
     {
@@ -873,26 +875,103 @@ static VGPUSwapChain d3d12_createSwapChain(VGFXRenderer* driverData, void* windo
 {
     VGFXD3D12Renderer* renderer = (VGFXD3D12Renderer*)driverData;
 
+    DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
+    swapChainDesc.Width = 0;
+    swapChainDesc.Height = 0;
+    swapChainDesc.Format = ToDXGIFormat(ToDXGISwapChainFormat(desc->format));
+    swapChainDesc.Stereo = FALSE;
+    swapChainDesc.SampleDesc.Count = 1;
+    swapChainDesc.SampleDesc.Quality = 0;
+    swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+    swapChainDesc.BufferCount = PresentModeToBufferCount(desc->presentMode);
+    swapChainDesc.Scaling = DXGI_SCALING_STRETCH;
+    swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+    swapChainDesc.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
+    swapChainDesc.Flags = renderer->tearingSupported ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0u;
+
     IDXGISwapChain1* tempSwapChain = nullptr;
-    if (!d3d_CreateSwapChain(
-        renderer->factory.Get(), renderer->tearingSupported, renderer->graphicsQueue,
-        windowHandle, desc, &tempSwapChain))
+
+#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
+    HWND window = static_cast<HWND>(windowHandle);
+    VGPU_ASSERT(IsWindow(window));
+
+    DXGI_SWAP_CHAIN_FULLSCREEN_DESC fsSwapChainDesc = {};
+    fsSwapChainDesc.Windowed = TRUE;
+
+    // Create a swap chain for the window.
+    HRESULT hr = renderer->factory->CreateSwapChainForHwnd(
+        renderer->graphicsQueue,
+        window,
+        &swapChainDesc,
+        &fsSwapChainDesc,
+        nullptr,
+        &tempSwapChain
+    );
+
+    if (FAILED(hr))
+    {
+        return nullptr;
+    }
+
+    // This class does not support exclusive full-screen mode and prevents DXGI from responding to the ALT+ENTER shortcut
+    hr = renderer->factory->MakeWindowAssociation(window, DXGI_MWA_NO_ALT_ENTER);
+#else
+    swapChainDesc.Scaling = DXGI_SCALING_ASPECT_RATIO_STRETCH;
+
+    IUnknown* window = static_cast<IUnknown*>(windowHandle);
+
+    HRESULT hr = renderer->factory->CreateSwapChainForCoreWindow(
+        renderer->graphicsQueue,
+        window,
+        &swapChainDesc,
+        nullptr,
+        &tempSwapChain
+    );
+
+    // SwapChain panel
+    //ComPtr<ISwapChainPanelNative> swapChainPanelNative;
+    //swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
+    //swapChainDesc.Scaling = DXGI_SCALING_ASPECT_RATIO_STRETCH;
+    //hr = renderer->factory->CreateSwapChainForComposition(
+    //    renderer->graphicsQueue,
+    //    &swapChainDesc,
+    //    nullptr,
+    //    tempSwapChain.GetAddressOf()
+    //);
+    //
+    //hr = tempSwapChain.As(&swapChainPanelNative);
+    //if (FAILED(hr))
+    //{
+    //    vgpuLogError("Failed to get ISwapChainPanelNative from IDXGISwapChain1");
+    //    return nullptr;
+    //}
+    //
+    //hr = swapChainPanelNative->SetSwapChain(tempSwapChain.Get());
+    //if (FAILED(hr))
+    //{
+    //    vgpuLogError("Failed to set ISwapChainPanelNative - SwapChain");
+    //    return nullptr;
+    //}
+#endif
+    if (FAILED(hr))
     {
         return nullptr;
     }
 
     IDXGISwapChain3* handle = nullptr;
-    HRESULT hr = tempSwapChain->QueryInterface(&handle);
+    hr = tempSwapChain->QueryInterface(&handle);
     if (FAILED(hr))
     {
         return nullptr;
     }
     SAFE_RELEASE(tempSwapChain);
 
-    VGFXD3D12SwapChain* swapChain = new VGFXD3D12SwapChain();
+    D3D12_SwapChain* swapChain = new D3D12_SwapChain();
+    swapChain->window = window;
     swapChain->handle = handle;
     swapChain->format = ToDXGISwapChainFormat(desc->format);
     swapChain->textureFormat = desc->format;
+    swapChain->backBufferCount = swapChainDesc.BufferCount;
     swapChain->syncInterval = PresentModeToSwapInterval(desc->presentMode);
     d3d12_updateSwapChain(renderer, swapChain);
     return (VGPUSwapChain)swapChain;
@@ -900,7 +979,7 @@ static VGPUSwapChain d3d12_createSwapChain(VGFXRenderer* driverData, void* windo
 
 static void d3d12_destroySwapChain(VGFXRenderer* driverData, VGPUSwapChain swapChain)
 {
-    VGFXD3D12SwapChain* d3d12SwapChain = (VGFXD3D12SwapChain*)swapChain;
+    D3D12_SwapChain* d3d12SwapChain = (D3D12_SwapChain*)swapChain;
 
     for (size_t i = 0, count = d3d12SwapChain->backbufferTextures.size(); i < count; ++i)
     {
@@ -914,7 +993,7 @@ static void d3d12_destroySwapChain(VGFXRenderer* driverData, VGPUSwapChain swapC
 
 static VGFXTextureFormat d3d12_getSwapChainFormat(VGFXRenderer*, VGPUSwapChain swapChain)
 {
-    VGFXD3D12SwapChain* d3dSwapChain = (VGFXD3D12SwapChain*)swapChain;
+    D3D12_SwapChain* d3dSwapChain = (D3D12_SwapChain*)swapChain;
     return d3dSwapChain->format;
 }
 
@@ -1001,36 +1080,87 @@ static void d3d12_TransitionResource(D3D12CommandBuffer* commandBuffer, D3D12Res
 static VGPUTexture d3d12_acquireSwapchainTexture(VGPUCommandBufferImpl* driverData, VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight)
 {
     D3D12CommandBuffer* commandBuffer = (D3D12CommandBuffer*)driverData;
-    VGFXD3D12SwapChain* d3dSwapChain = (VGFXD3D12SwapChain*)swapChain;
+    D3D12_SwapChain* d3d12SwapChain = (D3D12_SwapChain*)swapChain;
 
     HRESULT hr = S_OK;
 
     /* Check for window size changes and resize the swapchain if needed. */
     DXGI_SWAP_CHAIN_DESC1 swapChainDesc;
-    d3dSwapChain->handle->GetDesc1(&swapChainDesc);
+    d3d12SwapChain->handle->GetDesc1(&swapChainDesc);
 
-    if (d3dSwapChain->width != swapChainDesc.Width ||
-        d3dSwapChain->height != swapChainDesc.Height)
+    uint32_t width = 0;
+    uint32_t height = 0;
+#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
+    RECT windowRect;
+    GetClientRect(d3d12SwapChain->window, &windowRect);
+    width = static_cast<uint32_t>(windowRect.right - windowRect.left);
+    height = static_cast<uint32_t>(windowRect.bottom - windowRect.top);
+#else
+
+#endif
+
+    if (width != swapChainDesc.Width ||
+        height != swapChainDesc.Height)
     {
-        //hr = d3d11_ResizeSwapchain(renderer);
-        //ERROR_CHECK_RETURN("Could not resize swapchain", NULL);
+        d3d12_waitIdle((VGFXRenderer*)commandBuffer->renderer);
+
+        // Release resources that are tied to the swap chain and update fence values.
+        for (size_t i = 0, count = d3d12SwapChain->backbufferTextures.size(); i < count; ++i)
+        {
+            d3d12_destroyTexture((VGFXRenderer*)commandBuffer->renderer, (VGPUTexture)d3d12SwapChain->backbufferTextures[i]);
+        }
+        d3d12SwapChain->backbufferTextures.clear();
+
+        HRESULT hr = d3d12SwapChain->handle->ResizeBuffers(
+            d3d12SwapChain->backBufferCount,
+            width,
+            height,
+            DXGI_FORMAT_UNKNOWN, /* Keep the old format */
+            (commandBuffer->renderer->tearingSupported) ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0u
+        );
+
+        if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET)
+        {
+#ifdef _DEBUG
+            char buff[64] = {};
+            sprintf_s(buff, "Device Lost on ResizeBuffers: Reason code 0x%08X\n",
+                static_cast<unsigned int>((hr == DXGI_ERROR_DEVICE_REMOVED) ? commandBuffer->renderer->device->GetDeviceRemovedReason() : hr));
+            OutputDebugStringA(buff);
+#endif
+            // If the device was removed for any reason, a new device and swap chain will need to be created.
+            //HandleDeviceLost();
+
+            // Everything is set up now. Do not continue execution of this method. HandleDeviceLost will reenter this method
+            // and correctly set up the new device.
+            return nullptr;
+        }
+        else
+        {
+            if (FAILED(hr))
+            {
+                vgpuLogError("Could not resize swapchain");
+                return nullptr;
+            }
+
+            d3d12_updateSwapChain(commandBuffer->renderer, d3d12SwapChain);
+        }
     }
 
     D3D12Resource* swapChainTexture =
-        d3dSwapChain->backbufferTextures[d3dSwapChain->handle->GetCurrentBackBufferIndex()];
+        d3d12SwapChain->backbufferTextures[d3d12SwapChain->handle->GetCurrentBackBufferIndex()];
 
     // Transition to RenderTarget state
     d3d12_TransitionResource(commandBuffer, swapChainTexture, D3D12_RESOURCE_STATE_RENDER_TARGET, true);
 
     if (pWidth) {
-        *pWidth = d3dSwapChain->width;
+        *pWidth = swapChainTexture->width;
     }
 
     if (pHeight) {
-        *pHeight = d3dSwapChain->height;
+        *pHeight = swapChainTexture->height;
     }
 
-    commandBuffer->swapChains.push_back(d3dSwapChain);
+    commandBuffer->swapChains.push_back(d3d12SwapChain);
     return (VGPUTexture)swapChainTexture;
 }
 
@@ -1129,7 +1259,7 @@ static void d3d12_setViewport(VGPUCommandBufferImpl* driverData, const VGPUViewp
 
 static void d3d12_setScissorRect(VGPUCommandBufferImpl* driverData, const VGPURect* scissorRect)
 {
-    D3D12CommandBuffer * commandBuffer = (D3D12CommandBuffer*)driverData;
+    D3D12CommandBuffer* commandBuffer = (D3D12CommandBuffer*)driverData;
 
     D3D12_RECT d3dScissorRect;
     d3dScissorRect.left = LONG(scissorRect->x);
@@ -1221,7 +1351,7 @@ static void d3d12_submit(VGFXRenderer* driverData, VGPUCommandBuffer* commandBuf
 
     HRESULT hr = S_OK;
     std::vector<ID3D12CommandList*> submitCommandLists;
-    std::vector<VGFXD3D12SwapChain*> presentSwapChains;
+    std::vector<D3D12_SwapChain*> presentSwapChains;
     for (uint32_t i = 0; i < count; i += 1)
     {
         D3D12CommandBuffer* commandBuffer = (D3D12CommandBuffer*)commandBuffers[i]->driverData;
@@ -1229,7 +1359,7 @@ static void d3d12_submit(VGFXRenderer* driverData, VGPUCommandBuffer* commandBuf
         // Present acquired SwapChains
         for (size_t i = 0, count = commandBuffer->swapChains.size(); i < count && SUCCEEDED(hr); ++i)
         {
-            VGFXD3D12SwapChain* swapChain = commandBuffer->swapChains[i];
+            D3D12_SwapChain* swapChain = commandBuffer->swapChains[i];
 
             /* Transition SwapChain textures to present */
             D3D12Resource* texture = (D3D12Resource*)swapChain->backbufferTextures[swapChain->handle->GetCurrentBackBufferIndex()];
@@ -1268,7 +1398,7 @@ static void d3d12_submit(VGFXRenderer* driverData, VGPUCommandBuffer* commandBuf
     // Present acquired SwapChains
     for (size_t i = 0, count = presentSwapChains.size(); i < count && SUCCEEDED(hr); ++i)
     {
-        VGFXD3D12SwapChain* swapChain = presentSwapChains[i];
+        D3D12_SwapChain* swapChain = presentSwapChains[i];
 
         UINT presentFlags = 0;
         BOOL fullscreen = FALSE;

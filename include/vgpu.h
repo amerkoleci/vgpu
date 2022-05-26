@@ -57,6 +57,8 @@ typedef struct VGPUBuffer_T* VGPUBuffer;
 typedef struct VGPUTexture_T* VGPUTexture;
 typedef struct VGPUSampler_T* VGPUSampler;
 typedef struct VGPUSwapChain_T* VGPUSwapChain;
+typedef struct VGPUShaderModule_T* VGPUShaderModule;
+typedef struct VGPUPipeline_T* VGPUPipeline;
 typedef struct VGPUCommandBuffer_T* VGPUCommandBuffer;
 
 typedef enum VGPULogLevel {
@@ -185,72 +187,72 @@ typedef enum VGFXTextureFormat {
     VGFXTextureFormat_RGBA16SNorm,
     VGFXTextureFormat_RGBA16Float,
     /* 128-Bit formats */
-    VGFXTextureFormat_RGBA32UInt,
-    VGFXTextureFormat_RGBA32SInt,
-    VGFXTextureFormat_RGBA32Float,
+    VGPUTextureFormat_RGBA32UInt,
+    VGPUTextureFormat_RGBA32SInt,
+    VGPUTextureFormat_RGBA32Float,
     /* Depth-stencil formats */
-    VGFXTextureFormat_Depth16UNorm,
-    VGFXTextureFormat_Depth24UNormStencil8,
-    VGFXTextureFormat_Depth32Float,
-    VGFXTextureFormat_Depth32FloatStencil8,
+    VGPUTextureFormat_Depth16UNorm,
+    VGPUTextureFormat_Depth24UNormStencil8,
+    VGPUTextureFormat_Depth32Float,
+    VGPUTextureFormat_Depth32FloatStencil8,
     /* Compressed BC formats */
-    VGFXTextureFormat_BC1UNorm,
-    VGFXTextureFormat_BC1UNormSrgb,
-    VGFXTextureFormat_BC2UNorm,
-    VGFXTextureFormat_BC2UNormSrgb,
-    VGFXTextureFormat_BC3UNorm,
-    VGFXTextureFormat_BC3UNormSrgb,
-    VGFXTextureFormat_BC4UNorm,
-    VGFXTextureFormat_BC4SNorm,
-    VGFXTextureFormat_BC5UNorm,
-    VGFXTextureFormat_BC5SNorm,
-    VGFXTextureFormat_BC6HUFloat,
-    VGFXTextureFormat_BC6HSFloat,
-    VGFXTextureFormat_BC7UNorm,
-    VGFXTextureFormat_BC7UNormSrgb,
+    VGPUTextureFormat_BC1UNorm,
+    VGPUTextureFormat_BC1UNormSrgb,
+    VGPUTextureFormat_BC2UNorm,
+    VGPUTextureFormat_BC2UNormSrgb,
+    VGPUTextureFormat_BC3UNorm,
+    VGPUTextureFormat_BC3UNormSrgb,
+    VGPUTextureFormat_BC4UNorm,
+    VGPUTextureFormat_BC4SNorm,
+    VGPUTextureFormat_BC5UNorm,
+    VGPUTextureFormat_BC5SNorm,
+    VGPUTextureFormat_BC6HUFloat,
+    VGPUTextureFormat_BC6HSFloat,
+    VGPUTextureFormat_BC7UNorm,
+    VGPUTextureFormat_BC7UNormSrgb,
     /* Compressed EAC/ETC formats */
-    VGFXTextureFormat_ETC2RGB8UNorm,
-    VGFXTextureFormat_ETC2RGB8UNormSrgb,
-    VGFXTextureFormat_ETC2RGB8A1UNorm,
-    VGFXTextureFormat_ETC2RGB8A1UNormSrgb,
-    VGFXTextureFormat_ETC2RGBA8UNorm,
-    VGFXTextureFormat_ETC2RGBA8UNormSrgb,
-    VGFXTextureFormat_EACR11UNorm,
-    VGFXTextureFormat_EACR11SNorm,
-    VGFXTextureFormat_EACRG11UNorm,
-    VGFXTextureFormat_EACRG11SNorm,
+    VGPUTextureFormat_ETC2RGB8UNorm,
+    VGPUTextureFormat_ETC2RGB8UNormSrgb,
+    VGPUTextureFormat_ETC2RGB8A1UNorm,
+    VGPUTextureFormat_ETC2RGB8A1UNormSrgb,
+    VGPUTextureFormat_ETC2RGBA8UNorm,
+    VGPUTextureFormat_ETC2RGBA8UNormSrgb,
+    VGPUTextureFormat_EACR11UNorm,
+    VGPUTextureFormat_EACR11SNorm,
+    VGPUTextureFormat_EACRG11UNorm,
+    VGPUTextureFormat_EACRG11SNorm,
     /* Compressed ASTC formats */
-    VGFXTextureFormat_ASTC4x4UNorm,
-    VGFXTextureFormat_ASTC4x4UNormSrgb,
-    VGFXTextureFormat_ASTC5x4UNorm,
-    VGFXTextureFormat_ASTC5x4UNormSrgb,
-    VGFXTextureFormat_ASTC5x5UNorm,
-    VGFXTextureFormat_ASTC5x5UNormSrgb,
-    VGFXTextureFormat_ASTC6x5UNorm,
-    VGFXTextureFormat_ASTC6x5UNormSrgb,
-    VGFXTextureFormat_ASTC6x6UNorm,
-    VGFXTextureFormat_ASTC6x6UNormSrgb,
-    VGFXTextureFormat_ASTC8x5UNorm,
-    VGFXTextureFormat_ASTC8x5UNormSrgb,
-    VGFXTextureFormat_ASTC8x6UNorm,
-    VGFXTextureFormat_ASTC8x6UNormSrgb,
-    VGFXTextureFormat_ASTC8x8UNorm,
-    VGFXTextureFormat_ASTC8x8UNormSrgb,
-    VGFXTextureFormat_ASTC10x5UNorm,
-    VGFXTextureFormat_ASTC10x5UNormSrgb,
-    VGFXTextureFormat_ASTC10x6UNorm,
-    VGFXTextureFormat_ASTC10x6UNormSrgb,
-    VGFXTextureFormat_ASTC10x8UNorm,
-    VGFXTextureFormat_ASTC10x8UNormSrgb,
-    VGFXTextureFormat_ASTC10x10UNorm,
-    VGFXTextureFormat_ASTC10x10UNormSrgb,
-    VGFXTextureFormat_ASTC12x10UNorm,
-    VGFXTextureFormat_ASTC12x10UNormSrgb,
-    VGFXTextureFormat_ASTC12x12UNorm,
-    VGFXTextureFormat_ASTC12x12UNormSrgb,
+    VGPUTextureFormat_ASTC4x4UNorm,
+    VGPUTextureFormat_ASTC4x4UNormSrgb,
+    VGPUTextureFormat_ASTC5x4UNorm,
+    VGPUTextureFormat_ASTC5x4UNormSrgb,
+    VGPUTextureFormat_ASTC5x5UNorm,
+    VGPUTextureFormat_ASTC5x5UNormSrgb,
+    VGPUTextureFormat_ASTC6x5UNorm,
+    VGPUTextureFormat_ASTC6x5UNormSrgb,
+    VGPUTextureFormat_ASTC6x6UNorm,
+    VGPUTextureFormat_ASTC6x6UNormSrgb,
+    VGPUTextureFormat_ASTC8x5UNorm,
+    VGPUTextureFormat_ASTC8x5UNormSrgb,
+    VGPUTextureFormat_ASTC8x6UNorm,
+    VGPUTextureFormat_ASTC8x6UNormSrgb,
+    VGPUTextureFormat_ASTC8x8UNorm,
+    VGPUTextureFormat_ASTC8x8UNormSrgb,
+    VGPUTextureFormat_ASTC10x5UNorm,
+    VGPUTextureFormat_ASTC10x5UNormSrgb,
+    VGPUTextureFormat_ASTC10x6UNorm,
+    VGPUTextureFormat_ASTC10x6UNormSrgb,
+    VGPUTextureFormat_ASTC10x8UNorm,
+    VGPUTextureFormat_ASTC10x8UNormSrgb,
+    VGPUTextureFormat_ASTC10x10UNorm,
+    VGPUTextureFormat_ASTC10x10UNormSrgb,
+    VGPUTextureFormat_ASTC12x10UNorm,
+    VGPUTextureFormat_ASTC12x10UNormSrgb,
+    VGPUTextureFormat_ASTC12x12UNorm,
+    VGPUTextureFormat_ASTC12x12UNormSrgb,
 
-    _VGPU_TEXTURE_FORMAT_COUNT,
-    _VGPU_TEXTURE_FORMAT_FORCE_U32 = 0x7FFFFFFF
+    _VGPUTextureFormat_Count,
+    _VGPUTextureFormat_Force32 = 0x7FFFFFFF
 } VGFXTextureFormat;
 
 typedef enum VGPUTextureFormatKind {
@@ -421,8 +423,6 @@ typedef struct VGPUSamplerDesc
 typedef struct VGPUSwapChainDesc
 {
     VGFXTextureFormat format;
-    uint32_t width;
-    uint32_t height;
     VGPUPresentMode presentMode;
 } VGPUSwapChainDesc;
 

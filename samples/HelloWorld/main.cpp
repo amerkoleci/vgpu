@@ -77,8 +77,6 @@ void init_gfx(GLFWwindow* window)
     glfwGetWindowSize(window, &width, &height);
 
     VGPUSwapChainDesc swapChainDesc{};
-    swapChainDesc.width = (uint32_t)width;
-    swapChainDesc.height = (uint32_t)height;
     swapChainDesc.format = VGFXTextureFormat_BGRA8UNormSrgb;
     swapChainDesc.presentMode = VGPU_PRESENT_MODE_FIFO;
     swapChain = vgpuCreateSwapChain(device, windowHandle, &swapChainDesc);

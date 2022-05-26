@@ -117,29 +117,29 @@ namespace
             case VGFXTextureFormat_RGBA16SNorm:      return DXGI_FORMAT_R16G16B16A16_SNORM;
             case VGFXTextureFormat_RGBA16Float:      return DXGI_FORMAT_R16G16B16A16_FLOAT;
                 // 128-Bit formats
-            case VGFXTextureFormat_RGBA32UInt:       return DXGI_FORMAT_R32G32B32A32_UINT;
-            case VGFXTextureFormat_RGBA32SInt:       return DXGI_FORMAT_R32G32B32A32_SINT;
-            case VGFXTextureFormat_RGBA32Float:      return DXGI_FORMAT_R32G32B32A32_FLOAT;
+            case VGPUTextureFormat_RGBA32UInt:       return DXGI_FORMAT_R32G32B32A32_UINT;
+            case VGPUTextureFormat_RGBA32SInt:       return DXGI_FORMAT_R32G32B32A32_SINT;
+            case VGPUTextureFormat_RGBA32Float:      return DXGI_FORMAT_R32G32B32A32_FLOAT;
                 // Depth-stencil formats
-            case VGFXTextureFormat_Depth16UNorm:		    return DXGI_FORMAT_D16_UNORM;
-            case VGFXTextureFormat_Depth24UNormStencil8:    return DXGI_FORMAT_D24_UNORM_S8_UINT;
-            case VGFXTextureFormat_Depth32Float:			return DXGI_FORMAT_D32_FLOAT;
-            case VGFXTextureFormat_Depth32FloatStencil8:    return DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
+            case VGPUTextureFormat_Depth16UNorm:		    return DXGI_FORMAT_D16_UNORM;
+            case VGPUTextureFormat_Depth24UNormStencil8:    return DXGI_FORMAT_D24_UNORM_S8_UINT;
+            case VGPUTextureFormat_Depth32Float:			return DXGI_FORMAT_D32_FLOAT;
+            case VGPUTextureFormat_Depth32FloatStencil8:    return DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
                 // Compressed BC formats
-            case VGFXTextureFormat_BC1UNorm:            return DXGI_FORMAT_BC1_UNORM;
-            case VGFXTextureFormat_BC1UNormSrgb:        return DXGI_FORMAT_BC1_UNORM_SRGB;
-            case VGFXTextureFormat_BC2UNorm:            return DXGI_FORMAT_BC2_UNORM;
-            case VGFXTextureFormat_BC2UNormSrgb:        return DXGI_FORMAT_BC2_UNORM_SRGB;
-            case VGFXTextureFormat_BC3UNorm:            return DXGI_FORMAT_BC3_UNORM;
-            case VGFXTextureFormat_BC3UNormSrgb:        return DXGI_FORMAT_BC3_UNORM_SRGB;
-            case VGFXTextureFormat_BC4SNorm:            return DXGI_FORMAT_BC4_SNORM;
-            case VGFXTextureFormat_BC4UNorm:            return DXGI_FORMAT_BC4_UNORM;
-            case VGFXTextureFormat_BC5SNorm:            return DXGI_FORMAT_BC5_SNORM;
-            case VGFXTextureFormat_BC5UNorm:            return DXGI_FORMAT_BC5_UNORM;
-            case VGFXTextureFormat_BC6HUFloat:          return DXGI_FORMAT_BC6H_UF16;
-            case VGFXTextureFormat_BC6HSFloat:          return DXGI_FORMAT_BC6H_SF16;
-            case VGFXTextureFormat_BC7UNorm:            return DXGI_FORMAT_BC7_UNORM;
-            case VGFXTextureFormat_BC7UNormSrgb:        return DXGI_FORMAT_BC7_UNORM_SRGB;
+            case VGPUTextureFormat_BC1UNorm:            return DXGI_FORMAT_BC1_UNORM;
+            case VGPUTextureFormat_BC1UNormSrgb:        return DXGI_FORMAT_BC1_UNORM_SRGB;
+            case VGPUTextureFormat_BC2UNorm:            return DXGI_FORMAT_BC2_UNORM;
+            case VGPUTextureFormat_BC2UNormSrgb:        return DXGI_FORMAT_BC2_UNORM_SRGB;
+            case VGPUTextureFormat_BC3UNorm:            return DXGI_FORMAT_BC3_UNORM;
+            case VGPUTextureFormat_BC3UNormSrgb:        return DXGI_FORMAT_BC3_UNORM_SRGB;
+            case VGPUTextureFormat_BC4SNorm:            return DXGI_FORMAT_BC4_SNORM;
+            case VGPUTextureFormat_BC4UNorm:            return DXGI_FORMAT_BC4_UNORM;
+            case VGPUTextureFormat_BC5SNorm:            return DXGI_FORMAT_BC5_SNORM;
+            case VGPUTextureFormat_BC5UNorm:            return DXGI_FORMAT_BC5_UNORM;
+            case VGPUTextureFormat_BC6HUFloat:          return DXGI_FORMAT_BC6H_UF16;
+            case VGPUTextureFormat_BC6HSFloat:          return DXGI_FORMAT_BC6H_SF16;
+            case VGPUTextureFormat_BC7UNorm:            return DXGI_FORMAT_BC7_UNORM;
+            case VGPUTextureFormat_BC7UNormSrgb:        return DXGI_FORMAT_BC7_UNORM_SRGB;
 
             default:
                 return DXGI_FORMAT_UNKNOWN;
@@ -172,13 +172,13 @@ namespace
     {
         switch (format)
         {
-            case VGFXTextureFormat_Depth16UNorm:
+            case VGPUTextureFormat_Depth16UNorm:
                 return DXGI_FORMAT_R16_TYPELESS;
-            case VGFXTextureFormat_Depth32Float:
+            case VGPUTextureFormat_Depth32Float:
                 return DXGI_FORMAT_R32_TYPELESS;
-            case VGFXTextureFormat_Depth24UNormStencil8:
+            case VGPUTextureFormat_Depth24UNormStencil8:
                 return DXGI_FORMAT_R24G8_TYPELESS;
-            case VGFXTextureFormat_Depth32FloatStencil8:
+            case VGPUTextureFormat_Depth32FloatStencil8:
                 return DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS;
 
             default:
@@ -213,94 +213,5 @@ namespace
             default:
                 return 1;
         }
-    }
-
-    static inline bool d3d_CreateSwapChain(
-        IDXGIFactory2* dxgiFactory,
-        bool tearingSupported,
-        IUnknown* deviceOrCommandQueue,
-        void* windowHandle,
-        const VGPUSwapChainDesc* desc,
-        IDXGISwapChain1** ppSwapChain)
-    {
-        DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
-        swapChainDesc.Width = desc->width;
-        swapChainDesc.Height = desc->height;
-        swapChainDesc.Format = ToDXGIFormat(ToDXGISwapChainFormat(desc->format));
-        swapChainDesc.Stereo = FALSE;
-        swapChainDesc.SampleDesc.Count = 1;
-        swapChainDesc.SampleDesc.Quality = 0;
-        swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-        swapChainDesc.BufferCount = PresentModeToBufferCount(desc->presentMode);
-        swapChainDesc.Scaling = DXGI_SCALING_STRETCH;
-        swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-        swapChainDesc.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
-        swapChainDesc.Flags = tearingSupported ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0u;
-
-#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
-        DXGI_SWAP_CHAIN_FULLSCREEN_DESC fsSwapChainDesc = {};
-        fsSwapChainDesc.Windowed = TRUE;
-
-        // Create a swap chain for the window.
-        HRESULT hr = dxgiFactory->CreateSwapChainForHwnd(
-            deviceOrCommandQueue,
-            (HWND)windowHandle,
-            &swapChainDesc,
-            &fsSwapChainDesc,
-            nullptr,
-            ppSwapChain
-        );
-
-        if (FAILED(hr))
-        {
-            return false;
-        }
-
-        // This class does not support exclusive full-screen mode and prevents DXGI from responding to the ALT+ENTER shortcut
-        hr = dxgiFactory->MakeWindowAssociation((HWND)windowHandle, DXGI_MWA_NO_ALT_ENTER);
-#else
-        swapChainDesc.Scaling = DXGI_SCALING_ASPECT_RATIO_STRETCH;
-
-        IUnknown* window = static_cast<IUnknown*>(windowHandle);
-
-        HRESULT hr = dxgiFactory->CreateSwapChainForCoreWindow(
-            deviceOrCommandQueue,
-            window,
-            &swapChainDesc,
-            nullptr,
-            ppSwapChain
-        );
-
-        // SwapChain panel
-        //ComPtr<ISwapChainPanelNative> swapChainPanelNative;
-        //swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
-        //swapChainDesc.Scaling = DXGI_SCALING_ASPECT_RATIO_STRETCH;
-        //hr = renderer->factory->CreateSwapChainForComposition(
-        //    renderer->graphicsQueue,
-        //    &swapChainDesc,
-        //    nullptr,
-        //    tempSwapChain.GetAddressOf()
-        //);
-        //
-        //hr = tempSwapChain.As(&swapChainPanelNative);
-        //if (FAILED(hr))
-        //{
-        //    vgpuLogError("Failed to get ISwapChainPanelNative from IDXGISwapChain1");
-        //    return nullptr;
-        //}
-        //
-        //hr = swapChainPanelNative->SetSwapChain(tempSwapChain.Get());
-        //if (FAILED(hr))
-        //{
-        //    vgpuLogError("Failed to set ISwapChainPanelNative - SwapChain");
-        //    return nullptr;
-        //}
-#endif
-        if (FAILED(hr))
-        {
-            return false;
-        }
-
-        return true;
     }
 }
