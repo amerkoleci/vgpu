@@ -68,6 +68,14 @@ namespace
             }
         }
     }
+
+    static_assert(sizeof(VGPUViewport) == sizeof(D3D12_VIEWPORT));
+    static_assert(offsetof(VGPUViewport, x) == offsetof(D3D12_VIEWPORT, TopLeftX));
+    static_assert(offsetof(VGPUViewport, y) == offsetof(D3D12_VIEWPORT, TopLeftY));
+    static_assert(offsetof(VGPUViewport, width) == offsetof(D3D12_VIEWPORT, Width));
+    static_assert(offsetof(VGPUViewport, height) == offsetof(D3D12_VIEWPORT, Height));
+    static_assert(offsetof(VGPUViewport, minDepth) == offsetof(D3D12_VIEWPORT, MinDepth));
+    static_assert(offsetof(VGPUViewport, maxDepth) == offsetof(D3D12_VIEWPORT, MaxDepth));
 }
 
 #if !WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
@@ -1110,6 +1118,25 @@ static void d3d12_endRenderPass(VGPUCommandBufferImpl* driverData)
 static void d3d12_prepareDraw(D3D12CommandBuffer* commandBuffer)
 {
     VGPU_ASSERT(commandBuffer->insideRenderPass);
+}
+
+
+static void d3d12_setViewport(VGPUCommandBufferImpl* driverData, const VGPUViewport* viewport)
+{
+    D3D12CommandBuffer* commandBuffer = (D3D12CommandBuffer*)driverData;
+    commandBuffer->commandList->RSSetViewports(1, (D3D12_VIEWPORT*)&viewport);
+}
+
+static void d3d12_setScissorRect(VGPUCommandBufferImpl* driverData, const VGPURect* scissorRect)
+{
+    D3D12CommandBuffer * commandBuffer = (D3D12CommandBuffer*)driverData;
+
+    D3D12_RECT d3dScissorRect;
+    d3dScissorRect.left = LONG(scissorRect->x);
+    d3dScissorRect.top = LONG(scissorRect->y);
+    d3dScissorRect.right = LONG(scissorRect->x + scissorRect->width);
+    d3dScissorRect.bottom = LONG(scissorRect->y + scissorRect->height);
+    commandBuffer->commandList->RSSetScissorRects(1, &d3dScissorRect);
 }
 
 static void d3d12_draw(VGPUCommandBufferImpl* driverData, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t baseInstance)

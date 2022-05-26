@@ -15,15 +15,15 @@ static void VGPU_DefaultLogCallback(VGPULogLevel level, const char* message)
 #if defined(__EMSCRIPTEN__)
     switch (level)
     {
-        case VGFX_LOG_LEVEL_WARN:
-            emscripten_log(EM_LOG_CONSOLE | EM_LOG_WARN, "%s", message);
-            break;
-        case VGFX_LOG_LEVEL_ERROR:
-            emscripten_log(EM_LOG_CONSOLE | EM_LOG_ERROR, "%s", message);
-            break;
-        default:
-            emscripten_log(EM_LOG_CONSOLE, "%s", message);
-            break;
+    case VGFX_LOG_LEVEL_WARN:
+        emscripten_log(EM_LOG_CONSOLE | EM_LOG_WARN, "%s", message);
+        break;
+    case VGFX_LOG_LEVEL_ERROR:
+        emscripten_log(EM_LOG_CONSOLE | EM_LOG_ERROR, "%s", message);
+        break;
+    default:
+        emscripten_log(EM_LOG_CONSOLE, "%s", message);
+        break;
     }
 #elif defined(_WIN32)
     _VGPU_UNUSED(level);
@@ -210,11 +210,11 @@ static VGPUBufferDesc _vgpuBufferDescDef(const VGPUBufferDesc* desc)
 
 VGPUBuffer vgpuCreateBuffer(VGPUDevice device, const VGPUBufferDesc* desc, const void* pInitialData)
 {
-     NULL_RETURN_NULL(device);
-     NULL_RETURN_NULL(desc);
+    NULL_RETURN_NULL(device);
+    NULL_RETURN_NULL(desc);
 
-     VGPUBufferDesc desc_def = _vgpuBufferDescDef(desc);
-     return device->createBuffer(device->driverData, &desc_def, pInitialData);
+    VGPUBufferDesc desc_def = _vgpuBufferDescDef(desc);
+    return device->createBuffer(device->driverData, &desc_def, pInitialData);
 }
 
 void vgpuDestroyBuffer(VGPUDevice device, VGPUBuffer buffer)
@@ -336,6 +336,20 @@ void vgpuEndRenderPass(VGPUCommandBuffer commandBuffer)
     commandBuffer->endRenderPass(commandBuffer->driverData);
 }
 
+void vgpuSetViewport(VGPUCommandBuffer commandBuffer, const VGPUViewport* viewport)
+{
+    VGPU_ASSERT(viewport);
+
+    commandBuffer->setViewport(commandBuffer->driverData, viewport);
+}
+
+void vgpuSetScissorRect(VGPUCommandBuffer commandBuffer, const VGPURect* scissorRect)
+{
+    VGPU_ASSERT(scissorRect);
+
+    commandBuffer->setScissorRect(commandBuffer->driverData, scissorRect);
+}
+
 void vgpuDraw(VGPUCommandBuffer commandBuffer, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t baseInstance)
 {
     commandBuffer->draw(commandBuffer->driverData, vertexStart, vertexCount, instanceCount, baseInstance);
@@ -392,7 +406,7 @@ static const VGPUFormatInfo c_FormatInfo[] = {
     { VGFXTextureFormat_RGB10A2UNorm,   "R10G10B10A2_UNORM",    4,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,          true,  true,  true,  true,  false, false, false, false },
     { VGFXTextureFormat_RG11B10Float,   "R11G11B10_FLOAT",      4,   1, VGPU_TEXTURE_FORMAT_KIND_FLOAT,     true,  true,  true,  false, false, false, false, false },
     { VGFXTextureFormat_RGB9E5Float,    "RGB9E5Float",          4,   1, VGPU_TEXTURE_FORMAT_KIND_FLOAT,     true,  true,  true,  false, false, false, false, false },
-    
+
     { VGFXTextureFormat_RG32UInt,         "RG32_UINT",         8,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,    true,  true,  false, false, false, false, false, false },
     { VGFXTextureFormat_RG32SInt,         "RG32_SINT",         8,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,    true,  true,  false, false, false, false, true,  false },
     { VGFXTextureFormat_RG32Float,        "RG32_FLOAT",        8,   1, VGPU_TEXTURE_FORMAT_KIND_FLOAT,      true,  true,  false, false, false, false, true,  false },

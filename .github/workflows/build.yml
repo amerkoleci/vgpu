@@ -27,7 +27,7 @@ jobs:
         submodules: true
 
     - name: Configure Win64
-      run: cmake . -B -G "Visual Studio 17 2022" -A x64 -Bbuild_win_64 -DCMAKE_INSTALL_PREFIX="SDK"
+      run: cmake . -G "Visual Studio 17 2022" -A x64 -Bbuild_win_64 -DCMAKE_INSTALL_PREFIX="SDK"
      
     - name: Build Win64
       run: cmake --build build_win_64 --config MinSizeRel --target install

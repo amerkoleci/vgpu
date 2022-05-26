@@ -93,6 +93,10 @@ typedef struct VGPUCommandBuffer_T {
     VGPUTexture(*acquireSwapchainTexture)(VGPUCommandBufferImpl* driverData, VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight);
     void (*beginRenderPass)(VGPUCommandBufferImpl* driverData, const VGPURenderPassDesc* desc);
     void (*endRenderPass)(VGPUCommandBufferImpl* driverData);
+
+    void (*setViewport)(VGPUCommandBufferImpl* driverData, const VGPUViewport* viewport);
+    void (*setScissorRect)(VGPUCommandBufferImpl* driverData, const VGPURect* scissorRect);
+
     void (*draw)(VGPUCommandBufferImpl* driverData, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t baseInstance);
 
     /* Opaque pointer for the Driver */
@@ -135,6 +139,8 @@ ASSIGN_COMMAND_BUFFER_FUNC(insertDebugMarker, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(acquireSwapchainTexture, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(beginRenderPass, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(endRenderPass, name) \
+ASSIGN_COMMAND_BUFFER_FUNC(setViewport, name) \
+ASSIGN_COMMAND_BUFFER_FUNC(setScissorRect, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(draw, name) 
 
 #define ASSIGN_DRIVER(name) \

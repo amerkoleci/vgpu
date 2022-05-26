@@ -319,6 +319,14 @@ typedef struct VGPUSize3D {
     uint32_t depth;
 } VGPUSize3D;
 
+typedef struct VGPURect
+{
+    int32_t x;
+    int32_t y;
+    int32_t width;
+    int32_t height;
+} VGPURect;
+
 typedef struct VGPUViewport {
     /// Top left x coordinate.
     float x;
@@ -496,6 +504,8 @@ VGPU_API void vgpuInsertDebugMarker(VGPUCommandBuffer commandBuffer, const char*
 VGPU_API VGPUTexture vgpuAcquireSwapchainTexture(VGPUCommandBuffer commandBuffer, VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight);
 VGPU_API void vgpuBeginRenderPass(VGPUCommandBuffer commandBuffer, const VGPURenderPassDesc* desc);
 VGPU_API void vgpuEndRenderPass(VGPUCommandBuffer commandBuffer);
+VGPU_API void vgpuSetViewport(VGPUCommandBuffer commandBuffer, const VGPUViewport* viewport);
+VGPU_API void vgpuSetScissorRect(VGPUCommandBuffer commandBuffer, const VGPURect* scissorRect);
 VGPU_API void vgpuDraw(VGPUCommandBuffer commandBuffer, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t baseInstance);
 
 VGPU_API void vgpuSubmit(VGPUDevice device, VGPUCommandBuffer* commandBuffers, uint32_t count);

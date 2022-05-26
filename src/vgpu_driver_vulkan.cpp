@@ -494,6 +494,20 @@ namespace
             return VK_IMAGE_ASPECT_COLOR_BIT;
         }
     }
+
+    static_assert(sizeof(VGPUViewport) == sizeof(VkViewport), "Viewport mismatch");
+    static_assert(offsetof(VGPUViewport, x) == offsetof(VkViewport, x), "Layout mismatch");
+    static_assert(offsetof(VGPUViewport, y) == offsetof(VkViewport, y), "Layout mismatch");
+    static_assert(offsetof(VGPUViewport, width) == offsetof(VkViewport, width), "Layout mismatch");
+    static_assert(offsetof(VGPUViewport, height) == offsetof(VkViewport, height), "Layout mismatch");
+    static_assert(offsetof(VGPUViewport, minDepth) == offsetof(VkViewport, minDepth), "Layout mismatch");
+    static_assert(offsetof(VGPUViewport, maxDepth) == offsetof(VkViewport, maxDepth), "Layout mismatch");
+
+    static_assert(sizeof(VGPURect) == sizeof(VkRect2D), "RectI mismatch");
+    static_assert(offsetof(VGPURect, x) == offsetof(VkRect2D, offset.x), "Layout mismatch");
+    static_assert(offsetof(VGPURect, y) == offsetof(VkRect2D, offset.y), "Layout mismatch");
+    static_assert(offsetof(VGPURect, width) == offsetof(VkRect2D, extent.width), "Layout mismatch");
+    static_assert(offsetof(VGPURect, height) == offsetof(VkRect2D, extent.height), "Layout mismatch");
 }
 
 /// Helper macro to test the result of Vulkan calls which can return an error.
@@ -2148,6 +2162,27 @@ static void vulkan_endRenderPass(VGPUCommandBufferImpl* driverData)
 static void vulkan_prepareDraw(VulkanCommandBuffer* commandBuffer)
 {
     VGPU_ASSERT(commandBuffer->insideRenderPass);
+}
+
+static void vulkan_setViewport(VGPUCommandBufferImpl* driverData, const VGPUViewport* viewport)
+{
+    VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
+
+    // Flip viewport to match DirectX coordinate system
+    VkViewport vkViewport;
+    vkViewport.x = viewport->x;
+    vkViewport.y = viewport->height - viewport->y;
+    vkViewport.width = viewport->width;
+    vkViewport.height = -viewport->height;
+    vkViewport.minDepth = viewport->minDepth;
+    vkViewport.maxDepth = viewport->maxDepth;
+    vkCmdSetViewport(commandBuffer->handle, 0, 1, &vkViewport);
+}
+
+static void vulkan_setScissorRect(VGPUCommandBufferImpl* driverData, const VGPURect* scissorRect)
+{
+    VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
+    vkCmdSetScissor(commandBuffer->handle, 0, 1, (VkRect2D*)scissorRect);
 }
 
 static void vulkan_draw(VGPUCommandBufferImpl* driverData, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t baseInstance)
