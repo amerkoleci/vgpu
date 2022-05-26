@@ -5,12 +5,11 @@
 
 #include "vgpu_driver_d3d.h"
 
-#ifdef USING_DIRECTX_HEADERS
-#   include <directx/d3d12.h>
-#else
-#   include <d3d12.h>
-#endif
+#include <directx/dxgiformat.h>
+#include <directx/d3dx12.h>
 #include <dxgi1_6.h>
+#define D3D11_NO_HELPERS
+#include <d3d11_1.h>
 #include <windows.ui.xaml.media.dxinterop.h>
 #include <wrl/client.h>
 #include <vector>

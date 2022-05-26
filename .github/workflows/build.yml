@@ -23,17 +23,20 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v2
+      with:
+        submodules: true
 
-    - uses: lukka/get-cmake@latest
-
-    - name: Add msbuild to PATH
-      uses: microsoft/setup-msbuild@v1.1
-
-    - name: Generate project files
-      run: cmake -B "${{ env.CMAKE_BUILD_DIR }}" -S "." -G "Visual Studio 17 2022" -A x64 -DCMAKE_INSTALL_PREFIX="SDK"
+    - name: Configure Win64
+      run: cmake . -B -G "Visual Studio 17 2022" -A x64 -Bbuild_win_64 -DCMAKE_INSTALL_PREFIX="SDK"
      
-    - name: Build
-      run: cmake --build "${{ env.CMAKE_BUILD_DIR }}" --target install --config Release
+    - name: Build Win64
+      run: cmake --build build_win_64 --config MinSizeRel --target install
+
+    # Universal Windows Platform
+    - name: Configure UWP ARM64
+      run: cmake . -G "Visual Studio 17 2022" -A ARM64 -Bbuild_uwp_arm64 -DCMAKE_SYSTEM_NAME:String=WindowsStore -DCMAKE_SYSTEM_VERSION:String="10.0"
+    - name: build_uwp_arm64
+      run: cmake --build build_uwp_arm64 --config MinSizeRel --target install
 
     - uses: actions/upload-artifact@v2
       with:

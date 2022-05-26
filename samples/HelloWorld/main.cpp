@@ -55,11 +55,6 @@ void init_gfx(GLFWwindow* window)
     //    deviceDesc.preferredBackend = VGPU_BACKEND_TYPE_VULKAN;
     //}
 
-    //if (vgpuIsSupported(VGPU_BACKEND_TYPE_D3D11))
-    //{
-    //    deviceDesc.preferredBackend = VGPU_BACKEND_TYPE_D3D11;
-    //}
-
     void* windowHandle = nullptr;
 #if defined(__EMSCRIPTEN__)
     windowHandle = "canvas";

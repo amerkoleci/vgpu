@@ -58,7 +58,6 @@ _VGPU_EXTERN void vgpuLogError(const char* format, ...);
 
 namespace
 {
-
     /// Round up to next power of two.
     constexpr uint64_t vgfxNextPowerOfTwo(uint64_t value)
     {

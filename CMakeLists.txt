@@ -1,5 +1,5 @@
 # CMake version
-cmake_minimum_required (VERSION 3.14)
+cmake_minimum_required (VERSION 3.15)
 
 if (${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
 	message(FATAL_ERROR "In-source builds are not supported. Please choose a different binary directory.")
@@ -43,7 +43,6 @@ include(CMakeDependentOption)
 option(VGPU_BUILD_SHARED "Build vgpu as a shared library (DLL or .so)" ON)
 option(VGPU_INSTALL "Generate install rules for vgpu" ON)
 cmake_dependent_option(VGPU_VULKAN_DRIVER "Build the Vulkan backend" ON "NOT EMSCRIPTEN;NOT WINDOWS_STORE" OFF)
-cmake_dependent_option(VGPU_D3D11_DRIVER "Build the D3D11 backend" ON "WIN32" OFF)
 cmake_dependent_option(VGPU_D3D12_DRIVER "Build the D3D12 backend" ON "WIN32" OFF)
 cmake_dependent_option(VGPU_WEBGPU_DRIVER "Build the WebGPU backend" ON "EMSCRIPTEN" OFF)
 option(VGPU_SAMPLES "Build samples" ON)
@@ -117,10 +116,6 @@ set(SOURCE_FILES
     src/vgpu_driver.h
     src/vgpu.c
     src/vgpu_driver_vulkan.cpp
-    src/vgpu_driver_d3d.h
-    src/vgpu_driver_d3d11.cpp
-    src/vgpu_driver_d3d12.cpp
-    src/vgpu_driver_webgpu.cpp
 )
 
 if (VGPU_BUILD_SHARED)
@@ -174,6 +169,17 @@ if (WIN32)
     target_compile_definitions(${PROJECT_NAME} PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
 endif ()
 
+if (VGPU_D3D12_DRIVER)
+    target_sources(${PROJECT_NAME} PRIVATE
+        src/vgpu_driver_d3d.h
+        src/vgpu_driver_d3d12.cpp
+        src/lib/D3D12MemAlloc.cpp
+        src/lib/D3D12MemAlloc.h
+    )
+
+    target_compile_definitions(${PROJECT_NAME} PRIVATE VGPU_D3D12_DRIVER=1)
+endif ()
+
 if (VGPU_VULKAN_DRIVER)
     if(ANDROID)
         target_compile_definitions(${PROJECT_NAME} PRIVATE VK_USE_PLATFORM_ANDROID_KHR)
@@ -204,24 +210,12 @@ if (VGPU_VULKAN_DRIVER)
     target_link_libraries(${PROJECT_NAME} PRIVATE vulkan spirv-reflect)
 endif ()
 
-if (VGPU_D3D12_DRIVER)
-    target_sources(${PROJECT_NAME} PRIVATE
-        src/lib/D3D12MemoryAllocator/src/D3D12MemAlloc.cpp
-        src/lib/D3D12MemoryAllocator/include/D3D12MemAlloc.h
-    )
-
-    target_include_directories(${PROJECT_NAME} PRIVATE
-	    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/lib/D3D12MemoryAllocator/include>
-    )
-
-    target_compile_definitions(${PROJECT_NAME} PRIVATE VGPU_D3D12_DRIVER=1)
-endif ()
-
-if (VGPU_D3D11_DRIVER)
-    target_compile_definitions(${PROJECT_NAME} PRIVATE VGPU_D3D11_DRIVER=1)
-endif ()
 
 if (VGPU_WEBGPU_DRIVER)
+    target_sources(${PROJECT_NAME} PRIVATE
+        src/vgpu_driver_webgpu.cpp
+    )
+
     target_compile_definitions(${PROJECT_NAME} PRIVATE VGPU_WEBGPU_DRIVER=1)
 endif ()
 
@@ -229,6 +223,7 @@ endif ()
 target_include_directories(${PROJECT_NAME} PUBLIC
 	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
 	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/lib>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>
 )
 
