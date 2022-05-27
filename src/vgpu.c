@@ -257,6 +257,72 @@ void vgpuDestroyTexture(VGPUDevice device, VGPUTexture texture)
     device->destroyTexture(device->driverData, texture);
 }
 
+/* Sampler*/
+static VGPUSamplerDesc _vgpuSamplerDescDef(const VGPUSamplerDesc* desc)
+{
+    VGPUSamplerDesc def = *desc;
+    def.maxAnisotropy = _VGPU_DEF(desc->maxAnisotropy, 1);
+    return def;
+}
+
+VGPUSampler vgpuCreateSampler(VGPUDevice device, const VGPUSamplerDesc* desc)
+{
+    NULL_RETURN_NULL(device);
+    NULL_RETURN_NULL(desc);
+
+    VGPUSamplerDesc desc_def = _vgpuSamplerDescDef(desc);
+    return device->createSampler(device->driverData, &desc_def);
+}
+
+void vgpuDestroySampler(VGPUDevice device, VGPUSampler sampler)
+{
+    NULL_RETURN(device);
+    NULL_RETURN(sampler);
+
+    device->destroySampler(device->driverData, sampler);
+}
+
+/* Shader Module */
+VGPUShaderModule vgpuCreateShaderModule(VGPUDevice device, const void* pCode, size_t codeSize)
+{
+    NULL_RETURN_NULL(device);
+    NULL_RETURN_NULL(pCode);
+
+    return device->createShaderModule(device->driverData, pCode, codeSize);
+}
+
+void vgpuDestroyShaderModule(VGPUDevice device, VGPUShaderModule module)
+{
+    NULL_RETURN(device);
+    NULL_RETURN(module);
+
+    device->destroyShaderModule(device->driverData, module);
+}
+
+/* Pipeline */
+static VGPURenderPipelineDesc _vgpuRenderPipelineDescDef(const VGPURenderPipelineDesc* desc)
+{
+    VGPURenderPipelineDesc def = *desc;
+    return def;
+}
+
+VGPUPipeline vgpuCreateRenderPipeline(VGPUDevice device, const VGPURenderPipelineDesc* desc)
+{
+    NULL_RETURN_NULL(device);
+    NULL_RETURN_NULL(desc);
+
+    VGPURenderPipelineDesc desc_def = _vgpuRenderPipelineDescDef(desc);
+    return device->createRenderPipeline(device->driverData, &desc_def);
+}
+
+void vgpuDestroyPipeline(VGPUDevice device, VGPUPipeline pipeline)
+{
+    NULL_RETURN(device);
+    NULL_RETURN(pipeline);
+
+    device->destroyPipeline(device->driverData, pipeline);
+}
+
 /* SwapChain */
 static VGPUSwapChainDesc _vgpuSwapChainDescDef(const VGPUSwapChainDesc* desc)
 {
@@ -284,11 +350,10 @@ void vgpuDestroySwapChain(VGPUDevice device, VGPUSwapChain swapChain)
     device->destroySwapChain(device->driverData, swapChain);
 }
 
-VGFXTextureFormat vgpuSwapChainGetFormat(VGPUDevice device, VGPUSwapChain swapChain)
+VGPUTextureFormat vgpuSwapChainGetFormat(VGPUDevice device, VGPUSwapChain swapChain)
 {
     return device->getSwapChainFormat(device->driverData, swapChain);
 }
-
 
 /* Commands */
 VGPUCommandBuffer vgpuBeginCommandBuffer(VGPUDevice device, const char* label)
@@ -439,7 +504,7 @@ static const VGPUFormatInfo c_FormatInfo[] = {
     { VGPUTextureFormat_BC7UNormSrgb,   "BC7UNormSrgb",    16,  4, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  true,  true,  true,  false, false, false, true  },
 };
 
-void vgpuGetFormatInfo(VGFXTextureFormat format, const VGPUFormatInfo* pInfo)
+void vgpuGetFormatInfo(VGPUTextureFormat format, const VGPUFormatInfo* pInfo)
 {
     VGPU_ASSERT(pInfo);
 
@@ -457,19 +522,19 @@ void vgpuGetFormatInfo(VGFXTextureFormat format, const VGPUFormatInfo* pInfo)
     VGPU_ASSERT(pInfo->format == format);
 }
 
-bool vgpuIsDepthFormat(VGFXTextureFormat format)
+bool vgpuIsDepthFormat(VGPUTextureFormat format)
 {
     VGPU_ASSERT(c_FormatInfo[(uint32_t)format].format == format);
     return c_FormatInfo[(uint32_t)format].hasDepth;
 }
 
-bool vgpuIsStencilFormat(VGFXTextureFormat format)
+bool vgpuIsStencilFormat(VGPUTextureFormat format)
 {
     VGPU_ASSERT(c_FormatInfo[(uint32_t)format].format == format);
     return c_FormatInfo[(uint32_t)format].hasStencil;
 }
 
-bool vgpuIsDepthStencilFormat(VGFXTextureFormat format)
+bool vgpuIsDepthStencilFormat(VGPUTextureFormat format)
 {
     VGPU_ASSERT(c_FormatInfo[(uint32_t)format].format == format);
     return c_FormatInfo[(uint32_t)format].hasDepth || c_FormatInfo[(uint32_t)format].hasStencil;

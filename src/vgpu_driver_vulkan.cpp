@@ -289,7 +289,7 @@ namespace
         return extensions;
     }
 
-    constexpr VkFormat ToVk(VGFXTextureFormat format)
+    constexpr VkFormat ToVkFormat(VGPUTextureFormat format)
     {
         switch (format)
         {
@@ -519,7 +519,7 @@ struct VulkanSwapChain
     VkSwapchainKHR handle = VK_NULL_HANDLE;
     VkExtent2D extent;
     bool vsync = false;
-    VGFXTextureFormat colorFormat;
+    VGPUTextureFormat colorFormat;
     bool allowHDR = true;
     uint32_t imageIndex;
     std::vector<VulkanTexture*> backbufferTextures;
@@ -1337,35 +1337,35 @@ static VGPUBuffer vulkan_createBuffer(VGFXRenderer* driverData, const VGPUBuffer
     bufferInfo.size = desc->size;
     bufferInfo.usage = 0;
 
-    if (desc->usage & VGPU_BUFFER_USAGE_VERTEX)
+    if (desc->usage & VGPUBufferUsage_Vertex)
     {
         bufferInfo.usage |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
     }
 
-    if (desc->usage & VGPU_BUFFER_USAGE_INDEX)
+    if (desc->usage & VGPUBufferUsage_Index)
     {
         bufferInfo.usage |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
     }
 
-    if (desc->usage & VGPU_BUFFER_USAGE_UNIFORM)
+    if (desc->usage & VGPUBufferUsage_Uniform)
     {
-        bufferInfo.size = VmaAlignUp(bufferInfo.size, renderer->properties2.properties.limits.minUniformBufferOffsetAlignment);
+        bufferInfo.size = AlignUp(bufferInfo.size, renderer->properties2.properties.limits.minUniformBufferOffsetAlignment);
         bufferInfo.usage |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
     }
 
-    if (desc->usage & VGPU_BUFFER_USAGE_SHADER_READ)
+    if (desc->usage & VGPUBufferUsage_ShaderRead)
     {
         bufferInfo.usage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
         bufferInfo.usage |= VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT;
     }
 
-    if (desc->usage & VGPU_BUFFER_USAGE_SHADER_WRITE)
+    if (desc->usage & VGPUBufferUsage_ShaderWrite)
     {
         bufferInfo.usage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
         bufferInfo.usage |= VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT;
     }
 
-    if (desc->usage & VGPU_BUFFER_USAGE_INDIRECT)
+    if (desc->usage & VGPUBufferUsage_Indirect)
     {
         bufferInfo.usage |= VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
     }
@@ -1383,7 +1383,7 @@ static VGPUBuffer vulkan_createBuffer(VGFXRenderer* driverData, const VGPUBuffer
     //}
 
     if (renderer->features_1_2.bufferDeviceAddress == VK_TRUE &&
-        desc->usage & (VGPU_BUFFER_USAGE_VERTEX | VGPU_BUFFER_USAGE_INDEX/* | VGFXBufferUsage_RayTracing*/))
+        desc->usage & (VGPUBufferUsage_Vertex | VGPUBufferUsage_Index/* | VGFXBufferUsage_RayTracing*/))
     {
         bufferInfo.usage |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
     }
@@ -1482,7 +1482,7 @@ static VGPUTexture vulkan_createTexture(VGFXRenderer* driverData, const VGPUText
     imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     imageInfo.pNext = nullptr;
     imageInfo.flags = 0;
-    imageInfo.format = ToVk(desc->format);
+    imageInfo.format = ToVkFormat(desc->format);
     imageInfo.extent.width = desc->width;
     imageInfo.extent.height = desc->height;
     if (desc->type == VGPU_TEXTURE_TYPE_3D)
@@ -1603,6 +1603,49 @@ static void vulkan_destroyTexture(VGFXRenderer* driverData, VGPUTexture texture)
     delete vulkanTexture;
 }
 
+
+
+/* Sampler */
+static VGPUSampler vulkan_createSampler(VGFXRenderer* driverData, const VGPUSamplerDesc* desc)
+{
+    return nullptr;
+}
+
+static void vulkan_destroySampler(VGFXRenderer* driverData, VGPUSampler resource)
+{
+}
+
+/* ShaderModule */
+static VGPUShaderModule vulkan_createShaderModule(VGFXRenderer* driverData, const void* pCode, size_t codeSize)
+{
+    return nullptr;
+}
+
+static void vulkan_destroyShaderModule(VGFXRenderer* driverData, VGPUShaderModule resource)
+{
+}
+
+/* Pipeline */
+static VGPUPipeline vulkan_createRenderPipeline(VGFXRenderer* driverData, const VGPURenderPipelineDesc* desc)
+{
+    return nullptr;
+}
+
+static VGPUPipeline vulkan_createComputePipeline(VGFXRenderer* driverData, const VGPUComputePipelineDesc* desc)
+{
+    return nullptr;
+}
+
+static VGPUPipeline vulkan_createRayTracingPipeline(VGFXRenderer* driverData, const VGPURayTracingPipelineDesc* desc)
+{
+    return nullptr;
+}
+
+static void vulkan_destroyPipeline(VGFXRenderer* driverData, VGPUPipeline resource)
+{
+
+}
+
 /* SwapChain */
 static void vulkan_updateSwapChain(VGFXVulkanRenderer* renderer, VulkanSwapChain* swapChain)
 {
@@ -1623,7 +1666,7 @@ static void vulkan_updateSwapChain(VGFXVulkanRenderer* renderer, VulkanSwapChain
     VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(renderer->physicalDevice, swapChain->surface, &presentModeCount, swapchainPresentModes.data()));
 
     VkSurfaceFormatKHR surfaceFormat = {};
-    surfaceFormat.format = ToVk(swapChain->colorFormat);
+    surfaceFormat.format = ToVkFormat(swapChain->colorFormat);
     surfaceFormat.colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
     bool valid = false;
 
@@ -1711,6 +1754,12 @@ static void vulkan_updateSwapChain(VGFXVulkanRenderer* renderer, VulkanSwapChain
 
     if (createInfo.oldSwapchain != VK_NULL_HANDLE)
     {
+        for (size_t i = 0, count = swapChain->backbufferTextures.size(); i < count; ++i)
+        {
+            vulkan_destroyTexture((VGFXRenderer*)renderer, (VGPUTexture)swapChain->backbufferTextures[i]);
+        }
+        swapChain->backbufferTextures.clear();
+
         vkDestroySwapchainKHR(renderer->device, createInfo.oldSwapchain, nullptr);
     }
 
@@ -1819,7 +1868,7 @@ static void vulkan_destroySwapChain(VGFXRenderer* driverData, VGPUSwapChain swap
     delete vulkanSwapChain;
 }
 
-static VGFXTextureFormat vulkan_getSwapChainFormat(VGFXRenderer*, VGPUSwapChain swapChain)
+static VGPUTextureFormat vulkan_getSwapChainFormat(VGFXRenderer*, VGPUSwapChain swapChain)
 {
     VulkanSwapChain* vulkanSwapChain = (VulkanSwapChain*)swapChain;
     return vulkanSwapChain->colorFormat;
@@ -1909,6 +1958,26 @@ static VGPUTexture vulkan_acquireSwapchainTexture(VGPUCommandBufferImpl* driverD
     VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
     VulkanSwapChain* vulkanSwapChain = (VulkanSwapChain*)swapChain;
 
+    // Check if window is minimized
+    VkSurfaceCapabilitiesKHR surfaceProperties;
+    VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
+        commandBuffer->renderer->physicalDevice,
+        vulkanSwapChain->surface,
+        &surfaceProperties));
+
+    if (surfaceProperties.currentExtent.width == 0 ||
+        surfaceProperties.currentExtent.width == 0xFFFFFFFF)
+    {
+        return nullptr;
+    }
+
+    if (vulkanSwapChain->extent.width != surfaceProperties.currentExtent.width ||
+        vulkanSwapChain->extent.height != surfaceProperties.currentExtent.height)
+    {
+        vulkan_waitIdle((VGFXRenderer*)commandBuffer->renderer);
+        vulkan_updateSwapChain(commandBuffer->renderer, vulkanSwapChain);
+    }
+
     VkResult result = vkAcquireNextImageKHR(commandBuffer->renderer->device,
         vulkanSwapChain->handle,
         UINT64_MAX,
@@ -1920,7 +1989,9 @@ static VGPUTexture vulkan_acquireSwapchainTexture(VGPUCommandBufferImpl* driverD
         // Handle outdated error in acquire
         if (result == VK_SUBOPTIMAL_KHR || result == VK_ERROR_OUT_OF_DATE_KHR)
         {
-            // TODO
+            vulkan_waitIdle((VGFXRenderer*)commandBuffer->renderer);
+            vulkan_updateSwapChain(commandBuffer->renderer, vulkanSwapChain);
+            return vulkan_acquireSwapchainTexture(driverData, swapChain, pWidth, pHeight);
         }
     }
 
@@ -2248,7 +2319,8 @@ static void vulkan_submit(VGFXRenderer* driverData, VGPUCommandBuffer* commandBu
     std::vector<VkSemaphore> waitSemaphores;
     std::vector<VkPipelineStageFlags> waitStages;
     std::vector<VkSemaphore> signalSemaphores;
-    std::vector<VkSwapchainKHR> presentSwapChains;
+    std::vector<VulkanSwapChain*> presentSwapChains;
+    std::vector<VkSwapchainKHR> presentVkSwapChains;
     std::vector<uint32_t> swapChainImageIndices;
 
     VkResult result = VK_SUCCESS;
@@ -2272,15 +2344,16 @@ static void vulkan_submit(VGFXRenderer* driverData, VGPUCommandBuffer* commandBu
         {
             VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)commandBuffers[i]->driverData;
 
-            for (size_t i = 0, count = commandBuffer->swapChains.size(); i < count; ++i)
+            for (size_t j = 0, count = commandBuffer->swapChains.size(); j < count; ++j)
             {
-                VulkanSwapChain* swapChain = commandBuffer->swapChains[i];
+                VulkanSwapChain* swapChain = commandBuffer->swapChains[j];
+                presentSwapChains.push_back(swapChain);
 
                 waitSemaphores.push_back(swapChain->acquireSemaphore);
                 waitStages.push_back(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
                 signalSemaphores.push_back(swapChain->releaseSemaphore);
 
-                presentSwapChains.push_back(swapChain->handle);
+                presentVkSwapChains.push_back(swapChain->handle);
                 swapChainImageIndices.push_back(swapChain->imageIndex);
 
                 VkImageSubresourceRange range{};
@@ -2332,7 +2405,7 @@ static void vulkan_submit(VGFXRenderer* driverData, VGPUCommandBuffer* commandBu
             presentInfo.waitSemaphoreCount = (uint32_t)signalSemaphores.size();
             presentInfo.pWaitSemaphores = signalSemaphores.data();
             presentInfo.swapchainCount = (uint32_t)presentSwapChains.size();
-            presentInfo.pSwapchains = presentSwapChains.data();
+            presentInfo.pSwapchains = presentVkSwapChains.data();
             presentInfo.pImageIndices = swapChainImageIndices.data();
             result = vkQueuePresentKHR(renderer->graphicsQueue, &presentInfo);
             if (result != VK_SUCCESS)
@@ -2340,7 +2413,11 @@ static void vulkan_submit(VGFXRenderer* driverData, VGPUCommandBuffer* commandBu
                 // Handle outdated error in present:
                 if (result == VK_SUBOPTIMAL_KHR || result == VK_ERROR_OUT_OF_DATE_KHR)
                 {
-                    // TODO
+                    for (size_t i = 0, count = presentSwapChains.size(); i < count; ++i)
+                    {
+                        VulkanSwapChain* vulkanSwapChain = presentSwapChains[i];
+                        vulkan_updateSwapChain(renderer, vulkanSwapChain);
+                    }
                 }
                 else
                 {

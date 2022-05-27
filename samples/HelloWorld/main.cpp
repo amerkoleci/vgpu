@@ -22,6 +22,7 @@
 
 VGPUDevice device = nullptr;
 VGPUSwapChain swapChain = nullptr;
+VGPUBuffer vertexBuffer = nullptr;
 
 inline void vgpu_log(VGPULogLevel level, const char* message)
 {
@@ -80,6 +81,20 @@ void init_gfx(GLFWwindow* window)
     swapChainDesc.format = VGFXTextureFormat_BGRA8UNormSrgb;
     swapChainDesc.presentMode = VGPU_PRESENT_MODE_FIFO;
     swapChain = vgpuCreateSwapChain(device, windowHandle, &swapChainDesc);
+
+    // Create vertex buffer
+    const float vertices[] = {
+        /* positions            colors */
+         0.0f, 0.5f, 0.5f,      1.0f, 0.0f, 0.0f, 1.0f,
+         0.5f, -0.5f, 0.5f,     0.0f, 1.0f, 0.0f, 1.0f,
+        -0.5f, -0.5f, 0.5f,     0.0f, 0.0f, 1.0f, 1.0f
+    };
+
+    VGPUBufferDesc bufferDesc{};
+    bufferDesc.label = "Vertex Buffer";
+    bufferDesc.size = sizeof(vertices);
+    bufferDesc.usage = VGPUBufferUsage_Vertex;
+    vertexBuffer = vgpuCreateBuffer(device, &bufferDesc, vertices);
 }
 
 #if defined(__EMSCRIPTEN__)
@@ -120,26 +135,32 @@ KEEP_IN_MODULE void _glue_main_()
 
 void draw_frame()
 {
-    VGFXTextureFormat format = vgpuSwapChainGetFormat(device, swapChain);
+    VGPUTextureFormat format = vgpuSwapChainGetFormat(device, swapChain);
     uint32_t width;
     uint32_t height;
 
     VGPUCommandBuffer commandBuffer = vgpuBeginCommandBuffer(device, "Frame");
 
-    VGPURenderPassColorAttachment colorAttachment = {};
-    colorAttachment.texture = vgpuAcquireSwapchainTexture(commandBuffer, swapChain, &width, &height);
-    colorAttachment.loadOp = VGPU_LOAD_OP_CLEAR;
-    colorAttachment.storeOp = VGPU_STORE_OP_STORE;
-    colorAttachment.clearColor.r = 0.3f;
-    colorAttachment.clearColor.g = 0.3f;
-    colorAttachment.clearColor.b = 0.3f;
-    colorAttachment.clearColor.a = 1.0f;
+    // When window minimized texture is null
+    VGPUTexture swapChainTexture = vgpuAcquireSwapchainTexture(commandBuffer, swapChain, &width, &height);
+    if (swapChainTexture != nullptr)
+    {
+        VGPURenderPassColorAttachment colorAttachment = {};
+        colorAttachment.texture = swapChainTexture;
+        colorAttachment.loadOp = VGPU_LOAD_OP_CLEAR;
+        colorAttachment.storeOp = VGPU_STORE_OP_STORE;
+        colorAttachment.clearColor.r = 0.3f;
+        colorAttachment.clearColor.g = 0.3f;
+        colorAttachment.clearColor.b = 0.3f;
+        colorAttachment.clearColor.a = 1.0f;
 
-    VGPURenderPassDesc renderPass{};
-    renderPass.colorAttachmentCount = 1u;
-    renderPass.colorAttachments = &colorAttachment;
-    vgpuBeginRenderPass(commandBuffer, &renderPass);
-    vgpuEndRenderPass(commandBuffer);
+        VGPURenderPassDesc renderPass{};
+        renderPass.colorAttachmentCount = 1u;
+        renderPass.colorAttachments = &colorAttachment;
+        vgpuBeginRenderPass(commandBuffer, &renderPass);
+        vgpuEndRenderPass(commandBuffer);
+    }
+
     vgpuSubmit(device, &commandBuffer, 1u);
     vgpuFrame(device);
 }
@@ -168,6 +189,7 @@ int main()
     }
 
     vgpuWaitIdle(device);
+    vgpuDestroyBuffer(device, vertexBuffer);
     vgpuDestroySwapChain(device, swapChain);
     vgpuDestroyDevice(device);
     glfwDestroyWindow(window);

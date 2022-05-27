@@ -64,7 +64,7 @@ namespace
         return std::wstring(char_buffer, requiredSize);
     }
 
-    constexpr DXGI_FORMAT ToDXGIFormat(VGFXTextureFormat format)
+    constexpr DXGI_FORMAT ToDXGIFormat(VGPUTextureFormat format)
     {
         switch (format)
         {
@@ -146,7 +146,7 @@ namespace
         }
     }
 
-    constexpr VGFXTextureFormat ToDXGISwapChainFormat(VGFXTextureFormat format)
+    constexpr VGPUTextureFormat ToDXGISwapChainFormat(VGPUTextureFormat format)
     {
         switch (format)
         {
@@ -168,7 +168,7 @@ namespace
         return VGFXTextureFormat_BGRA8UNorm;
     }
 
-    constexpr DXGI_FORMAT GetTypelessFormatFromDepthFormat(VGFXTextureFormat format)
+    constexpr DXGI_FORMAT GetTypelessFormatFromDepthFormat(VGPUTextureFormat format)
     {
         switch (format)
         {

@@ -58,6 +58,16 @@ _VGPU_EXTERN void vgpuLogError(const char* format, ...);
 
 namespace
 {
+    template <typename T>
+    static bool IsPow2(T x) { return (x & (x - 1)) == 0; }
+
+    template <typename T>
+    static T AlignUp(T val, T alignment)
+    {
+        VGPU_ASSERT(IsPow2(alignment));
+        return (val + alignment - 1) & ~(alignment - 1);
+    }
+
     /// Round up to next power of two.
     constexpr uint64_t vgfxNextPowerOfTwo(uint64_t value)
     {
@@ -116,11 +126,22 @@ typedef struct VGPUDevice_T
     void(*destroyBuffer)(VGFXRenderer* driverData, VGPUBuffer resource);
 
     VGPUTexture(*createTexture)(VGFXRenderer* driverData, const VGPUTextureDesc* desc);
-    void(*destroyTexture)(VGFXRenderer* driverData, VGPUTexture texture);
+    void(*destroyTexture)(VGFXRenderer* driverData, VGPUTexture resource);
+
+    VGPUSampler(*createSampler)(VGFXRenderer* driverData, const VGPUSamplerDesc* desc);
+    void(*destroySampler)(VGFXRenderer* driverData, VGPUSampler resource);
+
+    VGPUShaderModule(*createShaderModule)(VGFXRenderer* driverData, const void* pCode, size_t codeSize);
+    void(*destroyShaderModule)(VGFXRenderer* driverData, VGPUShaderModule resource);
+
+    VGPUPipeline(*createRenderPipeline)(VGFXRenderer* driverData, const VGPURenderPipelineDesc* desc);
+    VGPUPipeline(*createComputePipeline)(VGFXRenderer* driverData, const VGPUComputePipelineDesc* desc);
+    VGPUPipeline(*createRayTracingPipeline)(VGFXRenderer* driverData, const VGPURayTracingPipelineDesc* desc);
+    void(*destroyPipeline)(VGFXRenderer* driverData, VGPUPipeline resource);
 
     VGPUSwapChain(*createSwapChain)(VGFXRenderer* driverData, void* windowHandle, const VGPUSwapChainDesc* desc);
     void(*destroySwapChain)(VGFXRenderer* driverData, VGPUSwapChain swapChain);
-    VGFXTextureFormat(*getSwapChainFormat)(VGFXRenderer* driverData, VGPUSwapChain swapChain);
+    VGPUTextureFormat(*getSwapChainFormat)(VGFXRenderer* driverData, VGPUSwapChain swapChain);
 
     VGPUCommandBuffer(*beginCommandBuffer)(VGFXRenderer* driverData, const char* label);
     void (*submit)(VGFXRenderer* driverData, VGPUCommandBuffer* commandBuffers, uint32_t count);
@@ -154,6 +175,14 @@ ASSIGN_DRIVER_FUNC(createBuffer, name) \
 ASSIGN_DRIVER_FUNC(destroyBuffer, name) \
 ASSIGN_DRIVER_FUNC(createTexture, name) \
 ASSIGN_DRIVER_FUNC(destroyTexture, name) \
+ASSIGN_DRIVER_FUNC(createSampler, name) \
+ASSIGN_DRIVER_FUNC(destroySampler, name) \
+ASSIGN_DRIVER_FUNC(createShaderModule, name) \
+ASSIGN_DRIVER_FUNC(destroyShaderModule, name) \
+ASSIGN_DRIVER_FUNC(createRenderPipeline, name) \
+ASSIGN_DRIVER_FUNC(createComputePipeline, name) \
+ASSIGN_DRIVER_FUNC(createRayTracingPipeline, name) \
+ASSIGN_DRIVER_FUNC(destroyPipeline, name) \
 ASSIGN_DRIVER_FUNC(createSwapChain, name) \
 ASSIGN_DRIVER_FUNC(destroySwapChain, name) \
 ASSIGN_DRIVER_FUNC(getSwapChainFormat, name) \
