@@ -42,19 +42,34 @@ namespace
 
 void init_gfx()
 #else
-void init_gfx(GLFWwindow* window)
+
+void* os_get_gl_proc_address(const char* function)
+{
+    return (void*)glfwGetProcAddress(function);
+}
+
+void init_gfx(GLFWwindow* window, bool useOpenGL)
 #endif
 {
     VGPUDeviceDesc deviceDesc{};
     deviceDesc.label = "test device";
 #ifdef _DEBUG
-    deviceDesc.validationMode = VGPU_VALIDATION_MODE_ENABLED;
+    deviceDesc.validationMode = VGPUValidationMode_Enabled;
 #endif
 
     //if (vgpuIsSupported(VGPU_BACKEND_TYPE_VULKAN))
     //{
     //    deviceDesc.preferredBackend = VGPU_BACKEND_TYPE_VULKAN;
     //}
+
+    if (useOpenGL)
+    {
+        glfwMakeContextCurrent(window);
+        glfwSwapInterval(1);
+
+        deviceDesc.preferredBackend = VGPUBackendType_OpenGL;
+        deviceDesc.gl.getProcAddress = os_get_gl_proc_address;
+    }
 
     void* windowHandle = nullptr;
 #if defined(__EMSCRIPTEN__)
@@ -176,15 +191,40 @@ int main()
         return EXIT_FAILURE;
     }
 
+    bool useOpenGL = false;
+    if (vgpuIsSupported(VGPUBackendType_OpenGL))
+    {
+        useOpenGL = true;
+    }
+
     //VGPU_SetLogCallback(vgpu_log);
 
-    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+    if (useOpenGL)
+    {
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+        glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
+        //glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    }
+    else
+    {
+        glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+    }
     GLFWwindow* window = glfwCreateWindow(1280, 720, "Hello World", NULL, NULL);
-    init_gfx(window);
+    init_gfx(window, useOpenGL);
 
     while (!glfwWindowShouldClose(window))
     {
-        draw_frame();
+        if (vgpuGetBackendType(device) == VGPUBackendType_OpenGL)
+        {
+            //draw_frame();
+            glfwSwapBuffers(window);
+        }
+        else
+        {
+            draw_frame();
+        }
+
         glfwPollEvents();
     }
 

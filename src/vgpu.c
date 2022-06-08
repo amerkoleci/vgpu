@@ -117,7 +117,7 @@ VGPUDevice vgpuCreateDevice(const VGPUDeviceDesc* desc)
     VGPUBackendType backend = desc->preferredBackend;
 
 retry:
-    if (backend == VGPU_BACKEND_TYPE_DEFAULT)
+    if (backend == VGPUBackendType_Default)
     {
         for (uint32_t i = 0; i < _VGPU_COUNT_OF(drivers); ++i)
         {
@@ -146,7 +146,7 @@ retry:
                 else
                 {
                     vgpuLogWarn("Wanted API not supported, fallback to default");
-                    backend = VGPU_BACKEND_TYPE_DEFAULT;
+                    backend = VGPUBackendType_Default;
                     goto retry;
                 }
             }
@@ -176,6 +176,15 @@ void vgpuWaitIdle(VGPUDevice device)
 {
     NULL_RETURN(device);
     device->waitIdle(device->driverData);
+}
+
+VGPUBackendType vgpuGetBackendType(VGPUDevice device)
+{
+    if (device == NULL) {
+        return _VGPUBackendType_Force32;
+    }
+
+    return device->getBackendType();
 }
 
 bool vgpuQueryFeature(VGPUDevice device, VGPUFeature feature)

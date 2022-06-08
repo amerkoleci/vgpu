@@ -651,6 +651,11 @@ static void d3d12_waitIdle(VGFXRenderer* driverData)
     d3d12_ProcessDeletionQueue(renderer);
 }
 
+static VGPUBackendType d3d12_getBackendType(void)
+{
+    return VGPUBackendType_D3D12;
+}
+
 static bool d3d12_hasFeature(VGFXRenderer* driverData, VGPUFeature feature)
 {
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
@@ -680,7 +685,6 @@ static void d3d12_getAdapterProperties(VGFXRenderer* driverData, VGPUAdapterProp
     properties->name = renderer->adapterName.c_str();
     properties->driverDescription = renderer->driverDescription.c_str();
     properties->adapterType = renderer->adapterType;
-    properties->backendType = VGPUBackendType_D3D12;
 }
 
 static void d3d12_getLimits(VGFXRenderer* driverData, VGPULimits* limits)
@@ -1790,14 +1794,14 @@ static VGPUDevice d3d12_createDevice(const VGPUDeviceDesc* info)
     D3D12_Renderer* renderer = new D3D12_Renderer();
 
     DWORD dxgiFactoryFlags = 0;
-    if (info->validationMode != VGPU_VALIDATION_MODE_DISABLED)
+    if (info->validationMode != VGPUValidationMode_Disabled)
     {
         ComPtr<ID3D12Debug> debugController;
         if (SUCCEEDED(vgfxD3D12GetDebugInterface(IID_PPV_ARGS(debugController.GetAddressOf()))))
         {
             debugController->EnableDebugLayer();
 
-            if (info->validationMode == VGPU_VALIDATION_MODE_GPU)
+            if (info->validationMode == VGPUValidationMode_GPU)
             {
                 ComPtr<ID3D12Debug1> debugController1;
                 if (SUCCEEDED(debugController.As(&debugController1)))
@@ -1929,7 +1933,7 @@ static VGPUDevice d3d12_createDevice(const VGPUDeviceDesc* info)
             renderer->device->SetName(wide_name.c_str());
         }
 
-        if (info->validationMode != VGPU_VALIDATION_MODE_DISABLED)
+        if (info->validationMode != VGPUValidationMode_Disabled)
         {
             // Configure debug device (if active).
             ComPtr<ID3D12InfoQueue> infoQueue;
@@ -1947,7 +1951,7 @@ static VGPUDevice d3d12_createDevice(const VGPUDeviceDesc* info)
                 enabledSeverities.push_back(D3D12_MESSAGE_SEVERITY_WARNING);
                 enabledSeverities.push_back(D3D12_MESSAGE_SEVERITY_MESSAGE);
 
-                if (info->validationMode == VGPU_VALIDATION_MODE_VERBOSE)
+                if (info->validationMode == VGPUValidationMode_Verbose)
                 {
                     // Verbose only filters
                     enabledSeverities.push_back(D3D12_MESSAGE_SEVERITY_INFO);
@@ -1976,7 +1980,6 @@ static VGPUDevice d3d12_createDevice(const VGPUDeviceDesc* info)
                 infoQueue->PushEmptyStorageFilter();
 
                 infoQueue->AddStorageFilterEntries(&filter);
-                infoQueue->AddApplicationMessage(D3D12_MESSAGE_SEVERITY_MESSAGE, "D3D12 Debug Filters setup");
             }
         }
 
@@ -2004,7 +2007,7 @@ static VGPUDevice d3d12_createDevice(const VGPUDeviceDesc* info)
 
         if (adapterDesc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)
         {
-            renderer->adapterType = VGPU_ADAPTER_TYPE_CPU;
+            renderer->adapterType = VGPUAdapterType_CPU;
         }
         else {
             renderer->adapterType = (arch.UMA == TRUE) ? VGPU_ADAPTER_TYPE_INTEGRATED_GPU : VGPU_ADAPTER_TYPE_DISCRETE_GPU;

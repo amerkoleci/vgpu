@@ -227,6 +227,13 @@ endif ()
 if (VGPU_OPENGL_DRIVER)
     target_sources(${PROJECT_NAME} PRIVATE
         src/vgpu_driver_gl.cpp
+        src/lib/glad/src/glad.c
+        src/lib/glad/include/KHR/khrplatform.h
+        src/lib/glad/include/glad/glad.h
+    )
+
+    target_include_directories(${PROJECT_NAME} PRIVATE
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/lib/glad/include>
     )
 
     target_compile_definitions(${PROJECT_NAME} PRIVATE VGPU_OPENGL_DRIVER=1)
@@ -246,11 +253,6 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/lib>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>
-)
-
-# Libraries
-target_link_libraries(${PROJECT_NAME} PRIVATE
-    stb
 )
 
 # Soname

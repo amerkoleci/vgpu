@@ -438,6 +438,11 @@ static void d3d11_waitIdle(VGFXRenderer* driverData)
     renderer->immediateContext->Flush();
 }
 
+static VGPUBackendType d3d11_getBackendType(void)
+{
+    return VGPUBackendType_D3D11;
+}
+
 static bool d3d11_hasFeature(VGFXRenderer* driverData, VGPUFeature feature)
 {
     VGFXD3D11Renderer* renderer = (VGFXD3D11Renderer*)driverData;
@@ -467,7 +472,6 @@ static void d3d11_getAdapterProperties(VGFXRenderer* driverData, VGPUAdapterProp
     properties->name = renderer->adapterName.c_str();
     properties->driverDescription = renderer->driverDescription.c_str();
     properties->adapterType = renderer->adapterType;
-    properties->backendType = VGPUBackendType_D3D11;
 }
 
 static void d3d11_getLimits(VGFXRenderer* driverData, VGPULimits* limits)
@@ -1360,7 +1364,7 @@ static VGPUDevice d3d11_createDevice(const VGPUDeviceDesc* info)
     VGFXD3D11Renderer* renderer = new VGFXD3D11Renderer();
 
     DWORD dxgiFactoryFlags = 0;
-    if (info->validationMode != VGPU_VALIDATION_MODE_DISABLED)
+    if (info->validationMode != VGPUValidationMode_Disabled)
     {
 #if defined(_DEBUG) && WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
         ComPtr<IDXGIInfoQueue> dxgiInfoQueue;
@@ -1448,7 +1452,7 @@ static VGPUDevice d3d11_createDevice(const VGPUDeviceDesc* info)
     }
 
     UINT creationFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
-    if (info->validationMode != VGPU_VALIDATION_MODE_DISABLED)
+    if (info->validationMode != VGPUValidationMode_Disabled)
     {
         if (SdkLayersAvailable())
         {
@@ -1525,7 +1529,7 @@ static VGPUDevice d3d11_createDevice(const VGPUDeviceDesc* info)
         return nullptr;
     }
 
-    if (info->validationMode != VGPU_VALIDATION_MODE_DISABLED)
+    if (info->validationMode != VGPUValidationMode_Disabled)
     {
         ComPtr<ID3D11Debug> d3dDebug;
         if (SUCCEEDED(tempDevice.As(&d3dDebug)))
@@ -1546,7 +1550,7 @@ static VGPUDevice d3d11_createDevice(const VGPUDeviceDesc* info)
                 enabledSeverities.push_back(D3D11_MESSAGE_SEVERITY_WARNING);
                 enabledSeverities.push_back(D3D11_MESSAGE_SEVERITY_MESSAGE);
 
-                if (info->validationMode == VGPU_VALIDATION_MODE_VERBOSE)
+                if (info->validationMode == VGPUValidationMode_Verbose)
                 {
                     // Verbose only filters
                     enabledSeverities.push_back(D3D11_MESSAGE_SEVERITY_INFO);
@@ -1564,7 +1568,6 @@ static VGPUDevice d3d11_createDevice(const VGPUDeviceDesc* info)
                 infoQueue->PushEmptyStorageFilter();
 
                 infoQueue->AddStorageFilterEntries(&filter);
-                infoQueue->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_MESSAGE, "D3D11 Debug Filters setup");
             }
         }
     }
@@ -1604,7 +1607,7 @@ static VGPUDevice d3d11_createDevice(const VGPUDeviceDesc* info)
 
         if (adapterDesc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)
         {
-            renderer->adapterType = VGPU_ADAPTER_TYPE_CPU;
+            renderer->adapterType = VGPUAdapterType_CPU;
         }
         else
         {
@@ -1634,7 +1637,7 @@ static VGPUDevice d3d11_createDevice(const VGPUDeviceDesc* info)
     else
     {
         renderer->adapterName = "WARP";
-        renderer->adapterType = VGPU_ADAPTER_TYPE_CPU;
+        renderer->adapterType = VGPUAdapterType_CPU;
         vgpuLogInfo("D3D11 Adapter: WARP");
     }
 

@@ -1220,7 +1220,13 @@ static void vulkan_waitIdle(VGFXRenderer* driverData) {
     VK_CHECK(vkDeviceWaitIdle(renderer->device));
 }
 
-static bool vulkan_hasFeature(VGFXRenderer* driverData, VGPUFeature feature) {
+static VGPUBackendType vulkan_getBackendType(void)
+{
+    return VGPUBackendType_Vulkan;
+}
+
+static bool vulkan_hasFeature(VGFXRenderer* driverData, VGPUFeature feature)
+{
     VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
     switch (feature)
     {
@@ -1268,14 +1274,12 @@ static void vulkan_getAdapterProperties(VGFXRenderer* driverData, VGPUAdapterPro
         properties->adapterType = VGPU_ADAPTER_TYPE_VIRTUAL_GPU;
         break;
     case VK_PHYSICAL_DEVICE_TYPE_CPU:
-        properties->adapterType = VGPU_ADAPTER_TYPE_CPU;
+        properties->adapterType = VGPUAdapterType_CPU;
         break;
     default:
-        properties->adapterType = VGPU_ADAPTER_TYPE_OTHER;
+        properties->adapterType = VGPUAdapterType_Other;
         break;
     }
-
-    properties->backendType = VGPU_BACKEND_TYPE_VULKAN;
 }
 
 static void vulkan_getLimits(VGFXRenderer* driverData, VGPULimits* limits)
@@ -2541,7 +2545,7 @@ static VGPUDevice vulkan_createDevice(const VGPUDeviceDesc* info)
 #   pragma error Platform not supported
 #endif
 
-        if (info->validationMode != VGPU_VALIDATION_MODE_DISABLED)
+        if (info->validationMode != VGPUValidationMode_Disabled)
         {
             // Determine the optimal validation layers to enable that are necessary for useful debugging
             std::vector<const char*> optimalValidationLyers = GetOptimalValidationLayers(availableInstanceLayers);
@@ -2550,7 +2554,7 @@ static VGPUDevice vulkan_createDevice(const VGPUDeviceDesc* info)
 
 #if defined(_DEBUG)
         bool validationFeatures = false;
-        if (info->validationMode == VGPU_VALIDATION_MODE_GPU)
+        if (info->validationMode == VGPUValidationMode_GPU)
         {
             uint32_t layerInstanceExtensionCount;
             VK_CHECK(vkEnumerateInstanceExtensionProperties("VK_LAYER_KHRONOS_validation", &layerInstanceExtensionCount, nullptr));
@@ -2588,14 +2592,14 @@ static VGPUDevice vulkan_createDevice(const VGPUDeviceDesc* info)
 
         VkDebugUtilsMessengerCreateInfoEXT debugUtilsCreateInfo{};
 
-        if (info->validationMode != VGPU_VALIDATION_MODE_DISABLED && renderer->debugUtils)
+        if (info->validationMode != VGPUValidationMode_Disabled && renderer->debugUtils)
         {
             debugUtilsCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
             debugUtilsCreateInfo.pNext = nullptr;
             debugUtilsCreateInfo.flags = 0;
 
             debugUtilsCreateInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-            if (info->validationMode == VGPU_VALIDATION_MODE_VERBOSE)
+            if (info->validationMode == VGPUValidationMode_Verbose)
             {
                 debugUtilsCreateInfo.messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT;
             }
@@ -2630,7 +2634,7 @@ static VGPUDevice vulkan_createDevice(const VGPUDeviceDesc* info)
 
         volkLoadInstanceOnly(renderer->instance);
 
-        if (info->validationMode != VGPU_VALIDATION_MODE_DISABLED && renderer->debugUtils)
+        if (info->validationMode != VGPUValidationMode_Disabled && renderer->debugUtils)
         {
             result = vkCreateDebugUtilsMessengerEXT(renderer->instance, &debugUtilsCreateInfo, nullptr, &renderer->debugUtilsMessenger);
             if (result != VK_SUCCESS)
@@ -3333,7 +3337,7 @@ static VGPUDevice vulkan_createDevice(const VGPUDeviceDesc* info)
 }
 
 VGFXDriver Vulkan_Driver = {
-    VGPU_BACKEND_TYPE_VULKAN,
+    VGPUBackendType_Vulkan,
     vulkan_isSupported,
     vulkan_createDevice
 };

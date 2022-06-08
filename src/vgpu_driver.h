@@ -118,6 +118,7 @@ typedef struct VGPUDevice_T
     void (*destroyDevice)(VGPUDevice device);
     uint64_t(*frame)(VGFXRenderer* driverData);
     void (*waitIdle)(VGFXRenderer* driverData);
+    VGPUBackendType(*getBackendType)(void);
     bool (*hasFeature)(VGFXRenderer* driverData, VGPUFeature feature);
     void (*getAdapterProperties)(VGFXRenderer* driverData, VGPUAdapterProperties* properties);
     void (*getLimits)(VGFXRenderer* driverData, VGPULimits* limits);
@@ -168,6 +169,7 @@ ASSIGN_COMMAND_BUFFER_FUNC(draw, name)
 ASSIGN_DRIVER_FUNC(destroyDevice, name) \
 ASSIGN_DRIVER_FUNC(frame, name) \
 ASSIGN_DRIVER_FUNC(waitIdle, name) \
+ASSIGN_DRIVER_FUNC(getBackendType, name) \
 ASSIGN_DRIVER_FUNC(hasFeature, name) \
 ASSIGN_DRIVER_FUNC(getAdapterProperties, name) \
 ASSIGN_DRIVER_FUNC(getLimits, name) \

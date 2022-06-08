@@ -71,39 +71,37 @@ typedef enum VGPULogLevel {
 } VGPULogLevel;
 
 typedef enum VGPUBackendType {
-    VGPU_BACKEND_TYPE_DEFAULT = 0,
-    VGPU_BACKEND_TYPE_VULKAN,
+    VGPUBackendType_Default = 0,
+    VGPUBackendType_Vulkan,
     VGPUBackendType_D3D12,
     VGPUBackendType_D3D11,
     VGPUBackendType_OpenGL,
-    VGPU_BACKEND_TYPE_WEBGPU,
+    VGPUBackendType_WebGPU,
 
-    _VGPU_BACKEND_TYPE_COUNT,
-    _VGPU_BACKEND_TYPE_FORCE_U32 = 0x7FFFFFFF
+    _VGPUBackendType_Count,
+    _VGPUBackendType_Force32 = 0x7FFFFFFF
 } VGPUBackendType;
 
 typedef enum VGPUValidationMode {
     /// No validation is enabled.
-    VGPU_VALIDATION_MODE_DISABLED = 0,
+    VGPUValidationMode_Disabled = 0,
     /// Print warnings and errors
-    VGPU_VALIDATION_MODE_ENABLED,
+    VGPUValidationMode_Enabled,
     /// Print all warnings, errors and info messages
-    VGPU_VALIDATION_MODE_VERBOSE,
+    VGPUValidationMode_Verbose,
     /// Enable GPU-based validation
-    VGPU_VALIDATION_MODE_GPU,
+    VGPUValidationMode_GPU,
 
-    _VGPUValidationMode_Count,
     _VGPUValidationMode_Force32 = 0x7FFFFFFF
 } VGPUValidationMode;
 
 typedef enum VGPUAdapterType {
-    VGPU_ADAPTER_TYPE_OTHER = 0,
+    VGPUAdapterType_Other = 0,
     VGPU_ADAPTER_TYPE_INTEGRATED_GPU,
     VGPU_ADAPTER_TYPE_DISCRETE_GPU,
     VGPU_ADAPTER_TYPE_VIRTUAL_GPU,
-    VGPU_ADAPTER_TYPE_CPU,
+    VGPUAdapterType_CPU,
 
-    _VGPUAdapterType_Count,
     _VGPUAdapterType_Force32 = 0x7FFFFFFF
 } VGPUAdapterType;
 
@@ -450,6 +448,9 @@ typedef struct VGPUDeviceDesc {
     const char* label;
     VGPUBackendType preferredBackend;
     VGPUValidationMode validationMode;
+    struct {
+        void* (*getProcAddress)(const char* function);
+    } gl;
 } VGPUDeviceDesc;
 
 typedef struct VGPUAdapterProperties {
@@ -458,7 +459,6 @@ typedef struct VGPUAdapterProperties {
     const char* name;
     const char* driverDescription;
     VGPUAdapterType adapterType;
-    VGPUBackendType backendType;
 } VGPUAdapterProperties;
 
 typedef struct VGPULimits {
@@ -498,6 +498,7 @@ VGPU_API VGPUDevice vgpuCreateDevice(const VGPUDeviceDesc* desc);
 VGPU_API void vgpuDestroyDevice(VGPUDevice device);
 VGPU_API uint64_t vgpuFrame(VGPUDevice device);
 VGPU_API void vgpuWaitIdle(VGPUDevice device);
+VGPU_API VGPUBackendType vgpuGetBackendType(VGPUDevice device);
 VGPU_API bool vgpuQueryFeature(VGPUDevice device, VGPUFeature feature);
 VGPU_API void vgpuGetAdapterProperties(VGPUDevice device, VGPUAdapterProperties* properties);
 VGPU_API void vgpuGetLimits(VGPUDevice device, VGPULimits* limits);
