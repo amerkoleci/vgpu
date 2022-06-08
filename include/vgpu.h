@@ -73,7 +73,9 @@ typedef enum VGPULogLevel {
 typedef enum VGPUBackendType {
     VGPU_BACKEND_TYPE_DEFAULT = 0,
     VGPU_BACKEND_TYPE_VULKAN,
-    VGPU_BACKEND_TYPE_D3D12,
+    VGPUBackendType_D3D12,
+    VGPUBackendType_D3D11,
+    VGPUBackendType_OpenGL,
     VGPU_BACKEND_TYPE_WEBGPU,
 
     _VGPU_BACKEND_TYPE_COUNT,

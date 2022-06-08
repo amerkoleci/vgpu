@@ -44,6 +44,8 @@ option(VGPU_BUILD_SHARED "Build vgpu as a shared library (DLL or .so)" ON)
 option(VGPU_INSTALL "Generate install rules for vgpu" ON)
 cmake_dependent_option(VGPU_VULKAN_DRIVER "Build the Vulkan backend" ON "NOT EMSCRIPTEN;NOT WINDOWS_STORE" OFF)
 cmake_dependent_option(VGPU_D3D12_DRIVER "Build the D3D12 backend" ON "WIN32" OFF)
+cmake_dependent_option(VGPU_D3D11_DRIVER "Build the D3D11 backend" ON "WIN32" OFF)
+cmake_dependent_option(VGPU_OPENGL_DRIVER "Build the OpenGL backend" ON "NOT WINDOWS_STORE" OFF)
 cmake_dependent_option(VGPU_WEBGPU_DRIVER "Build the WebGPU backend" ON "EMSCRIPTEN" OFF)
 cmake_dependent_option(VGPU_SAMPLES "Build samples" ON "NOT WINDOWS_STORE" OFF)
 
@@ -180,6 +182,18 @@ if (VGPU_D3D12_DRIVER)
     target_compile_definitions(${PROJECT_NAME} PRIVATE VGPU_D3D12_DRIVER=1)
 endif ()
 
+if (VGPU_D3D11_DRIVER)
+    target_sources(${PROJECT_NAME} PRIVATE
+        src/vgpu_driver_d3d11.cpp
+    )
+
+    target_compile_definitions(${PROJECT_NAME} PRIVATE VGPU_D3D11_DRIVER=1)
+
+    if(WINDOWS_STORE)
+        target_link_libraries(${PROJECT_NAME} PRIVATE d3d11 dxgi)
+    endif ()
+endif ()
+
 if (VGPU_VULKAN_DRIVER)
     if(ANDROID)
         target_compile_definitions(${PROJECT_NAME} PRIVATE VK_USE_PLATFORM_ANDROID_KHR)
@@ -210,6 +224,13 @@ if (VGPU_VULKAN_DRIVER)
     target_link_libraries(${PROJECT_NAME} PRIVATE vulkan spirv-reflect)
 endif ()
 
+if (VGPU_OPENGL_DRIVER)
+    target_sources(${PROJECT_NAME} PRIVATE
+        src/vgpu_driver_gl.cpp
+    )
+
+    target_compile_definitions(${PROJECT_NAME} PRIVATE VGPU_OPENGL_DRIVER=1)
+endif ()
 
 if (VGPU_WEBGPU_DRIVER)
     target_sources(${PROJECT_NAME} PRIVATE
@@ -225,6 +246,11 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/lib>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>
+)
+
+# Libraries
+target_link_libraries(${PROJECT_NAME} PRIVATE
+    stb
 )
 
 # Soname
@@ -278,6 +304,12 @@ if (VGPU_VULKAN_DRIVER)
 endif()
 if (VGPU_D3D12_DRIVER)
     message(STATUS "      - Direct3D12")
+endif ()
+if (VGPU_D3D11_DRIVER)
+    message(STATUS "      - Direct3D11")
+endif ()
+if (VGPU_OPENGL_DRIVER)
+    message(STATUS "      - OpenGL")
 endif ()
 
 if (VGPU_SAMPLES)

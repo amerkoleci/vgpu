@@ -680,7 +680,7 @@ static void d3d12_getAdapterProperties(VGFXRenderer* driverData, VGPUAdapterProp
     properties->name = renderer->adapterName.c_str();
     properties->driverDescription = renderer->driverDescription.c_str();
     properties->adapterType = renderer->adapterType;
-    properties->backendType = VGPU_BACKEND_TYPE_D3D12;
+    properties->backendType = VGPUBackendType_D3D12;
 }
 
 static void d3d12_getLimits(VGFXRenderer* driverData, VGPULimits* limits)
@@ -1520,12 +1520,6 @@ static void d3d12_endRenderPass(VGPUCommandBufferImpl* driverData)
     commandBuffer->insideRenderPass = false;
 }
 
-static void d3d12_prepareDraw(D3D12CommandBuffer* commandBuffer)
-{
-    VGPU_ASSERT(commandBuffer->insideRenderPass);
-}
-
-
 static void d3d12_setViewport(VGPUCommandBufferImpl* driverData, const VGPUViewport* viewport)
 {
     D3D12CommandBuffer* commandBuffer = (D3D12CommandBuffer*)driverData;
@@ -1542,6 +1536,11 @@ static void d3d12_setScissorRect(VGPUCommandBufferImpl* driverData, const VGPURe
     d3dScissorRect.right = LONG(scissorRect->x + scissorRect->width);
     d3dScissorRect.bottom = LONG(scissorRect->y + scissorRect->height);
     commandBuffer->commandList->RSSetScissorRects(1, &d3dScissorRect);
+}
+
+static void d3d12_prepareDraw(D3D12CommandBuffer* commandBuffer)
+{
+    VGPU_ASSERT(commandBuffer->insideRenderPass);
 }
 
 static void d3d12_draw(VGPUCommandBufferImpl* driverData, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t baseInstance)
@@ -2098,7 +2097,7 @@ static VGPUDevice d3d12_createDevice(const VGPUDeviceDesc* info)
 }
 
 VGFXDriver D3D12_Driver = {
-    VGPU_BACKEND_TYPE_D3D12,
+    VGPUBackendType_D3D12,
     d3d12_isSupported,
     d3d12_createDevice
 };
