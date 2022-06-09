@@ -56,15 +56,10 @@ void init_gfx(GLFWwindow* window)
         deviceDesc.preferredBackend = VGPUBackendType_Vulkan;
     }
 
-    void* windowHandle = nullptr;
-#if defined(__EMSCRIPTEN__)
-    windowHandle = "canvas";
-#elif defined(GLFW_EXPOSE_NATIVE_WIN32)
-    windowHandle = glfwGetWin32Window(window);
-#elif defined(GLFW_EXPOSE_NATIVE_X11)
-    windowHandle = (void*)(uintptr_t)glfwGetX11Window(window);
-#endif
-
+    if (vgpuIsSupported(VGPUBackendType_D3D11))
+    {
+        deviceDesc.preferredBackend = VGPUBackendType_D3D11;
+    }
     device = vgpuCreateDevice(&deviceDesc);
 
     VGPUAdapterProperties adapterProps;
@@ -77,9 +72,21 @@ void init_gfx(GLFWwindow* window)
     int height = 0;
     glfwGetWindowSize(window, &width, &height);
 
+
+    void* windowHandle = nullptr;
+#if defined(__EMSCRIPTEN__)
+    windowHandle = "canvas";
+#elif defined(GLFW_EXPOSE_NATIVE_WIN32)
+    windowHandle = glfwGetWin32Window(window);
+#elif defined(GLFW_EXPOSE_NATIVE_X11)
+    windowHandle = (void*)(uintptr_t)glfwGetX11Window(window);
+#endif
+
     VGPUSwapChainDesc swapChainDesc{};
+    swapChainDesc.width = width;
+    swapChainDesc.height = height;
     swapChainDesc.format = VGFXTextureFormat_BGRA8UNormSrgb;
-    swapChainDesc.presentMode = VGPU_PRESENT_MODE_FIFO;
+    swapChainDesc.presentMode = VGPUPresentMode_Fifo;
     swapChain = vgpuCreateSwapChain(device, windowHandle, &swapChainDesc);
 
     // Create vertex buffer
@@ -163,7 +170,7 @@ void draw_frame()
 
     vgpuSubmit(device, &commandBuffer, 1u);
     vgpuFrame(device);
-}
+    }
 
 int main()
 {
@@ -175,6 +182,8 @@ int main()
     {
         return EXIT_FAILURE;
     }
+
+    vgpuSetLogCallback(vgpu_log);
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     GLFWwindow* window = glfwCreateWindow(1280, 720, "Hello World", NULL, NULL);

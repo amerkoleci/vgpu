@@ -2,6 +2,7 @@
 // Licensed under the MIT License (MIT). See LICENSE in the repository root for more information.
 
 #include "vgpu_driver.h"
+
 #if defined(__EMSCRIPTEN__)
 #   include <emscripten.h>
 #elif defined(_WIN32)
@@ -67,7 +68,7 @@ void vgpuLogError(const char* format, ...)
     s_LogFunc(VGPU_LOG_LEVEL_ERROR, msg);
 }
 
-void VGPU_SetLogCallback(VGPULogCallback func)
+void vgpuSetLogCallback(VGPULogCallback func)
 {
     s_LogFunc = func;
 }
@@ -91,7 +92,7 @@ static const VGFXDriver* drivers[] = {
 #define NULL_RETURN(name) if (name == NULL) { return; }
 #define NULL_RETURN_NULL(name) if (name == NULL) { return NULL; }
 
-bool vgpuIsSupported(VGPUBackendType backend)
+vgpu_bool vgpuIsSupported(VGPUBackendType backend)
 {
     for (uint32_t i = 0; i < _VGPU_COUNT_OF(drivers); ++i)
     {
@@ -184,13 +185,13 @@ VGPUBackendType vgpuGetBackendType(VGPUDevice device)
     return device->getBackendType();
 }
 
-bool vgpuQueryFeature(VGPUDevice device, VGPUFeature feature)
+vgpu_bool vgpuQueryFeature(VGPUDevice device, VGPUFeature feature, void* pInfo, uint32_t infoSize)
 {
     if (device == NULL) {
         return false;
     }
 
-    return device->hasFeature(device->driverData, feature);
+    return device->queryFeature(device->driverData, feature, pInfo, infoSize);
 }
 
 void vgpuGetAdapterProperties(VGPUDevice device, VGPUAdapterProperties* properties)
@@ -238,7 +239,7 @@ void vgpuDestroyBuffer(VGPUDevice device, VGPUBuffer buffer)
 static VGPUTextureDesc _vgpuTextureDescDef(const VGPUTextureDesc* desc)
 {
     VGPUTextureDesc def = *desc;
-    def.type = _VGPU_DEF(def.type, VGPU_TEXTURE_TYPE_2D);
+    def.type = _VGPU_DEF(def.type, VGPUTexture_Type2D);
     def.format = _VGPU_DEF(def.type, VGFXTextureFormat_RGBA8UNorm);
     //def.usage = _VGPU_DEF(def.type, VGFXTextureUsage_ShaderRead);
     def.width = _VGPU_DEF(def.width, 1);
@@ -255,6 +256,80 @@ VGPUTexture vgpuCreateTexture(VGPUDevice device, const VGPUTextureDesc* desc)
     NULL_RETURN_NULL(desc);
 
     VGPUTextureDesc desc_def = _vgpuTextureDescDef(desc);
+
+    VGPU_ASSERT(desc_def.width > 0 && desc_def.height > 0 && desc_def.mipLevelCount >= 0);
+
+    const bool is3D = desc_def.type == VGPUTexture_Type3D;
+    const bool isDepthStencil = vgpuIsDepthStencilFormat(desc_def.format);
+    bool isCube = false;
+
+    if (desc_def.type == VGPUTexture_Type2D &&
+        desc_def.width == desc_def.height &&
+        desc_def.depthOrArraySize >= 6)
+    {
+        isCube = true;
+    }
+
+    uint32_t mipLevels = desc_def.mipLevelCount;
+    if (mipLevels == 0)
+    {
+        if (is3D)
+        {
+            mipLevels = vgpuNumMipLevels(desc_def.width, desc_def.height, desc_def.depthOrArraySize);
+        }
+        else
+        {
+            mipLevels = vgpuNumMipLevels(desc_def.width, desc_def.height, 1);
+        }
+    }
+
+    if (desc_def.sampleCount > 1u)
+    {
+        if (isCube)
+        {
+            vgpuLogWarn("Cubemap texture cannot be multisample");
+            return NULL;
+        }
+
+        if (is3D)
+        {
+            vgpuLogWarn("3D texture cannot be multisample");
+            return NULL;
+        }
+
+        if (mipLevels > 1)
+        {
+            vgpuLogWarn("Multisample texture cannot have mipmaps");
+            return NULL;
+        }
+    }
+
+    if (isDepthStencil && mipLevels > 1)
+    {
+        vgpuLogWarn("Depth texture cannot have mipmaps");
+        return NULL;
+    }
+
+    //if (isCube)
+    //{
+    //    ALIMER_ASSERT_MSG(info.width <= limits.maxTextureDimensionCube,
+    //        "Requested cube texture size too large: {}, Max allowed: {}", info.width, limits.maxTextureDimensionCube);
+    //    ALIMER_ASSERT(info.width == info.height);
+    //    ALIMER_ASSERT_MSG(info.sampleCount == TextureSampleCount::Count1, "Cubemap texture cannot be multisampled");
+    //}
+    //else
+    //{
+    //    ALIMER_ASSERT_MSG(info.width <= limits.maxTextureDimension2D, "Requested Texture2D width size too large: {}, Max: {}", info.width, limits.maxTextureDimension2D);
+    //    ALIMER_ASSERT_MSG(info.height <= limits.maxTextureDimension2D, "Requested Texture2D height size too large: {}, Max: {}", info.height, limits.maxTextureDimension2D);
+    //}
+
+    // Check if depth texture and ShaderWrite
+    if (isDepthStencil && (desc_def.usage & VGPUTextureUsage_ShaderWrite))
+    {
+        vgpuLogWarn("Cannot create Depth texture with ShaderWrite usage");
+        return NULL;
+    }
+
     return device->createTexture(device->driverData, &desc_def);
 }
 
@@ -337,7 +412,7 @@ static VGPUSwapChainDesc _vgpuSwapChainDescDef(const VGPUSwapChainDesc* desc)
 {
     VGPUSwapChainDesc def = *desc;
     def.format = _VGPU_DEF(def.format, VGFXTextureFormat_BGRA8UNorm);
-    def.presentMode = _VGPU_DEF(def.presentMode, VGPU_PRESENT_MODE_IMMEDIATE);
+    def.presentMode = _VGPU_DEF(def.presentMode, VGPUPresentMode_Immediate);
     return def;
 }
 
@@ -408,18 +483,27 @@ void vgpuEndRenderPass(VGPUCommandBuffer commandBuffer)
     commandBuffer->endRenderPass(commandBuffer->driverData);
 }
 
-void vgpuSetViewport(VGPUCommandBuffer commandBuffer, const VGPUViewport* viewport)
+void vgpuSetViewports(VGPUCommandBuffer commandBuffer, uint32_t count, const VGPUViewport* viewports)
 {
     VGPU_ASSERT(viewport);
+    VGPU_ASSERT(count < VGPU_MAX_VIEWPORTS_AND_SCISSORS);
 
-    commandBuffer->setViewport(commandBuffer->driverData, viewport);
+    commandBuffer->setViewports(commandBuffer->driverData, viewports, count);
 }
 
-void vgpuSetScissorRect(VGPUCommandBuffer commandBuffer, const VGPURect* scissorRect)
+void vgpuSetScissorRects(VGPUCommandBuffer commandBuffer, uint32_t count, const VGPURect* scissorRects)
 {
     VGPU_ASSERT(scissorRect);
+    VGPU_ASSERT(count < VGPU_MAX_VIEWPORTS_AND_SCISSORS);
 
-    commandBuffer->setScissorRect(commandBuffer->driverData, scissorRect);
+    commandBuffer->setScissorRects(commandBuffer->driverData, scissorRects, count);
+}
+
+void vgpuSetPipeline(VGPUCommandBuffer commandBuffer, VGPUPipeline pipeline)
+{
+    VGPU_ASSERT(pipeline);
+
+    commandBuffer->setPipeline(commandBuffer->driverData, pipeline);
 }
 
 void vgpuDraw(VGPUCommandBuffer commandBuffer, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t baseInstance)
@@ -438,11 +522,11 @@ void vgpuSubmit(VGPUDevice device, VGPUCommandBuffer* commandBuffers, uint32_t c
 // Format mapping table. The rows must be in the exactly same order as Format enum members are defined.
 static const VGPUFormatInfo c_FormatInfo[] = {
     //        format                   name             bytes blk         kind               red   green   blue  alpha  depth  stencl signed  srgb
-    { VGFXTextureFormat_Undefined,      "Undefined",           0,   0,  VGPU_TEXTURE_FORMAT_KIND_INTEGER,      false, false, false, false, false, false, false, false },
-    { VGFXTextureFormat_R8UInt,           "R8_UINT",           1,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,      true,  false, false, false, false, false, false, false },
-    { VGFXTextureFormat_R8SInt,           "R8_SINT",           1,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,      true,  false, false, false, false, false, true,  false },
-    { VGFXTextureFormat_R8UNorm,          "R8_UNORM",          1,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  false, false, false, false, false, false, false },
-    { VGFXTextureFormat_R8SNorm,          "R8_SNORM",          1,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  false, false, false, false, false, false, false },
+    { VGPUTextureFormat_Undefined,      "Undefined",           0,   0,  VGPU_TEXTURE_FORMAT_KIND_INTEGER,      false, false, false, false, false, false, false, false },
+    { VGPUTextureFormat_R8UNorm,        "R8_UNORM",          1,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  false, false, false, false, false, false, false },
+    { VGPUTextureFormat_R8SNorm,        "R8_SNORM",          1,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  false, false, false, false, false, false, false },
+    { VGPUTextureFormat_R8UInt,         "R8_UINT",           1,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,      true,  false, false, false, false, false, false, false },
+    { VGPUTextureFormat_R8SInt,         "R8_SINT",           1,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,      true,  false, false, false, false, false, true,  false },
 
     { VGFXTextureFormat_R16UInt,          "R16_UINT",          2,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,      true,  false, false, false, false, false, false, false },
     { VGFXTextureFormat_R16SInt,          "R16_SINT",          2,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,      true,  false, false, false, false, false, true,  false },
@@ -531,20 +615,35 @@ void vgpuGetFormatInfo(VGPUTextureFormat format, const VGPUFormatInfo* pInfo)
     VGPU_ASSERT(pInfo->format == format);
 }
 
-bool vgpuIsDepthFormat(VGPUTextureFormat format)
+vgpu_bool vgpuIsDepthFormat(VGPUTextureFormat format)
 {
     VGPU_ASSERT(c_FormatInfo[(uint32_t)format].format == format);
     return c_FormatInfo[(uint32_t)format].hasDepth;
 }
 
-bool vgpuIsStencilFormat(VGPUTextureFormat format)
+vgpu_bool vgpuIsStencilFormat(VGPUTextureFormat format)
 {
     VGPU_ASSERT(c_FormatInfo[(uint32_t)format].format == format);
     return c_FormatInfo[(uint32_t)format].hasStencil;
 }
 
-bool vgpuIsDepthStencilFormat(VGPUTextureFormat format)
+vgpu_bool vgpuIsDepthStencilFormat(VGPUTextureFormat format)
 {
     VGPU_ASSERT(c_FormatInfo[(uint32_t)format].format == format);
     return c_FormatInfo[(uint32_t)format].hasDepth || c_FormatInfo[(uint32_t)format].hasStencil;
+}
+
+uint32_t vgpuNumMipLevels(uint32_t width, uint32_t height, uint32_t depth)
+{
+    uint32_t mipLevels = 0;
+    uint32_t size = _VGPU_MAX(_VGPU_MAX(width, height), depth);
+    while (1u << mipLevels <= size)
+    {
+        ++mipLevels;
+    }
+
+    if (1u << mipLevels < size)
+        ++mipLevels;
+
+    return mipLevels;
 }

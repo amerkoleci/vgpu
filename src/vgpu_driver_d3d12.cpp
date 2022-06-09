@@ -177,6 +177,11 @@ struct D3D12_ShaderModule
     std::vector<uint8_t> byteCode;
 };
 
+struct D3D12Pipeline
+{
+    ID3D12PipelineState* handle = nullptr;
+    D3D_PRIMITIVE_TOPOLOGY primitiveTopology = D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
+};
 
 struct D3D12_SwapChain
 {
@@ -242,6 +247,7 @@ struct D3D12_Renderer
     HANDLE frameFenceEvent = INVALID_HANDLE_VALUE;
 
     D3D12MA::Allocator* allocator = nullptr;
+    CD3DX12FeatureSupport d3dFeatures;
     ID3D12CommandQueue* graphicsQueue = nullptr;
 
     /* Command contexts */
@@ -656,20 +662,53 @@ static VGPUBackendType d3d12_getBackendType(void)
     return VGPUBackendType_D3D12;
 }
 
-static bool d3d12_hasFeature(VGFXRenderer* driverData, VGPUFeature feature)
+static bool d3d12_queryFeature(VGFXRenderer* driverData, VGPUFeature feature, void* pInfo, uint32_t infoSize)
 {
+    (void)pInfo;
+    (void)infoSize;
+
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
     switch (feature)
     {
-    case VGPU_FEATURE_COMPUTE:
-    case VGPU_FEATURE_INDEPENDENT_BLEND:
-    case VGPU_FEATURE_TEXTURE_CUBE_ARRAY:
-    case VGPU_FEATURE_TEXTURE_COMPRESSION_BC:
+    case VGPUFeature_TextureCompressionBC:
+    case VGPUFeature_ShaderFloat16:
+    case VGPUFeature_PipelineStatisticsQuery:
+    case VGPUFeature_TimestampQuery:
+    case VGPUFeature_DepthClamping:
+    case VGPUFeature_Depth24UNormStencil8:
+    case VGPUFeature_Depth32FloatStencil8:
+    case VGPUFeature_IndependentBlend:
+    case VGPUFeature_TextureCubeArray:
+    case VGPUFeature_Tessellation:
+    case VGPUFeature_DescriptorIndexing:
+    case VGPUFeature_ConditionalRendering:
+    case VGPUFeature_DrawIndirectFirstInstance:
         return true;
 
-    case VGPU_FEATURE_TEXTURE_COMPRESSION_ETC2:
-    case VGPU_FEATURE_TEXTURE_COMPRESSION_ASTC:
+    case VGPUFeature_TextureCompressionETC2:
+    case VGPUFeature_TextureCompressionASTC:
         return false;
+
+    case VGPUFeature_ShaderOutputViewportIndex:
+        return renderer->d3dFeatures.VPAndRTArrayIndexFromAnyShaderFeedingRasterizerSupportedWithoutGSEmulation() == TRUE;
+
+        // https://docs.microsoft.com/en-us/windows/win32/direct3d11/tiled-resources-texture-sampling-features
+    case VGPUFeature_SamplerMinMax:
+        return renderer->d3dFeatures.TiledResourcesTier() >= D3D12_TILED_RESOURCES_TIER_2;
+
+    case VGPUFeature_RayTracing:
+        if (renderer->d3dFeatures.RaytracingTier() >= D3D12_RAYTRACING_TIER_1_1)
+        {
+            if (infoSize == sizeof(uint32_t))
+            {
+                auto* pShaderGroupHandleSize = reinterpret_cast<uint32_t*>(pInfo);
+                *pShaderGroupHandleSize = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
+            }
+
+            return true;
+        }
+        return false;
+
 
     default:
         return false;
@@ -798,13 +837,13 @@ static VGPUBuffer d3d12_createBuffer(VGFXRenderer* driverData, const VGPUBufferD
     D3D12MA::ALLOCATION_DESC allocationDesc = {};
     D3D12_RESOURCE_STATES resourceState = D3D12_RESOURCE_STATE_COMMON;
     allocationDesc.HeapType = D3D12_HEAP_TYPE_DEFAULT;
-    if (desc->usage & VGPUBufferUsage_MapRead)
+    if (desc->cpuAccess == VGPUCpuAccessMode_Read)
     {
         allocationDesc.HeapType = D3D12_HEAP_TYPE_READBACK;
         resourceState = D3D12_RESOURCE_STATE_COPY_DEST;
         resourceDesc.Flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
     }
-    else if (desc->usage & VGPUBufferUsage_MapWrite)
+    else if (desc->cpuAccess == VGPUCpuAccessMode_Write)
     {
         allocationDesc.HeapType = D3D12_HEAP_TYPE_UPLOAD;
         resourceState = D3D12_RESOURCE_STATE_GENERIC_READ;
@@ -838,11 +877,11 @@ static VGPUBuffer d3d12_createBuffer(VGFXRenderer* driverData, const VGPUBufferD
 
     buffer->gpuAddress = buffer->handle->GetGPUVirtualAddress();
 
-    if (desc->usage & VGPUBufferUsage_MapRead)
+    if (desc->cpuAccess == VGPUCpuAccessMode_Read)
     {
         buffer->handle->Map(0, nullptr, &buffer->pMappedData);
     }
-    else if (desc->usage & VGPUBufferUsage_MapWrite)
+    else if (desc->cpuAccess == VGPUCpuAccessMode_Write)
     {
         D3D12_RANGE readRange = {};
         buffer->handle->Map(0, &readRange, &buffer->pMappedData);
@@ -934,7 +973,11 @@ static VGPUTexture d3d12_createTexture(VGFXRenderer* driverData, const VGPUTextu
     allocationDesc.HeapType = D3D12_HEAP_TYPE_DEFAULT;
 
     D3D12_RESOURCE_DESC resourceDesc;
-    if (desc->type == VGPU_TEXTURE_TYPE_3D)
+    if (desc->type == VGPUTexture_Type1D)
+    {
+        resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE1D;
+    }
+    else if (desc->type == VGPUTexture_Type3D)
     {
         resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE3D;
     }
@@ -953,18 +996,18 @@ static VGPUTexture d3d12_createTexture(VGFXRenderer* driverData, const VGPUTextu
     resourceDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
     resourceDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
 
-    if (desc->usage & VGPU_TEXTURE_USAGE_SHADER_WRITE)
+    if (desc->usage & VGPUTextureUsage_ShaderWrite)
     {
         resourceDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     }
 
-    if (desc->usage & VGPU_TEXTURE_USAGE_RENDER_TARGET)
+    if (desc->usage & VGPUTextureUsage_RenderTarget)
     {
         if (vgpuIsDepthStencilFormat(desc->format))
         {
             resourceDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
 
-            if (!(desc->usage & VGPU_TEXTURE_USAGE_SHADER_READ))
+            if (!(desc->usage & VGPUTextureUsage_ShaderRead))
             {
                 resourceDesc.Flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
             }
@@ -978,7 +1021,7 @@ static VGPUTexture d3d12_createTexture(VGFXRenderer* driverData, const VGPUTextu
     D3D12_CLEAR_VALUE clearValue = {};
     D3D12_CLEAR_VALUE* pClearValue = nullptr;
 
-    if (desc->usage & VGPU_TEXTURE_USAGE_RENDER_TARGET)
+    if (desc->usage & VGPUTextureUsage_RenderTarget)
     {
         clearValue.Format = resourceDesc.Format;
         if (vgpuIsDepthStencilFormat(desc->format))
@@ -989,7 +1032,7 @@ static VGPUTexture d3d12_createTexture(VGFXRenderer* driverData, const VGPUTextu
     }
 
     // If shader read/write and depth format, set to typeless
-    if (vgpuIsDepthFormat(desc->format) && desc->usage & (VGPU_TEXTURE_USAGE_SHADER_READ | VGPU_TEXTURE_USAGE_SHADER_WRITE))
+    if (vgpuIsDepthFormat(desc->format) && desc->usage & (VGPUTextureUsage_ShaderRead | VGPUTextureUsage_ShaderWrite))
     {
         resourceDesc.Format = GetTypelessFormatFromDepthFormat(desc->format);
         pClearValue = nullptr;
@@ -1124,22 +1167,26 @@ static void d3d12_destroyShaderModule(VGFXRenderer* driverData, VGPUShaderModule
 /* Pipeline */
 static VGPUPipeline d3d12_createRenderPipeline(VGFXRenderer* driverData, const VGPURenderPipelineDesc* desc)
 {
-    return nullptr;
+    D3D12Pipeline* pipeline = new D3D12Pipeline();
+    return (VGPUPipeline)pipeline;
 }
 
 static VGPUPipeline d3d12_createComputePipeline(VGFXRenderer* driverData, const VGPUComputePipelineDesc* desc)
 {
-    return nullptr;
+    D3D12Pipeline* pipeline = new D3D12Pipeline();
+    return (VGPUPipeline)pipeline;
 }
 
 static VGPUPipeline d3d12_createRayTracingPipeline(VGFXRenderer* driverData, const VGPURayTracingPipelineDesc* desc)
 {
-    return nullptr;
+    D3D12Pipeline* pipeline = new D3D12Pipeline();
+    return (VGPUPipeline)pipeline;
 }
 
 static void d3d12_destroyPipeline(VGFXRenderer* driverData, VGPUPipeline resource)
 {
-
+    D3D12Pipeline* pipeline = (D3D12Pipeline*)resource;
+    delete pipeline;
 }
 
 /* SwapChain */
@@ -1148,8 +1195,8 @@ static VGPUSwapChain d3d12_createSwapChain(VGFXRenderer* driverData, void* windo
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
 
     DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
-    swapChainDesc.Width = 0;
-    swapChainDesc.Height = 0;
+    swapChainDesc.Width = desc->width;
+    swapChainDesc.Height = desc->height;
     swapChainDesc.Format = ToDXGIFormat(ToDXGISwapChainFormat(desc->format));
     swapChainDesc.Stereo = FALSE;
     swapChainDesc.SampleDesc.Count = 1;
@@ -1168,7 +1215,7 @@ static VGPUSwapChain d3d12_createSwapChain(VGFXRenderer* driverData, void* windo
     VGPU_ASSERT(IsWindow(window));
 
     DXGI_SWAP_CHAIN_FULLSCREEN_DESC fsSwapChainDesc = {};
-    fsSwapChainDesc.Windowed = TRUE;
+    fsSwapChainDesc.Windowed = !desc->isFullscreen;
 
     // Create a swap chain for the window.
     HRESULT hr = renderer->factory->CreateSwapChainForHwnd(
@@ -1524,22 +1571,37 @@ static void d3d12_endRenderPass(VGPUCommandBufferImpl* driverData)
     commandBuffer->insideRenderPass = false;
 }
 
-static void d3d12_setViewport(VGPUCommandBufferImpl* driverData, const VGPUViewport* viewport)
+static void d3d12_setViewports(VGPUCommandBufferImpl* driverData, const VGPUViewport* viewports, uint32_t count)
 {
+    VGPU_ASSERT(count < D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE);
+
     D3D12CommandBuffer* commandBuffer = (D3D12CommandBuffer*)driverData;
-    commandBuffer->commandList->RSSetViewports(1, (D3D12_VIEWPORT*)&viewport);
+    commandBuffer->commandList->RSSetViewports(count, (const D3D12_VIEWPORT*)viewports);
 }
 
-static void d3d12_setScissorRect(VGPUCommandBufferImpl* driverData, const VGPURect* scissorRect)
+static void d3d12_setScissorRects(VGPUCommandBufferImpl* driverData, const VGPURect* scissorRects, uint32_t count)
 {
+    VGPU_ASSERT(count < D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE);
+
     D3D12CommandBuffer* commandBuffer = (D3D12CommandBuffer*)driverData;
 
-    D3D12_RECT d3dScissorRect;
-    d3dScissorRect.left = LONG(scissorRect->x);
-    d3dScissorRect.top = LONG(scissorRect->y);
-    d3dScissorRect.right = LONG(scissorRect->x + scissorRect->width);
-    d3dScissorRect.bottom = LONG(scissorRect->y + scissorRect->height);
-    commandBuffer->commandList->RSSetScissorRects(1, &d3dScissorRect);
+    D3D12_RECT d3dScissorRects[VGPU_MAX_VIEWPORTS_AND_SCISSORS];
+    for (uint32_t i = 0; i < count; i++)
+    {
+        d3dScissorRects[i].left = scissorRects[i].x;
+        d3dScissorRects[i].top = scissorRects[i].y;
+        d3dScissorRects[i].right = scissorRects[i].x + scissorRects[i].width;
+        d3dScissorRects[i].bottom = scissorRects[i].y + scissorRects[i].height;
+    }
+    commandBuffer->commandList->RSSetScissorRects(count, d3dScissorRects);
+}
+
+static void d3d12_setPipeline(VGPUCommandBufferImpl* driverData, VGPUPipeline pipeline)
+{
+    D3D12CommandBuffer* commandBuffer = (D3D12CommandBuffer*)driverData;
+    D3D12Pipeline* d3dPipeline = (D3D12Pipeline*)pipeline;
+    commandBuffer->commandList->SetPipelineState(d3dPipeline->handle);
+    commandBuffer->commandList->IASetPrimitiveTopology(d3dPipeline->primitiveTopology);
 }
 
 static void d3d12_prepareDraw(D3D12CommandBuffer* commandBuffer)
@@ -1926,6 +1988,16 @@ static VGPUDevice d3d12_createDevice(const VGPUDeviceDesc* info)
             return nullptr;
         }
 
+        // Init feature check (https://devblogs.microsoft.com/directx/introducing-a-new-api-for-checking-feature-support-in-direct3d-12/)
+        VHR(renderer->d3dFeatures.Init(renderer->device));
+
+        if (renderer->d3dFeatures.HighestRootSignatureVersion() < D3D_ROOT_SIGNATURE_VERSION_1_1)
+        {
+            vgpuLogError("Direct3D12: Root signature version 1.1 not supported!");
+            delete renderer;
+            return nullptr;
+        }
+
         // Assign label object.
         if (info->label)
         {
@@ -2002,15 +2074,12 @@ static VGPUDevice d3d12_createDevice(const VGPUDeviceDesc* info)
         renderer->deviceID = adapterDesc.DeviceId;
         renderer->adapterName = WCharToUTF8(adapterDesc.Description);
 
-        D3D12_FEATURE_DATA_ARCHITECTURE arch = {};
-        HRESULT hr = renderer->device->CheckFeatureSupport(D3D12_FEATURE_ARCHITECTURE, &arch, sizeof(arch));
-
         if (adapterDesc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)
         {
-            renderer->adapterType = VGPUAdapterType_CPU;
+            renderer->adapterType = VGPUAdapterType_Cpu;
         }
         else {
-            renderer->adapterType = (arch.UMA == TRUE) ? VGPU_ADAPTER_TYPE_INTEGRATED_GPU : VGPU_ADAPTER_TYPE_DISCRETE_GPU;
+            renderer->adapterType = (renderer->d3dFeatures.UMA() == TRUE) ? VGPUAdapterType_IntegratedGPU : VGPUAdapterType_DiscreteGPU;
         }
 
         // Convert the adapter's D3D12 driver version to a readable string like "24.21.13.9793".
@@ -2030,21 +2099,7 @@ static VGPUDevice d3d12_createDevice(const VGPUDeviceDesc* info)
             renderer->driverDescription = o.str();
         }
 
-        // Check the maximum feature level, and make sure it's above our minimum
-        D3D12_FEATURE_DATA_FEATURE_LEVELS featureLevels =
-        {
-            _countof(s_featureLevels), s_featureLevels, D3D_FEATURE_LEVEL_11_0
-        };
-
-        hr = renderer->device->CheckFeatureSupport(D3D12_FEATURE_FEATURE_LEVELS, &featureLevels, sizeof(featureLevels));
-        if (SUCCEEDED(hr))
-        {
-            renderer->featureLevel = featureLevels.MaxSupportedFeatureLevel;
-        }
-        else
-        {
-            renderer->featureLevel = D3D_FEATURE_LEVEL_11_0;
-        }
+        renderer->featureLevel = renderer->d3dFeatures.MaxSupportedFeatureLevel();
 
         vgpuLogInfo("VGPU Driver: D3D12");
         vgpuLogInfo("D3D12 Adapter: %S", adapterDesc.Description);

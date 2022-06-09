@@ -60,8 +60,8 @@ namespace
             STR(ERROR_VALIDATION_FAILED_EXT);
             STR(ERROR_INVALID_SHADER_NV);
 #undef STR
-        default:
-            return "UNKNOWN_ERROR";
+            default:
+                return "UNKNOWN_ERROR";
         }
     }
 
@@ -289,125 +289,139 @@ namespace
         return extensions;
     }
 
+
+    bool IsDepthStencilFormatSupported(VkPhysicalDevice physicalDevice, VkFormat format)
+    {
+        VGPU_ASSERT(
+            format == VK_FORMAT_D16_UNORM_S8_UINT ||
+            format == VK_FORMAT_D24_UNORM_S8_UINT ||
+            format == VK_FORMAT_D32_SFLOAT_S8_UINT ||
+            format == VK_FORMAT_S8_UINT
+        );
+        VkFormatProperties properties;
+        vkGetPhysicalDeviceFormatProperties(physicalDevice, format, &properties);
+        return properties.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    }
+
     constexpr VkFormat ToVkFormat(VGPUTextureFormat format)
     {
         switch (format)
         {
             // 8-bit formats
-        case VGFXTextureFormat_R8UInt:      return VK_FORMAT_R8_UINT;
-        case VGFXTextureFormat_R8SInt:      return VK_FORMAT_R8_SINT;
-        case VGFXTextureFormat_R8UNorm:     return VK_FORMAT_R8_UNORM;
-        case VGFXTextureFormat_R8SNorm:     return VK_FORMAT_R8_SNORM;
-            // 16-bit formats
-        case VGFXTextureFormat_R16UInt:         return VK_FORMAT_R16_UINT;
-        case VGFXTextureFormat_R16SInt:         return VK_FORMAT_R16_SINT;
-        case VGFXTextureFormat_R16UNorm:        return VK_FORMAT_R16_UNORM;
-        case VGFXTextureFormat_R16SNorm:        return VK_FORMAT_R16_SNORM;
-        case VGFXTextureFormat_R16Float:        return VK_FORMAT_R16_SFLOAT;
-        case VGFXTextureFormat_RG8UInt:         return VK_FORMAT_R8G8_UINT;
-        case VGFXTextureFormat_RG8SInt:         return VK_FORMAT_R8G8_SINT;
-        case VGFXTextureFormat_RG8UNorm:        return VK_FORMAT_R8G8_UNORM;
-        case VGFXTextureFormat_RG8SNorm:        return VK_FORMAT_R8G8_SNORM;
-            // Packed 16-Bit Pixel Formats
-        case VGFXTextureFormat_BGRA4UNorm:       return VK_FORMAT_B4G4R4A4_UNORM_PACK16;
-        case VGFXTextureFormat_B5G6R5UNorm:      return VK_FORMAT_B5G6R5_UNORM_PACK16;
-        case VGFXTextureFormat_B5G5R5A1UNorm:    return VK_FORMAT_B5G5R5A1_UNORM_PACK16;
-            // 32-bit formats
-        case VGFXTextureFormat_R32UInt:          return VK_FORMAT_R32_UINT;
-        case VGFXTextureFormat_R32SInt:          return VK_FORMAT_R32_SINT;
-        case VGFXTextureFormat_R32Float:         return VK_FORMAT_R32_SFLOAT;
-        case VGFXTextureFormat_RG16UInt:         return VK_FORMAT_R16G16_UINT;
-        case VGFXTextureFormat_RG16SInt:         return VK_FORMAT_R16G16_SINT;
-        case VGFXTextureFormat_RG16UNorm:        return VK_FORMAT_R16G16_UNORM;
-        case VGFXTextureFormat_RG16SNorm:        return VK_FORMAT_R16G16_SNORM;
-        case VGFXTextureFormat_RG16Float:        return VK_FORMAT_R16G16_SFLOAT;
-        case VGFXTextureFormat_RGBA8UInt:        return VK_FORMAT_R8G8B8A8_UINT;
-        case VGFXTextureFormat_BGRA8UNorm:       return VK_FORMAT_B8G8R8A8_UNORM;
-        case VGFXTextureFormat_RGBA8UNorm:       return VK_FORMAT_R8G8B8A8_UNORM;
-        case VGFXTextureFormat_RGBA8UNormSrgb:   return VK_FORMAT_R8G8B8A8_SRGB;
-        case VGFXTextureFormat_RGBA8SNorm:       return VK_FORMAT_R8G8B8A8_SNORM;
-        case VGFXTextureFormat_RGBA8SInt:        return VK_FORMAT_R8G8B8A8_SINT;
-        case VGFXTextureFormat_BGRA8UNormSrgb:   return VK_FORMAT_B8G8R8A8_SRGB;
-            // Packed 32-Bit formats
-        case VGFXTextureFormat_RGB10A2UNorm:     return VK_FORMAT_A2B10G10R10_UNORM_PACK32;
-        case VGFXTextureFormat_RG11B10Float:     return VK_FORMAT_B10G11R11_UFLOAT_PACK32;
-        case VGFXTextureFormat_RGB9E5Float:      return VK_FORMAT_E5B9G9R9_UFLOAT_PACK32;
-            // 64-Bit formats
-        case VGFXTextureFormat_RG32UInt:         return VK_FORMAT_R32G32_UINT;
-        case VGFXTextureFormat_RG32SInt:         return VK_FORMAT_R32G32_SINT;
-        case VGFXTextureFormat_RG32Float:        return VK_FORMAT_R32G32_SFLOAT;
-        case VGFXTextureFormat_RGBA16UInt:       return VK_FORMAT_R16G16B16A16_UINT;
-        case VGFXTextureFormat_RGBA16SInt:       return VK_FORMAT_R16G16B16A16_SINT;
-        case VGFXTextureFormat_RGBA16UNorm:      return VK_FORMAT_R16G16B16A16_UNORM;
-        case VGFXTextureFormat_RGBA16SNorm:      return VK_FORMAT_R16G16B16A16_SNORM;
-        case VGFXTextureFormat_RGBA16Float:      return VK_FORMAT_R16G16B16A16_SFLOAT;
-            // 128-Bit formats
-        case VGPUTextureFormat_RGBA32UInt:       return VK_FORMAT_R32G32B32A32_UINT;
-        case VGPUTextureFormat_RGBA32SInt:       return VK_FORMAT_R32G32B32A32_SINT;
-        case VGPUTextureFormat_RGBA32Float:      return VK_FORMAT_R32G32B32A32_SFLOAT;
-            // Depth-stencil formats
-        case VGPUTextureFormat_Depth16UNorm:     return VK_FORMAT_D16_UNORM;
-        case VGPUTextureFormat_Depth32Float:     return VK_FORMAT_D32_SFLOAT;
-        case VGPUTextureFormat_Depth24UNormStencil8: return VK_FORMAT_D24_UNORM_S8_UINT;
-        case VGPUTextureFormat_Depth32FloatStencil8: return VK_FORMAT_D32_SFLOAT_S8_UINT;
-            // Compressed BC formats
-        case VGPUTextureFormat_BC1UNorm:         return VK_FORMAT_BC1_RGBA_UNORM_BLOCK;
-        case VGPUTextureFormat_BC1UNormSrgb:     return VK_FORMAT_BC1_RGBA_SRGB_BLOCK;
-        case VGPUTextureFormat_BC2UNorm:         return VK_FORMAT_BC2_UNORM_BLOCK;
-        case VGPUTextureFormat_BC2UNormSrgb:     return VK_FORMAT_BC2_SRGB_BLOCK;
-        case VGPUTextureFormat_BC3UNorm:         return VK_FORMAT_BC3_UNORM_BLOCK;
-        case VGPUTextureFormat_BC3UNormSrgb:     return VK_FORMAT_BC3_SRGB_BLOCK;
-        case VGPUTextureFormat_BC4SNorm:            return VK_FORMAT_BC4_SNORM_BLOCK;
-        case VGPUTextureFormat_BC4UNorm:            return VK_FORMAT_BC4_UNORM_BLOCK;
-        case VGPUTextureFormat_BC5SNorm:           return VK_FORMAT_BC5_SNORM_BLOCK;
-        case VGPUTextureFormat_BC5UNorm:           return VK_FORMAT_BC5_UNORM_BLOCK;
-        case VGPUTextureFormat_BC6HUFloat:        return VK_FORMAT_BC6H_UFLOAT_BLOCK;
-        case VGPUTextureFormat_BC6HSFloat:         return VK_FORMAT_BC6H_SFLOAT_BLOCK;
-        case VGPUTextureFormat_BC7UNorm:         return VK_FORMAT_BC7_UNORM_BLOCK;
-        case VGPUTextureFormat_BC7UNormSrgb:     return VK_FORMAT_BC7_SRGB_BLOCK;
-            // EAC/ETC compressed formats
-        case VGPUTextureFormat_ETC2RGB8UNorm:            return VK_FORMAT_ETC2_R8G8B8_UNORM_BLOCK;
-        case VGPUTextureFormat_ETC2RGB8UNormSrgb:        return VK_FORMAT_ETC2_R8G8B8_SRGB_BLOCK;
-        case VGPUTextureFormat_ETC2RGB8A1UNorm:          return VK_FORMAT_ETC2_R8G8B8A1_UNORM_BLOCK;
-        case VGPUTextureFormat_ETC2RGB8A1UNormSrgb:      return VK_FORMAT_ETC2_R8G8B8A1_SRGB_BLOCK;
-        case VGPUTextureFormat_ETC2RGBA8UNorm:           return VK_FORMAT_ETC2_R8G8B8A8_UNORM_BLOCK;
-        case VGPUTextureFormat_ETC2RGBA8UNormSrgb:       return VK_FORMAT_ETC2_R8G8B8A8_SRGB_BLOCK;
-        case VGPUTextureFormat_EACR11UNorm:              return VK_FORMAT_EAC_R11_UNORM_BLOCK;
-        case VGPUTextureFormat_EACR11SNorm:              return VK_FORMAT_EAC_R11_SNORM_BLOCK;
-        case VGPUTextureFormat_EACRG11UNorm:             return VK_FORMAT_EAC_R11G11_UNORM_BLOCK;
-        case VGPUTextureFormat_EACRG11SNorm:             return VK_FORMAT_EAC_R11G11_SNORM_BLOCK;
-            // ASTC compressed formats
-        case VGPUTextureFormat_ASTC4x4UNorm:            return VK_FORMAT_ASTC_4x4_UNORM_BLOCK;
-        case VGPUTextureFormat_ASTC4x4UNormSrgb:        return VK_FORMAT_ASTC_4x4_SRGB_BLOCK;
-        case VGPUTextureFormat_ASTC5x4UNorm:            return VK_FORMAT_ASTC_5x4_UNORM_BLOCK;
-        case VGPUTextureFormat_ASTC5x4UNormSrgb:        return VK_FORMAT_ASTC_5x4_SRGB_BLOCK;
-        case VGPUTextureFormat_ASTC5x5UNorm:            return VK_FORMAT_ASTC_5x5_UNORM_BLOCK;
-        case VGPUTextureFormat_ASTC5x5UNormSrgb:        return VK_FORMAT_ASTC_5x5_SRGB_BLOCK;
-        case VGPUTextureFormat_ASTC6x5UNorm:            return VK_FORMAT_ASTC_6x5_UNORM_BLOCK;
-        case VGPUTextureFormat_ASTC6x5UNormSrgb:        return VK_FORMAT_ASTC_6x5_SRGB_BLOCK;
-        case VGPUTextureFormat_ASTC6x6UNorm:            return VK_FORMAT_ASTC_6x6_UNORM_BLOCK;
-        case VGPUTextureFormat_ASTC6x6UNormSrgb:        return VK_FORMAT_ASTC_6x6_SRGB_BLOCK;
-        case VGPUTextureFormat_ASTC8x5UNorm:            return VK_FORMAT_ASTC_8x5_UNORM_BLOCK;
-        case VGPUTextureFormat_ASTC8x5UNormSrgb:        return VK_FORMAT_ASTC_8x5_SRGB_BLOCK;
-        case VGPUTextureFormat_ASTC8x6UNorm:            return VK_FORMAT_ASTC_8x6_UNORM_BLOCK;
-        case VGPUTextureFormat_ASTC8x6UNormSrgb:        return VK_FORMAT_ASTC_8x6_SRGB_BLOCK;
-        case VGPUTextureFormat_ASTC8x8UNorm:            return VK_FORMAT_ASTC_8x8_UNORM_BLOCK;
-        case VGPUTextureFormat_ASTC8x8UNormSrgb:        return VK_FORMAT_ASTC_8x8_SRGB_BLOCK;
-        case VGPUTextureFormat_ASTC10x5UNorm:           return VK_FORMAT_ASTC_10x5_UNORM_BLOCK;
-        case VGPUTextureFormat_ASTC10x5UNormSrgb:       return VK_FORMAT_ASTC_10x5_SRGB_BLOCK;
-        case VGPUTextureFormat_ASTC10x6UNorm:           return VK_FORMAT_ASTC_10x6_UNORM_BLOCK;
-        case VGPUTextureFormat_ASTC10x6UNormSrgb:       return VK_FORMAT_ASTC_10x6_SRGB_BLOCK;
-        case VGPUTextureFormat_ASTC10x8UNorm:           return VK_FORMAT_ASTC_10x8_UNORM_BLOCK;
-        case VGPUTextureFormat_ASTC10x8UNormSrgb:       return VK_FORMAT_ASTC_10x8_SRGB_BLOCK;
-        case VGPUTextureFormat_ASTC10x10UNorm:          return VK_FORMAT_ASTC_10x10_UNORM_BLOCK;
-        case VGPUTextureFormat_ASTC10x10UNormSrgb:      return VK_FORMAT_ASTC_10x10_SRGB_BLOCK;
-        case VGPUTextureFormat_ASTC12x10UNorm:          return VK_FORMAT_ASTC_12x10_UNORM_BLOCK;
-        case VGPUTextureFormat_ASTC12x10UNormSrgb:      return VK_FORMAT_ASTC_12x10_SRGB_BLOCK;
-        case VGPUTextureFormat_ASTC12x12UNorm:          return VK_FORMAT_ASTC_12x12_UNORM_BLOCK;
-        case VGPUTextureFormat_ASTC12x12UNormSrgb:      return VK_FORMAT_ASTC_12x12_SRGB_BLOCK;
+            case VGPUTextureFormat_R8UNorm:     return VK_FORMAT_R8_UNORM;
+            case VGPUTextureFormat_R8SNorm:     return VK_FORMAT_R8_SNORM;
+            case VGPUTextureFormat_R8UInt:      return VK_FORMAT_R8_UINT;
+            case VGPUTextureFormat_R8SInt:      return VK_FORMAT_R8_SINT;
+                // 16-bit formats
+            case VGFXTextureFormat_R16UInt:         return VK_FORMAT_R16_UINT;
+            case VGFXTextureFormat_R16SInt:         return VK_FORMAT_R16_SINT;
+            case VGFXTextureFormat_R16UNorm:        return VK_FORMAT_R16_UNORM;
+            case VGFXTextureFormat_R16SNorm:        return VK_FORMAT_R16_SNORM;
+            case VGFXTextureFormat_R16Float:        return VK_FORMAT_R16_SFLOAT;
+            case VGFXTextureFormat_RG8UInt:         return VK_FORMAT_R8G8_UINT;
+            case VGFXTextureFormat_RG8SInt:         return VK_FORMAT_R8G8_SINT;
+            case VGFXTextureFormat_RG8UNorm:        return VK_FORMAT_R8G8_UNORM;
+            case VGFXTextureFormat_RG8SNorm:        return VK_FORMAT_R8G8_SNORM;
+                // Packed 16-Bit Pixel Formats
+            case VGFXTextureFormat_BGRA4UNorm:       return VK_FORMAT_B4G4R4A4_UNORM_PACK16;
+            case VGFXTextureFormat_B5G6R5UNorm:      return VK_FORMAT_B5G6R5_UNORM_PACK16;
+            case VGFXTextureFormat_B5G5R5A1UNorm:    return VK_FORMAT_B5G5R5A1_UNORM_PACK16;
+                // 32-bit formats
+            case VGFXTextureFormat_R32UInt:          return VK_FORMAT_R32_UINT;
+            case VGFXTextureFormat_R32SInt:          return VK_FORMAT_R32_SINT;
+            case VGFXTextureFormat_R32Float:         return VK_FORMAT_R32_SFLOAT;
+            case VGFXTextureFormat_RG16UInt:         return VK_FORMAT_R16G16_UINT;
+            case VGFXTextureFormat_RG16SInt:         return VK_FORMAT_R16G16_SINT;
+            case VGFXTextureFormat_RG16UNorm:        return VK_FORMAT_R16G16_UNORM;
+            case VGFXTextureFormat_RG16SNorm:        return VK_FORMAT_R16G16_SNORM;
+            case VGFXTextureFormat_RG16Float:        return VK_FORMAT_R16G16_SFLOAT;
+            case VGFXTextureFormat_RGBA8UInt:        return VK_FORMAT_R8G8B8A8_UINT;
+            case VGFXTextureFormat_BGRA8UNorm:       return VK_FORMAT_B8G8R8A8_UNORM;
+            case VGFXTextureFormat_RGBA8UNorm:       return VK_FORMAT_R8G8B8A8_UNORM;
+            case VGFXTextureFormat_RGBA8UNormSrgb:   return VK_FORMAT_R8G8B8A8_SRGB;
+            case VGFXTextureFormat_RGBA8SNorm:       return VK_FORMAT_R8G8B8A8_SNORM;
+            case VGFXTextureFormat_RGBA8SInt:        return VK_FORMAT_R8G8B8A8_SINT;
+            case VGFXTextureFormat_BGRA8UNormSrgb:   return VK_FORMAT_B8G8R8A8_SRGB;
+                // Packed 32-Bit formats
+            case VGFXTextureFormat_RGB10A2UNorm:     return VK_FORMAT_A2B10G10R10_UNORM_PACK32;
+            case VGFXTextureFormat_RG11B10Float:     return VK_FORMAT_B10G11R11_UFLOAT_PACK32;
+            case VGFXTextureFormat_RGB9E5Float:      return VK_FORMAT_E5B9G9R9_UFLOAT_PACK32;
+                // 64-Bit formats
+            case VGFXTextureFormat_RG32UInt:         return VK_FORMAT_R32G32_UINT;
+            case VGFXTextureFormat_RG32SInt:         return VK_FORMAT_R32G32_SINT;
+            case VGFXTextureFormat_RG32Float:        return VK_FORMAT_R32G32_SFLOAT;
+            case VGFXTextureFormat_RGBA16UInt:       return VK_FORMAT_R16G16B16A16_UINT;
+            case VGFXTextureFormat_RGBA16SInt:       return VK_FORMAT_R16G16B16A16_SINT;
+            case VGFXTextureFormat_RGBA16UNorm:      return VK_FORMAT_R16G16B16A16_UNORM;
+            case VGFXTextureFormat_RGBA16SNorm:      return VK_FORMAT_R16G16B16A16_SNORM;
+            case VGFXTextureFormat_RGBA16Float:      return VK_FORMAT_R16G16B16A16_SFLOAT;
+                // 128-Bit formats
+            case VGPUTextureFormat_RGBA32UInt:       return VK_FORMAT_R32G32B32A32_UINT;
+            case VGPUTextureFormat_RGBA32SInt:       return VK_FORMAT_R32G32B32A32_SINT;
+            case VGPUTextureFormat_RGBA32Float:      return VK_FORMAT_R32G32B32A32_SFLOAT;
+                // Depth-stencil formats
+            case VGPUTextureFormat_Depth16UNorm:     return VK_FORMAT_D16_UNORM;
+            case VGPUTextureFormat_Depth32Float:     return VK_FORMAT_D32_SFLOAT;
+            case VGPUTextureFormat_Depth24UNormStencil8: return VK_FORMAT_D24_UNORM_S8_UINT;
+            case VGPUTextureFormat_Depth32FloatStencil8: return VK_FORMAT_D32_SFLOAT_S8_UINT;
+                // Compressed BC formats
+            case VGPUTextureFormat_BC1UNorm:         return VK_FORMAT_BC1_RGBA_UNORM_BLOCK;
+            case VGPUTextureFormat_BC1UNormSrgb:     return VK_FORMAT_BC1_RGBA_SRGB_BLOCK;
+            case VGPUTextureFormat_BC2UNorm:         return VK_FORMAT_BC2_UNORM_BLOCK;
+            case VGPUTextureFormat_BC2UNormSrgb:     return VK_FORMAT_BC2_SRGB_BLOCK;
+            case VGPUTextureFormat_BC3UNorm:         return VK_FORMAT_BC3_UNORM_BLOCK;
+            case VGPUTextureFormat_BC3UNormSrgb:     return VK_FORMAT_BC3_SRGB_BLOCK;
+            case VGPUTextureFormat_BC4SNorm:            return VK_FORMAT_BC4_SNORM_BLOCK;
+            case VGPUTextureFormat_BC4UNorm:            return VK_FORMAT_BC4_UNORM_BLOCK;
+            case VGPUTextureFormat_BC5SNorm:           return VK_FORMAT_BC5_SNORM_BLOCK;
+            case VGPUTextureFormat_BC5UNorm:           return VK_FORMAT_BC5_UNORM_BLOCK;
+            case VGPUTextureFormat_BC6HUFloat:        return VK_FORMAT_BC6H_UFLOAT_BLOCK;
+            case VGPUTextureFormat_BC6HSFloat:         return VK_FORMAT_BC6H_SFLOAT_BLOCK;
+            case VGPUTextureFormat_BC7UNorm:         return VK_FORMAT_BC7_UNORM_BLOCK;
+            case VGPUTextureFormat_BC7UNormSrgb:     return VK_FORMAT_BC7_SRGB_BLOCK;
+                // EAC/ETC compressed formats
+            case VGPUTextureFormat_ETC2RGB8UNorm:            return VK_FORMAT_ETC2_R8G8B8_UNORM_BLOCK;
+            case VGPUTextureFormat_ETC2RGB8UNormSrgb:        return VK_FORMAT_ETC2_R8G8B8_SRGB_BLOCK;
+            case VGPUTextureFormat_ETC2RGB8A1UNorm:          return VK_FORMAT_ETC2_R8G8B8A1_UNORM_BLOCK;
+            case VGPUTextureFormat_ETC2RGB8A1UNormSrgb:      return VK_FORMAT_ETC2_R8G8B8A1_SRGB_BLOCK;
+            case VGPUTextureFormat_ETC2RGBA8UNorm:           return VK_FORMAT_ETC2_R8G8B8A8_UNORM_BLOCK;
+            case VGPUTextureFormat_ETC2RGBA8UNormSrgb:       return VK_FORMAT_ETC2_R8G8B8A8_SRGB_BLOCK;
+            case VGPUTextureFormat_EACR11UNorm:              return VK_FORMAT_EAC_R11_UNORM_BLOCK;
+            case VGPUTextureFormat_EACR11SNorm:              return VK_FORMAT_EAC_R11_SNORM_BLOCK;
+            case VGPUTextureFormat_EACRG11UNorm:             return VK_FORMAT_EAC_R11G11_UNORM_BLOCK;
+            case VGPUTextureFormat_EACRG11SNorm:             return VK_FORMAT_EAC_R11G11_SNORM_BLOCK;
+                // ASTC compressed formats
+            case VGPUTextureFormat_ASTC4x4UNorm:            return VK_FORMAT_ASTC_4x4_UNORM_BLOCK;
+            case VGPUTextureFormat_ASTC4x4UNormSrgb:        return VK_FORMAT_ASTC_4x4_SRGB_BLOCK;
+            case VGPUTextureFormat_ASTC5x4UNorm:            return VK_FORMAT_ASTC_5x4_UNORM_BLOCK;
+            case VGPUTextureFormat_ASTC5x4UNormSrgb:        return VK_FORMAT_ASTC_5x4_SRGB_BLOCK;
+            case VGPUTextureFormat_ASTC5x5UNorm:            return VK_FORMAT_ASTC_5x5_UNORM_BLOCK;
+            case VGPUTextureFormat_ASTC5x5UNormSrgb:        return VK_FORMAT_ASTC_5x5_SRGB_BLOCK;
+            case VGPUTextureFormat_ASTC6x5UNorm:            return VK_FORMAT_ASTC_6x5_UNORM_BLOCK;
+            case VGPUTextureFormat_ASTC6x5UNormSrgb:        return VK_FORMAT_ASTC_6x5_SRGB_BLOCK;
+            case VGPUTextureFormat_ASTC6x6UNorm:            return VK_FORMAT_ASTC_6x6_UNORM_BLOCK;
+            case VGPUTextureFormat_ASTC6x6UNormSrgb:        return VK_FORMAT_ASTC_6x6_SRGB_BLOCK;
+            case VGPUTextureFormat_ASTC8x5UNorm:            return VK_FORMAT_ASTC_8x5_UNORM_BLOCK;
+            case VGPUTextureFormat_ASTC8x5UNormSrgb:        return VK_FORMAT_ASTC_8x5_SRGB_BLOCK;
+            case VGPUTextureFormat_ASTC8x6UNorm:            return VK_FORMAT_ASTC_8x6_UNORM_BLOCK;
+            case VGPUTextureFormat_ASTC8x6UNormSrgb:        return VK_FORMAT_ASTC_8x6_SRGB_BLOCK;
+            case VGPUTextureFormat_ASTC8x8UNorm:            return VK_FORMAT_ASTC_8x8_UNORM_BLOCK;
+            case VGPUTextureFormat_ASTC8x8UNormSrgb:        return VK_FORMAT_ASTC_8x8_SRGB_BLOCK;
+            case VGPUTextureFormat_ASTC10x5UNorm:           return VK_FORMAT_ASTC_10x5_UNORM_BLOCK;
+            case VGPUTextureFormat_ASTC10x5UNormSrgb:       return VK_FORMAT_ASTC_10x5_SRGB_BLOCK;
+            case VGPUTextureFormat_ASTC10x6UNorm:           return VK_FORMAT_ASTC_10x6_UNORM_BLOCK;
+            case VGPUTextureFormat_ASTC10x6UNormSrgb:       return VK_FORMAT_ASTC_10x6_SRGB_BLOCK;
+            case VGPUTextureFormat_ASTC10x8UNorm:           return VK_FORMAT_ASTC_10x8_UNORM_BLOCK;
+            case VGPUTextureFormat_ASTC10x8UNormSrgb:       return VK_FORMAT_ASTC_10x8_SRGB_BLOCK;
+            case VGPUTextureFormat_ASTC10x10UNorm:          return VK_FORMAT_ASTC_10x10_UNORM_BLOCK;
+            case VGPUTextureFormat_ASTC10x10UNormSrgb:      return VK_FORMAT_ASTC_10x10_SRGB_BLOCK;
+            case VGPUTextureFormat_ASTC12x10UNorm:          return VK_FORMAT_ASTC_12x10_UNORM_BLOCK;
+            case VGPUTextureFormat_ASTC12x10UNormSrgb:      return VK_FORMAT_ASTC_12x10_SRGB_BLOCK;
+            case VGPUTextureFormat_ASTC12x12UNorm:          return VK_FORMAT_ASTC_12x12_UNORM_BLOCK;
+            case VGPUTextureFormat_ASTC12x12UNormSrgb:      return VK_FORMAT_ASTC_12x12_SRGB_BLOCK;
 
-        default:
-            return VK_FORMAT_UNDEFINED;
+            default:
+                return VK_FORMAT_UNDEFINED;
         }
     }
 
@@ -415,15 +429,15 @@ namespace
     {
         switch (op)
         {
-        case VGPU_LOAD_OP_LOAD:
-            return VK_ATTACHMENT_LOAD_OP_LOAD;
-        case VGPU_LOAD_OP_CLEAR:
-            return VK_ATTACHMENT_LOAD_OP_CLEAR;
-        case VGPU_LOAD_OP_DISCARD:
-            return VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+            case VGPU_LOAD_OP_LOAD:
+                return VK_ATTACHMENT_LOAD_OP_LOAD;
+            case VGPU_LOAD_OP_CLEAR:
+                return VK_ATTACHMENT_LOAD_OP_CLEAR;
+            case VGPU_LOAD_OP_DISCARD:
+                return VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 
-        default:
-            return VK_ATTACHMENT_LOAD_OP_MAX_ENUM;
+            default:
+                return VK_ATTACHMENT_LOAD_OP_MAX_ENUM;
         }
     }
 
@@ -431,14 +445,14 @@ namespace
     {
         switch (op)
         {
-        case VGPU_STORE_OP_STORE:
-            return VK_ATTACHMENT_STORE_OP_STORE;
+            case VGPU_STORE_OP_STORE:
+                return VK_ATTACHMENT_STORE_OP_STORE;
 
-        case VGPU_STORE_OP_DISCARD:
-            return VK_ATTACHMENT_STORE_OP_DONT_CARE;
+            case VGPU_STORE_OP_DISCARD:
+                return VK_ATTACHMENT_STORE_OP_DONT_CARE;
 
-        default:
-            return VK_ATTACHMENT_STORE_OP_MAX_ENUM;
+            default:
+                return VK_ATTACHMENT_STORE_OP_MAX_ENUM;
         }
     }
 
@@ -446,24 +460,24 @@ namespace
     {
         switch (format)
         {
-        case VK_FORMAT_UNDEFINED:
-            return 0;
+            case VK_FORMAT_UNDEFINED:
+                return 0;
 
-        case VK_FORMAT_S8_UINT:
-            return VK_IMAGE_ASPECT_STENCIL_BIT;
+            case VK_FORMAT_S8_UINT:
+                return VK_IMAGE_ASPECT_STENCIL_BIT;
 
-        case VK_FORMAT_D16_UNORM_S8_UINT:
-        case VK_FORMAT_D24_UNORM_S8_UINT:
-        case VK_FORMAT_D32_SFLOAT_S8_UINT:
-            return VK_IMAGE_ASPECT_STENCIL_BIT | VK_IMAGE_ASPECT_DEPTH_BIT;
+            case VK_FORMAT_D16_UNORM_S8_UINT:
+            case VK_FORMAT_D24_UNORM_S8_UINT:
+            case VK_FORMAT_D32_SFLOAT_S8_UINT:
+                return VK_IMAGE_ASPECT_STENCIL_BIT | VK_IMAGE_ASPECT_DEPTH_BIT;
 
-        case VK_FORMAT_D16_UNORM:
-        case VK_FORMAT_D32_SFLOAT:
-        case VK_FORMAT_X8_D24_UNORM_PACK32:
-            return VK_IMAGE_ASPECT_DEPTH_BIT;
+            case VK_FORMAT_D16_UNORM:
+            case VK_FORMAT_D32_SFLOAT:
+            case VK_FORMAT_X8_D24_UNORM_PACK32:
+                return VK_IMAGE_ASPECT_DEPTH_BIT;
 
-        default:
-            return VK_IMAGE_ASPECT_COLOR_BIT;
+            default:
+                return VK_IMAGE_ASPECT_COLOR_BIT;
         }
     }
 
@@ -511,6 +525,17 @@ struct VulkanTexture
     uint32_t height = 0;
     VkFormat format = VK_FORMAT_UNDEFINED;
     std::unordered_map<size_t, VkImageView> viewCache;
+};
+
+struct VulkanSampler
+{
+    VkSampler handle = VK_NULL_HANDLE;
+};
+
+struct VulkanPipeline
+{
+    VkPipelineBindPoint bindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    VkPipeline handle = VK_NULL_HANDLE;
 };
 
 struct VulkanSwapChain
@@ -1225,31 +1250,84 @@ static VGPUBackendType vulkan_getBackendType(void)
     return VGPUBackendType_Vulkan;
 }
 
-static bool vulkan_hasFeature(VGFXRenderer* driverData, VGPUFeature feature)
+static bool vulkan_queryFeature(VGFXRenderer* driverData, VGPUFeature feature, void* pInfo, uint32_t infoSize)
 {
+    (void)pInfo;
+    (void)infoSize;
+
     VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
     switch (feature)
     {
-    case VGPU_FEATURE_COMPUTE:
-        return true;
+        case VGPUFeature_TextureCompressionBC:
+            return renderer->features2.features.textureCompressionBC;
 
-    case VGPU_FEATURE_INDEPENDENT_BLEND:
-        return renderer->features2.features.independentBlend == VK_TRUE;
+        case VGPUFeature_TextureCompressionETC2:
+            return renderer->features2.features.textureCompressionETC2;
 
-    case VGPU_FEATURE_TEXTURE_CUBE_ARRAY:
-        return renderer->features2.features.imageCubeArray == VK_TRUE;
+        case VGPUFeature_TextureCompressionASTC:
+            return renderer->features2.features.textureCompressionASTC_LDR;
 
-    case VGPU_FEATURE_TEXTURE_COMPRESSION_BC:
-        return renderer->features2.features.textureCompressionBC;
+        case VGPUFeature_ShaderFloat16:
+            return renderer->features_1_2.shaderFloat16 == VK_TRUE;
 
-    case VGPU_FEATURE_TEXTURE_COMPRESSION_ETC2:
-        return renderer->features2.features.textureCompressionETC2;
+        case VGPUFeature_PipelineStatisticsQuery:
+            return renderer->features2.features.pipelineStatisticsQuery == VK_TRUE;
 
-    case VGPU_FEATURE_TEXTURE_COMPRESSION_ASTC:
-        return renderer->features2.features.textureCompressionASTC_LDR;
+        case VGPUFeature_TimestampQuery:
+            return renderer->properties2.properties.limits.timestampComputeAndGraphics == VK_TRUE;
 
-    default:
-        return false;
+        case VGPUFeature_DepthClamping:
+            return renderer->features2.features.depthClamp == VK_TRUE;
+
+        case VGPUFeature_Depth24UNormStencil8:
+            return IsDepthStencilFormatSupported(renderer->physicalDevice, VK_FORMAT_D24_UNORM_S8_UINT);
+
+        case VGPUFeature_Depth32FloatStencil8:
+            return IsDepthStencilFormatSupported(renderer->physicalDevice, VK_FORMAT_D32_SFLOAT_S8_UINT);
+
+        case VGPUFeature_TextureCubeArray:
+            return renderer->features2.features.imageCubeArray == VK_TRUE;
+
+        case VGPUFeature_IndependentBlend:
+            return renderer->features2.features.independentBlend == VK_TRUE;
+
+        case VGPUFeature_Tessellation:
+            return renderer->features2.features.tessellationShader == VK_TRUE;
+
+        case VGPUFeature_DescriptorIndexing:
+            return renderer->features_1_2.descriptorIndexing == VK_TRUE;
+
+        case VGPUFeature_ConditionalRendering:
+            return renderer->conditional_rendering_features.conditionalRendering == VK_TRUE;
+
+        case VGPUFeature_DrawIndirectFirstInstance:
+            return renderer->features2.features.drawIndirectFirstInstance == VK_TRUE;
+
+        case VGPUFeature_ShaderOutputViewportIndex:
+            return renderer->features_1_2.shaderOutputLayer == VK_TRUE && renderer->features_1_2.shaderOutputViewportIndex == VK_TRUE;
+
+        case VGPUFeature_SamplerMinMax:
+            return renderer->features_1_2.samplerFilterMinmax == VK_TRUE;
+
+        case VGPUFeature_RayTracing:
+            if (renderer->raytracing_features.rayTracingPipeline == VK_TRUE &&
+                renderer->raytracing_query_features.rayQuery == VK_TRUE &&
+                renderer->acceleration_structure_features.accelerationStructure == VK_TRUE &&
+                renderer->features_1_2.bufferDeviceAddress == VK_TRUE)
+            {
+                if (infoSize == sizeof(uint32_t))
+                {
+                    auto* pShaderGroupHandleSize = reinterpret_cast<uint32_t*>(pInfo);
+                    *pShaderGroupHandleSize = renderer->raytracing_properties.shaderGroupHandleSize;
+                }
+
+                return true;
+            }
+
+            return false;
+
+        default:
+            return false;
     }
 }
 
@@ -1264,21 +1342,21 @@ static void vulkan_getAdapterProperties(VGFXRenderer* driverData, VGPUAdapterPro
 
     switch (renderer->properties2.properties.deviceType)
     {
-    case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU:
-        properties->adapterType = VGPU_ADAPTER_TYPE_INTEGRATED_GPU;
-        break;
-    case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:
-        properties->adapterType = VGPU_ADAPTER_TYPE_DISCRETE_GPU;
-        break;
-    case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU:
-        properties->adapterType = VGPU_ADAPTER_TYPE_VIRTUAL_GPU;
-        break;
-    case VK_PHYSICAL_DEVICE_TYPE_CPU:
-        properties->adapterType = VGPUAdapterType_CPU;
-        break;
-    default:
-        properties->adapterType = VGPUAdapterType_Other;
-        break;
+        case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU:
+            properties->adapterType = VGPUAdapterType_IntegratedGPU;
+            break;
+        case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:
+            properties->adapterType = VGPUAdapterType_DiscreteGPU;
+            break;
+        case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU:
+            properties->adapterType = VGPUAdapterType_VirtualGpu;
+            break;
+        case VK_PHYSICAL_DEVICE_TYPE_CPU:
+            properties->adapterType = VGPUAdapterType_Cpu;
+            break;
+        default:
+            properties->adapterType = VGPUAdapterType_Other;
+            break;
     }
 }
 
@@ -1289,6 +1367,7 @@ static void vulkan_getLimits(VGFXRenderer* driverData, VGPULimits* limits)
 #define SET_LIMIT_FROM_VULKAN(vulkanName, name) limits->name = renderer->properties2.properties.limits.vulkanName
     SET_LIMIT_FROM_VULKAN(maxImageDimension1D, maxTextureDimension1D);
     SET_LIMIT_FROM_VULKAN(maxImageDimension2D, maxTextureDimension2D);
+    SET_LIMIT_FROM_VULKAN(maxImageDimension3D, maxTextureDimension3D);
     SET_LIMIT_FROM_VULKAN(maxImageArrayLayers, maxTextureArrayLayers);
     SET_LIMIT_FROM_VULKAN(maxBoundDescriptorSets, maxBindGroups);
     SET_LIMIT_FROM_VULKAN(maxDescriptorSetUniformBuffersDynamic, maxDynamicUniformBuffersPerPipelineLayout);
@@ -1302,7 +1381,7 @@ static void vulkan_getLimits(VGFXRenderer* driverData, VGPULimits* limits)
     limits->maxUniformBufferBindingSize = renderer->properties2.properties.limits.maxUniformBufferRange;
     limits->maxStorageBufferBindingSize = renderer->properties2.properties.limits.maxStorageBufferRange;
     limits->minUniformBufferOffsetAlignment = (uint32_t)renderer->properties2.properties.limits.minUniformBufferOffsetAlignment;
-    limits->minUniformBufferOffsetAlignment = (uint32_t)renderer->properties2.properties.limits.minUniformBufferOffsetAlignment;
+    limits->minStorageBufferOffsetAlignment = (uint32_t)renderer->properties2.properties.limits.minStorageBufferOffsetAlignment;
     SET_LIMIT_FROM_VULKAN(maxVertexInputBindings, maxVertexBuffers);
     SET_LIMIT_FROM_VULKAN(maxVertexInputAttributes, maxVertexAttributes);
 
@@ -1427,16 +1506,16 @@ static VGPUBuffer vulkan_createBuffer(VGFXRenderer* driverData, const VGPUBuffer
 
     VmaAllocationCreateInfo memoryInfo = {};
     memoryInfo.usage = VMA_MEMORY_USAGE_AUTO;
-    //if (info.heapType == HeapType::Readback)
-    //{
-    //    bufferInfo.usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    //    memoryInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
-    //}
-    //else if (info.heapType == HeapType::Upload)
-    //{
-    //    bufferInfo.usage |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-    //    memoryInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
-    //}
+    if (desc->cpuAccess == VGPUCpuAccessMode_Read)
+    {
+        bufferInfo.usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+        memoryInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+    }
+    else if (desc->cpuAccess == VGPUCpuAccessMode_Write)
+    {
+        bufferInfo.usage |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+        memoryInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+    }
 
     VmaAllocationInfo allocationInfo{};
     VulkanBuffer* buffer = new VulkanBuffer();
@@ -1488,41 +1567,50 @@ static VGPUTexture vulkan_createTexture(VGFXRenderer* driverData, const VGPUText
     imageInfo.flags = 0;
     imageInfo.format = ToVkFormat(desc->format);
     imageInfo.extent.width = desc->width;
-    imageInfo.extent.height = desc->height;
-    if (desc->type == VGPU_TEXTURE_TYPE_3D)
+    imageInfo.extent.height = 1;
+    imageInfo.extent.depth = 1;
+
+    if (desc->type == VGPUTexture_Type1D)
+    {
+        imageInfo.imageType = VK_IMAGE_TYPE_1D;
+        imageInfo.arrayLayers = desc->depthOrArraySize;
+    }
+    else if (desc->type == VGPUTexture_Type3D)
     {
         imageInfo.imageType = VK_IMAGE_TYPE_3D;
+        imageInfo.flags |= VK_IMAGE_CREATE_2D_ARRAY_COMPATIBLE_BIT;
+        imageInfo.extent.height = desc->height;
         imageInfo.extent.depth = desc->depthOrArraySize;
         imageInfo.arrayLayers = 1;
         imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-
-        imageInfo.flags |= VK_IMAGE_CREATE_2D_ARRAY_COMPATIBLE_BIT;
     }
     else
     {
         imageInfo.imageType = VK_IMAGE_TYPE_2D;
+        imageInfo.extent.height = desc->height;
         imageInfo.extent.depth = 1;
         imageInfo.arrayLayers = desc->depthOrArraySize;
         imageInfo.samples = (VkSampleCountFlagBits)desc->sampleCount;
 
-        if (desc->width == desc->height && (desc->depthOrArraySize % 6 == 0))
+        if (desc->type == VGPUTexture_Type2D &&
+            desc->width == desc->height &&
+            desc->depthOrArraySize >= 6)
         {
             imageInfo.flags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
         }
     }
-    imageInfo.extent.depth = 1;
     imageInfo.mipLevels = desc->mipLevelCount;
     imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
     imageInfo.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 
-    if (desc->usage & VGPU_TEXTURE_USAGE_SHADER_READ)
+    if (desc->usage & VGPUTextureUsage_ShaderRead)
         imageInfo.usage |= VK_IMAGE_USAGE_SAMPLED_BIT;
 
-    if (desc->usage & VGPU_TEXTURE_USAGE_SHADER_WRITE)
+    if (desc->usage & VGPUTextureUsage_ShaderWrite)
         imageInfo.usage |= VK_IMAGE_USAGE_STORAGE_BIT;
 
-    if (desc->usage & VGPU_TEXTURE_USAGE_RENDER_TARGET)
+    if (desc->usage & VGPUTextureUsage_RenderTarget)
     {
         if (vgpuIsDepthStencilFormat(desc->format))
         {
@@ -1632,22 +1720,26 @@ static void vulkan_destroyShaderModule(VGFXRenderer* driverData, VGPUShaderModul
 /* Pipeline */
 static VGPUPipeline vulkan_createRenderPipeline(VGFXRenderer* driverData, const VGPURenderPipelineDesc* desc)
 {
-    return nullptr;
+    VulkanPipeline* pipeline = new VulkanPipeline();
+    return (VGPUPipeline)pipeline;
 }
 
 static VGPUPipeline vulkan_createComputePipeline(VGFXRenderer* driverData, const VGPUComputePipelineDesc* desc)
 {
-    return nullptr;
+    VulkanPipeline* pipeline = new VulkanPipeline();
+    return (VGPUPipeline)pipeline;
 }
 
 static VGPUPipeline vulkan_createRayTracingPipeline(VGFXRenderer* driverData, const VGPURayTracingPipelineDesc* desc)
 {
-    return nullptr;
+    VulkanPipeline* pipeline = new VulkanPipeline();
+    return (VGPUPipeline)pipeline;
 }
 
 static void vulkan_destroyPipeline(VGFXRenderer* driverData, VGPUPipeline resource)
 {
-
+    VulkanPipeline* pipeline = (VulkanPipeline*)resource;
+    delete pipeline;
 }
 
 /* SwapChain */
@@ -1809,7 +1901,7 @@ static void vulkan_updateSwapChain(VGFXVulkanRenderer* renderer, VulkanSwapChain
     swapChain->extent = createInfo.imageExtent;
 }
 
-static VGPUSwapChain vulkan_createSwapChain(VGFXRenderer* driverData, void* windowHandle, const VGPUSwapChainDesc* info)
+static VGPUSwapChain vulkan_createSwapChain(VGFXRenderer* driverData, void* windowHandle, const VGPUSwapChainDesc* desc)
 {
     VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
     VkSurfaceKHR vk_surface = vulkan_createSurface(renderer, windowHandle);
@@ -1827,8 +1919,10 @@ static VGPUSwapChain vulkan_createSwapChain(VGFXRenderer* driverData, void* wind
 
     VulkanSwapChain* swapChain = new VulkanSwapChain();
     swapChain->surface = vk_surface;
-    swapChain->colorFormat = info->format;
-    swapChain->vsync = info->presentMode == VGPU_PRESENT_MODE_FIFO;
+    swapChain->extent.width = desc->width;
+    swapChain->extent.height = desc->height;
+    swapChain->colorFormat = desc->format;
+    swapChain->vsync = desc->presentMode == VGPUPresentMode_Fifo;
     vulkan_updateSwapChain(renderer, swapChain);
 
     return (VGPUSwapChain)swapChain;
@@ -2209,25 +2303,39 @@ static void vulkan_prepareDraw(VulkanCommandBuffer* commandBuffer)
     VGPU_ASSERT(commandBuffer->insideRenderPass);
 }
 
-static void vulkan_setViewport(VGPUCommandBufferImpl* driverData, const VGPUViewport* viewport)
+static void vulkan_setViewports(VGPUCommandBufferImpl* driverData, const VGPUViewport* viewports, uint32_t count)
 {
     VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
+    
+    VGPU_ASSERT(count < commandBuffer->renderer->properties2.properties.limits.maxViewports);
 
     // Flip viewport to match DirectX coordinate system
-    VkViewport vkViewport;
-    vkViewport.x = viewport->x;
-    vkViewport.y = viewport->height - viewport->y;
-    vkViewport.width = viewport->width;
-    vkViewport.height = -viewport->height;
-    vkViewport.minDepth = viewport->minDepth;
-    vkViewport.maxDepth = viewport->maxDepth;
-    vkCmdSetViewport(commandBuffer->handle, 0, 1, &vkViewport);
+    VkViewport vkViewports[VGPU_MAX_VIEWPORTS_AND_SCISSORS];
+    for (uint32_t i = 0; i < count; i++)
+    {
+        const VkViewport& viewport = *(const VkViewport*)&viewports[i];
+        VkViewport& vkViewport = vkViewports[i];
+        vkViewport = viewport;
+        vkViewport.y = viewport.height - viewport.y;
+        vkViewport.height = -viewport.height;
+    }
+
+    vkCmdSetViewport(commandBuffer->handle, 0, count, vkViewports);
 }
 
-static void vulkan_setScissorRect(VGPUCommandBufferImpl* driverData, const VGPURect* scissorRect)
+static void vulkan_setScissorRects(VGPUCommandBufferImpl* driverData, const VGPURect* scissorRects, uint32_t count)
 {
     VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
-    vkCmdSetScissor(commandBuffer->handle, 0, 1, (VkRect2D*)scissorRect);
+    VGPU_ASSERT(count < commandBuffer->renderer->properties2.properties.limits.maxViewports);
+
+    vkCmdSetScissor(commandBuffer->handle, 0, count, (const VkRect2D*)scissorRects);
+}
+
+static void vulkan_setPipeline(VGPUCommandBufferImpl* driverData, VGPUPipeline pipeline)
+{
+    VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
+    VulkanPipeline* vulkanPipeline = (VulkanPipeline*)pipeline;
+    vkCmdBindPipeline(commandBuffer->handle, vulkanPipeline->bindPoint, vulkanPipeline->handle);
 }
 
 static void vulkan_draw(VGPUCommandBufferImpl* driverData, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t baseInstance)
@@ -3334,7 +3442,7 @@ static VGPUDevice vulkan_createDevice(const VGPUDeviceDesc* info)
 
     device->driverData = (VGFXRenderer*)renderer;
     return device;
-}
+    }
 
 VGFXDriver Vulkan_Driver = {
     VGPUBackendType_Vulkan,

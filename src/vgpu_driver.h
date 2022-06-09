@@ -5,6 +5,7 @@
 #define _VGPU_DRIVER_H_
 
 #include "vgpu.h"
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdarg.h>
 
@@ -104,9 +105,10 @@ typedef struct VGPUCommandBuffer_T {
     void (*beginRenderPass)(VGPUCommandBufferImpl* driverData, const VGPURenderPassDesc* desc);
     void (*endRenderPass)(VGPUCommandBufferImpl* driverData);
 
-    void (*setViewport)(VGPUCommandBufferImpl* driverData, const VGPUViewport* viewport);
-    void (*setScissorRect)(VGPUCommandBufferImpl* driverData, const VGPURect* scissorRect);
+    void (*setViewports)(VGPUCommandBufferImpl* driverData, const VGPUViewport* viewports, uint32_t count);
+    void (*setScissorRects)(VGPUCommandBufferImpl* driverData, const VGPURect* scissorRects, uint32_t count);
 
+    void (*setPipeline)(VGPUCommandBufferImpl* driverData, VGPUPipeline pipeline);
     void (*draw)(VGPUCommandBufferImpl* driverData, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t baseInstance);
 
     /* Opaque pointer for the Driver */
@@ -119,7 +121,7 @@ typedef struct VGPUDevice_T
     uint64_t(*frame)(VGFXRenderer* driverData);
     void (*waitIdle)(VGFXRenderer* driverData);
     VGPUBackendType(*getBackendType)(void);
-    bool (*hasFeature)(VGFXRenderer* driverData, VGPUFeature feature);
+    bool (*queryFeature)(VGFXRenderer* driverData, VGPUFeature feature, void* pInfo, uint32_t infoSize);
     void (*getAdapterProperties)(VGFXRenderer* driverData, VGPUAdapterProperties* properties);
     void (*getLimits)(VGFXRenderer* driverData, VGPULimits* limits);
 
@@ -161,8 +163,9 @@ ASSIGN_COMMAND_BUFFER_FUNC(insertDebugMarker, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(acquireSwapchainTexture, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(beginRenderPass, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(endRenderPass, name) \
-ASSIGN_COMMAND_BUFFER_FUNC(setViewport, name) \
-ASSIGN_COMMAND_BUFFER_FUNC(setScissorRect, name) \
+ASSIGN_COMMAND_BUFFER_FUNC(setViewports, name) \
+ASSIGN_COMMAND_BUFFER_FUNC(setScissorRects, name) \
+ASSIGN_COMMAND_BUFFER_FUNC(setPipeline, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(draw, name) 
 
 #define ASSIGN_DRIVER(name) \
@@ -170,7 +173,7 @@ ASSIGN_DRIVER_FUNC(destroyDevice, name) \
 ASSIGN_DRIVER_FUNC(frame, name) \
 ASSIGN_DRIVER_FUNC(waitIdle, name) \
 ASSIGN_DRIVER_FUNC(getBackendType, name) \
-ASSIGN_DRIVER_FUNC(hasFeature, name) \
+ASSIGN_DRIVER_FUNC(queryFeature, name) \
 ASSIGN_DRIVER_FUNC(getAdapterProperties, name) \
 ASSIGN_DRIVER_FUNC(getLimits, name) \
 ASSIGN_DRIVER_FUNC(createBuffer, name) \

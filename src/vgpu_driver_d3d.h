@@ -18,6 +18,7 @@
 
 #include <string>
 
+#define VHR(hr) if (FAILED(hr)) { VGPU_ASSERT(0); }
 #define SAFE_RELEASE(obj) if ((obj)) { (obj)->Release(); (obj) = nullptr; }
 
 namespace
@@ -69,10 +70,10 @@ namespace
         switch (format)
         {
             // 8-bit formats
-            case VGFXTextureFormat_R8UInt:          return DXGI_FORMAT_R8_UINT;
-            case VGFXTextureFormat_R8SInt:          return DXGI_FORMAT_R8_SINT;
-            case VGFXTextureFormat_R8UNorm:         return DXGI_FORMAT_R8_UNORM;
-            case VGFXTextureFormat_R8SNorm:         return DXGI_FORMAT_R8_SNORM;
+            case VGPUTextureFormat_R8UNorm:         return DXGI_FORMAT_R8_UNORM;
+            case VGPUTextureFormat_R8SNorm:         return DXGI_FORMAT_R8_SNORM;
+            case VGPUTextureFormat_R8UInt:          return DXGI_FORMAT_R8_UINT;
+            case VGPUTextureFormat_R8SInt:          return DXGI_FORMAT_R8_SINT;
                 // 16-bit formats
             case VGFXTextureFormat_R16UInt:         return DXGI_FORMAT_R16_UINT;
             case VGFXTextureFormat_R16SInt:         return DXGI_FORMAT_R16_SINT;
@@ -191,10 +192,10 @@ namespace
     {
         switch (mode)
         {
-            case VGPU_PRESENT_MODE_IMMEDIATE:
-            case VGPU_PRESENT_MODE_FIFO:
+            case VGPUPresentMode_Immediate:
+            case VGPUPresentMode_Fifo:
                 return 2;
-            case VGPU_PRESENT_MODE_MAILBOX:
+            case VGPUPresentMode_Mailbox:
                 return 3;
             default:
                 return 2;
@@ -205,13 +206,13 @@ namespace
     {
         switch (mode)
         {
-            case VGPU_PRESENT_MODE_IMMEDIATE:
-            case VGPU_PRESENT_MODE_MAILBOX:
-                return 0;
+            case VGPUPresentMode_Immediate:
+            case VGPUPresentMode_Mailbox:
+                return 0u;
 
-            case VGPU_PRESENT_MODE_FIFO:
+            case VGPUPresentMode_Fifo:
             default:
-                return 1;
+                return 1u;
         }
     }
 }
