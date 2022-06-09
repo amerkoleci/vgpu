@@ -31,7 +31,6 @@ Files in this repository originate from:
 * registry/reg.py
 * registry/spec_tools/util.py
 * registry/validusage.json
-* registry/video.xml
 * registry/vk.xml
 * registry/vkconventions.py
 * All files under include/vulkan/ which are *not* listed explicitly as originating from another repository.

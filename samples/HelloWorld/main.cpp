@@ -42,13 +42,7 @@ namespace
 
 void init_gfx()
 #else
-
-void* os_get_gl_proc_address(const char* function)
-{
-    return (void*)glfwGetProcAddress(function);
-}
-
-void init_gfx(GLFWwindow* window, bool useOpenGL)
+void init_gfx(GLFWwindow* window)
 #endif
 {
     VGPUDeviceDesc deviceDesc{};
@@ -57,18 +51,9 @@ void init_gfx(GLFWwindow* window, bool useOpenGL)
     deviceDesc.validationMode = VGPUValidationMode_Enabled;
 #endif
 
-    //if (vgpuIsSupported(VGPU_BACKEND_TYPE_VULKAN))
-    //{
-    //    deviceDesc.preferredBackend = VGPU_BACKEND_TYPE_VULKAN;
-    //}
-
-    if (useOpenGL)
+    if (vgpuIsSupported(VGPUBackendType_Vulkan))
     {
-        glfwMakeContextCurrent(window);
-        glfwSwapInterval(1);
-
-        deviceDesc.preferredBackend = VGPUBackendType_OpenGL;
-        deviceDesc.gl.getProcAddress = os_get_gl_proc_address;
+        deviceDesc.preferredBackend = VGPUBackendType_Vulkan;
     }
 
     void* windowHandle = nullptr;
@@ -191,40 +176,13 @@ int main()
         return EXIT_FAILURE;
     }
 
-    bool useOpenGL = false;
-    if (vgpuIsSupported(VGPUBackendType_OpenGL))
-    {
-        useOpenGL = true;
-    }
-
-    //VGPU_SetLogCallback(vgpu_log);
-
-    if (useOpenGL)
-    {
-        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-        glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
-        //glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    }
-    else
-    {
-        glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    }
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     GLFWwindow* window = glfwCreateWindow(1280, 720, "Hello World", NULL, NULL);
-    init_gfx(window, useOpenGL);
+    init_gfx(window);
 
     while (!glfwWindowShouldClose(window))
     {
-        if (vgpuGetBackendType(device) == VGPUBackendType_OpenGL)
-        {
-            //draw_frame();
-            glfwSwapBuffers(window);
-        }
-        else
-        {
-            draw_frame();
-        }
-
+        draw_frame();
         glfwPollEvents();
     }
 

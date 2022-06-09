@@ -1,3 +1,7 @@
+# stb
+add_library(stb INTERFACE)
+target_include_directories(stb INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/stb")
+
 # Graphics backend dependencies
 if(VGPU_VULKAN_DRIVER)
     # vulkan
@@ -22,6 +26,19 @@ if(VGPU_VULKAN_DRIVER)
     add_library(spirv-reflect STATIC ${SPIRV_REFLECT_FILES})
     target_include_directories(spirv-reflect PUBLIC ${SPIRV_REFLECT_DIR})
     set_property(TARGET spirv-reflect PROPERTY FOLDER "ThirdParty")
+endif()
+
+if (VGPU_OPENGL_DRIVER AND NOT EMSCRIPTEN)
+    set(GLAD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/glad")
+    set(GLAD_FILES
+        "${GLAD_DIR}/include/KHR/khrplatform.h"
+        "${GLAD_DIR}/include/glad/glad.h"
+        "${GLAD_DIR}/src/glad.c"
+    )
+
+    add_library(glad STATIC ${GLAD_FILES})
+    target_include_directories(glad PUBLIC "${GLAD_DIR}/include")
+    set_property(TARGET glad PROPERTY FOLDER "ThirdParty")
 endif()
 
 if (VGPU_SAMPLES)
