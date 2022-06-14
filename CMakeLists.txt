@@ -11,12 +11,16 @@ set(CMAKE_INSTALL_MESSAGE LAZY)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 # Use solution folders to organize projects
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 # Project declaration
-project (vgpu C CXX)
+project (vgpu
+    VERSION 0.1.0
+    DESCRIPTION "Cross-platform gpu library"
+)
 
 # Build Type
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
@@ -47,10 +51,6 @@ cmake_dependent_option(VGPU_D3D12_DRIVER "Build the D3D12 backend" ON "WIN32" OF
 cmake_dependent_option(VGPU_D3D11_DRIVER "Build the D3D11 backend" ON "WIN32" OFF)
 cmake_dependent_option(VGPU_WEBGPU_DRIVER "Build the WebGPU backend" ON "EMSCRIPTEN" OFF)
 cmake_dependent_option(VGPU_SAMPLES "Build samples" ON "NOT WINDOWS_STORE" OFF)
-
-if (VGPU_BUILD_SHARED)
-    set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-endif()
 
 # Build version
 set (VGPU_VERSION_MAJOR 0)

@@ -11,7 +11,7 @@
 #        else
 #            define _VGPU_EXPORT __declspec(dllimport)
 #        endif
-#    else 
+#    else
 #        if defined(VGPU_IMPLEMENTATION)
 #            define _VGPU_EXPORT __attribute__((visibility("default")))
 #        else
@@ -106,7 +106,7 @@ typedef enum VGPUAdapterType {
     _VGPUAdapterType_Force32 = 0x7FFFFFFF
 } VGPUAdapterType;
 
-typedef enum VGPUCpuAccessMode 
+typedef enum VGPUCpuAccessMode
 {
     VGPUCpuAccessMode_None,
     VGPUCpuAccessMode_Write,
@@ -139,11 +139,11 @@ typedef enum VGPUBufferUsage {
 } VGPUBufferUsage;
 
 typedef enum VGPUTextureUsage {
-    VGPUTextureUsage_None = 0x0,
-    VGPUTextureUsage_ShaderRead = 0x1,
-    VGPUTextureUsage_ShaderWrite = 0x2,
-    VGPUTextureUsage_RenderTarget = 0x4,
-    VGPUTextureUsage_ShadingRate = 0x8,
+    VGPUTextureUsage_None = 0,
+    VGPUTextureUsage_ShaderRead = (1 << 0),
+    VGPUTextureUsage_ShaderWrite = (1 << 1),
+    VGPUTextureUsage_RenderTarget = (1 << 2),
+    VGPUTextureUsage_ShadingRate = (1 << 3),
 
     _VGPUTextureUsage_Force32 = 0x7FFFFFFF
 } VGPUTextureUsage;

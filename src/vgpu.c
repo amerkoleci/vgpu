@@ -485,7 +485,7 @@ void vgpuEndRenderPass(VGPUCommandBuffer commandBuffer)
 
 void vgpuSetViewports(VGPUCommandBuffer commandBuffer, uint32_t count, const VGPUViewport* viewports)
 {
-    VGPU_ASSERT(viewport);
+    VGPU_ASSERT(viewports);
     VGPU_ASSERT(count < VGPU_MAX_VIEWPORTS_AND_SCISSORS);
 
     commandBuffer->setViewports(commandBuffer->driverData, viewports, count);
@@ -493,7 +493,7 @@ void vgpuSetViewports(VGPUCommandBuffer commandBuffer, uint32_t count, const VGP
 
 void vgpuSetScissorRects(VGPUCommandBuffer commandBuffer, uint32_t count, const VGPURect* scissorRects)
 {
-    VGPU_ASSERT(scissorRect);
+    VGPU_ASSERT(scissorRects);
     VGPU_ASSERT(count < VGPU_MAX_VIEWPORTS_AND_SCISSORS);
 
     commandBuffer->setScissorRects(commandBuffer->driverData, scissorRects, count);

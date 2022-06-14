@@ -13,9 +13,7 @@ on:
       - '*.md'
 
 env:
-  # Indicates the CMake build directory where project files and binaries are being produced.
-  CMAKE_BUILD_DIR: ${{ github.workspace }}/build/
-  VGFX_SAMPLES: ON
+  VGPU_SAMPLES: OFF
 
 jobs:
   windows:
@@ -27,46 +25,69 @@ jobs:
         submodules: true
 
     - name: Configure Win64
-      run: cmake . -G "Visual Studio 17 2022" -A x64 -Bbuild_win_64 -DCMAKE_INSTALL_PREFIX="SDK"
+      run: cmake . -G "Visual Studio 17 2022" -A x64 -Bbuild_win_64
     - name: Build Win64
-      run: cmake --build build_win_64 --config MinSizeRel --target install
-    - uses: actions/upload-artifact@v2
-      with:
-        name: 'Windows Sdk'
-        path: ${{ github.workspace }}/SDK
+      run: cmake --build build_win_64 --config MinSizeRel
 
-    # Universal Windows Platform
+    # UWP
     - name: Configure UWP ARM64
-      run: cmake . -G "Visual Studio 17 2022" -A ARM64 -Bbuild_uwp_arm64 -DCMAKE_SYSTEM_NAME:String=WindowsStore -DCMAKE_SYSTEM_VERSION:String="10.0" -DCMAKE_INSTALL_PREFIX="SDK"
+      run: cmake . -G "Visual Studio 17 2022" -A ARM64 -Bbuild_uwp_arm64 -DCMAKE_SYSTEM_NAME:String=WindowsStore -DCMAKE_SYSTEM_VERSION:String="10.0"
     - name: Build UWP ARM64
-      run: cmake --build build_uwp_arm64 --config MinSizeRel --target install
-    - uses: actions/upload-artifact@v2
-      with:
-        name: 'UWP ARM64 Sdk'
-        path: ${{ github.workspace }}/SDK
+      run: cmake --build build_uwp_arm64 --config MinSizeRel
 
-  linux:
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout    
-      uses: actions/checkout@v2
+    - name: Configure UWP ARM
+      run: cmake . -G "Visual Studio 17 2022" -A ARM -Bbuild_uwp_arm -DCMAKE_SYSTEM_NAME:String=WindowsStore -DCMAKE_SYSTEM_VERSION:String="10.0"
+    - name: Build UWP ARM
+      run: cmake --build build_uwp_arm --config MinSizeRel
 
-    - name: Install dependencies
+    - name: Configure UWP x64
+      run: cmake . -G "Visual Studio 17 2022" -A x64 -Bbuild_uwp_x64 -DCMAKE_SYSTEM_NAME:String=WindowsStore -DCMAKE_SYSTEM_VERSION:String="10.0"
+    - name: Build UWP x64
+      run: cmake --build build_uwp_x64 --config MinSizeRel
+
+    - name: Package Windows
       run: |
-        sudo apt update
-        sudo apt install libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev
-
-    - uses: lukka/get-cmake@latest
-
-    # Run CMake to generate Ninja project files
-    - name: Generate project files
-      run: cmake -B "${{ env.CMAKE_BUILD_DIR }}" -S "." -GNinja -DCMAKE_INSTALL_PREFIX="SDK"
-
-    # Build the whole project with Ninja (which is spawn by CMake).          
-    - name: Build
-      run: cmake --build "${{ env.CMAKE_BUILD_DIR }}" --target install --config Release
-
+        mkdir bin/win-x64
+        mkdir bin/win10-arm64
+        mkdir bin/win10-arm
+        mkdir bin/win10-x64
+        mv build_win_64\bin\MinSizeRel\vgpu.dll bin/win-x64
+        mv build_uwp_arm64\bin\MinSizeRel\vgpu.dll bin/win10-arm64
+        mv build_uwp_arm\bin\MinSizeRel\vgpu.dll bin/win10-arm
+        mv build_uwp_x64\bin\MinSizeRel\vgpu.dll bin/win10-x64
     - uses: actions/upload-artifact@v2
       with:
-        name: 'Linux SDK'
-        path: ${{ github.workspace }}/SDK      
+        name: vgpu_libs_windows
+        path: bin
+
+  combine:
+    name: combine artifacts
+    runs-on: ubuntu-20.04
+    needs: [windows]
+    steps:
+      - name: download artifacts
+        uses: actions/download-artifact@v2
+        with:
+          path: artifacts
+      - name: Display structure of downloaded files
+        run: ls -R
+        working-directory: artifacts
+      - name: combine
+        run: |
+          mkdir vgpu_libs
+          cp -r artifacts/vgpu_libs_windows/* vgpu_libs
+      - name: zip
+        run: zip -r vgpu_libs.zip vgpu_libs
+      - uses: AButler/upload-release-assets@v2.0
+        if: github.event_name == 'release' && github.event.action == 'created'
+        with:
+          files: vgpu_libs.zip
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/upload-artifact@v2
+        with:
+          name: vgpu_libs.zip
+          path: vgpu_libs.zip
+      - uses: geekyeggo/delete-artifact@v1
+        with:
+          name: |
+            vgpu_libs_windows
