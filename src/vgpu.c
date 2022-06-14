@@ -463,6 +463,25 @@ void vgpuInsertDebugMarker(VGPUCommandBuffer commandBuffer, const char* debugLab
     commandBuffer->insertDebugMarker(commandBuffer->driverData, debugLabel);
 }
 
+void vgpuSetPipeline(VGPUCommandBuffer commandBuffer, VGPUPipeline pipeline)
+{
+    VGPU_ASSERT(pipeline);
+
+    commandBuffer->setPipeline(commandBuffer->driverData, pipeline);
+}
+
+void vgpuDispatch(VGPUCommandBuffer commandBuffer, uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)
+{
+    commandBuffer->dispatch(commandBuffer->driverData, groupCountX, groupCountY, groupCountZ);
+}
+
+void vgpuDispatchIndirect(VGPUCommandBuffer commandBuffer, VGPUBuffer indirectBuffer, uint32_t indirectBufferOffset)
+{
+    NULL_RETURN(indirectBuffer);
+
+    commandBuffer->dispatchIndirect(commandBuffer->driverData, indirectBuffer, indirectBufferOffset);
+}
+
 VGPUTexture vgpuAcquireSwapchainTexture(VGPUCommandBuffer commandBuffer, VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight)
 {
     return commandBuffer->acquireSwapchainTexture(commandBuffer->driverData, swapChain, pWidth, pHeight);
@@ -494,13 +513,6 @@ void vgpuSetScissorRects(VGPUCommandBuffer commandBuffer, uint32_t count, const 
     VGPU_ASSERT(count < VGPU_MAX_VIEWPORTS_AND_SCISSORS);
 
     commandBuffer->setScissorRects(commandBuffer->driverData, scissorRects, count);
-}
-
-void vgpuSetPipeline(VGPUCommandBuffer commandBuffer, VGPUPipeline pipeline)
-{
-    VGPU_ASSERT(pipeline);
-
-    commandBuffer->setPipeline(commandBuffer->driverData, pipeline);
 }
 
 void vgpuDraw(VGPUCommandBuffer commandBuffer, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t baseInstance)

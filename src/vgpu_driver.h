@@ -101,6 +101,10 @@ typedef struct VGPUCommandBuffer_T {
     void (*popDebugGroup)(VGPUCommandBufferImpl* driverData);
     void (*insertDebugMarker)(VGPUCommandBufferImpl* driverData, const char* debugLabel);
 
+    void (*setPipeline)(VGPUCommandBufferImpl* driverData, VGPUPipeline pipeline);
+    void (*dispatch)(VGPUCommandBufferImpl* driverData, uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ);
+    void (*dispatchIndirect)(VGPUCommandBufferImpl* driverData, VGPUBuffer indirectBuffer, uint32_t indirectBufferOffset);
+
     VGPUTexture(*acquireSwapchainTexture)(VGPUCommandBufferImpl* driverData, VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight);
     void (*beginRenderPass)(VGPUCommandBufferImpl* driverData, const VGPURenderPassDesc* desc);
     void (*endRenderPass)(VGPUCommandBufferImpl* driverData);
@@ -108,7 +112,6 @@ typedef struct VGPUCommandBuffer_T {
     void (*setViewports)(VGPUCommandBufferImpl* driverData, const VGPUViewport* viewports, uint32_t count);
     void (*setScissorRects)(VGPUCommandBufferImpl* driverData, const VGPURect* scissorRects, uint32_t count);
 
-    void (*setPipeline)(VGPUCommandBufferImpl* driverData, VGPUPipeline pipeline);
     void (*draw)(VGPUCommandBufferImpl* driverData, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t baseInstance);
 
     /* Opaque pointer for the Driver */
@@ -160,12 +163,14 @@ typedef struct VGPUDevice_T
 ASSIGN_COMMAND_BUFFER_FUNC(pushDebugGroup, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(popDebugGroup, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(insertDebugMarker, name) \
+ASSIGN_COMMAND_BUFFER_FUNC(setPipeline, name) \
+ASSIGN_COMMAND_BUFFER_FUNC(dispatch, name) \
+ASSIGN_COMMAND_BUFFER_FUNC(dispatchIndirect, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(acquireSwapchainTexture, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(beginRenderPass, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(endRenderPass, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(setViewports, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(setScissorRects, name) \
-ASSIGN_COMMAND_BUFFER_FUNC(setPipeline, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(draw, name) 
 
 #define ASSIGN_DRIVER(name) \

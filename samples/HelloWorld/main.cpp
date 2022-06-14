@@ -97,11 +97,6 @@ void init_gfx(GLFWwindow* window)
     bufferDesc.size = sizeof(vertices);
     bufferDesc.usage = VGPUBufferUsage_Vertex;
     vertexBuffer = vgpuCreateBuffer(device, &bufferDesc, vertices);
-
-    VGPUSamplerDesc samplerDesc{};
-    samplerDesc.label = "Test Sampler";
-    auto sampler = vgpuCreateSampler(device, &samplerDesc);
-    vgpuDestroySampler(device, sampler);
 }
 
 #if defined(__EMSCRIPTEN__)

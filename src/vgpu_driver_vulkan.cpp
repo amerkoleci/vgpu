@@ -1379,6 +1379,9 @@ static bool vulkan_queryFeature(VGFXRenderer* driverData, VGPUFeature feature, v
         case VGPUFeature_SamplerMinMax:
             return renderer->features_1_2.samplerFilterMinmax == VK_TRUE;
 
+        case VGPUFeature_MeshShader:
+            return renderer->mesh_shader_features.meshShader == VK_TRUE && renderer->mesh_shader_features.taskShader == VK_TRUE;
+
         case VGPUFeature_RayTracing:
             if (renderer->raytracing_features.rayTracingPipeline == VK_TRUE &&
                 renderer->raytracing_query_features.rayQuery == VK_TRUE &&
@@ -2180,6 +2183,34 @@ static void vulkan_insertDebugMarker(VGPUCommandBufferImpl* driverData, const ch
     vkCmdInsertDebugUtilsLabelEXT(commandBuffer->handle, &label);
 }
 
+static void vulkan_setPipeline(VGPUCommandBufferImpl* driverData, VGPUPipeline pipeline)
+{
+    VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
+    VulkanPipeline* vulkanPipeline = (VulkanPipeline*)pipeline;
+    vkCmdBindPipeline(commandBuffer->handle, vulkanPipeline->bindPoint, vulkanPipeline->handle);
+}
+
+static void vulkan_prepareDispatch(VulkanCommandBuffer* commandBuffer)
+{
+    VGPU_ASSERT(commandBuffer->insideRenderPass);
+}
+
+static void vulkan_dispatch(VGPUCommandBufferImpl* driverData, uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)
+{
+    VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
+    vulkan_prepareDispatch(commandBuffer);
+    vkCmdDispatch(commandBuffer->handle, groupCountX, groupCountY, groupCountZ);
+}
+
+static void vulkan_dispatchIndirect(VGPUCommandBufferImpl* driverData, VGPUBuffer indirectBuffer, uint32_t indirectBufferOffset)
+{
+    VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
+    vulkan_prepareDispatch(commandBuffer);
+
+    VulkanBuffer* vulkanBuffer = (VulkanBuffer*)indirectBuffer;
+    vkCmdDispatchIndirect(commandBuffer->handle, vulkanBuffer->handle, indirectBufferOffset);
+}
+
 static VGPUTexture vulkan_acquireSwapchainTexture(VGPUCommandBufferImpl* driverData, VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight)
 {
     VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
@@ -2458,13 +2489,6 @@ static void vulkan_setScissorRects(VGPUCommandBufferImpl* driverData, const VGPU
     VGPU_ASSERT(count < commandBuffer->renderer->properties2.properties.limits.maxViewports);
 
     vkCmdSetScissor(commandBuffer->handle, 0, count, (const VkRect2D*)scissorRects);
-}
-
-static void vulkan_setPipeline(VGPUCommandBufferImpl* driverData, VGPUPipeline pipeline)
-{
-    VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
-    VulkanPipeline* vulkanPipeline = (VulkanPipeline*)pipeline;
-    vkCmdBindPipeline(commandBuffer->handle, vulkanPipeline->bindPoint, vulkanPipeline->handle);
 }
 
 static void vulkan_draw(VGPUCommandBufferImpl* driverData, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t baseInstance)

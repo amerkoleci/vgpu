@@ -303,6 +303,7 @@ typedef enum VGPUFeature {
     VGPUFeature_DrawIndirectFirstInstance,
     VGPUFeature_ShaderOutputViewportIndex,
     VGPUFeature_SamplerMinMax,
+    VGPUFeature_MeshShader,
     VGPUFeature_RayTracing,
 
     _VGPUFeature_Force32 = 0x7FFFFFFF
@@ -468,7 +469,7 @@ typedef struct VGPURenderPassDesc {
 
 typedef struct VGPUBufferDesc {
     const char* label;
-    uint64_t size;
+    uint32_t size;
     VGPUBufferUsage usage;
     VGPUCpuAccessMode cpuAccess;
 } VGPUBufferDesc;
@@ -608,13 +609,18 @@ VGPU_API VGPUCommandBuffer vgpuBeginCommandBuffer(VGPUDevice device, const char*
 VGPU_API void vgpuPushDebugGroup(VGPUCommandBuffer commandBuffer, const char* groupLabel);
 VGPU_API void vgpuPopDebugGroup(VGPUCommandBuffer commandBuffer);
 VGPU_API void vgpuInsertDebugMarker(VGPUCommandBuffer commandBuffer, const char* debugLabel);
+VGPU_API void vgpuSetPipeline(VGPUCommandBuffer commandBuffer, VGPUPipeline pipeline);
 
+/* Compute commands */
+VGPU_API void vgpuDispatch(VGPUCommandBuffer commandBuffer, uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ);
+VGPU_API void vgpuDispatchIndirect(VGPUCommandBuffer commandBuffer, VGPUBuffer indirectBuffer, uint32_t indirectBufferOffset);
+
+/* Render commands */
 VGPU_API VGPUTexture vgpuAcquireSwapchainTexture(VGPUCommandBuffer commandBuffer, VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight);
 VGPU_API void vgpuBeginRenderPass(VGPUCommandBuffer commandBuffer, const VGPURenderPassDesc* desc);
 VGPU_API void vgpuEndRenderPass(VGPUCommandBuffer commandBuffer);
 VGPU_API void vgpuSetViewports(VGPUCommandBuffer commandBuffer, uint32_t count, const VGPUViewport* viewports);
 VGPU_API void vgpuSetScissorRects(VGPUCommandBuffer commandBuffer, uint32_t count, const VGPURect* scissorRects);
-VGPU_API void vgpuSetPipeline(VGPUCommandBuffer commandBuffer, VGPUPipeline pipeline);
 VGPU_API void vgpuDraw(VGPUCommandBuffer commandBuffer, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t baseInstance);
 
 VGPU_API void vgpuSubmit(VGPUDevice device, VGPUCommandBuffer* commandBuffers, uint32_t count);
