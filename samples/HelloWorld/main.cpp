@@ -51,10 +51,10 @@ void init_gfx(GLFWwindow* window)
     deviceDesc.validationMode = VGPUValidationMode_Enabled;
 #endif
 
-    if (vgpuIsSupported(VGPUBackendType_Vulkan))
-    {
-        deviceDesc.preferredBackend = VGPUBackendType_Vulkan;
-    }
+    //if (vgpuIsSupported(VGPUBackendType_Vulkan))
+    //{
+    //    deviceDesc.preferredBackend = VGPUBackendType_Vulkan;
+    //}
 
     device = vgpuCreateDevice(&deviceDesc);
 
@@ -68,7 +68,6 @@ void init_gfx(GLFWwindow* window)
     int height = 0;
     glfwGetWindowSize(window, &width, &height);
 
-
     void* windowHandle = nullptr;
 #if defined(__EMSCRIPTEN__)
     windowHandle = "canvas";
@@ -81,7 +80,7 @@ void init_gfx(GLFWwindow* window)
     VGPUSwapChainDesc swapChainDesc{};
     swapChainDesc.width = width;
     swapChainDesc.height = height;
-    swapChainDesc.format = VGFXTextureFormat_BGRA8UNormSrgb;
+    swapChainDesc.format = VGPUTextureFormat_BGRA8UNormSrgb;
     swapChainDesc.presentMode = VGPUPresentMode_Fifo;
     swapChain = vgpuCreateSwapChain(device, windowHandle, &swapChainDesc);
 
@@ -98,6 +97,11 @@ void init_gfx(GLFWwindow* window)
     bufferDesc.size = sizeof(vertices);
     bufferDesc.usage = VGPUBufferUsage_Vertex;
     vertexBuffer = vgpuCreateBuffer(device, &bufferDesc, vertices);
+
+    VGPUSamplerDesc samplerDesc{};
+    samplerDesc.label = "Test Sampler";
+    auto sampler = vgpuCreateSampler(device, &samplerDesc);
+    vgpuDestroySampler(device, sampler);
 }
 
 #if defined(__EMSCRIPTEN__)
@@ -150,8 +154,8 @@ void draw_frame()
     {
         VGPURenderPassColorAttachment colorAttachment = {};
         colorAttachment.texture = swapChainTexture;
-        colorAttachment.loadOp = VGPU_LOAD_OP_CLEAR;
-        colorAttachment.storeOp = VGPU_STORE_OP_STORE;
+        colorAttachment.loadOp = VGPULoadOp_Clear;
+        colorAttachment.storeOp = VGPUStoreOp_Store;
         colorAttachment.clearColor.r = 0.3f;
         colorAttachment.clearColor.g = 0.3f;
         colorAttachment.clearColor.b = 0.3f;
@@ -166,7 +170,7 @@ void draw_frame()
 
     vgpuSubmit(device, &commandBuffer, 1u);
     vgpuFrame(device);
-    }
+}
 
 int main()
 {
@@ -179,7 +183,7 @@ int main()
         return EXIT_FAILURE;
     }
 
-    vgpuSetLogCallback(vgpu_log);
+    //vgpuSetLogCallback(vgpu_log);
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     GLFWwindow* window = glfwCreateWindow(1280, 720, "Hello World", NULL, NULL);

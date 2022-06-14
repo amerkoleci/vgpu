@@ -155,48 +155,48 @@ typedef enum VGPUTextureFormat {
     VGPUTextureFormat_R8UInt,
     VGPUTextureFormat_R8SInt,
     /* 16-bit formats */
-    VGFXTextureFormat_R16UInt,
-    VGFXTextureFormat_R16SInt,
-    VGFXTextureFormat_R16UNorm,
-    VGFXTextureFormat_R16SNorm,
-    VGFXTextureFormat_R16Float,
-    VGFXTextureFormat_RG8UInt,
-    VGFXTextureFormat_RG8SInt,
-    VGFXTextureFormat_RG8UNorm,
-    VGFXTextureFormat_RG8SNorm,
+    VGPUTextureFormat_R16UInt,
+    VGPUTextureFormat_R16SInt,
+    VGPUTextureFormat_R16UNorm,
+    VGPUTextureFormat_R16SNorm,
+    VGPUTextureFormat_R16Float,
+    VGPUTextureFormat_RG8UInt,
+    VGPUTextureFormat_RG8SInt,
+    VGPUTextureFormat_RG8UNorm,
+    VGPUTextureFormat_RG8SNorm,
     /* Packed 16-Bit Pixel Formats */
-    VGFXTextureFormat_BGRA4UNorm,
-    VGFXTextureFormat_B5G6R5UNorm,
-    VGFXTextureFormat_B5G5R5A1UNorm,
+    VGPUTextureFormat_BGRA4UNorm,
+    VGPUTextureFormat_B5G6R5UNorm,
+    VGPUTextureFormat_B5G5R5A1UNorm,
     /* 32-bit formats */
-    VGFXTextureFormat_R32UInt,
-    VGFXTextureFormat_R32SInt,
-    VGFXTextureFormat_R32Float,
-    VGFXTextureFormat_RG16UInt,
-    VGFXTextureFormat_RG16SInt,
-    VGFXTextureFormat_RG16UNorm,
-    VGFXTextureFormat_RG16SNorm,
-    VGFXTextureFormat_RG16Float,
-    VGFXTextureFormat_RGBA8UInt,
-    VGFXTextureFormat_RGBA8SInt,
-    VGFXTextureFormat_RGBA8UNorm,
-    VGFXTextureFormat_RGBA8UNormSrgb,
-    VGFXTextureFormat_RGBA8SNorm,
-    VGFXTextureFormat_BGRA8UNorm,
-    VGFXTextureFormat_BGRA8UNormSrgb,
+    VGPUTextureFormat_R32UInt,
+    VGPUTextureFormat_R32SInt,
+    VGPUTextureFormat_R32Float,
+    VGPUTextureFormat_RG16UInt,
+    VGPUTextureFormat_RG16SInt,
+    VGPUTextureFormat_RG16UNorm,
+    VGPUTextureFormat_RG16SNorm,
+    VGPUTextureFormat_RG16Float,
+    VGPUTextureFormat_RGBA8UInt,
+    VGPUTextureFormat_RGBA8SInt,
+    VGPUTextureFormat_RGBA8UNorm,
+    VGPUTextureFormat_RGBA8UNormSrgb,
+    VGPUTextureFormat_RGBA8SNorm,
+    VGPUTextureFormat_BGRA8UNorm,
+    VGPUTextureFormat_BGRA8UNormSrgb,
     /* Packed 32-Bit formats */
-    VGFXTextureFormat_RGB10A2UNorm,
-    VGFXTextureFormat_RG11B10Float,
-    VGFXTextureFormat_RGB9E5Float,
+    VGPUTextureFormat_RGB10A2UNorm,
+    VGPUTextureFormat_RG11B10Float,
+    VGPUTextureFormat_RGB9E5Float,
     /* 64-Bit formats */
-    VGFXTextureFormat_RG32UInt,
-    VGFXTextureFormat_RG32SInt,
-    VGFXTextureFormat_RG32Float,
-    VGFXTextureFormat_RGBA16UInt,
-    VGFXTextureFormat_RGBA16SInt,
-    VGFXTextureFormat_RGBA16UNorm,
-    VGFXTextureFormat_RGBA16SNorm,
-    VGFXTextureFormat_RGBA16Float,
+    VGPUTextureFormat_RG32UInt,
+    VGPUTextureFormat_RG32SInt,
+    VGPUTextureFormat_RG32Float,
+    VGPUTextureFormat_RGBA16UInt,
+    VGPUTextureFormat_RGBA16SInt,
+    VGPUTextureFormat_RGBA16UNorm,
+    VGPUTextureFormat_RGBA16SNorm,
+    VGPUTextureFormat_RGBA16Float,
     /* 128-Bit formats */
     VGPUTextureFormat_RGBA32UInt,
     VGPUTextureFormat_RGBA32SInt,
@@ -309,20 +309,68 @@ typedef enum VGPUFeature {
 } VGPUFeature;
 
 typedef enum VGPULoadOp {
-    VGPU_LOAD_OP_LOAD = 0,
-    VGPU_LOAD_OP_CLEAR = 1,
-    VGPU_LOAD_OP_DISCARD = 2,
+    VGPULoadOp_Load = 0,
+    VGPULoadOp_Clear = 1,
+    VGPULoadOp_Discard = 2,
 
-    _VGPU_LOAD_OP_COUNT,
-    _VGPU_LOAD_OP_FORCE_U32 = 0x7FFFFFFF
+    _VGPULoadOp_Force32 = 0x7FFFFFFF
 } VGPULoadOp;
 
-typedef enum VGFXStoreOp {
-    VGPU_STORE_OP_STORE = 0,
-    VGPU_STORE_OP_DISCARD = 1,
+typedef enum VGPUStoreOp {
+    VGPUStoreOp_Store = 0,
+    VGPUStoreOp_Discard = 1,
 
-    _VGPU_STORE_OP_FORCE_U32 = 0x7FFFFFFF
-} VGFXStoreOp;
+    _VGPUStoreOp_Force32 = 0x7FFFFFFF
+} VGPUStoreOp;
+
+typedef enum VGPUCompareFunction 
+{
+    VGPUCompareFunction_Never,
+    VGPUCompareFunction_Less,
+    VGPUCompareFunction_Equal,
+    VGPUCompareFunction_LessEqual,
+    VGPUCompareFunction_Greater,
+    VGPUCompareFunction_NotEqual,
+    VGPUCompareFunction_GreaterEqual,
+    VGPUCompareFunction_Always,
+
+    _VGPUCompareFunction_Force32 = 0x7FFFFFFF
+} VGPUCompareFunction;
+
+typedef enum VGPUSamplerFilter 
+{
+    VGPUSamplerFilter_Nearest = 0,
+    VGPUSamplerFilter_Linear,
+
+    _VGPUSamplerFilter_Force32 = 0x7FFFFFFF
+} VGPUSamplerFilter;
+
+typedef enum VGPUSamplerMipFilter
+{
+    VGPUSamplerMipFilter_Nearest = 0,
+    VGPUSamplerMipFilter_Linear,
+
+    _VGPUSamplerMipFilter_Force32 = 0x7FFFFFFF
+} VGPUSamplerMipFilter;
+
+typedef enum VGPUSamplerAddressMode
+{
+    VGPUSamplerAddressMode_Wrap = 0,
+    VGPUSamplerAddressMode_Mirror,
+    VGPUSamplerAddressMode_Clamp,
+    VGPUSamplerAddressMode_Border,
+
+    _VGPUSamplerAddressMode_Force32 = 0x7FFFFFFF
+} VGPUSamplerAddressMode;
+
+typedef enum VGPUSamplerBorderColor 
+{
+    VGPUSamplerBorderColor_TransparentBlack = 0,
+    VGPUSamplerBorderColor_OpaqueBlack,
+    VGPUSamplerBorderColor_OpaqueWhite,
+
+    _VGPUSamplerBorderColor_Force32 = 0x7FFFFFFF
+} VGPUSamplerBorderColor;
 
 typedef struct VGPUColor {
     float r;
@@ -391,23 +439,23 @@ typedef struct VGPUDrawIndexedIndirectCommand
 
 typedef struct VGPURenderPassColorAttachment {
     VGPUTexture texture;
-    uint32_t level;
-    uint32_t slice;
-    VGPULoadOp loadOp;
-    VGFXStoreOp storeOp;
-    VGPUColor clearColor;
+    uint32_t    level;
+    uint32_t    slice;
+    VGPULoadOp  loadOp;
+    VGPUStoreOp storeOp;
+    VGPUColor   clearColor;
 } VGPURenderPassColorAttachment;
 
 typedef struct VGPURenderPassDepthStencilAttachment {
     VGPUTexture texture;
-    uint32_t level;
-    uint32_t slice;
-    VGPULoadOp depthLoadOp;
-    VGFXStoreOp depthStoreOp;
-    float clearDepth;
-    VGPULoadOp stencilLoadOp;
-    VGFXStoreOp stencilStoreOp;
-    uint8_t clearStencil;
+    uint32_t    level;
+    uint32_t    slice;
+    VGPULoadOp  depthLoadOp;
+    VGPUStoreOp depthStoreOp;
+    float       clearDepth;
+    VGPULoadOp  stencilLoadOp;
+    VGPUStoreOp stencilStoreOp;
+    uint8_t     clearStencil;
 } VGPURenderPassDepthStencilAttachment;
 
 typedef struct VGPURenderPassDesc {
@@ -438,12 +486,19 @@ typedef struct VGPUTextureDesc {
 } VGPUTextureDesc;
 
 typedef struct VGPUSamplerDesc {
-    const char* label;
-    uint32_t maxAnisotropy;
-    float    mipLodBias;
-    //CompareFunction compareFunction = CompareFunction::Never;
-    float lodMinClamp;
-    float lodMaxClamp;
+    const char*             label;
+    VGPUSamplerFilter       minFilter;
+    VGPUSamplerFilter       magFilter;
+    VGPUSamplerMipFilter    mipFilter;
+    VGPUSamplerAddressMode  addressU;
+    VGPUSamplerAddressMode  addressV;
+    VGPUSamplerAddressMode  addressW;
+    uint32_t                maxAnisotropy;
+    float                   mipLodBias;
+    VGPUCompareFunction     compareFunction;
+    float                   lodMinClamp;
+    float                   lodMaxClamp;
+    VGPUSamplerBorderColor  borderColor;
 } VGPUSamplerDesc;
 
 typedef struct VGPURenderPipelineDesc {
@@ -536,8 +591,8 @@ VGPU_API VGPUSampler vgpuCreateSampler(VGPUDevice device, const VGPUSamplerDesc*
 VGPU_API void vgpuDestroySampler(VGPUDevice device, VGPUSampler sampler);
 
 /* ShaderModule */
-VGPU_API VGPUShaderModule vgpuCreateShaderModule(VGPUDevice device, const void* pCode, size_t codeSize);
-VGPU_API void vgpuDestroyShaderModule(VGPUDevice device, VGPUShaderModule module);
+VGPU_API VGPUShaderModule vgpuCreateShader(VGPUDevice device, const void* pCode, size_t codeSize);
+VGPU_API void vgpuDestroyShader(VGPUDevice device, VGPUShaderModule module);
 
 /* Pipeline */
 VGPU_API VGPUPipeline vgpuCreateRenderPipeline(VGPUDevice device, const VGPURenderPipelineDesc* desc);

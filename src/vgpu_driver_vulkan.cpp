@@ -313,48 +313,48 @@ namespace
             case VGPUTextureFormat_R8UInt:      return VK_FORMAT_R8_UINT;
             case VGPUTextureFormat_R8SInt:      return VK_FORMAT_R8_SINT;
                 // 16-bit formats
-            case VGFXTextureFormat_R16UInt:         return VK_FORMAT_R16_UINT;
-            case VGFXTextureFormat_R16SInt:         return VK_FORMAT_R16_SINT;
-            case VGFXTextureFormat_R16UNorm:        return VK_FORMAT_R16_UNORM;
-            case VGFXTextureFormat_R16SNorm:        return VK_FORMAT_R16_SNORM;
-            case VGFXTextureFormat_R16Float:        return VK_FORMAT_R16_SFLOAT;
-            case VGFXTextureFormat_RG8UInt:         return VK_FORMAT_R8G8_UINT;
-            case VGFXTextureFormat_RG8SInt:         return VK_FORMAT_R8G8_SINT;
-            case VGFXTextureFormat_RG8UNorm:        return VK_FORMAT_R8G8_UNORM;
-            case VGFXTextureFormat_RG8SNorm:        return VK_FORMAT_R8G8_SNORM;
+            case VGPUTextureFormat_R16UInt:         return VK_FORMAT_R16_UINT;
+            case VGPUTextureFormat_R16SInt:         return VK_FORMAT_R16_SINT;
+            case VGPUTextureFormat_R16UNorm:        return VK_FORMAT_R16_UNORM;
+            case VGPUTextureFormat_R16SNorm:        return VK_FORMAT_R16_SNORM;
+            case VGPUTextureFormat_R16Float:        return VK_FORMAT_R16_SFLOAT;
+            case VGPUTextureFormat_RG8UInt:         return VK_FORMAT_R8G8_UINT;
+            case VGPUTextureFormat_RG8SInt:         return VK_FORMAT_R8G8_SINT;
+            case VGPUTextureFormat_RG8UNorm:        return VK_FORMAT_R8G8_UNORM;
+            case VGPUTextureFormat_RG8SNorm:        return VK_FORMAT_R8G8_SNORM;
                 // Packed 16-Bit Pixel Formats
-            case VGFXTextureFormat_BGRA4UNorm:       return VK_FORMAT_B4G4R4A4_UNORM_PACK16;
-            case VGFXTextureFormat_B5G6R5UNorm:      return VK_FORMAT_B5G6R5_UNORM_PACK16;
-            case VGFXTextureFormat_B5G5R5A1UNorm:    return VK_FORMAT_B5G5R5A1_UNORM_PACK16;
+            case VGPUTextureFormat_BGRA4UNorm:       return VK_FORMAT_B4G4R4A4_UNORM_PACK16;
+            case VGPUTextureFormat_B5G6R5UNorm:      return VK_FORMAT_B5G6R5_UNORM_PACK16;
+            case VGPUTextureFormat_B5G5R5A1UNorm:    return VK_FORMAT_B5G5R5A1_UNORM_PACK16;
                 // 32-bit formats
-            case VGFXTextureFormat_R32UInt:          return VK_FORMAT_R32_UINT;
-            case VGFXTextureFormat_R32SInt:          return VK_FORMAT_R32_SINT;
-            case VGFXTextureFormat_R32Float:         return VK_FORMAT_R32_SFLOAT;
-            case VGFXTextureFormat_RG16UInt:         return VK_FORMAT_R16G16_UINT;
-            case VGFXTextureFormat_RG16SInt:         return VK_FORMAT_R16G16_SINT;
-            case VGFXTextureFormat_RG16UNorm:        return VK_FORMAT_R16G16_UNORM;
-            case VGFXTextureFormat_RG16SNorm:        return VK_FORMAT_R16G16_SNORM;
-            case VGFXTextureFormat_RG16Float:        return VK_FORMAT_R16G16_SFLOAT;
-            case VGFXTextureFormat_RGBA8UInt:        return VK_FORMAT_R8G8B8A8_UINT;
-            case VGFXTextureFormat_BGRA8UNorm:       return VK_FORMAT_B8G8R8A8_UNORM;
-            case VGFXTextureFormat_RGBA8UNorm:       return VK_FORMAT_R8G8B8A8_UNORM;
-            case VGFXTextureFormat_RGBA8UNormSrgb:   return VK_FORMAT_R8G8B8A8_SRGB;
-            case VGFXTextureFormat_RGBA8SNorm:       return VK_FORMAT_R8G8B8A8_SNORM;
-            case VGFXTextureFormat_RGBA8SInt:        return VK_FORMAT_R8G8B8A8_SINT;
-            case VGFXTextureFormat_BGRA8UNormSrgb:   return VK_FORMAT_B8G8R8A8_SRGB;
+            case VGPUTextureFormat_R32UInt:          return VK_FORMAT_R32_UINT;
+            case VGPUTextureFormat_R32SInt:          return VK_FORMAT_R32_SINT;
+            case VGPUTextureFormat_R32Float:         return VK_FORMAT_R32_SFLOAT;
+            case VGPUTextureFormat_RG16UInt:         return VK_FORMAT_R16G16_UINT;
+            case VGPUTextureFormat_RG16SInt:         return VK_FORMAT_R16G16_SINT;
+            case VGPUTextureFormat_RG16UNorm:        return VK_FORMAT_R16G16_UNORM;
+            case VGPUTextureFormat_RG16SNorm:        return VK_FORMAT_R16G16_SNORM;
+            case VGPUTextureFormat_RG16Float:        return VK_FORMAT_R16G16_SFLOAT;
+            case VGPUTextureFormat_RGBA8UInt:        return VK_FORMAT_R8G8B8A8_UINT;
+            case VGPUTextureFormat_BGRA8UNorm:       return VK_FORMAT_B8G8R8A8_UNORM;
+            case VGPUTextureFormat_RGBA8UNorm:       return VK_FORMAT_R8G8B8A8_UNORM;
+            case VGPUTextureFormat_RGBA8UNormSrgb:   return VK_FORMAT_R8G8B8A8_SRGB;
+            case VGPUTextureFormat_RGBA8SNorm:       return VK_FORMAT_R8G8B8A8_SNORM;
+            case VGPUTextureFormat_RGBA8SInt:        return VK_FORMAT_R8G8B8A8_SINT;
+            case VGPUTextureFormat_BGRA8UNormSrgb:   return VK_FORMAT_B8G8R8A8_SRGB;
                 // Packed 32-Bit formats
-            case VGFXTextureFormat_RGB10A2UNorm:     return VK_FORMAT_A2B10G10R10_UNORM_PACK32;
-            case VGFXTextureFormat_RG11B10Float:     return VK_FORMAT_B10G11R11_UFLOAT_PACK32;
-            case VGFXTextureFormat_RGB9E5Float:      return VK_FORMAT_E5B9G9R9_UFLOAT_PACK32;
+            case VGPUTextureFormat_RGB10A2UNorm:     return VK_FORMAT_A2B10G10R10_UNORM_PACK32;
+            case VGPUTextureFormat_RG11B10Float:     return VK_FORMAT_B10G11R11_UFLOAT_PACK32;
+            case VGPUTextureFormat_RGB9E5Float:      return VK_FORMAT_E5B9G9R9_UFLOAT_PACK32;
                 // 64-Bit formats
-            case VGFXTextureFormat_RG32UInt:         return VK_FORMAT_R32G32_UINT;
-            case VGFXTextureFormat_RG32SInt:         return VK_FORMAT_R32G32_SINT;
-            case VGFXTextureFormat_RG32Float:        return VK_FORMAT_R32G32_SFLOAT;
-            case VGFXTextureFormat_RGBA16UInt:       return VK_FORMAT_R16G16B16A16_UINT;
-            case VGFXTextureFormat_RGBA16SInt:       return VK_FORMAT_R16G16B16A16_SINT;
-            case VGFXTextureFormat_RGBA16UNorm:      return VK_FORMAT_R16G16B16A16_UNORM;
-            case VGFXTextureFormat_RGBA16SNorm:      return VK_FORMAT_R16G16B16A16_SNORM;
-            case VGFXTextureFormat_RGBA16Float:      return VK_FORMAT_R16G16B16A16_SFLOAT;
+            case VGPUTextureFormat_RG32UInt:         return VK_FORMAT_R32G32_UINT;
+            case VGPUTextureFormat_RG32SInt:         return VK_FORMAT_R32G32_SINT;
+            case VGPUTextureFormat_RG32Float:        return VK_FORMAT_R32G32_SFLOAT;
+            case VGPUTextureFormat_RGBA16UInt:       return VK_FORMAT_R16G16B16A16_UINT;
+            case VGPUTextureFormat_RGBA16SInt:       return VK_FORMAT_R16G16B16A16_SINT;
+            case VGPUTextureFormat_RGBA16UNorm:      return VK_FORMAT_R16G16B16A16_UNORM;
+            case VGPUTextureFormat_RGBA16SNorm:      return VK_FORMAT_R16G16B16A16_SNORM;
+            case VGPUTextureFormat_RGBA16Float:      return VK_FORMAT_R16G16B16A16_SFLOAT;
                 // 128-Bit formats
             case VGPUTextureFormat_RGBA32UInt:       return VK_FORMAT_R32G32B32A32_UINT;
             case VGPUTextureFormat_RGBA32SInt:       return VK_FORMAT_R32G32B32A32_SINT;
@@ -429,30 +429,25 @@ namespace
     {
         switch (op)
         {
-            case VGPU_LOAD_OP_LOAD:
-                return VK_ATTACHMENT_LOAD_OP_LOAD;
-            case VGPU_LOAD_OP_CLEAR:
+            case VGPULoadOp_Clear:
                 return VK_ATTACHMENT_LOAD_OP_CLEAR;
-            case VGPU_LOAD_OP_DISCARD:
+            case VGPULoadOp_Discard:
                 return VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 
             default:
-                return VK_ATTACHMENT_LOAD_OP_MAX_ENUM;
+                return VK_ATTACHMENT_LOAD_OP_LOAD;
         }
     }
 
-    constexpr VkAttachmentStoreOp ToVkAttachmentStoreOp(VGFXStoreOp op)
+    constexpr VkAttachmentStoreOp ToVkAttachmentStoreOp(VGPUStoreOp op)
     {
         switch (op)
         {
-            case VGPU_STORE_OP_STORE:
-                return VK_ATTACHMENT_STORE_OP_STORE;
-
-            case VGPU_STORE_OP_DISCARD:
+            case VGPUStoreOp_Discard:
                 return VK_ATTACHMENT_STORE_OP_DONT_CARE;
 
             default:
-                return VK_ATTACHMENT_STORE_OP_MAX_ENUM;
+                return VK_ATTACHMENT_STORE_OP_STORE;
         }
     }
 
@@ -478,6 +473,78 @@ namespace
 
             default:
                 return VK_IMAGE_ASPECT_COLOR_BIT;
+        }
+    }
+
+    constexpr VkCompareOp ToVkCompareOp(VGPUCompareFunction function)
+    {
+        switch (function)
+        {
+            case VGPUCompareFunction_Never:        return VK_COMPARE_OP_NEVER;
+            case VGPUCompareFunction_Less:         return VK_COMPARE_OP_LESS;
+            case VGPUCompareFunction_Equal:        return VK_COMPARE_OP_EQUAL;
+            case VGPUCompareFunction_LessEqual:    return VK_COMPARE_OP_LESS_OR_EQUAL;
+            case VGPUCompareFunction_Greater:      return VK_COMPARE_OP_GREATER;
+            case VGPUCompareFunction_NotEqual:     return VK_COMPARE_OP_NOT_EQUAL;
+            case VGPUCompareFunction_GreaterEqual: return VK_COMPARE_OP_GREATER_OR_EQUAL;
+            case VGPUCompareFunction_Always:       return VK_COMPARE_OP_ALWAYS;
+            default:
+                return VK_COMPARE_OP_NEVER;
+        }
+    }
+
+    constexpr VkFilter ToVkFilter(VGPUSamplerFilter mode)
+    {
+        switch (mode)
+        {
+            case VGPUSamplerFilter_Linear:
+                return VK_FILTER_LINEAR;
+            default:
+                return VK_FILTER_NEAREST;
+        }
+    }
+
+    constexpr VkSamplerMipmapMode ToVkMipmapMode(VGPUSamplerMipFilter mode)
+    {
+        switch (mode)
+        {
+            case VGPUSamplerMipFilter_Linear:
+                return VK_SAMPLER_MIPMAP_MODE_LINEAR;
+            default:
+                return VK_SAMPLER_MIPMAP_MODE_NEAREST;
+        }
+    }
+
+    constexpr VkSamplerAddressMode ToVkSamplerAddressMode(VGPUSamplerAddressMode mode)
+    {
+        switch (mode)
+        {
+            case VGPUSamplerAddressMode_Mirror:
+                return VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+
+            case VGPUSamplerAddressMode_Clamp:
+                return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+
+            case VGPUSamplerAddressMode_Border:
+                return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+
+            default:
+            case VGPUSamplerAddressMode_Wrap:
+                return VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        }
+    }
+
+    constexpr VkBorderColor ToVkBorderColor(VGPUSamplerBorderColor value)
+    {
+        switch (value)
+        {
+            case VGPUSamplerBorderColor_OpaqueBlack:
+                return VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
+            case VGPUSamplerBorderColor_OpaqueWhite:
+                return VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+            default:
+            case VGPUSamplerBorderColor_TransparentBlack:
+                return VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
         }
     }
 
@@ -509,7 +576,7 @@ namespace
 
 #define VK_LOG_ERROR(result, message) vgpuLogError("Vulkan: %s, error: %s", message, ToString(result));
 
-struct VGFXVulkanRenderer;
+struct VulkanRenderer;
 
 struct VulkanBuffer
 {
@@ -555,7 +622,7 @@ struct VulkanSwapChain
 
 struct VulkanCommandBuffer
 {
-    VGFXVulkanRenderer* renderer;
+    VulkanRenderer* renderer;
     bool hasLabel;
     VkCommandPool commandPools[VGPU_MAX_INFLIGHT_FRAMES];
     VkCommandBuffer commandBuffers[VGPU_MAX_INFLIGHT_FRAMES];
@@ -565,7 +632,7 @@ struct VulkanCommandBuffer
     std::vector<VulkanSwapChain*> swapChains;
 };
 
-struct VGFXVulkanRenderer
+struct VulkanRenderer
 {
 #if defined(VK_USE_PLATFORM_XCB_KHR)
     struct {
@@ -673,7 +740,7 @@ struct VGFXVulkanRenderer
     std::deque<std::pair<VkQueryPool, uint64_t>> destroyedQueryPools;
 };
 
-static void vulkan_SetObjectName(VGFXVulkanRenderer* renderer, VkObjectType type, uint64_t handle, const char* name)
+static void vulkan_SetObjectName(VulkanRenderer* renderer, VkObjectType type, uint64_t handle, const char* name)
 {
     if (!renderer->debugUtils)
     {
@@ -689,7 +756,7 @@ static void vulkan_SetObjectName(VGFXVulkanRenderer* renderer, VkObjectType type
     VK_CHECK(vkSetDebugUtilsObjectNameEXT(renderer->device, &info));
 }
 
-static VkSurfaceKHR vulkan_createSurface(VGFXVulkanRenderer* renderer, void* windowHandle)
+static VkSurfaceKHR vulkan_createSurface(VulkanRenderer* renderer, void* windowHandle)
 {
     VkResult result = VK_SUCCESS;
     VkSurfaceKHR vk_surface = VK_NULL_HANDLE;
@@ -745,7 +812,7 @@ static VkSurfaceKHR vulkan_createSurface(VGFXVulkanRenderer* renderer, void* win
     return vk_surface;
 }
 
-static VkImageView vulkan_GetView(VGFXVulkanRenderer* renderer, VulkanTexture* texture, uint32_t baseMipLevel, uint32_t levelCount, uint32_t baseArrayLayer, uint32_t layerCount)
+static VkImageView vulkan_GetView(VulkanRenderer* renderer, VulkanTexture* texture, uint32_t baseMipLevel, uint32_t levelCount, uint32_t baseArrayLayer, uint32_t layerCount)
 {
     size_t hash = 0;
     hash_combine(hash, baseMipLevel);
@@ -786,12 +853,12 @@ static VkImageView vulkan_GetView(VGFXVulkanRenderer* renderer, VulkanTexture* t
     return it->second;
 }
 
-static VkImageView vulkan_GetRTV(VGFXVulkanRenderer* renderer, VulkanTexture* texture, uint32_t level, uint32_t slice)
+static VkImageView vulkan_GetRTV(VulkanRenderer* renderer, VulkanTexture* texture, uint32_t level, uint32_t slice)
 {
     return vulkan_GetView(renderer, texture, level, 1, slice, 1);
 }
 
-static VkRenderPass vulkan_RequestRenderPass(VGFXVulkanRenderer* renderer, const VGPURenderPassDesc* info)
+static VkRenderPass vulkan_RequestRenderPass(VulkanRenderer* renderer, const VGPURenderPassDesc* info)
 {
     size_t hash = 0;
     hash_combine(hash, info->colorAttachmentCount);
@@ -932,7 +999,7 @@ static VkRenderPass vulkan_RequestRenderPass(VGFXVulkanRenderer* renderer, const
 }
 
 static VkFramebuffer vulkan_RequestFramebuffer(
-    VGFXVulkanRenderer* renderer,
+    VulkanRenderer* renderer,
     VkRenderPass renderPass,
     const VGPURenderPassDesc* desc,
     uint32_t width, uint32_t height)
@@ -993,7 +1060,7 @@ static VkFramebuffer vulkan_RequestFramebuffer(
     return it->second;
 }
 
-static void vulkan_ProcessDeletionQueue(VGFXVulkanRenderer* renderer)
+static void vulkan_ProcessDeletionQueue(VulkanRenderer* renderer)
 {
     renderer->destroyMutex.lock();
 
@@ -1099,7 +1166,7 @@ static void vulkan_ProcessDeletionQueue(VGFXVulkanRenderer* renderer)
 
 static void vulkan_destroyDevice(VGPUDevice device)
 {
-    VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)device->driverData;
+    VulkanRenderer* renderer = (VulkanRenderer*)device->driverData;
     VK_CHECK(vkDeviceWaitIdle(renderer->device));
 
     for (auto& frame : renderer->frames)
@@ -1153,13 +1220,15 @@ static void vulkan_destroyDevice(VGPUDevice device)
 
     if (renderer->allocator != VK_NULL_HANDLE)
     {
-        //VmaStats stats;
-        //vmaCalculateStats(renderer->allocator, &stats);
+#if defined(_DEBUG)
+        VmaTotalStatistics stats;
+        vmaCalculateStatistics(renderer->allocator, &stats);
 
-        //if (stats.total.usedBytes > 0)
-        //{
+        if (stats.total.statistics.allocationBytes > 0)
+        {
         //    vgpuLogError("Total device memory leaked: {} bytes.", stats.total.usedBytes);
-        //}
+        }
+#endif
 
         vmaDestroyAllocator(renderer->allocator);
         renderer->allocator = VK_NULL_HANDLE;
@@ -1198,7 +1267,7 @@ static void vulkan_destroyDevice(VGPUDevice device)
 static uint64_t vulkan_frame(VGFXRenderer* driverData)
 {
     VkResult result = VK_SUCCESS;
-    VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
+    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
 
     renderer->initLocker.lock();
 
@@ -1240,8 +1309,9 @@ static uint64_t vulkan_frame(VGFXRenderer* driverData)
     return renderer->frameCount - 1;
 }
 
-static void vulkan_waitIdle(VGFXRenderer* driverData) {
-    VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
+static void vulkan_waitIdle(VGFXRenderer* driverData)
+{
+    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
     VK_CHECK(vkDeviceWaitIdle(renderer->device));
 }
 
@@ -1255,7 +1325,7 @@ static bool vulkan_queryFeature(VGFXRenderer* driverData, VGPUFeature feature, v
     (void)pInfo;
     (void)infoSize;
 
-    VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
+    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
     switch (feature)
     {
         case VGPUFeature_TextureCompressionBC:
@@ -1333,7 +1403,7 @@ static bool vulkan_queryFeature(VGFXRenderer* driverData, VGPUFeature feature, v
 
 static void vulkan_getAdapterProperties(VGFXRenderer* driverData, VGPUAdapterProperties* properties)
 {
-    VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
+    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
 
     properties->vendorID = renderer->properties2.properties.vendorID;
     properties->deviceID = renderer->properties2.properties.deviceID;
@@ -1362,7 +1432,7 @@ static void vulkan_getAdapterProperties(VGFXRenderer* driverData, VGPUAdapterPro
 
 static void vulkan_getLimits(VGFXRenderer* driverData, VGPULimits* limits)
 {
-    VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
+    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
 
 #define SET_LIMIT_FROM_VULKAN(vulkanName, name) limits->name = renderer->properties2.properties.limits.vulkanName
     SET_LIMIT_FROM_VULKAN(maxImageDimension1D, maxTextureDimension1D);
@@ -1413,7 +1483,7 @@ static void vulkan_getLimits(VGFXRenderer* driverData, VGPULimits* limits)
 /* Buffer */
 static VGPUBuffer vulkan_createBuffer(VGFXRenderer* driverData, const VGPUBufferDesc* desc, const void* pInitialData)
 {
-    VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
+    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
 
     VkBufferCreateInfo bufferInfo = {};
     bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -1540,7 +1610,7 @@ static VGPUBuffer vulkan_createBuffer(VGFXRenderer* driverData, const VGPUBuffer
 
 static void vulkan_destroyBuffer(VGFXRenderer* driverData, VGPUBuffer resource)
 {
-    VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
+    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
     VulkanBuffer* buffer = (VulkanBuffer*)resource;
 
     renderer->destroyMutex.lock();
@@ -1556,7 +1626,7 @@ static void vulkan_destroyBuffer(VGFXRenderer* driverData, VGPUBuffer resource)
 /* Texture */
 static VGPUTexture vulkan_createTexture(VGFXRenderer* driverData, const VGPUTextureDesc* desc)
 {
-    VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
+    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
 
     VmaAllocationCreateInfo memoryInfo = {};
     memoryInfo.usage = VMA_MEMORY_USAGE_AUTO;
@@ -1677,7 +1747,7 @@ static VGPUTexture vulkan_createTexture(VGFXRenderer* driverData, const VGPUText
 
 static void vulkan_destroyTexture(VGFXRenderer* driverData, VGPUTexture texture)
 {
-    VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
+    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
     VulkanTexture* vulkanTexture = (VulkanTexture*)texture;
 
     renderer->destroyMutex.lock();
@@ -1695,16 +1765,75 @@ static void vulkan_destroyTexture(VGFXRenderer* driverData, VGPUTexture texture)
     delete vulkanTexture;
 }
 
-
-
 /* Sampler */
 static VGPUSampler vulkan_createSampler(VGFXRenderer* driverData, const VGPUSamplerDesc* desc)
 {
-    return nullptr;
+    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
+    VulkanSampler* sampler = new VulkanSampler();
+
+    VkSamplerCreateInfo createInfo = {};
+    createInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    createInfo.magFilter = ToVkFilter(desc->magFilter);
+    createInfo.minFilter = ToVkFilter(desc->minFilter);
+    createInfo.mipmapMode = ToVkMipmapMode(desc->mipFilter);
+    createInfo.addressModeU = ToVkSamplerAddressMode(desc->addressU);
+    createInfo.addressModeV = ToVkSamplerAddressMode(desc->addressV);
+    createInfo.addressModeW = ToVkSamplerAddressMode(desc->addressW);
+    createInfo.mipLodBias = desc->mipLodBias;
+    // https://www.khronos.org/registry/vulkan/specs/1.2-extensions/man/html/VkSamplerCreateInfo.html
+    if (desc->maxAnisotropy > 1)
+    {
+        createInfo.anisotropyEnable = VK_TRUE;
+        createInfo.maxAnisotropy = _VGPU_MIN(float(desc->maxAnisotropy), renderer->properties2.properties.limits.maxSamplerAnisotropy);
+    }
+    else
+    {
+        createInfo.anisotropyEnable = VK_FALSE;
+        createInfo.maxAnisotropy = 1;
+    }
+
+    if (desc->compareFunction != VGPUCompareFunction_Never)
+    {
+        createInfo.compareOp = ToVkCompareOp(desc->compareFunction);
+        createInfo.compareEnable = VK_TRUE;
+    }
+    else
+    {
+        createInfo.compareOp = VK_COMPARE_OP_NEVER;
+        createInfo.compareEnable = VK_FALSE;
+    }
+
+    createInfo.minLod = desc->lodMinClamp;
+    createInfo.maxLod = desc->lodMaxClamp;
+    createInfo.borderColor = ToVkBorderColor(desc->borderColor);
+    createInfo.unnormalizedCoordinates = VK_FALSE;
+
+    VkResult result = vkCreateSampler(renderer->device, &createInfo, nullptr, &sampler->handle);
+
+    if (result != VK_SUCCESS)
+    {
+        VK_LOG_ERROR(result, "Failed to create sampler.");
+        delete sampler;
+        return nullptr;
+    }
+
+    if (desc->label)
+    {
+        vulkan_SetObjectName(renderer, VK_OBJECT_TYPE_SAMPLER, (uint64_t)sampler->handle, desc->label);
+    }
+
+    return (VGPUSampler)sampler;
 }
 
 static void vulkan_destroySampler(VGFXRenderer* driverData, VGPUSampler resource)
 {
+    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
+    VulkanSampler* sampler = (VulkanSampler*)resource;
+
+    renderer->destroyMutex.lock();
+    renderer->destroyedSamplers.push_back(std::make_pair(sampler->handle, renderer->frameCount));
+    renderer->destroyMutex.unlock();
+    delete sampler;
 }
 
 /* ShaderModule */
@@ -1743,7 +1872,7 @@ static void vulkan_destroyPipeline(VGFXRenderer* driverData, VGPUPipeline resour
 }
 
 /* SwapChain */
-static void vulkan_updateSwapChain(VGFXVulkanRenderer* renderer, VulkanSwapChain* swapChain)
+static void vulkan_updateSwapChain(VulkanRenderer* renderer, VulkanSwapChain* swapChain)
 {
     VkResult result = VK_SUCCESS;
     VkSurfaceCapabilitiesKHR caps;
@@ -1891,11 +2020,11 @@ static void vulkan_updateSwapChain(VGFXVulkanRenderer* renderer, VulkanSwapChain
 
     if (createInfo.imageFormat == VK_FORMAT_B8G8R8A8_UNORM)
     {
-        swapChain->colorFormat = VGFXTextureFormat_BGRA8UNorm;
+        swapChain->colorFormat = VGPUTextureFormat_BGRA8UNorm;
     }
     else if (createInfo.imageFormat == VK_FORMAT_R8G8B8A8_SRGB)
     {
-        swapChain->colorFormat = VGFXTextureFormat_BGRA8UNormSrgb;
+        swapChain->colorFormat = VGPUTextureFormat_BGRA8UNormSrgb;
     }
 
     swapChain->extent = createInfo.imageExtent;
@@ -1903,7 +2032,7 @@ static void vulkan_updateSwapChain(VGFXVulkanRenderer* renderer, VulkanSwapChain
 
 static VGPUSwapChain vulkan_createSwapChain(VGFXRenderer* driverData, void* windowHandle, const VGPUSwapChainDesc* desc)
 {
-    VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
+    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
     VkSurfaceKHR vk_surface = vulkan_createSurface(renderer, windowHandle);
     if (vk_surface == VK_NULL_HANDLE)
     {
@@ -1930,7 +2059,7 @@ static VGPUSwapChain vulkan_createSwapChain(VGFXRenderer* driverData, void* wind
 
 static void vulkan_destroySwapChain(VGFXRenderer* driverData, VGPUSwapChain swapChain)
 {
-    VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
+    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
     VulkanSwapChain* vulkanSwapChain = (VulkanSwapChain*)swapChain;
     //vulkan_destroyTexture(nullptr, d3dSwapChain->backbufferTexture);
 
@@ -2306,7 +2435,7 @@ static void vulkan_prepareDraw(VulkanCommandBuffer* commandBuffer)
 static void vulkan_setViewports(VGPUCommandBufferImpl* driverData, const VGPUViewport* viewports, uint32_t count)
 {
     VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
-    
+
     VGPU_ASSERT(count < commandBuffer->renderer->properties2.properties.limits.maxViewports);
 
     // Flip viewport to match DirectX coordinate system
@@ -2347,7 +2476,7 @@ static void vulkan_draw(VGPUCommandBufferImpl* driverData, uint32_t vertexStart,
 
 static VGPUCommandBuffer vulkan_beginCommandBuffer(VGFXRenderer* driverData, const char* label)
 {
-    VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
+    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
     VulkanCommandBuffer* impl = nullptr;
 
     renderer->cmdBuffersLocker.lock();
@@ -2425,7 +2554,7 @@ static VGPUCommandBuffer vulkan_beginCommandBuffer(VGFXRenderer* driverData, con
 
 static void vulkan_submit(VGFXRenderer* driverData, VGPUCommandBuffer* commandBuffers, uint32_t count)
 {
-    VGFXVulkanRenderer* renderer = (VGFXVulkanRenderer*)driverData;
+    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
 
     // Collect present swapchains
     std::vector<VkSemaphore> waitSemaphores;
@@ -2566,7 +2695,7 @@ static bool vulkan_isSupported(void)
 
 static VGPUDevice vulkan_createDevice(const VGPUDeviceDesc* info)
 {
-    VGFXVulkanRenderer* renderer = new VGFXVulkanRenderer();
+    VulkanRenderer* renderer = new VulkanRenderer();
 
 #if defined(VK_USE_PLATFORM_XCB_KHR)
 #if defined(__CYGWIN__)
@@ -2774,7 +2903,7 @@ static VGPUDevice vulkan_createDevice(const VGPUDeviceDesc* info)
             vgpuLogInfo("	\t%s", createInfo.ppEnabledExtensionNames[i]);
         }
 #endif
-    }
+}
 
     // Enumerate physical device and create logical device.
     {

@@ -35,10 +35,10 @@ jobs:
     - name: Build UWP ARM64
       run: cmake --build build_uwp_arm64 --config MinSizeRel
 
-    #- name: Configure UWP ARM
-    #  run: cmake . -G "Visual Studio 17 2022" -A ARM -Bbuild_uwp_arm -DCMAKE_SYSTEM_NAME:String=WindowsStore -DCMAKE_SYSTEM_VERSION:String="10.0"
-    #- name: Build UWP ARM
-    #  run: cmake --build build_uwp_arm --config MinSizeRel
+    - name: Configure UWP ARM
+      run: cmake . -G "Visual Studio 17 2022" -A ARM -Bbuild_uwp_arm -DCMAKE_SYSTEM_NAME:String=WindowsStore -DCMAKE_SYSTEM_VERSION:String="10.0"
+    - name: Build UWP ARM
+      run: cmake --build build_uwp_arm --config MinSizeRel
 
     - name: Configure UWP x64
       run: cmake . -G "Visual Studio 17 2022" -A x64 -Bbuild_uwp_x64 -DCMAKE_SYSTEM_NAME:String=WindowsStore -DCMAKE_SYSTEM_VERSION:String="10.0"

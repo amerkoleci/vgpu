@@ -170,7 +170,6 @@ endif ()
 
 if (VGPU_D3D12_DRIVER)
     target_sources(${PROJECT_NAME} PRIVATE
-        src/vgpu_driver_d3d.h
         src/vgpu_driver_d3d12.cpp
         src/lib/D3D12MemAlloc.cpp
         src/lib/D3D12MemAlloc.h

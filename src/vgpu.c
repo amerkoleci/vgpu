@@ -237,7 +237,7 @@ static VGPUTextureDesc _vgpuTextureDescDef(const VGPUTextureDesc* desc)
 {
     VGPUTextureDesc def = *desc;
     def.type = _VGPU_DEF(def.type, VGPUTexture_Type2D);
-    def.format = _VGPU_DEF(def.type, VGFXTextureFormat_RGBA8UNorm);
+    def.format = _VGPU_DEF(def.type, VGPUTextureFormat_RGBA8UNorm);
     //def.usage = _VGPU_DEF(def.type, VGFXTextureUsage_ShaderRead);
     def.width = _VGPU_DEF(def.width, 1);
     def.height = _VGPU_DEF(def.height, 1);
@@ -364,7 +364,7 @@ void vgpuDestroySampler(VGPUDevice device, VGPUSampler sampler)
 }
 
 /* Shader Module */
-VGPUShaderModule vgpuCreateShaderModule(VGPUDevice device, const void* pCode, size_t codeSize)
+VGPUShaderModule vgpuCreateShader(VGPUDevice device, const void* pCode, size_t codeSize)
 {
     NULL_RETURN_NULL(device);
     NULL_RETURN_NULL(pCode);
@@ -372,7 +372,7 @@ VGPUShaderModule vgpuCreateShaderModule(VGPUDevice device, const void* pCode, si
     return device->createShaderModule(device->driverData, pCode, codeSize);
 }
 
-void vgpuDestroyShaderModule(VGPUDevice device, VGPUShaderModule module)
+void vgpuDestroyShader(VGPUDevice device, VGPUShaderModule module)
 {
     NULL_RETURN(device);
     NULL_RETURN(module);
@@ -408,7 +408,7 @@ void vgpuDestroyPipeline(VGPUDevice device, VGPUPipeline pipeline)
 static VGPUSwapChainDesc _vgpuSwapChainDescDef(const VGPUSwapChainDesc* desc)
 {
     VGPUSwapChainDesc def = *desc;
-    def.format = _VGPU_DEF(def.format, VGFXTextureFormat_BGRA8UNorm);
+    def.format = _VGPU_DEF(def.format, VGPUTextureFormat_BGRA8UNorm);
     def.presentMode = _VGPU_DEF(def.presentMode, VGPUPresentMode_Immediate);
     return def;
 }
@@ -525,49 +525,49 @@ static const VGPUFormatInfo c_FormatInfo[] = {
     { VGPUTextureFormat_R8UInt,         "R8_UINT",           1,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,      true,  false, false, false, false, false, false, false },
     { VGPUTextureFormat_R8SInt,         "R8_SINT",           1,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,      true,  false, false, false, false, false, true,  false },
 
-    { VGFXTextureFormat_R16UInt,          "R16_UINT",          2,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,      true,  false, false, false, false, false, false, false },
-    { VGFXTextureFormat_R16SInt,          "R16_SINT",          2,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,      true,  false, false, false, false, false, true,  false },
-    { VGFXTextureFormat_R16UNorm,         "R16_UNORM",         2,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  false, false, false, false, false, false, false },
-    { VGFXTextureFormat_R16SNorm,         "R16_SNORM",         2,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  false, false, false, false, false, false, false },
-    { VGFXTextureFormat_R16Float,         "R16_FLOAT",         2,   1, VGPU_TEXTURE_FORMAT_KIND_FLOAT,        true,  false, false, false, false, false, true,  false },
-    { VGFXTextureFormat_RG8UInt,          "RG8_UINT",          2,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,      true,  true,  false, false, false, false, false, false },
-    { VGFXTextureFormat_RG8SInt,          "RG8_SINT",          2,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,      true,  true,  false, false, false, false, true,  false },
-    { VGFXTextureFormat_RG8UNorm,         "RG8_UNORM",         2,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  true,  false, false, false, false, false, false },
-    { VGFXTextureFormat_RG8SNorm,         "RG8_SNORM",         2,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  true,  false, false, false, false, false, false },
+    { VGPUTextureFormat_R16UInt,          "R16_UINT",          2,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,      true,  false, false, false, false, false, false, false },
+    { VGPUTextureFormat_R16SInt,          "R16_SINT",          2,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,      true,  false, false, false, false, false, true,  false },
+    { VGPUTextureFormat_R16UNorm,         "R16_UNORM",         2,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  false, false, false, false, false, false, false },
+    { VGPUTextureFormat_R16SNorm,         "R16_SNORM",         2,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  false, false, false, false, false, false, false },
+    { VGPUTextureFormat_R16Float,         "R16_FLOAT",         2,   1, VGPU_TEXTURE_FORMAT_KIND_FLOAT,        true,  false, false, false, false, false, true,  false },
+    { VGPUTextureFormat_RG8UInt,          "RG8_UINT",          2,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,      true,  true,  false, false, false, false, false, false },
+    { VGPUTextureFormat_RG8SInt,          "RG8_SINT",          2,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,      true,  true,  false, false, false, false, true,  false },
+    { VGPUTextureFormat_RG8UNorm,         "RG8_UNORM",         2,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  true,  false, false, false, false, false, false },
+    { VGPUTextureFormat_RG8SNorm,         "RG8_SNORM",         2,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  true,  false, false, false, false, false, false },
 
-    { VGFXTextureFormat_BGRA4UNorm,       "BGRA4_UNORM",       2,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  true,  true,  true,  false, false, false, false },
-    { VGFXTextureFormat_B5G6R5UNorm,      "B5G6R5_UNORM",      2,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  true,  true,  false, false, false, false, false },
-    { VGFXTextureFormat_B5G5R5A1UNorm,    "B5G5R5A1_UNORM",    2,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  true,  true,  true,  false, false, false, false },
+    { VGPUTextureFormat_BGRA4UNorm,       "BGRA4_UNORM",       2,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  true,  true,  true,  false, false, false, false },
+    { VGPUTextureFormat_B5G6R5UNorm,      "B5G6R5_UNORM",      2,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  true,  true,  false, false, false, false, false },
+    { VGPUTextureFormat_B5G5R5A1UNorm,    "B5G5R5A1_UNORM",    2,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  true,  true,  true,  false, false, false, false },
 
-    { VGFXTextureFormat_R32UInt,          "R32_UINT",          4,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,      true,  false, false, false, false, false, false, false },
-    { VGFXTextureFormat_R32SInt,          "R32_SINT",          4,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,      true,  false, false, false, false, false, true,  false },
-    { VGFXTextureFormat_R32Float,         "R32_FLOAT",         4,   1, VGPU_TEXTURE_FORMAT_KIND_FLOAT,        true,  false, false, false, false, false, true,  false },
-    { VGFXTextureFormat_RG16UInt,         "RG16_UINT",         4,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,      true,  true,  false, false, false, false, false, false },
-    { VGFXTextureFormat_RG16SInt,         "RG16_SINT",         4,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,      true,  true,  false, false, false, false, true,  false },
-    { VGFXTextureFormat_RG16UNorm,        "RG16_UNORM",        4,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  true,  false, false, false, false, false, false },
-    { VGFXTextureFormat_RG16SNorm,        "RG16_SNORM",        4,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  true,  false, false, false, false, false, false },
-    { VGFXTextureFormat_RG16Float,        "RG16_FLOAT",        4,   1, VGPU_TEXTURE_FORMAT_KIND_FLOAT,        true,  true,  false, false, false, false, true,  false },
+    { VGPUTextureFormat_R32UInt,          "R32_UINT",          4,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,      true,  false, false, false, false, false, false, false },
+    { VGPUTextureFormat_R32SInt,          "R32_SINT",          4,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,      true,  false, false, false, false, false, true,  false },
+    { VGPUTextureFormat_R32Float,         "R32_FLOAT",         4,   1, VGPU_TEXTURE_FORMAT_KIND_FLOAT,        true,  false, false, false, false, false, true,  false },
+    { VGPUTextureFormat_RG16UInt,         "RG16_UINT",         4,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,      true,  true,  false, false, false, false, false, false },
+    { VGPUTextureFormat_RG16SInt,         "RG16_SINT",         4,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,      true,  true,  false, false, false, false, true,  false },
+    { VGPUTextureFormat_RG16UNorm,        "RG16_UNORM",        4,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  true,  false, false, false, false, false, false },
+    { VGPUTextureFormat_RG16SNorm,        "RG16_SNORM",        4,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  true,  false, false, false, false, false, false },
+    { VGPUTextureFormat_RG16Float,        "RG16_FLOAT",        4,   1, VGPU_TEXTURE_FORMAT_KIND_FLOAT,        true,  true,  false, false, false, false, true,  false },
 
-    { VGFXTextureFormat_RGBA8UInt,        "RGBA8_UINT",        4,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,      true,  true,  true,  true,  false, false, false, false },
-    { VGFXTextureFormat_RGBA8SInt,        "RGBA8_SINT",        4,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,      true,  true,  true,  true,  false, false, true,  false },
-    { VGFXTextureFormat_RGBA8UNorm,       "RGBA8_UNORM",       4,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  true,  true,  true,  false, false, false, false },
-    { VGFXTextureFormat_RGBA8UNormSrgb,      "SRGBA8_UNORM",      4,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  true,  true,  true,  false, false, false, true  },
-    { VGFXTextureFormat_RGBA8SNorm,       "RGBA8_SNORM",       4,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  true,  true,  true,  false, false, false, false },
-    { VGFXTextureFormat_BGRA8UNorm,       "BGRA8_UNORM",       4,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  true,  true,  true,  false, false, false, false },
-    { VGFXTextureFormat_BGRA8UNormSrgb,      "SBGRA8_UNORM",      4,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  true,  true,  true,  false, false, false, false },
+    { VGPUTextureFormat_RGBA8UInt,        "RGBA8_UINT",        4,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,      true,  true,  true,  true,  false, false, false, false },
+    { VGPUTextureFormat_RGBA8SInt,        "RGBA8_SINT",        4,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,      true,  true,  true,  true,  false, false, true,  false },
+    { VGPUTextureFormat_RGBA8UNorm,       "RGBA8_UNORM",       4,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  true,  true,  true,  false, false, false, false },
+    { VGPUTextureFormat_RGBA8UNormSrgb,      "SRGBA8_UNORM",      4,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  true,  true,  true,  false, false, false, true  },
+    { VGPUTextureFormat_RGBA8SNorm,       "RGBA8_SNORM",       4,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  true,  true,  true,  false, false, false, false },
+    { VGPUTextureFormat_BGRA8UNorm,       "BGRA8_UNORM",       4,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  true,  true,  true,  false, false, false, false },
+    { VGPUTextureFormat_BGRA8UNormSrgb,      "SBGRA8_UNORM",      4,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  true,  true,  true,  false, false, false, false },
 
-    { VGFXTextureFormat_RGB10A2UNorm,   "R10G10B10A2_UNORM",    4,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,          true,  true,  true,  true,  false, false, false, false },
-    { VGFXTextureFormat_RG11B10Float,   "R11G11B10_FLOAT",      4,   1, VGPU_TEXTURE_FORMAT_KIND_FLOAT,     true,  true,  true,  false, false, false, false, false },
-    { VGFXTextureFormat_RGB9E5Float,    "RGB9E5Float",          4,   1, VGPU_TEXTURE_FORMAT_KIND_FLOAT,     true,  true,  true,  false, false, false, false, false },
+    { VGPUTextureFormat_RGB10A2UNorm,   "R10G10B10A2_UNORM",    4,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,          true,  true,  true,  true,  false, false, false, false },
+    { VGPUTextureFormat_RG11B10Float,   "R11G11B10_FLOAT",      4,   1, VGPU_TEXTURE_FORMAT_KIND_FLOAT,     true,  true,  true,  false, false, false, false, false },
+    { VGPUTextureFormat_RGB9E5Float,    "RGB9E5Float",          4,   1, VGPU_TEXTURE_FORMAT_KIND_FLOAT,     true,  true,  true,  false, false, false, false, false },
 
-    { VGFXTextureFormat_RG32UInt,         "RG32_UINT",         8,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,    true,  true,  false, false, false, false, false, false },
-    { VGFXTextureFormat_RG32SInt,         "RG32_SINT",         8,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,    true,  true,  false, false, false, false, true,  false },
-    { VGFXTextureFormat_RG32Float,        "RG32_FLOAT",        8,   1, VGPU_TEXTURE_FORMAT_KIND_FLOAT,      true,  true,  false, false, false, false, true,  false },
-    { VGFXTextureFormat_RGBA16UInt,       "RGBA16_UINT",       8,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,    true,  true,  true,  true,  false, false, false, false },
-    { VGFXTextureFormat_RGBA16SInt,       "RGBA16_SINT",       8,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,    true,  true,  true,  true,  false, false, true,  false },
-    { VGFXTextureFormat_RGBA16UNorm,      "RGBA16_UNORM",      8,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,           true,  true,  true,  true,  false, false, false, false },
-    { VGFXTextureFormat_RGBA16SNorm,      "RGBA16_SNORM",      8,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,           true,  true,  true,  true,  false, false, false, false },
-    { VGFXTextureFormat_RGBA16Float,      "RGBA16_FLOAT",      8,   1, VGPU_TEXTURE_FORMAT_KIND_FLOAT,      true,  true,  true,  true,  false, false, true,  false },
+    { VGPUTextureFormat_RG32UInt,         "RG32_UINT",         8,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,    true,  true,  false, false, false, false, false, false },
+    { VGPUTextureFormat_RG32SInt,         "RG32_SINT",         8,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,    true,  true,  false, false, false, false, true,  false },
+    { VGPUTextureFormat_RG32Float,        "RG32_FLOAT",        8,   1, VGPU_TEXTURE_FORMAT_KIND_FLOAT,      true,  true,  false, false, false, false, true,  false },
+    { VGPUTextureFormat_RGBA16UInt,       "RGBA16_UINT",       8,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,    true,  true,  true,  true,  false, false, false, false },
+    { VGPUTextureFormat_RGBA16SInt,       "RGBA16_SINT",       8,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,    true,  true,  true,  true,  false, false, true,  false },
+    { VGPUTextureFormat_RGBA16UNorm,      "RGBA16_UNORM",      8,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,           true,  true,  true,  true,  false, false, false, false },
+    { VGPUTextureFormat_RGBA16SNorm,      "RGBA16_SNORM",      8,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,           true,  true,  true,  true,  false, false, false, false },
+    { VGPUTextureFormat_RGBA16Float,      "RGBA16_FLOAT",      8,   1, VGPU_TEXTURE_FORMAT_KIND_FLOAT,      true,  true,  true,  true,  false, false, true,  false },
 
     { VGPUTextureFormat_RGBA32UInt,       "RGBA32_UINT",       16,  1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,    true,  true,  true,  true,  false, false, false, false },
     { VGPUTextureFormat_RGBA32SInt,       "RGBA32_SINT",       16,  1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,    true,  true,  true,  true,  false, false, true,  false },

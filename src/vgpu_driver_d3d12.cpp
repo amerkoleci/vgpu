@@ -3,7 +3,7 @@
 
 #if defined(VGPU_D3D12_DRIVER)
 
-#include "vgpu_driver_d3d.h"
+#include "vgpu_driver.h"
 
 #include <directx/dxgiformat.h>
 #include <directx/d3dx12.h>
@@ -19,6 +19,10 @@
 
 #define D3D12MA_D3D12_HEADERS_ALREADY_INCLUDED
 #include "D3D12MemAlloc.h"
+
+#if defined(_DEBUG) && WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
+#   include <dxgidebug.h>
+#endif
 
 #ifdef USING_D3D12_AGILITY_SDK
 extern "C"
@@ -37,6 +41,9 @@ extern "C"
 
 using Microsoft::WRL::ComPtr;
 
+#define VHR(hr) if (FAILED(hr)) { VGPU_ASSERT(0); }
+#define SAFE_RELEASE(obj) if ((obj)) { (obj)->Release(); (obj) = nullptr; }
+
 namespace
 {
 #if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
@@ -48,10 +55,42 @@ namespace
     static PFN_D3D12_SERIALIZE_VERSIONED_ROOT_SIGNATURE vgfxD3D12SerializeVersionedRootSignature = nullptr;
 
 #if defined(_DEBUG)
+    // Declare debug guids to avoid linking with "dxguid.lib"
+    static constexpr IID VGFX_DXGI_DEBUG_ALL = { 0xe48ae283, 0xda80, 0x490b, {0x87, 0xe6, 0x43, 0xe9, 0xa9, 0xcf, 0xda, 0x8} };
+    static constexpr IID VGFX_DXGI_DEBUG_DXGI = { 0x25cddaa4, 0xb1c6, 0x47e1, {0xac, 0x3e, 0x98, 0x87, 0x5b, 0x5a, 0x2e, 0x2a} };
+
     using PFN_DXGI_GET_DEBUG_INTERFACE1 = decltype(&DXGIGetDebugInterface1);
     static PFN_DXGI_GET_DEBUG_INTERFACE1 vgpuDXGIGetDebugInterface1 = nullptr;
 #endif
 #endif
+
+
+    inline std::string WCharToUTF8(const wchar_t* input)
+    {
+        // The -1 argument asks WideCharToMultiByte to use the null terminator to know the size of
+        // input. It will return a size that includes the null terminator.
+        const int requiredSize = WideCharToMultiByte(CP_UTF8, 0, input, -1, nullptr, 0, nullptr, nullptr);
+        if (requiredSize < 0)
+            return "";
+
+        char* char_buffer = (char*)alloca(sizeof(char) * requiredSize);
+        WideCharToMultiByte(CP_UTF8, 0, input, -1, char_buffer, requiredSize, nullptr, nullptr);
+        return std::string(char_buffer, requiredSize);
+    }
+
+    inline std::wstring UTF8ToWStr(const char* input)
+    {
+        // The -1 argument asks MultiByteToWideChar to use the null terminator to know the size of
+        // input. It will return a size that includes the null terminator.
+        const int requiredSize = MultiByteToWideChar(CP_UTF8, 0, input, -1, nullptr, 0);
+        if (requiredSize < 0)
+            return L"";
+
+        wchar_t* char_buffer = (wchar_t*)alloca(sizeof(wchar_t) * requiredSize);
+        MultiByteToWideChar(CP_UTF8, 0, input, -1, char_buffer, requiredSize);
+        return std::wstring(char_buffer, requiredSize);
+    }
+
 
     inline void D3D12SetName(ID3D12DeviceChild* obj, const char* name)
     {
@@ -76,6 +115,219 @@ namespace
     static_assert(offsetof(VGPUViewport, height) == offsetof(D3D12_VIEWPORT, Height));
     static_assert(offsetof(VGPUViewport, minDepth) == offsetof(D3D12_VIEWPORT, MinDepth));
     static_assert(offsetof(VGPUViewport, maxDepth) == offsetof(D3D12_VIEWPORT, MaxDepth));
+
+    constexpr DXGI_FORMAT ToDXGIFormat(VGPUTextureFormat format)
+    {
+        switch (format)
+        {
+            // 8-bit formats
+            case VGPUTextureFormat_R8UNorm:         return DXGI_FORMAT_R8_UNORM;
+            case VGPUTextureFormat_R8SNorm:         return DXGI_FORMAT_R8_SNORM;
+            case VGPUTextureFormat_R8UInt:          return DXGI_FORMAT_R8_UINT;
+            case VGPUTextureFormat_R8SInt:          return DXGI_FORMAT_R8_SINT;
+                // 16-bit formats
+            case VGPUTextureFormat_R16UInt:         return DXGI_FORMAT_R16_UINT;
+            case VGPUTextureFormat_R16SInt:         return DXGI_FORMAT_R16_SINT;
+            case VGPUTextureFormat_R16UNorm:        return DXGI_FORMAT_R16_UNORM;
+            case VGPUTextureFormat_R16SNorm:        return DXGI_FORMAT_R16_SNORM;
+            case VGPUTextureFormat_R16Float:        return DXGI_FORMAT_R16_FLOAT;
+            case VGPUTextureFormat_RG8UNorm:        return DXGI_FORMAT_R8G8_UNORM;
+            case VGPUTextureFormat_RG8SNorm:        return DXGI_FORMAT_R8G8_SNORM;
+            case VGPUTextureFormat_RG8UInt:         return DXGI_FORMAT_R8G8_UINT;
+            case VGPUTextureFormat_RG8SInt:         return DXGI_FORMAT_R8G8_SINT;
+                // Packed 16-Bit Pixel Formats
+            case VGPUTextureFormat_BGRA4UNorm:      return DXGI_FORMAT_B4G4R4A4_UNORM;
+            case VGPUTextureFormat_B5G6R5UNorm:     return DXGI_FORMAT_B5G6R5_UNORM;
+            case VGPUTextureFormat_B5G5R5A1UNorm:   return DXGI_FORMAT_B5G5R5A1_UNORM;
+                // 32-bit formats
+            case VGPUTextureFormat_R32UInt:          return DXGI_FORMAT_R32_UINT;
+            case VGPUTextureFormat_R32SInt:          return DXGI_FORMAT_R32_SINT;
+            case VGPUTextureFormat_R32Float:         return DXGI_FORMAT_R32_FLOAT;
+            case VGPUTextureFormat_RG16UInt:         return DXGI_FORMAT_R16G16_UINT;
+            case VGPUTextureFormat_RG16SInt:         return DXGI_FORMAT_R16G16_SINT;
+            case VGPUTextureFormat_RG16UNorm:        return DXGI_FORMAT_R16G16_UNORM;
+            case VGPUTextureFormat_RG16SNorm:        return DXGI_FORMAT_R16G16_SNORM;
+            case VGPUTextureFormat_RG16Float:        return DXGI_FORMAT_R16G16_FLOAT;
+            case VGPUTextureFormat_RGBA8UInt:        return DXGI_FORMAT_R8G8B8A8_UINT;
+            case VGPUTextureFormat_RGBA8SInt:        return DXGI_FORMAT_R8G8B8A8_SINT;
+            case VGPUTextureFormat_RGBA8UNorm:       return DXGI_FORMAT_R8G8B8A8_UNORM;
+            case VGPUTextureFormat_RGBA8UNormSrgb:   return DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+            case VGPUTextureFormat_RGBA8SNorm:       return DXGI_FORMAT_R8G8B8A8_SNORM;
+            case VGPUTextureFormat_BGRA8UNorm:       return DXGI_FORMAT_B8G8R8A8_UNORM;
+            case VGPUTextureFormat_BGRA8UNormSrgb:   return DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
+                // Packed 32-Bit formats
+            case VGPUTextureFormat_RGB10A2UNorm:     return DXGI_FORMAT_R10G10B10A2_UNORM;
+            case VGPUTextureFormat_RG11B10Float:     return DXGI_FORMAT_R11G11B10_FLOAT;
+            case VGPUTextureFormat_RGB9E5Float:      return DXGI_FORMAT_R9G9B9E5_SHAREDEXP;
+                // 64-Bit formats
+            case VGPUTextureFormat_RG32UInt:         return DXGI_FORMAT_R32G32_UINT;
+            case VGPUTextureFormat_RG32SInt:         return DXGI_FORMAT_R32G32_SINT;
+            case VGPUTextureFormat_RG32Float:        return DXGI_FORMAT_R32G32_FLOAT;
+            case VGPUTextureFormat_RGBA16UInt:       return DXGI_FORMAT_R16G16B16A16_UINT;
+            case VGPUTextureFormat_RGBA16SInt:       return DXGI_FORMAT_R16G16B16A16_SINT;
+            case VGPUTextureFormat_RGBA16UNorm:      return DXGI_FORMAT_R16G16B16A16_UNORM;
+            case VGPUTextureFormat_RGBA16SNorm:      return DXGI_FORMAT_R16G16B16A16_SNORM;
+            case VGPUTextureFormat_RGBA16Float:      return DXGI_FORMAT_R16G16B16A16_FLOAT;
+                // 128-Bit formats
+            case VGPUTextureFormat_RGBA32UInt:       return DXGI_FORMAT_R32G32B32A32_UINT;
+            case VGPUTextureFormat_RGBA32SInt:       return DXGI_FORMAT_R32G32B32A32_SINT;
+            case VGPUTextureFormat_RGBA32Float:      return DXGI_FORMAT_R32G32B32A32_FLOAT;
+                // Depth-stencil formats
+            case VGPUTextureFormat_Depth16UNorm:		    return DXGI_FORMAT_D16_UNORM;
+            case VGPUTextureFormat_Depth24UNormStencil8:    return DXGI_FORMAT_D24_UNORM_S8_UINT;
+            case VGPUTextureFormat_Depth32Float:			return DXGI_FORMAT_D32_FLOAT;
+            case VGPUTextureFormat_Depth32FloatStencil8:    return DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
+                // Compressed BC formats
+            case VGPUTextureFormat_BC1UNorm:            return DXGI_FORMAT_BC1_UNORM;
+            case VGPUTextureFormat_BC1UNormSrgb:        return DXGI_FORMAT_BC1_UNORM_SRGB;
+            case VGPUTextureFormat_BC2UNorm:            return DXGI_FORMAT_BC2_UNORM;
+            case VGPUTextureFormat_BC2UNormSrgb:        return DXGI_FORMAT_BC2_UNORM_SRGB;
+            case VGPUTextureFormat_BC3UNorm:            return DXGI_FORMAT_BC3_UNORM;
+            case VGPUTextureFormat_BC3UNormSrgb:        return DXGI_FORMAT_BC3_UNORM_SRGB;
+            case VGPUTextureFormat_BC4SNorm:            return DXGI_FORMAT_BC4_SNORM;
+            case VGPUTextureFormat_BC4UNorm:            return DXGI_FORMAT_BC4_UNORM;
+            case VGPUTextureFormat_BC5SNorm:            return DXGI_FORMAT_BC5_SNORM;
+            case VGPUTextureFormat_BC5UNorm:            return DXGI_FORMAT_BC5_UNORM;
+            case VGPUTextureFormat_BC6HUFloat:          return DXGI_FORMAT_BC6H_UF16;
+            case VGPUTextureFormat_BC6HSFloat:          return DXGI_FORMAT_BC6H_SF16;
+            case VGPUTextureFormat_BC7UNorm:            return DXGI_FORMAT_BC7_UNORM;
+            case VGPUTextureFormat_BC7UNormSrgb:        return DXGI_FORMAT_BC7_UNORM_SRGB;
+
+            default:
+                return DXGI_FORMAT_UNKNOWN;
+        }
+    }
+
+    constexpr VGPUTextureFormat ToDXGISwapChainFormat(VGPUTextureFormat format)
+    {
+        switch (format)
+        {
+            case VGPUTextureFormat_RGBA16Float:
+                return VGPUTextureFormat_RGBA16Float;
+
+            case VGPUTextureFormat_BGRA8UNorm:
+            case VGPUTextureFormat_BGRA8UNormSrgb:
+                return VGPUTextureFormat_BGRA8UNorm;
+
+            case VGPUTextureFormat_RGBA8UNorm:
+            case VGPUTextureFormat_RGBA8UNormSrgb:
+                return VGPUTextureFormat_RGBA8UNorm;
+
+            case VGPUTextureFormat_RGB10A2UNorm:
+                return VGPUTextureFormat_RGB10A2UNorm;
+        }
+
+        return VGPUTextureFormat_BGRA8UNorm;
+    }
+
+    constexpr DXGI_FORMAT GetTypelessFormatFromDepthFormat(VGPUTextureFormat format)
+    {
+        switch (format)
+        {
+            case VGPUTextureFormat_Depth16UNorm:
+                return DXGI_FORMAT_R16_TYPELESS;
+            case VGPUTextureFormat_Depth32Float:
+                return DXGI_FORMAT_R32_TYPELESS;
+            case VGPUTextureFormat_Depth24UNormStencil8:
+                return DXGI_FORMAT_R24G8_TYPELESS;
+            case VGPUTextureFormat_Depth32FloatStencil8:
+                return DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS;
+
+            default:
+                VGPU_ASSERT(vgpuIsDepthFormat(format) == false);
+                return ToDXGIFormat(format);
+        }
+    }
+
+    constexpr uint32_t PresentModeToBufferCount(VGPUPresentMode mode)
+    {
+        switch (mode)
+        {
+            case VGPUPresentMode_Immediate:
+            case VGPUPresentMode_Fifo:
+                return 2;
+            case VGPUPresentMode_Mailbox:
+                return 3;
+            default:
+                return 2;
+        }
+    }
+
+    constexpr uint32_t PresentModeToSwapInterval(VGPUPresentMode mode)
+    {
+        switch (mode)
+        {
+            case VGPUPresentMode_Immediate:
+            case VGPUPresentMode_Mailbox:
+                return 0u;
+
+            case VGPUPresentMode_Fifo:
+            default:
+                return 1u;
+        }
+    }
+
+    constexpr D3D12_COMPARISON_FUNC ToD3D12ComparisonFunc(VGPUCompareFunction function)
+    {
+        switch (function)
+        {
+            case VGPUCompareFunction_Never:        return D3D12_COMPARISON_FUNC_NEVER;
+            case VGPUCompareFunction_Less:         return D3D12_COMPARISON_FUNC_LESS;
+            case VGPUCompareFunction_Equal:        return D3D12_COMPARISON_FUNC_EQUAL;
+            case VGPUCompareFunction_LessEqual:    return D3D12_COMPARISON_FUNC_LESS_EQUAL;
+            case VGPUCompareFunction_Greater:      return D3D12_COMPARISON_FUNC_GREATER;
+            case VGPUCompareFunction_NotEqual:     return D3D12_COMPARISON_FUNC_NOT_EQUAL;
+            case VGPUCompareFunction_GreaterEqual: return D3D12_COMPARISON_FUNC_GREATER_EQUAL;
+            case VGPUCompareFunction_Always:       return D3D12_COMPARISON_FUNC_ALWAYS;
+
+            default:
+                return D3D12_COMPARISON_FUNC_NEVER;
+        }
+    }
+
+    constexpr D3D12_FILTER_TYPE ToD3D12FilterType(VGPUSamplerFilter value)
+    {
+        switch (value)
+        {
+            case VGPUSamplerFilter_Linear:
+                return D3D12_FILTER_TYPE_LINEAR;
+            default:
+            case VGPUSamplerFilter_Nearest:
+                return D3D12_FILTER_TYPE_POINT;
+        }
+    }
+
+    constexpr D3D12_FILTER_TYPE ToD3D12FilterType(VGPUSamplerMipFilter value)
+    {
+        switch (value)
+        {
+            case VGPUSamplerMipFilter_Linear:
+                return D3D12_FILTER_TYPE_LINEAR;
+            default:
+            case VGPUSamplerMipFilter_Nearest:
+                return D3D12_FILTER_TYPE_POINT;
+        }
+    }
+
+    constexpr D3D12_TEXTURE_ADDRESS_MODE ToD3D12AddressMode(VGPUSamplerAddressMode mode)
+    {
+        switch (mode)
+        {
+            case VGPUSamplerAddressMode_Mirror:
+                return D3D12_TEXTURE_ADDRESS_MODE_MIRROR;
+            case VGPUSamplerAddressMode_Clamp:
+                return D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+            case VGPUSamplerAddressMode_Border:
+                return D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+            //case VGPUSamplerAddressMode_MirrorOnce:
+            //    return D3D12_TEXTURE_ADDRESS_MODE_MIRROR_ONCE;
+
+            default:
+            case VGPUSamplerAddressMode_Wrap:
+                return D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+        }
+    }
+
 }
 
 #if !WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
@@ -288,7 +540,7 @@ static void d3d12_DeferDestroy(D3D12_Renderer* renderer, IUnknown* resource, D3D
         || renderer->device == nullptr)
     {
         resource->Release();
-        SafeRelease(allocation);
+        SAFE_RELEASE(allocation);
 
         renderer->destroyMutex.unlock();
         return;
@@ -461,7 +713,7 @@ static void d3d12_destroyDevice(VGPUDevice device)
     renderer->frameCount = 0;
 
     // Frame fence
-    SafeRelease(renderer->frameFence);
+    SAFE_RELEASE(renderer->frameFence);
     CloseHandle(renderer->frameFenceEvent);
 
     // Copy queue + allocations
@@ -485,7 +737,7 @@ static void d3d12_destroyDevice(VGPUDevice device)
         }
         renderer->uploadFreeList.clear();
 
-        SafeRelease(renderer->copyQueue);
+        SAFE_RELEASE(renderer->copyQueue);
     }
 
     // CPU descriptor allocators
@@ -501,25 +753,24 @@ static void d3d12_destroyDevice(VGPUDevice device)
         D3D12CommandBuffer* commandBuffer = (D3D12CommandBuffer*)renderer->commandBuffers[i]->driverData;
         for (uint32_t i = 0; i < VGPU_MAX_INFLIGHT_FRAMES; ++i)
         {
-            SafeRelease(commandBuffer->commandAllocators[i]);
+            SAFE_RELEASE(commandBuffer->commandAllocators[i]);
         }
-        SafeRelease(commandBuffer->commandList);
+        SAFE_RELEASE(commandBuffer->commandList);
     }
     renderer->commandBuffers.clear();
-    SafeRelease(renderer->graphicsQueue);
+    SAFE_RELEASE(renderer->graphicsQueue);
 
     // Allocator.
     if (renderer->allocator != nullptr)
     {
-        //D3D12MA::TotalStatistics stats;
-        //renderer->allocator->CalculateStatistics(&stats);
-        //
-        //if (stats.Total.Stats.AllocationBytes > 0)
-        //{
-        //    //LOGI("Total device memory leaked: {} bytes.", stats.Total.UsedBytes);
-        //}
+        D3D12MA::TotalStatistics stats;
+        renderer->allocator->CalculateStatistics(&stats);
+        if (stats.Total.Stats.AllocationBytes > 0)
+        {
+            //LOGI("Total device memory leaked: {} bytes.", stats.Total.UsedBytes);
+        }
 
-        SafeRelease(renderer->allocator);
+        SAFE_RELEASE(renderer->allocator);
     }
 
     if (renderer->device)
@@ -670,48 +921,48 @@ static bool d3d12_queryFeature(VGFXRenderer* driverData, VGPUFeature feature, vo
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
     switch (feature)
     {
-    case VGPUFeature_TextureCompressionBC:
-    case VGPUFeature_ShaderFloat16:
-    case VGPUFeature_PipelineStatisticsQuery:
-    case VGPUFeature_TimestampQuery:
-    case VGPUFeature_DepthClamping:
-    case VGPUFeature_Depth24UNormStencil8:
-    case VGPUFeature_Depth32FloatStencil8:
-    case VGPUFeature_IndependentBlend:
-    case VGPUFeature_TextureCubeArray:
-    case VGPUFeature_Tessellation:
-    case VGPUFeature_DescriptorIndexing:
-    case VGPUFeature_ConditionalRendering:
-    case VGPUFeature_DrawIndirectFirstInstance:
-        return true;
-
-    case VGPUFeature_TextureCompressionETC2:
-    case VGPUFeature_TextureCompressionASTC:
-        return false;
-
-    case VGPUFeature_ShaderOutputViewportIndex:
-        return renderer->d3dFeatures.VPAndRTArrayIndexFromAnyShaderFeedingRasterizerSupportedWithoutGSEmulation() == TRUE;
-
-        // https://docs.microsoft.com/en-us/windows/win32/direct3d11/tiled-resources-texture-sampling-features
-    case VGPUFeature_SamplerMinMax:
-        return renderer->d3dFeatures.TiledResourcesTier() >= D3D12_TILED_RESOURCES_TIER_2;
-
-    case VGPUFeature_RayTracing:
-        if (renderer->d3dFeatures.RaytracingTier() >= D3D12_RAYTRACING_TIER_1_1)
-        {
-            if (infoSize == sizeof(uint32_t))
-            {
-                auto* pShaderGroupHandleSize = reinterpret_cast<uint32_t*>(pInfo);
-                *pShaderGroupHandleSize = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
-            }
-
+        case VGPUFeature_TextureCompressionBC:
+        case VGPUFeature_ShaderFloat16:
+        case VGPUFeature_PipelineStatisticsQuery:
+        case VGPUFeature_TimestampQuery:
+        case VGPUFeature_DepthClamping:
+        case VGPUFeature_Depth24UNormStencil8:
+        case VGPUFeature_Depth32FloatStencil8:
+        case VGPUFeature_IndependentBlend:
+        case VGPUFeature_TextureCubeArray:
+        case VGPUFeature_Tessellation:
+        case VGPUFeature_DescriptorIndexing:
+        case VGPUFeature_ConditionalRendering:
+        case VGPUFeature_DrawIndirectFirstInstance:
             return true;
-        }
-        return false;
+
+        case VGPUFeature_TextureCompressionETC2:
+        case VGPUFeature_TextureCompressionASTC:
+            return false;
+
+        case VGPUFeature_ShaderOutputViewportIndex:
+            return renderer->d3dFeatures.VPAndRTArrayIndexFromAnyShaderFeedingRasterizerSupportedWithoutGSEmulation() == TRUE;
+
+            // https://docs.microsoft.com/en-us/windows/win32/direct3d11/tiled-resources-texture-sampling-features
+        case VGPUFeature_SamplerMinMax:
+            return renderer->d3dFeatures.TiledResourcesTier() >= D3D12_TILED_RESOURCES_TIER_2;
+
+        case VGPUFeature_RayTracing:
+            if (renderer->d3dFeatures.RaytracingTier() >= D3D12_RAYTRACING_TIER_1_1)
+            {
+                if (infoSize == sizeof(uint32_t))
+                {
+                    auto* pShaderGroupHandleSize = reinterpret_cast<uint32_t*>(pInfo);
+                    *pShaderGroupHandleSize = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
+                }
+
+                return true;
+            }
+            return false;
 
 
-    default:
-        return false;
+        default:
+            return false;
     }
 }
 
@@ -750,25 +1001,25 @@ static void d3d12_getLimits(VGFXRenderer* driverData, VGPULimits* limits)
     uint32_t maxSamplersPerStage;
     switch (featureData.ResourceBindingTier)
     {
-    case D3D12_RESOURCE_BINDING_TIER_1:
-        maxCBVsPerStage = 14;
-        maxSRVsPerStage = 128;
-        maxUAVsAllStages = 64;
-        maxSamplersPerStage = 16;
-        break;
-    case D3D12_RESOURCE_BINDING_TIER_2:
-        maxCBVsPerStage = 14;
-        maxSRVsPerStage = 1'000'000;
-        maxUAVsAllStages = 64;
-        maxSamplersPerStage = 2048;
-        break;
-    case D3D12_RESOURCE_BINDING_TIER_3:
-    default:
-        maxCBVsPerStage = 1'100'000;
-        maxSRVsPerStage = 1'100'000;
-        maxUAVsAllStages = 1'100'000;
-        maxSamplersPerStage = 2048;
-        break;
+        case D3D12_RESOURCE_BINDING_TIER_1:
+            maxCBVsPerStage = 14;
+            maxSRVsPerStage = 128;
+            maxUAVsAllStages = 64;
+            maxSamplersPerStage = 16;
+            break;
+        case D3D12_RESOURCE_BINDING_TIER_2:
+            maxCBVsPerStage = 14;
+            maxSRVsPerStage = 1'000'000;
+            maxUAVsAllStages = 64;
+            maxSamplersPerStage = 2048;
+            break;
+        case D3D12_RESOURCE_BINDING_TIER_3:
+        default:
+            maxCBVsPerStage = 1'100'000;
+            maxSRVsPerStage = 1'100'000;
+            maxUAVsAllStages = 1'100'000;
+            maxSamplersPerStage = 2048;
+            break;
     }
 
     uint32_t maxUAVsPerStage = maxUAVsAllStages / 2;
@@ -828,7 +1079,7 @@ static VGPUBuffer d3d12_createBuffer(VGFXRenderer* driverData, const VGPUBufferD
     }
 
     D3D12_RESOURCE_DESC resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(desc->size, resourceFlags);
-    
+
     if (desc->usage & VGPUBufferUsage_Constant)
     {
         resourceDesc.Width = AlignUp<UINT64>(resourceDesc.Width, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
@@ -898,7 +1149,7 @@ static VGPUBuffer d3d12_createBuffer(VGFXRenderer* driverData, const VGPUBufferD
         {
             auto context = d3d12_AllocateUpload(renderer, desc->size);
             memcpy(context.uploadBufferData, pInitialData, desc->size);
-            
+
             context.commandList->CopyBufferRegion(
                 buffer->handle,
                 0,
@@ -906,7 +1157,7 @@ static VGPUBuffer d3d12_createBuffer(VGFXRenderer* driverData, const VGPUBufferD
                 0,
                 desc->size
             );
-            
+
             d3d12_UploadSubmit(renderer, context);
         }
     }
@@ -1084,10 +1335,10 @@ static VGPUSampler d3d12_createSampler(VGFXRenderer* driverData, const VGPUSampl
 {
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
 
-    const D3D12_FILTER_REDUCTION_TYPE d3dReductionType = D3D12_FILTER_REDUCTION_TYPE_STANDARD; // ToD3D12(info.reductionType);
-    const D3D12_FILTER_TYPE d3dMinFilter = D3D12_FILTER_TYPE_POINT; //ToD3D12(info.minFilter);
-    const D3D12_FILTER_TYPE d3dMagFilter = D3D12_FILTER_TYPE_POINT; //ToD3D12(info.magFilter);
-    const D3D12_FILTER_TYPE d3dMipFilter = D3D12_FILTER_TYPE_POINT; //ToD3D12(info.mipFilter);
+    const D3D12_FILTER_REDUCTION_TYPE d3dReductionType = desc->compareFunction != VGPUCompareFunction_Never ? D3D12_FILTER_REDUCTION_TYPE_COMPARISON : D3D12_FILTER_REDUCTION_TYPE_STANDARD;
+    const D3D12_FILTER_TYPE d3dMinFilter = ToD3D12FilterType(desc->minFilter);
+    const D3D12_FILTER_TYPE d3dMagFilter = ToD3D12FilterType(desc->magFilter);
+    const D3D12_FILTER_TYPE d3dMipFilter = ToD3D12FilterType(desc->mipFilter);
 
     D3D12_SAMPLER_DESC samplerDesc{};
 
@@ -1101,12 +1352,12 @@ static VGPUSampler d3d12_createSampler(VGFXRenderer* driverData, const VGPUSampl
         samplerDesc.Filter = D3D12_ENCODE_BASIC_FILTER(d3dMinFilter, d3dMagFilter, d3dMipFilter, d3dReductionType);
     }
 
-    //samplerDesc.AddressU = ToD3D12(info.addressU);
-    //samplerDesc.AddressV = ToD3D12(info.addressV);
-    //samplerDesc.AddressW = ToD3D12(info.addressW);
+    samplerDesc.AddressU = ToD3D12AddressMode(desc->addressU);
+    samplerDesc.AddressV = ToD3D12AddressMode(desc->addressV);
+    samplerDesc.AddressW = ToD3D12AddressMode(desc->addressW);
     samplerDesc.MipLODBias = desc->mipLodBias;
     samplerDesc.MaxAnisotropy = std::min<UINT>(desc->maxAnisotropy, 16u);
-    //samplerDesc.ComparisonFunc = ToD3D12(desc->compareFunction);
+    samplerDesc.ComparisonFunc = ToD3D12ComparisonFunc(desc->compareFunction);
     //switch (info.borderColor)
     //{
     //case SamplerBorderColor::OpaqueBlack:
@@ -1513,35 +1764,35 @@ static void d3d12_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGPUR
 
         switch (attachment->loadOp)
         {
-        case VGPU_LOAD_OP_LOAD:
-            commandBuffer->RTVs[numRTVS].BeginningAccess.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_PRESERVE;
-            break;
+            default:
+            case VGPULoadOp_Load:
+                commandBuffer->RTVs[numRTVS].BeginningAccess.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_PRESERVE;
+                break;
 
-        case VGPU_LOAD_OP_CLEAR:
-            commandBuffer->RTVs[numRTVS].BeginningAccess.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR;
-            commandBuffer->RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Format = texture->dxgiFormat;
-            commandBuffer->RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Color[0] = attachment->clearColor.r;
-            commandBuffer->RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Color[1] = attachment->clearColor.g;
-            commandBuffer->RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Color[2] = attachment->clearColor.b;
-            commandBuffer->RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Color[3] = attachment->clearColor.a;
-            break;
+            case VGPULoadOp_Clear:
+                commandBuffer->RTVs[numRTVS].BeginningAccess.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR;
+                commandBuffer->RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Format = texture->dxgiFormat;
+                commandBuffer->RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Color[0] = attachment->clearColor.r;
+                commandBuffer->RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Color[1] = attachment->clearColor.g;
+                commandBuffer->RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Color[2] = attachment->clearColor.b;
+                commandBuffer->RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Color[3] = attachment->clearColor.a;
+                break;
 
-        default:
-        case VGPU_LOAD_OP_DISCARD:
-            commandBuffer->RTVs[numRTVS].BeginningAccess.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_DISCARD;
-            break;
+            case VGPULoadOp_Discard:
+                commandBuffer->RTVs[numRTVS].BeginningAccess.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_DISCARD;
+                break;
         }
 
         switch (attachment->storeOp)
         {
-        default:
-        case VGPU_STORE_OP_STORE:
-            commandBuffer->RTVs[numRTVS].EndingAccess.Type = D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_PRESERVE;
-            break;
+            default:
+            case VGPUStoreOp_Store:
+                commandBuffer->RTVs[numRTVS].EndingAccess.Type = D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_PRESERVE;
+                break;
 
-        case VGPU_STORE_OP_DISCARD:
-            commandBuffer->RTVs[numRTVS].EndingAccess.Type = D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_DISCARD;
-            break;
+            case VGPUStoreOp_Discard:
+                commandBuffer->RTVs[numRTVS].EndingAccess.Type = D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_DISCARD;
+                break;
         }
 
         width = _VGPU_MIN(width, _VGPU_MAX(1U, texture->width >> level));
@@ -1555,7 +1806,7 @@ static void d3d12_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGPUR
 
     // Set the viewport.
     static constexpr float defaultBlendFactor[4] = { 0, 0, 0, 0 };
-    D3D12_VIEWPORT viewport = { 0.f, 0.f, float(width), float(height), 0.0f, 1.0f };
+    D3D12_VIEWPORT viewport = { 0.0f, 0.0f, float(width), float(height), 0.0f, 1.0f };
     D3D12_RECT scissorRect = { 0, 0, LONG(width), LONG(height) };
     commandBuffer->commandList->RSSetViewports(1, &viewport);
     commandBuffer->commandList->RSSetScissorRects(1, &scissorRect);
@@ -2159,5 +2410,8 @@ VGFXDriver D3D12_Driver = {
     d3d12_isSupported,
     d3d12_createDevice
 };
+
+#undef VHR
+#undef SAFE_RELEASE
 
 #endif /* VGPU_D3D12_DRIVER */
