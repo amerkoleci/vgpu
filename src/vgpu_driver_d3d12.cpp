@@ -429,6 +429,7 @@ struct D3D12Resource
     uint32_t height = 0;
     DXGI_FORMAT dxgiFormat = DXGI_FORMAT_UNKNOWN;
     D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint{};
+    uint32_t size = 0;
     uint64_t allocatedSize = 0;
     D3D12_GPU_VIRTUAL_ADDRESS gpuAddress = {};
     void* pMappedData{ nullptr };
@@ -491,11 +492,14 @@ struct D3D12CommandBuffer
     D3D12_RESOURCE_BARRIER resourceBarriers[16];
     UINT numBarriersToFlush;
 
+    bool insideRenderPass;
+
+    D3D12_VERTEX_BUFFER_VIEW vboViews[VGPU_MAX_VERTEX_BUFFERS] = {};
+
     D3D12_RENDER_PASS_RENDER_TARGET_DESC RTVs[VGPU_MAX_COLOR_ATTACHMENTS] = {};
     // Due to a API bug, this resolve_subresources array must be kept alive between BeginRenderpass() and EndRenderpass()!
     D3D12_RENDER_PASS_ENDING_ACCESS_RESOLVE_SUBRESOURCE_PARAMETERS resolveSubresources[D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT] = {};
 
-    bool insideRenderPass;
 
     std::vector<D3D12_SwapChain*> swapChains;
 };
@@ -1306,6 +1310,7 @@ static VGPUBuffer d3d12_createBuffer(VGFXRenderer* driverData, const VGPUBufferD
 
     D3D12Resource* buffer = new D3D12Resource();
     buffer->state = resourceState;
+    buffer->size = desc->size;
 
     renderer->device->GetCopyableFootprints(&resourceDesc, 0, 1, 0, &buffer->footprint, nullptr, nullptr, &buffer->allocatedSize);
 
@@ -1420,7 +1425,7 @@ static void d3d12_destroyBuffer(VGFXRenderer* driverData, VGPUBuffer resource)
 }
 
 /* Texture */
-static VGPUTexture d3d12_createTexture(VGFXRenderer* driverData, const VGPUTextureDesc* desc)
+static VGPUTexture d3d12_createTexture(VGFXRenderer* driverData, const VGPUTextureDesc* desc, const void* pInitialData)
 {
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
 
@@ -1444,12 +1449,38 @@ static VGPUTexture d3d12_createTexture(VGFXRenderer* driverData, const VGPUTextu
     resourceDesc.Width = desc->width;
     resourceDesc.Height = desc->height;
     resourceDesc.DepthOrArraySize = (UINT16)desc->depthOrArraySize;
-    resourceDesc.MipLevels = (UINT16)desc->mipLevelCount;
+    resourceDesc.MipLevels = (UINT16)desc->mipLevels;
     resourceDesc.Format = ToDXGIFormat(desc->format);
     resourceDesc.SampleDesc.Count = desc->sampleCount;
     resourceDesc.SampleDesc.Quality = 0;
     resourceDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
     resourceDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+    D3D12_RESOURCE_STATES resourceState = D3D12_RESOURCE_STATE_COMMON;
+
+    if (pInitialData == nullptr)
+    {
+        if (desc->usage & VGPUTextureUsage_RenderTarget)
+        {
+            if (vgpuIsDepthStencilFormat(desc->format))
+            {
+                resourceState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+            }
+            else
+            {
+                resourceState = D3D12_RESOURCE_STATE_RENDER_TARGET;
+            }
+        }
+        if (desc->usage & VGPUTextureUsage_ShaderRead)
+        {
+            resourceState |= D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+        }
+
+        if (desc->usage & VGPUTextureUsage_ShaderWrite)
+        {
+            resourceState |= D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+        }
+    }
 
     if (desc->usage & VGPUTextureUsage_ShaderWrite)
     {
@@ -1495,7 +1526,7 @@ static VGPUTexture d3d12_createTexture(VGFXRenderer* driverData, const VGPUTextu
 
     // TODO: TextureLayout/State
     D3D12Resource* texture = new D3D12Resource();
-    texture->state = D3D12_RESOURCE_STATE_COMMON;
+    texture->state = resourceState;
     texture->width = desc->width;
     texture->height = desc->height;
     texture->dxgiFormat = resourceDesc.Format;
@@ -2167,6 +2198,28 @@ static void d3d12_setScissorRects(VGPUCommandBufferImpl* driverData, const VGPUR
         d3dScissorRects[i].bottom = scissorRects[i].y + scissorRects[i].height;
     }
     commandBuffer->commandList->RSSetScissorRects(count, d3dScissorRects);
+}
+
+static void d3d12_setVertexBuffer(VGPUCommandBufferImpl* driverData, uint32_t index, VGPUBuffer buffer, uint64_t offset)
+{
+    D3D12CommandBuffer* commandBuffer = (D3D12CommandBuffer*)driverData;
+    D3D12Resource* d3d12Buffer = (D3D12Resource*)buffer;
+
+    commandBuffer->vboViews[index].BufferLocation = d3d12Buffer->gpuAddress + (D3D12_GPU_VIRTUAL_ADDRESS)offset;
+    commandBuffer->vboViews[index].SizeInBytes = (UINT)(d3d12Buffer->size - offset);
+    commandBuffer->vboViews[index].StrideInBytes = 0;
+}
+
+static void d3d12_setIndexBuffer(VGPUCommandBufferImpl* driverData, VGPUBuffer buffer, uint64_t offset, VGPUIndexType indexType)
+{
+    D3D12CommandBuffer* commandBuffer = (D3D12CommandBuffer*)driverData;
+    D3D12Resource* d3d12Buffer = (D3D12Resource*)buffer;
+
+    D3D12_INDEX_BUFFER_VIEW view;
+    view.BufferLocation = d3d12Buffer->gpuAddress + (D3D12_GPU_VIRTUAL_ADDRESS)offset;
+    view.SizeInBytes = (UINT)(d3d12Buffer->size - offset);
+    view.Format = (indexType == VGPUIndexType_UInt16 ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT);
+    commandBuffer->commandList->IASetIndexBuffer(&view);
 }
 
 static void d3d12_prepareDraw(D3D12CommandBuffer* commandBuffer)

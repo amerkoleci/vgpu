@@ -27,6 +27,8 @@
 #define _VGPU_MIN(a,b) (((a)<(b))?(a):(b))
 #define _VGPU_MAX(a,b) (((a)>(b))?(a):(b))
 
+#define _VGPU_DivideByMultiple(value, alignment) (value + alignment - 1) / alignment
+
 #if defined(__clang__)
 // CLANG ENABLE/DISABLE WARNING DEFINITION
 #define VGPU_DISABLE_WARNINGS() \
@@ -111,6 +113,8 @@ typedef struct VGPUCommandBuffer_T {
 
     void (*setViewports)(VGPUCommandBufferImpl* driverData, const VGPUViewport* viewports, uint32_t count);
     void (*setScissorRects)(VGPUCommandBufferImpl* driverData, const VGPURect* scissorRects, uint32_t count);
+    void (*setVertexBuffer)(VGPUCommandBufferImpl* driverData, uint32_t index, VGPUBuffer buffer, uint64_t offset);
+    void (*setIndexBuffer)(VGPUCommandBufferImpl* driverData, VGPUBuffer buffer, uint64_t offset, VGPUIndexType indexType);
 
     void (*draw)(VGPUCommandBufferImpl* driverData, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t baseInstance);
 
@@ -131,7 +135,7 @@ typedef struct VGPUDevice_T
     VGPUBuffer(*createBuffer)(VGFXRenderer* driverData, const VGPUBufferDesc* desc, const void* pInitialData);
     void(*destroyBuffer)(VGFXRenderer* driverData, VGPUBuffer resource);
 
-    VGPUTexture(*createTexture)(VGFXRenderer* driverData, const VGPUTextureDesc* desc);
+    VGPUTexture(*createTexture)(VGFXRenderer* driverData, const VGPUTextureDesc* desc, const void* pInitialData);
     void(*destroyTexture)(VGFXRenderer* driverData, VGPUTexture resource);
 
     VGPUSampler(*createSampler)(VGFXRenderer* driverData, const VGPUSamplerDesc* desc);
@@ -171,6 +175,8 @@ ASSIGN_COMMAND_BUFFER_FUNC(beginRenderPass, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(endRenderPass, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(setViewports, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(setScissorRects, name) \
+ASSIGN_COMMAND_BUFFER_FUNC(setVertexBuffer, name) \
+ASSIGN_COMMAND_BUFFER_FUNC(setIndexBuffer, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(draw, name) 
 
 #define ASSIGN_DRIVER(name) \

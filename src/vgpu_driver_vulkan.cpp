@@ -698,9 +698,11 @@ struct VulkanRenderer
         VkCommandBuffer initCommandBuffer = VK_NULL_HANDLE;
     };
     FrameResources frames[VGPU_MAX_INFLIGHT_FRAMES];
-
     std::mutex initLocker;
     bool submitInits = false;
+
+    const FrameResources& GetFrameResources() const { return frames[frameIndex]; }
+    FrameResources& GetFrameResources() { return frames[frameIndex]; }
 
     /* Command contexts */
     std::mutex cmdBuffersLocker;
@@ -861,8 +863,8 @@ static VkImageView vulkan_GetRTV(VulkanRenderer* renderer, VulkanTexture* textur
 static VkRenderPass vulkan_RequestRenderPass(VulkanRenderer* renderer, const VGPURenderPassDesc* info)
 {
     size_t hash = 0;
-    hash_combine(hash, info->colorAttachmentCount);
 
+    hash_combine(hash, info->colorAttachmentCount);
     for (uint32_t i = 0; i < info->colorAttachmentCount; ++i)
     {
         VulkanTexture* texture = (VulkanTexture*)info->colorAttachments[i].texture;
@@ -870,6 +872,18 @@ static VkRenderPass vulkan_RequestRenderPass(VulkanRenderer* renderer, const VGP
         hash_combine(hash, texture->format);
         hash_combine(hash, info->colorAttachments[i].loadOp);
         hash_combine(hash, info->colorAttachments[i].storeOp);
+    }
+
+    if (info->depthStencilAttachment != nullptr &&
+        info->depthStencilAttachment->texture != nullptr)
+    {
+        VulkanTexture* texture = (VulkanTexture*)info->depthStencilAttachment->texture;
+
+        hash_combine(hash, texture->format);
+        hash_combine(hash, info->depthStencilAttachment->depthLoadOp);
+        hash_combine(hash, info->depthStencilAttachment->depthStoreOp);
+        hash_combine(hash, info->depthStencilAttachment->stencilLoadOp);
+        hash_combine(hash, info->depthStencilAttachment->stencilStoreOp);
     }
 
     auto it = renderer->renderPassCache.find(hash);
@@ -928,7 +942,7 @@ static VkRenderPass vulkan_RequestRenderPass(VulkanRenderer* renderer, const VGP
             depthStencilAttachmentRef.sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2;
             depthStencilAttachmentRef.attachment = subpass.colorAttachmentCount;
             depthStencilAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-            depthStencilAttachmentRef.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+            depthStencilAttachmentRef.aspectMask = GetImageAspectFlags(texture->format);
 
             attachmentDesc.sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2;
             attachmentDesc.flags = 0;
@@ -936,8 +950,16 @@ static VkRenderPass vulkan_RequestRenderPass(VulkanRenderer* renderer, const VGP
             attachmentDesc.samples = sampleCount;
             attachmentDesc.loadOp = ToVkAttachmentLoadOp(attachment->depthLoadOp);
             attachmentDesc.storeOp = ToVkAttachmentStoreOp(attachment->depthStoreOp);
-            attachmentDesc.stencilLoadOp = ToVkAttachmentLoadOp(attachment->stencilLoadOp);
-            attachmentDesc.stencilStoreOp = ToVkAttachmentStoreOp(attachment->stencilStoreOp);
+            if (depthStencilAttachmentRef.aspectMask & VK_IMAGE_ASPECT_STENCIL_BIT)
+            {
+                attachmentDesc.stencilLoadOp = ToVkAttachmentLoadOp(attachment->stencilLoadOp);
+                attachmentDesc.stencilStoreOp = ToVkAttachmentStoreOp(attachment->stencilStoreOp);
+            }
+            else
+            {
+                attachmentDesc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+                attachmentDesc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+            }
             attachmentDesc.initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
             attachmentDesc.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
             ++attachmentCount;
@@ -1226,7 +1248,7 @@ static void vulkan_destroyDevice(VGPUDevice device)
 
         if (stats.total.statistics.allocationBytes > 0)
         {
-        //    vgpuLogError("Total device memory leaked: {} bytes.", stats.total.usedBytes);
+            //    vgpuLogError("Total device memory leaked: {} bytes.", stats.total.usedBytes);
         }
 #endif
 
@@ -1627,7 +1649,7 @@ static void vulkan_destroyBuffer(VGFXRenderer* driverData, VGPUBuffer resource)
 }
 
 /* Texture */
-static VGPUTexture vulkan_createTexture(VGFXRenderer* driverData, const VGPUTextureDesc* desc)
+static VGPUTexture vulkan_createTexture(VGFXRenderer* driverData, const VGPUTextureDesc* desc, const void* pInitialData)
 {
     VulkanRenderer* renderer = (VulkanRenderer*)driverData;
 
@@ -1672,16 +1694,20 @@ static VGPUTexture vulkan_createTexture(VGFXRenderer* driverData, const VGPUText
             imageInfo.flags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
         }
     }
-    imageInfo.mipLevels = desc->mipLevelCount;
+    imageInfo.mipLevels = desc->mipLevels;
     imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
     imageInfo.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 
     if (desc->usage & VGPUTextureUsage_ShaderRead)
+    {
         imageInfo.usage |= VK_IMAGE_USAGE_SAMPLED_BIT;
+    }
 
     if (desc->usage & VGPUTextureUsage_ShaderWrite)
+    {
         imageInfo.usage |= VK_IMAGE_USAGE_STORAGE_BIT;
+    }
 
     if (desc->usage & VGPUTextureUsage_RenderTarget)
     {
@@ -1728,6 +1754,10 @@ static VGPUTexture vulkan_createTexture(VGFXRenderer* driverData, const VGPUText
     // TODO: Handle readback texture
 
     VulkanTexture* texture = new VulkanTexture();
+    texture->width = imageInfo.extent.width;
+    texture->height = imageInfo.extent.height;
+    texture->format = imageInfo.format;
+
     VkResult result = vmaCreateImage(renderer->allocator,
         &imageInfo, &memoryInfo,
         &texture->handle,
@@ -1741,9 +1771,34 @@ static VGPUTexture vulkan_createTexture(VGFXRenderer* driverData, const VGPUText
         return nullptr;
     }
 
-    texture->width = imageInfo.extent.width;
-    texture->height = imageInfo.extent.height;
-    texture->format = imageInfo.format;
+    // Barrier
+    VkImageMemoryBarrier barrier = {};
+    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    barrier.image = texture->handle;
+    barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    barrier.newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    barrier.srcAccessMask = 0;
+    barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+    barrier.subresourceRange.aspectMask = GetImageAspectFlags(imageInfo.format);
+    barrier.subresourceRange.baseArrayLayer = 0;
+    barrier.subresourceRange.layerCount = imageInfo.arrayLayers;
+    barrier.subresourceRange.baseMipLevel = 0;
+    barrier.subresourceRange.levelCount = imageInfo.mipLevels;
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+
+    renderer->initLocker.lock();
+    vkCmdPipelineBarrier(
+        renderer->GetFrameResources().initCommandBuffer,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+        0,
+        0, nullptr,
+        0, nullptr,
+        1, &barrier
+    );
+    renderer->submitInits = true;
+    renderer->initLocker.unlock();
 
     return (VGPUTexture)texture;
 }
@@ -2385,8 +2440,7 @@ static void vulkan_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGPU
         {
             const VGPURenderPassColorAttachment* attachment = &desc->colorAttachments[i];
             VulkanTexture* texture = (VulkanTexture*)attachment->texture;
-            uint32_t level = attachment->level;
-            uint32_t slice = attachment->slice;
+            const uint32_t level = attachment->level;
 
             clearValues[clearValueCount].color.float32[0] = attachment->clearColor.r;
             clearValues[clearValueCount].color.float32[1] = attachment->clearColor.g;
@@ -2402,10 +2456,14 @@ static void vulkan_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGPU
         {
             const VGPURenderPassDepthStencilAttachment* attachment = desc->depthStencilAttachment;
             VulkanTexture* texture = (VulkanTexture*)attachment->texture;
+            const uint32_t level = attachment->level;
 
             clearValues[clearValueCount].depthStencil.depth = attachment->clearDepth;
             clearValues[clearValueCount].depthStencil.stencil = attachment->clearStencil;
             clearValueCount++;
+
+            width = _VGPU_MIN(width, _VGPU_MAX(1U, texture->width >> level));
+            height = _VGPU_MIN(height, _VGPU_MAX(1U, texture->height >> level));
         }
 
         VkRenderPassBeginInfo beginInfo = {};
@@ -2417,7 +2475,7 @@ static void vulkan_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGPU
         beginInfo.renderArea.offset.y = 0;
         beginInfo.renderArea.extent.width = width;
         beginInfo.renderArea.extent.height = height;
-        beginInfo.clearValueCount = 1;
+        beginInfo.clearValueCount = clearValueCount;
         beginInfo.pClearValues = clearValues;
         vkCmdBeginRenderPass(commandBuffer->handle, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
     }
@@ -2456,6 +2514,21 @@ static void vulkan_endRenderPass(VGPUCommandBufferImpl* driverData)
     }
 
     commandBuffer->insideRenderPass = false;
+}
+
+static void vulkan_setVertexBuffer(VGPUCommandBufferImpl* driverData, uint32_t index, VGPUBuffer buffer, uint64_t offset)
+{
+    VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
+    VulkanBuffer* vulkanBuffer = (VulkanBuffer*)buffer;
+    vkCmdBindVertexBuffers(commandBuffer->handle, index, 1, &vulkanBuffer->handle, &offset);
+}
+
+static void vulkan_setIndexBuffer(VGPUCommandBufferImpl* driverData, VGPUBuffer buffer, uint64_t offset, VGPUIndexType indexType)
+{
+    VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
+    VulkanBuffer* vulkanBuffer = (VulkanBuffer*)buffer;
+    const VkIndexType vkIndexType = (indexType == VGPUIndexType_UInt16) ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32;
+    vkCmdBindIndexBuffer(commandBuffer->handle, vulkanBuffer->handle, offset, vkIndexType);
 }
 
 static void vulkan_prepareDraw(VulkanCommandBuffer* commandBuffer)
@@ -2927,7 +3000,7 @@ static VGPUDevice vulkan_createDevice(const VGPUDeviceDesc* info)
             vgpuLogInfo("	\t%s", createInfo.ppEnabledExtensionNames[i]);
         }
 #endif
-}
+            }
 
     // Enumerate physical device and create logical device.
     {
@@ -3595,7 +3668,7 @@ static VGPUDevice vulkan_createDevice(const VGPUDeviceDesc* info)
 
     device->driverData = (VGFXRenderer*)renderer;
     return device;
-    }
+        }
 
 VGFXDriver Vulkan_Driver = {
     VGPUBackendType_Vulkan,

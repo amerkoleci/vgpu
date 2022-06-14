@@ -22,7 +22,9 @@
 
 VGPUDevice device = nullptr;
 VGPUSwapChain swapChain = nullptr;
+VGPUTexture depthStencilTexture = nullptr;
 VGPUBuffer vertexBuffer = nullptr;
+VGPUPipeline renderPipeline = nullptr;
 
 inline void vgpu_log(VGPULogLevel level, const char* message)
 {
@@ -51,10 +53,10 @@ void init_gfx(GLFWwindow* window)
     deviceDesc.validationMode = VGPUValidationMode_Enabled;
 #endif
 
-    //if (vgpuIsSupported(VGPUBackendType_Vulkan))
-    //{
-    //    deviceDesc.preferredBackend = VGPUBackendType_Vulkan;
-    //}
+    if (vgpuIsSupported(VGPUBackendType_Vulkan))
+    {
+        deviceDesc.preferredBackend = VGPUBackendType_Vulkan;
+    }
 
     device = vgpuCreateDevice(&deviceDesc);
 
@@ -84,6 +86,13 @@ void init_gfx(GLFWwindow* window)
     swapChainDesc.presentMode = VGPUPresentMode_Fifo;
     swapChain = vgpuCreateSwapChain(device, windowHandle, &swapChainDesc);
 
+    depthStencilTexture = vgpuCreateTexture2D(device,
+        width, height,
+        VGPUTextureFormat_Depth32Float,
+        1,
+        VGPUTextureUsage_RenderTarget,
+        nullptr);
+
     // Create vertex buffer
     const float vertices[] = {
         /* positions            colors */
@@ -97,6 +106,10 @@ void init_gfx(GLFWwindow* window)
     bufferDesc.size = sizeof(vertices);
     bufferDesc.usage = VGPUBufferUsage_Vertex;
     vertexBuffer = vgpuCreateBuffer(device, &bufferDesc, vertices);
+
+    VGPURenderPipelineDesc renderPipelineDesc{};
+    renderPipelineDesc.label = "Triangle";
+    renderPipeline = vgpuCreateRenderPipeline(device, &renderPipelineDesc);
 }
 
 #if defined(__EMSCRIPTEN__)
@@ -156,10 +169,19 @@ void draw_frame()
         colorAttachment.clearColor.b = 0.3f;
         colorAttachment.clearColor.a = 1.0f;
 
+        VGPURenderPassDepthStencilAttachment depthStencilAttachment{};
+        depthStencilAttachment.texture = depthStencilTexture;
+        depthStencilAttachment.depthLoadOp = VGPULoadOp_Clear;
+        depthStencilAttachment.depthStoreOp = VGPUStoreOp_Store;
+        depthStencilAttachment.clearDepth = 1.0f;
+
         VGPURenderPassDesc renderPass{};
         renderPass.colorAttachmentCount = 1u;
         renderPass.colorAttachments = &colorAttachment;
+        renderPass.depthStencilAttachment = &depthStencilAttachment;
         vgpuBeginRenderPass(commandBuffer, &renderPass);
+        //vgpuSetVertexBuffer(commandBuffer, 0, vertexBuffer, 0);
+        //vgpuDraw(commandBuffer, 0, 3, 1, 0);
         vgpuEndRenderPass(commandBuffer);
     }
 
@@ -192,6 +214,8 @@ int main()
 
     vgpuWaitIdle(device);
     vgpuDestroyBuffer(device, vertexBuffer);
+    vgpuDestroyTexture(device, depthStencilTexture);
+    vgpuDestroyPipeline(device, renderPipeline);
     vgpuDestroySwapChain(device, swapChain);
     vgpuDestroyDevice(device);
     glfwDestroyWindow(window);

@@ -16,15 +16,15 @@ static void VGPU_DefaultLogCallback(VGPULogLevel level, const char* message)
 #if defined(__EMSCRIPTEN__)
     switch (level)
     {
-    case VGFX_LOG_LEVEL_WARN:
-        emscripten_log(EM_LOG_CONSOLE | EM_LOG_WARN, "%s", message);
-        break;
-    case VGFX_LOG_LEVEL_ERROR:
-        emscripten_log(EM_LOG_CONSOLE | EM_LOG_ERROR, "%s", message);
-        break;
-    default:
-        emscripten_log(EM_LOG_CONSOLE, "%s", message);
-        break;
+        case VGFX_LOG_LEVEL_WARN:
+            emscripten_log(EM_LOG_CONSOLE | EM_LOG_WARN, "%s", message);
+            break;
+        case VGFX_LOG_LEVEL_ERROR:
+            emscripten_log(EM_LOG_CONSOLE | EM_LOG_ERROR, "%s", message);
+            break;
+        default:
+            emscripten_log(EM_LOG_CONSOLE, "%s", message);
+            break;
     }
 #elif defined(_WIN32)
     _VGPU_UNUSED(level);
@@ -237,24 +237,24 @@ static VGPUTextureDesc _vgpuTextureDescDef(const VGPUTextureDesc* desc)
 {
     VGPUTextureDesc def = *desc;
     def.type = _VGPU_DEF(def.type, VGPUTexture_Type2D);
-    def.format = _VGPU_DEF(def.type, VGPUTextureFormat_RGBA8UNorm);
+    def.format = _VGPU_DEF(def.format, VGPUTextureFormat_RGBA8UNorm);
     //def.usage = _VGPU_DEF(def.type, VGFXTextureUsage_ShaderRead);
     def.width = _VGPU_DEF(def.width, 1);
     def.height = _VGPU_DEF(def.height, 1);
     def.depthOrArraySize = _VGPU_DEF(def.depthOrArraySize, 1);
-    def.mipLevelCount = _VGPU_DEF(def.mipLevelCount, 1);
+    def.mipLevels = _VGPU_DEF(def.mipLevels, 1);
     def.sampleCount = _VGPU_DEF(def.sampleCount, 1);
     return def;
 }
 
-VGPUTexture vgpuCreateTexture(VGPUDevice device, const VGPUTextureDesc* desc)
+VGPUTexture vgpuCreateTexture(VGPUDevice device, const VGPUTextureDesc* desc, const void* pInitialData)
 {
     NULL_RETURN_NULL(device);
     NULL_RETURN_NULL(desc);
 
     VGPUTextureDesc desc_def = _vgpuTextureDescDef(desc);
 
-    VGPU_ASSERT(desc_def.width > 0 && desc_def.height > 0 && desc_def.mipLevelCount >= 0);
+    VGPU_ASSERT(desc_def.width > 0 && desc_def.height > 0 && desc_def.mipLevels >= 0);
 
     const bool is3D = desc_def.type == VGPUTexture_Type3D;
     const bool isDepthStencil = vgpuIsDepthStencilFormat(desc_def.format);
@@ -267,7 +267,7 @@ VGPUTexture vgpuCreateTexture(VGPUDevice device, const VGPUTextureDesc* desc)
         isCube = true;
     }
 
-    uint32_t mipLevels = desc_def.mipLevelCount;
+    uint32_t mipLevels = desc_def.mipLevels;
     if (mipLevels == 0)
     {
         if (is3D)
@@ -327,7 +327,39 @@ VGPUTexture vgpuCreateTexture(VGPUDevice device, const VGPUTextureDesc* desc)
         return NULL;
     }
 
-    return device->createTexture(device->driverData, &desc_def);
+    return device->createTexture(device->driverData, &desc_def, pInitialData);
+}
+
+VGPUTexture vgpuCreateTexture2D(VGPUDevice device, uint32_t width, uint32_t height, VGPUTextureFormat format, uint32_t mipLevels, VGPUTextureUsage usage, const void* pInitialData)
+{
+    VGPUTextureDesc desc = {
+        .type = VGPUTexture_Type2D,
+        .format = format,
+        .usage = usage,
+        .width = width,
+        .height = height,
+        .depthOrArraySize = 1u,
+        .mipLevels = mipLevels,
+        .sampleCount = 1u
+    };
+
+    return vgpuCreateTexture(device, &desc, pInitialData);
+}
+
+VGPUTexture vgpuCreateTextureCube(VGPUDevice device, uint32_t size, VGPUTextureFormat format, uint32_t mipLevels, const void* pInitialData)
+{
+    VGPUTextureDesc desc = {
+        .type = VGPUTexture_Type2D,
+        .format = format,
+        .usage = VGPUTextureUsage_ShaderRead,
+        .width = size,
+        .height = size,
+        .depthOrArraySize = 6u,
+        .mipLevels = mipLevels,
+        .sampleCount = 1u
+    };
+
+    return vgpuCreateTexture(device, &desc, pInitialData);
 }
 
 void vgpuDestroyTexture(VGPUDevice device, VGPUTexture texture)
@@ -470,6 +502,20 @@ void vgpuSetPipeline(VGPUCommandBuffer commandBuffer, VGPUPipeline pipeline)
     commandBuffer->setPipeline(commandBuffer->driverData, pipeline);
 }
 
+void vgpuDispatch1D(VGPUCommandBuffer commandBuffer, uint32_t threadCountX, uint32_t groupSizeX)
+{
+    vgpuDispatch(commandBuffer, _VGPU_DivideByMultiple(threadCountX, groupSizeX), 1, 1);
+}
+
+void vgpuDispatch2D(VGPUCommandBuffer commandBuffer, uint32_t threadCountX, uint32_t threadCountY, uint32_t groupSizeX, uint32_t groupSizeY)
+{
+    vgpuDispatch(commandBuffer,
+        _VGPU_DivideByMultiple(threadCountX, groupSizeX),
+        _VGPU_DivideByMultiple(threadCountY, groupSizeY),
+        1
+    );
+}
+
 void vgpuDispatch(VGPUCommandBuffer commandBuffer, uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)
 {
     commandBuffer->dispatch(commandBuffer->driverData, groupCountX, groupCountY, groupCountZ);
@@ -513,6 +559,16 @@ void vgpuSetScissorRects(VGPUCommandBuffer commandBuffer, uint32_t count, const 
     VGPU_ASSERT(count < VGPU_MAX_VIEWPORTS_AND_SCISSORS);
 
     commandBuffer->setScissorRects(commandBuffer->driverData, scissorRects, count);
+}
+
+void vgpuSetVertexBuffer(VGPUCommandBuffer commandBuffer, uint32_t index, VGPUBuffer buffer, uint64_t offset)
+{
+    commandBuffer->setVertexBuffer(commandBuffer->driverData, index, buffer, offset);
+}
+
+void vgpuSetIndexBuffer(VGPUCommandBuffer commandBuffer, VGPUBuffer buffer, uint64_t offset, VGPUIndexType indexType)
+{
+    commandBuffer->setIndexBuffer(commandBuffer->driverData, buffer, offset, indexType);
 }
 
 void vgpuDraw(VGPUCommandBuffer commandBuffer, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t baseInstance)
