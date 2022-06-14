@@ -1430,7 +1430,7 @@ static VGPUBuffer vulkan_createBuffer(VGFXRenderer* driverData, const VGPUBuffer
         bufferInfo.usage |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
     }
 
-    if (desc->usage & VGPUBufferUsage_Uniform)
+    if (desc->usage & VGPUBufferUsage_Constant)
     {
         bufferInfo.size = AlignUp(bufferInfo.size, renderer->properties2.properties.limits.minUniformBufferOffsetAlignment);
         bufferInfo.usage |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;

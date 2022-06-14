@@ -56,10 +56,6 @@ void init_gfx(GLFWwindow* window)
         deviceDesc.preferredBackend = VGPUBackendType_Vulkan;
     }
 
-    if (vgpuIsSupported(VGPUBackendType_D3D11))
-    {
-        deviceDesc.preferredBackend = VGPUBackendType_D3D11;
-    }
     device = vgpuCreateDevice(&deviceDesc);
 
     VGPUAdapterProperties adapterProps;

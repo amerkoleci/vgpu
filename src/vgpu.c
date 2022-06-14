@@ -77,9 +77,6 @@ static const VGFXDriver* drivers[] = {
 #if defined(VGPU_D3D12_DRIVER)
     &D3D12_Driver,
 #endif
-#if defined(VGPU_D3D11_DRIVER)
-    &D3D11_Driver,
-#endif
 #if defined(VGPU_VULKAN_DRIVER)
     &Vulkan_Driver,
 #endif

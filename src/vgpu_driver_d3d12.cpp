@@ -829,7 +829,7 @@ static VGPUBuffer d3d12_createBuffer(VGFXRenderer* driverData, const VGPUBufferD
 
     D3D12_RESOURCE_DESC resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(desc->size, resourceFlags);
     
-    if (desc->usage & VGPUBufferUsage_Uniform)
+    if (desc->usage & VGPUBufferUsage_Constant)
     {
         resourceDesc.Width = AlignUp<UINT64>(resourceDesc.Width, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
     }

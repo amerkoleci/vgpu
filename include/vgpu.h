@@ -76,7 +76,6 @@ typedef enum VGPUBackendType {
     VGPUBackendType_Default = 0,
     VGPUBackendType_Vulkan,
     VGPUBackendType_D3D12,
-    VGPUBackendType_D3D11,
     VGPUBackendType_WebGPU,
 
     _VGPUBackendType_Count,
@@ -128,7 +127,7 @@ typedef enum VGPUBufferUsage {
     VGPUBufferUsage_None = 0,
     VGPUBufferUsage_Vertex = (1 << 0),
     VGPUBufferUsage_Index = (1 << 1),
-    VGPUBufferUsage_Uniform = (1 << 2),
+    VGPUBufferUsage_Constant = (1 << 2),
     VGPUBufferUsage_ShaderRead = (1 << 3),
     VGPUBufferUsage_ShaderWrite = (1 << 4),
     VGPUBufferUsage_Indirect = (1 << 5),
