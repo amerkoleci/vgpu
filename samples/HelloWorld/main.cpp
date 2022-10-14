@@ -200,7 +200,7 @@ int main()
         return EXIT_FAILURE;
     }
 
-    //vgpuSetLogCallback(vgpu_log);
+    vgpu_set_log_callback(vgpu_log);
 
     glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);

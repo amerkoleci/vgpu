@@ -68,7 +68,7 @@ void vgpuLogError(const char* format, ...)
     s_LogFunc(VGPU_LOG_LEVEL_ERROR, msg);
 }
 
-void vgpuSetLogCallback(vgpu_log_callback func)
+void vgpu_set_log_callback(vgpu_log_callback func)
 {
     s_LogFunc = func;
 }

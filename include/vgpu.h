@@ -33,12 +33,6 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#ifdef _WIN32
-#   define VGPU_CALL __cdecl
-#else
-#   define VGPU_CALL
-#endif
-
 /* Version API */
 #define VGPU_VERSION_MAJOR  0
 #define VGPU_VERSION_MINOR	1
@@ -53,6 +47,7 @@ enum {
 };
 
 typedef uint32_t vgpu_bool;
+typedef uint32_t vgpu_flags;
 
 typedef struct VGPUDevice_T* VGPUDevice;
 typedef struct VGPUBuffer_T* VGPUBuffer;
@@ -573,8 +568,8 @@ typedef struct VGPULimits {
     uint32_t maxComputeWorkGroupsPerDimension;
 } VGPULimits;
 
-typedef void (VGPU_CALL* vgpu_log_callback)(vgpu_log_level level, const char* message);
-VGPU_API void vgpuSetLogCallback(vgpu_log_callback func);
+typedef void (*vgpu_log_callback)(vgpu_log_level level, const char* message);
+VGPU_API void vgpu_set_log_callback(vgpu_log_callback func);
 
 VGPU_API vgpu_bool vgpuIsSupported(VGPUBackendType backend);
 VGPU_API VGPUDevice vgpuCreateDevice(const VGPUDeviceDesc* desc);

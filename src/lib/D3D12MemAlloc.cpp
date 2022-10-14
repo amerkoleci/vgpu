@@ -6120,7 +6120,7 @@ private:
     D3D12MA_ATOMIC_UINT64 m_BlockBytes[DXGI_MEMORY_SEGMENT_GROUP_COUNT] = {};
     D3D12MA_ATOMIC_UINT64 m_AllocationBytes[DXGI_MEMORY_SEGMENT_GROUP_COUNT] = {};
 
-    D3D12MA_ATOMIC_UINT32 m_OperationsSinceBudgetFetch = 0;
+    D3D12MA_ATOMIC_UINT32 m_OperationsSinceBudgetFetch = {0};
     D3D12MA_RW_MUTEX m_BudgetMutex;
     UINT64 m_D3D12Usage[DXGI_MEMORY_SEGMENT_GROUP_COUNT] = {};
     UINT64 m_D3D12Budget[DXGI_MEMORY_SEGMENT_GROUP_COUNT] = {};
@@ -6355,7 +6355,7 @@ class AllocatorPimpl
     friend class Allocator;
     friend class Pool;
 public:
-    std::atomic_uint32_t m_RefCount = 1;
+    std::atomic_uint32_t m_RefCount = {1};
     CurrentBudgetData m_Budget;
 
     AllocatorPimpl(const ALLOCATION_CALLBACKS& allocationCallbacks, const ALLOCATOR_DESC& desc);
@@ -9470,8 +9470,8 @@ PoolPimpl::PoolPimpl(AllocatorPimpl* allocator, const POOL_DESC& desc)
         desc.MinBlockCount, maxBlockCount,
         explicitBlockSize,
         D3D12MA_MAX(desc.MinAllocationAlignment, (UINT64)D3D12MA_DEBUG_ALIGNMENT),
-        desc.Flags & POOL_FLAG_ALGORITHM_MASK,
-        desc.Flags & POOL_FLAG_MSAA_TEXTURES_ALWAYS_COMMITTED,
+        (desc.Flags & POOL_FLAG_ALGORITHM_MASK) != 0,
+        (desc.Flags & POOL_FLAG_MSAA_TEXTURES_ALWAYS_COMMITTED) != 0,
         desc.pProtectedSession);
 }
 
