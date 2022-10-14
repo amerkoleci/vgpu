@@ -110,8 +110,8 @@ typedef struct VGPUCommandBuffer_T {
     void (*endRenderPass)(VGPUCommandBufferImpl* driverData);
 
     void (*setViewports)(VGPUCommandBufferImpl* driverData, uint32_t count, const VGPUViewport* viewports);
-    void (*set_scissor_rect)(VGPUCommandBufferImpl* driverData, const VGPURect* rects);
-    void (*set_scissor_rects)(VGPUCommandBufferImpl* driverData, uint32_t count, const VGPURect* rects);
+    void (*setScissorRect)(VGPUCommandBufferImpl* driverData, const VGPURect* rects);
+    void (*setScissorRects)(VGPUCommandBufferImpl* driverData, uint32_t count, const VGPURect* rects);
     void (*setVertexBuffer)(VGPUCommandBufferImpl* driverData, uint32_t index, VGPUBuffer buffer, uint64_t offset);
     void (*setIndexBuffer)(VGPUCommandBufferImpl* driverData, VGPUBuffer buffer, uint64_t offset, VGPUIndexType indexType);
 
@@ -152,7 +152,7 @@ typedef struct VGPUDevice_T
     void(*destroySwapChain)(VGFXRenderer* driverData, VGPUSwapChain swapChain);
     VGPUTextureFormat(*getSwapChainFormat)(VGFXRenderer* driverData, VGPUSwapChain swapChain);
 
-    VGPUCommandBuffer(*beginCommandBuffer)(VGFXRenderer* driverData, const char* label);
+    VGPUCommandBuffer(*beginCommandBuffer)(VGFXRenderer* driverData, VGPUCommandQueue queueType, const char* label);
     void (*submit)(VGFXRenderer* driverData, VGPUCommandBuffer* commandBuffers, uint32_t count);
 
     /* Opaque pointer for the Driver */
@@ -173,8 +173,8 @@ ASSIGN_COMMAND_BUFFER_FUNC(acquireSwapchainTexture, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(beginRenderPass, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(endRenderPass, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(setViewports, name) \
-ASSIGN_COMMAND_BUFFER_FUNC(set_scissor_rect, name) \
-ASSIGN_COMMAND_BUFFER_FUNC(set_scissor_rects, name) \
+ASSIGN_COMMAND_BUFFER_FUNC(setScissorRect, name) \
+ASSIGN_COMMAND_BUFFER_FUNC(setScissorRects, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(setVertexBuffer, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(setIndexBuffer, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(draw, name) 

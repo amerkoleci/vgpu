@@ -87,6 +87,14 @@ typedef enum VGPUValidationMode {
     _VGPUValidationMode_Force32 = 0x7FFFFFFF
 } VGPUValidationMode;
 
+typedef enum VGPUCommandQueue {
+    VGPUCommandQueue_Graphics,
+    VGPUCommandQueue_Compute,
+
+    _VGPUCommandQueue_Count,
+    _VGPUCommandQueue_Force32 = 0x7FFFFFFF
+} VGPUCommandQueue;
+
 typedef enum VGPUAdapterType {
     VGPUAdapterType_Other = 0,
     VGPUAdapterType_IntegratedGPU,
@@ -520,13 +528,13 @@ typedef struct VGPUSamplerDesc {
 
 typedef struct VGPURenderPipelineDesc {
     const char* label;
-    VGPUShaderModule* vertex;
-    VGPUShaderModule* fragment;
+    VGPUShaderModule vertex;
+    VGPUShaderModule fragment;
 } VGPURenderPipelineDesc;
 
 typedef struct VGPUComputePipelineDesc {
     const char* label;
-    VGPUShaderModule* shader;
+    VGPUShaderModule shader;
 } VGPUComputePipelineDesc;
 
 typedef struct VGPURayTracingPipelineDesc {
@@ -635,7 +643,7 @@ VGPU_API void vgpuDestroySwapChain(VGPUDevice device, VGPUSwapChain swapChain);
 VGPU_API VGPUTextureFormat vgpuSwapChainGetFormat(VGPUDevice device, VGPUSwapChain swapChain);
 
 /* Commands */
-VGPU_API VGPUCommandBuffer vgpuBeginCommandBuffer(VGPUDevice device, const char* label);
+VGPU_API VGPUCommandBuffer vgpuBeginCommandBuffer(VGPUDevice device, VGPUCommandQueue queueType, const char* label);
 VGPU_API void vgpuPushDebugGroup(VGPUCommandBuffer commandBuffer, const char* groupLabel);
 VGPU_API void vgpuPopDebugGroup(VGPUCommandBuffer commandBuffer);
 VGPU_API void vgpuInsertDebugMarker(VGPUCommandBuffer commandBuffer, const char* debugLabel);
@@ -649,7 +657,7 @@ VGPU_API void vgpuDispatchIndirect(VGPUCommandBuffer commandBuffer, VGPUBuffer b
 VGPU_API VGPUTexture vgpuAcquireSwapchainTexture(VGPUCommandBuffer commandBuffer, VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight);
 VGPU_API void vgpuBeginRenderPass(VGPUCommandBuffer commandBuffer, const VGPURenderPassDesc* desc);
 VGPU_API void vgpuEndRenderPass(VGPUCommandBuffer commandBuffer);
-VGPU_API void vgpuSetVewports(VGPUCommandBuffer commandBuffer, uint32_t count, const VGPUViewport* viewports);
+VGPU_API void vgpuSetViewports(VGPUCommandBuffer commandBuffer, uint32_t count, const VGPUViewport* viewports);
 VGPU_API void vgpuSetScissorRect(VGPUCommandBuffer commandBuffer, const VGPURect* rect);
 VGPU_API void vgpuSetScissorRects(VGPUCommandBuffer commandBuffer, uint32_t count, const VGPURect* rects);
 VGPU_API void vgpuSetVertexBuffer(VGPUCommandBuffer commandBuffer, uint32_t index, VGPUBuffer buffer, uint64_t offset);

@@ -535,11 +535,11 @@ VGPUTextureFormat vgpuSwapChainGetFormat(VGPUDevice device, VGPUSwapChain swapCh
 }
 
 /* Commands */
-VGPUCommandBuffer vgpuBeginCommandBuffer(VGPUDevice device, const char* label)
+VGPUCommandBuffer vgpuBeginCommandBuffer(VGPUDevice device, VGPUCommandQueue queueType, const char* label)
 {
     NULL_RETURN_NULL(device);
 
-    return device->beginCommandBuffer(device->driverData, label);
+    return device->beginCommandBuffer(device->driverData, queueType, label);
 }
 
 void vgpuPushDebugGroup(VGPUCommandBuffer commandBuffer, const char* groupLabel)
@@ -608,7 +608,7 @@ void vgpuSetViewports(VGPUCommandBuffer commandBuffer, uint32_t count, const VGP
 void vgpuSetScissorRect(VGPUCommandBuffer commandBuffer, const VGPURect* rect)
 {
     VGPU_ASSERT(rect);
-    commandBuffer->set_scissor_rect(commandBuffer->driverData, rect);
+    commandBuffer->setScissorRect(commandBuffer->driverData, rect);
 }
 
 void vgpuSetScissorRects(VGPUCommandBuffer commandBuffer, uint32_t count, const VGPURect* rects)
@@ -616,7 +616,7 @@ void vgpuSetScissorRects(VGPUCommandBuffer commandBuffer, uint32_t count, const 
     VGPU_ASSERT(rects);
     VGPU_ASSERT(count < VGPU_MAX_VIEWPORTS_AND_SCISSORS);
 
-    commandBuffer->set_scissor_rects(commandBuffer->driverData, count, rects);
+    commandBuffer->setScissorRects(commandBuffer->driverData, count, rects);
 }
 
 void vgpuSetVertexBuffer(VGPUCommandBuffer commandBuffer, uint32_t index, VGPUBuffer buffer, uint64_t offset)

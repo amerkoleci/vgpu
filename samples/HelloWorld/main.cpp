@@ -16,8 +16,11 @@
 #endif
 #include "GLFW/glfw3native.h"
 #endif
-#include <cstdio>
-#include <cstdlib>
+#include <stdio.h>
+#include <stdlib.h>
+#include <iostream>
+#include <fstream>
+#include <assert.h>
 #include <vgpu.h>
 
 VGPUDevice device = nullptr;
@@ -28,6 +31,49 @@ VGPUPipeline renderPipeline = nullptr;
 
 inline void vgpu_log(VGPULogLevel level, const char* message)
 {
+}
+
+std::string getAssetPath()
+{
+    return "assets/";
+}
+
+std::string getShadersPath()
+{
+    return getAssetPath() + "shaders/";
+}
+
+VGPUShaderModule LoadShader(const char* fileName)
+{
+    std::string shaderExt = ".spv";
+    if (vgpuGetBackendType(device) == VGPUBackendType_D3D12)
+    {
+        shaderExt = ".cso";
+    }
+
+    std::ifstream is(getShadersPath() + "/" + fileName + shaderExt, std::ios::binary | std::ios::in | std::ios::ate);
+
+    if (is.is_open())
+    {
+        size_t size = is.tellg();
+        is.seekg(0, std::ios::beg);
+        char* shaderCode = new char[size];
+        is.read(shaderCode, size);
+        is.close();
+
+        assert(size > 0);
+
+        VGPUShaderModule shader = vgpuCreateShader(device, shaderCode, size);
+
+        delete[] shaderCode;
+
+        return shader;
+    }
+    else
+    {
+        std::cerr << "Error: Could not open shader file \"" << fileName << "\"" << "\n";
+        return nullptr;
+    }
 }
 
 #if defined(__EMSCRIPTEN__)
@@ -107,9 +153,16 @@ void init_gfx(GLFWwindow* window)
     bufferDesc.usage = VGPUBufferUsage_Vertex;
     vertexBuffer = vgpuCreateBuffer(device, &bufferDesc, vertices);
 
-    //VGPURenderPipelineDesc renderPipelineDesc{};
-    //renderPipelineDesc.label = "Triangle";
-    //renderPipeline = vgpuCreateRenderPipeline(device, &renderPipelineDesc);
+    VGPUShaderModule vertexShader = LoadShader("triangleVertex");
+    VGPUShaderModule fragmentShader = LoadShader("triangleFragment");
+
+    VGPURenderPipelineDesc renderPipelineDesc{};
+    renderPipelineDesc.label = "Triangle";
+    renderPipelineDesc.vertex = vertexShader;
+    renderPipelineDesc.fragment = fragmentShader;
+    renderPipeline = vgpuCreateRenderPipeline(device, &renderPipelineDesc);
+    vgpuDestroyShader(device, vertexShader);
+    vgpuDestroyShader(device, fragmentShader);
 }
 
 #if defined(__EMSCRIPTEN__)
@@ -154,7 +207,7 @@ void draw_frame()
     uint32_t width;
     uint32_t height;
 
-    VGPUCommandBuffer commandBuffer = vgpuBeginCommandBuffer(device, "Frame");
+    VGPUCommandBuffer commandBuffer = vgpuBeginCommandBuffer(device, VGPUCommandQueue_Graphics, "Frame");
 
     // When window minimized texture is null
     VGPUTexture swapChainTexture = vgpuAcquireSwapchainTexture(commandBuffer, swapChain, &width, &height);
@@ -180,8 +233,9 @@ void draw_frame()
         renderPass.colorAttachments = &colorAttachment;
         renderPass.depthStencilAttachment = &depthStencilAttachment;
         vgpuBeginRenderPass(commandBuffer, &renderPass);
+        vgpuSetPipeline(commandBuffer, renderPipeline);
         vgpuSetVertexBuffer(commandBuffer, 0, vertexBuffer, 0);
-        //vgpuDraw(commandBuffer, 0, 3, 1, 0);
+        vgpuDraw(commandBuffer, 0, 3, 1, 0);
         vgpuEndRenderPass(commandBuffer);
     }
 
