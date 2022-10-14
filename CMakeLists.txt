@@ -1,10 +1,20 @@
 # CMake version
-cmake_minimum_required (VERSION 3.15)
+cmake_minimum_required (VERSION 3.14)
 
 if (${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
 	message(FATAL_ERROR "In-source builds are not supported. Please choose a different binary directory.")
 	return()
 endif()
+
+# Project declaration
+project (vgpu)
+
+# Configure CMake global variables
+set (CMAKE_CXX_STANDARD 11)
+set (CMAKE_CXX_STANDARD_REQUIRED ON)
+set (CMAKE_CXX_EXTENSIONS OFF)
+
+option(BUILD_SHARED_LIBS "Build shared library" ON)
 
 # Configure CMake global variables
 set(CMAKE_INSTALL_MESSAGE LAZY)
@@ -16,11 +26,6 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 # Use solution folders to organize projects
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
-# Project declaration
-project (vgpu
-    VERSION 0.1.0
-    DESCRIPTION "Cross-platform gpu library"
-)
 
 # Build Type
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)

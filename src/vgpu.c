@@ -11,7 +11,7 @@
 
 #define MAX_MESSAGE_SIZE 1024
 
-static void VGPU_DefaultLogCallback(VGPULogLevel level, const char* message)
+static void VGPU_DefaultLogCallback(vgpu_log_level level, const char* message)
 {
 #if defined(__EMSCRIPTEN__)
     switch (level)
@@ -36,7 +36,7 @@ static void VGPU_DefaultLogCallback(VGPULogLevel level, const char* message)
 #endif
 }
 
-static VGPULogCallback s_LogFunc = VGPU_DefaultLogCallback;
+static vgpu_log_callback s_LogFunc = VGPU_DefaultLogCallback;
 
 void vgpuLogInfo(const char* format, ...)
 {
@@ -68,7 +68,7 @@ void vgpuLogError(const char* format, ...)
     s_LogFunc(VGPU_LOG_LEVEL_ERROR, msg);
 }
 
-void vgpuSetLogCallback(VGPULogCallback func)
+void vgpuSetLogCallback(vgpu_log_callback func)
 {
     s_LogFunc = func;
 }

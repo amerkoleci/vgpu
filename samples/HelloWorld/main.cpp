@@ -26,7 +26,7 @@ VGPUTexture depthStencilTexture = nullptr;
 VGPUBuffer vertexBuffer = nullptr;
 VGPUPipeline renderPipeline = nullptr;
 
-inline void vgpu_log(VGPULogLevel level, const char* message)
+inline void vgpu_log(vgpu_log_level level, const char* message)
 {
 }
 
@@ -202,10 +202,12 @@ int main()
 
     //vgpuSetLogCallback(vgpu_log);
 
+    glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     GLFWwindow* window = glfwCreateWindow(1280, 720, "Hello World", NULL, NULL);
     init_gfx(window);
 
+    glfwShowWindow(window);
     while (!glfwWindowShouldClose(window))
     {
         draw_frame();

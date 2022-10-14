@@ -63,14 +63,14 @@ typedef struct VGPUShaderModule_T* VGPUShaderModule;
 typedef struct VGPUPipeline_T* VGPUPipeline;
 typedef struct VGPUCommandBuffer_T* VGPUCommandBuffer;
 
-typedef enum VGPULogLevel {
+typedef enum vgpu_log_level {
     VGPU_LOG_LEVEL_INFO = 0,
     VGPU_LOG_LEVEL_WARN,
     VGPU_LOG_LEVEL_ERROR,
 
     _VGPU_LOG_LEVEL_COUNT,
     _VGPU_LOG_LEVEL_FORCE_U32 = 0x7FFFFFFF
-} VGPULogLevel;
+} vgpu_log_level;
 
 typedef enum VGPUBackendType {
     VGPUBackendType_Default = 0,
@@ -573,8 +573,8 @@ typedef struct VGPULimits {
     uint32_t maxComputeWorkGroupsPerDimension;
 } VGPULimits;
 
-typedef void (VGPU_CALL* VGPULogCallback)(VGPULogLevel level, const char* message);
-VGPU_API void vgpuSetLogCallback(VGPULogCallback func);
+typedef void (VGPU_CALL* vgpu_log_callback)(vgpu_log_level level, const char* message);
+VGPU_API void vgpuSetLogCallback(vgpu_log_callback func);
 
 VGPU_API vgpu_bool vgpuIsSupported(VGPUBackendType backend);
 VGPU_API VGPUDevice vgpuCreateDevice(const VGPUDeviceDesc* desc);
