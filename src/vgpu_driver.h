@@ -113,7 +113,7 @@ typedef struct VGPUCommandBuffer_T {
     void (*setScissorRect)(VGPUCommandBufferImpl* driverData, const VGPURect* rects);
     void (*setScissorRects)(VGPUCommandBufferImpl* driverData, uint32_t count, const VGPURect* rects);
     void (*setVertexBuffer)(VGPUCommandBufferImpl* driverData, uint32_t index, VGPUBuffer buffer, uint64_t offset);
-    void (*setIndexBuffer)(VGPUCommandBufferImpl* driverData, VGPUBuffer buffer, uint64_t offset, VGPUIndexType indexType);
+    void (*setIndexBuffer)(VGPUCommandBufferImpl* driverData, VGPUBuffer buffer, uint64_t offset, VGPUIndexFormat format);
 
     void (*draw)(VGPUCommandBufferImpl* driverData, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t baseInstance);
 

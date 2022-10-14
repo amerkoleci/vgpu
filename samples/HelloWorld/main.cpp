@@ -160,6 +160,9 @@ void init_gfx(GLFWwindow* window)
     renderPipelineDesc.label = "Triangle";
     renderPipelineDesc.vertex = vertexShader;
     renderPipelineDesc.fragment = fragmentShader;
+    renderPipelineDesc.primitiveTopology = VGPUPrimitiveTopology_TriangleList;
+    renderPipelineDesc.colorFormats[0] = vgpuSwapChainGetFormat(device, swapChain);
+
     renderPipeline = vgpuCreateRenderPipeline(device, &renderPipelineDesc);
     vgpuDestroyShader(device, vertexShader);
     vgpuDestroyShader(device, fragmentShader);

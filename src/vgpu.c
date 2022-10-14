@@ -464,6 +464,9 @@ void vgpuDestroyShader(VGPUDevice device, VGPUShaderModule module)
 static VGPURenderPipelineDesc _vgpuRenderPipelineDescDef(const VGPURenderPipelineDesc* desc)
 {
     VGPURenderPipelineDesc def = *desc;
+    def.depthStencilState.stencilReadMask = _VGPU_DEF(def.depthStencilState.stencilReadMask, 0xFF);
+    def.depthStencilState.stencilWriteMask = _VGPU_DEF(def.depthStencilState.stencilWriteMask, 0xFF);
+    def.sampleCount = _VGPU_DEF(def.sampleCount, 1);
     return def;
 }
 
@@ -624,9 +627,9 @@ void vgpuSetVertexBuffer(VGPUCommandBuffer commandBuffer, uint32_t index, VGPUBu
     commandBuffer->setVertexBuffer(commandBuffer->driverData, index, buffer, offset);
 }
 
-void vgpuSetIndexBuffer(VGPUCommandBuffer commandBuffer, VGPUBuffer buffer, uint64_t offset, VGPUIndexType indexType)
+void vgpuSetIndexBuffer(VGPUCommandBuffer commandBuffer, VGPUBuffer buffer, uint64_t offset, VGPUIndexFormat format)
 {
-    commandBuffer->setIndexBuffer(commandBuffer->driverData, buffer, offset, indexType);
+    commandBuffer->setIndexBuffer(commandBuffer->driverData, buffer, offset, format);
 }
 
 void vgpuDraw(VGPUCommandBuffer commandBuffer, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t baseInstance)

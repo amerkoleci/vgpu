@@ -428,7 +428,7 @@ namespace
         {
         case VGPULoadOp_Clear:
             return VK_ATTACHMENT_LOAD_OP_CLEAR;
-        case VGPULoadOp_Discard:
+        case VGPULoadOp_DontCare:
             return VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 
         default:
@@ -440,7 +440,7 @@ namespace
     {
         switch (op)
         {
-        case VGPUStoreOp_Discard:
+        case VGPUStoreOp_DontCare:
             return VK_ATTACHMENT_STORE_OP_DONT_CARE;
 
         default:
@@ -2574,11 +2574,11 @@ static void vulkan_setVertexBuffer(VGPUCommandBufferImpl* driverData, uint32_t i
     vkCmdBindVertexBuffers(commandBuffer->handle, index, 1, &vulkanBuffer->handle, &offset);
 }
 
-static void vulkan_setIndexBuffer(VGPUCommandBufferImpl* driverData, VGPUBuffer buffer, uint64_t offset, VGPUIndexType indexType)
+static void vulkan_setIndexBuffer(VGPUCommandBufferImpl* driverData, VGPUBuffer buffer, uint64_t offset, VGPUIndexFormat format)
 {
     VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
     VulkanBuffer* vulkanBuffer = (VulkanBuffer*)buffer;
-    const VkIndexType vkIndexType = (indexType == VGPUIndexType_UInt16) ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32;
+    const VkIndexType vkIndexType = (format == VGPUIndexFormat_Uint16) ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32;
     vkCmdBindIndexBuffer(commandBuffer->handle, vulkanBuffer->handle, offset, vkIndexType);
 }
 

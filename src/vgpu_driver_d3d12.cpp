@@ -131,81 +131,81 @@ namespace
         switch (format)
         {
             // 8-bit formats
-            case VGPUTextureFormat_R8UNorm:         return DXGI_FORMAT_R8_UNORM;
-            case VGPUTextureFormat_R8SNorm:         return DXGI_FORMAT_R8_SNORM;
-            case VGPUTextureFormat_R8UInt:          return DXGI_FORMAT_R8_UINT;
-            case VGPUTextureFormat_R8SInt:          return DXGI_FORMAT_R8_SINT;
-                // 16-bit formats
-            case VGPUTextureFormat_R16UInt:         return DXGI_FORMAT_R16_UINT;
-            case VGPUTextureFormat_R16SInt:         return DXGI_FORMAT_R16_SINT;
-            case VGPUTextureFormat_R16UNorm:        return DXGI_FORMAT_R16_UNORM;
-            case VGPUTextureFormat_R16SNorm:        return DXGI_FORMAT_R16_SNORM;
-            case VGPUTextureFormat_R16Float:        return DXGI_FORMAT_R16_FLOAT;
-            case VGPUTextureFormat_RG8UNorm:        return DXGI_FORMAT_R8G8_UNORM;
-            case VGPUTextureFormat_RG8SNorm:        return DXGI_FORMAT_R8G8_SNORM;
-            case VGPUTextureFormat_RG8UInt:         return DXGI_FORMAT_R8G8_UINT;
-            case VGPUTextureFormat_RG8SInt:         return DXGI_FORMAT_R8G8_SINT;
-                // Packed 16-Bit Pixel Formats
-            case VGPUTextureFormat_BGRA4UNorm:      return DXGI_FORMAT_B4G4R4A4_UNORM;
-            case VGPUTextureFormat_B5G6R5UNorm:     return DXGI_FORMAT_B5G6R5_UNORM;
-            case VGPUTextureFormat_B5G5R5A1UNorm:   return DXGI_FORMAT_B5G5R5A1_UNORM;
-                // 32-bit formats
-            case VGPUTextureFormat_R32UInt:          return DXGI_FORMAT_R32_UINT;
-            case VGPUTextureFormat_R32SInt:          return DXGI_FORMAT_R32_SINT;
-            case VGPUTextureFormat_R32Float:         return DXGI_FORMAT_R32_FLOAT;
-            case VGPUTextureFormat_RG16UInt:         return DXGI_FORMAT_R16G16_UINT;
-            case VGPUTextureFormat_RG16SInt:         return DXGI_FORMAT_R16G16_SINT;
-            case VGPUTextureFormat_RG16UNorm:        return DXGI_FORMAT_R16G16_UNORM;
-            case VGPUTextureFormat_RG16SNorm:        return DXGI_FORMAT_R16G16_SNORM;
-            case VGPUTextureFormat_RG16Float:        return DXGI_FORMAT_R16G16_FLOAT;
-            case VGPUTextureFormat_RGBA8UInt:        return DXGI_FORMAT_R8G8B8A8_UINT;
-            case VGPUTextureFormat_RGBA8SInt:        return DXGI_FORMAT_R8G8B8A8_SINT;
-            case VGPUTextureFormat_RGBA8UNorm:       return DXGI_FORMAT_R8G8B8A8_UNORM;
-            case VGPUTextureFormat_RGBA8UNormSrgb:   return DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
-            case VGPUTextureFormat_RGBA8SNorm:       return DXGI_FORMAT_R8G8B8A8_SNORM;
-            case VGPUTextureFormat_BGRA8UNorm:       return DXGI_FORMAT_B8G8R8A8_UNORM;
-            case VGPUTextureFormat_BGRA8UNormSrgb:   return DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
-                // Packed 32-Bit formats
-            case VGPUTextureFormat_RGB10A2UNorm:     return DXGI_FORMAT_R10G10B10A2_UNORM;
-            case VGPUTextureFormat_RG11B10Float:     return DXGI_FORMAT_R11G11B10_FLOAT;
-            case VGPUTextureFormat_RGB9E5Float:      return DXGI_FORMAT_R9G9B9E5_SHAREDEXP;
-                // 64-Bit formats
-            case VGPUTextureFormat_RG32UInt:         return DXGI_FORMAT_R32G32_UINT;
-            case VGPUTextureFormat_RG32SInt:         return DXGI_FORMAT_R32G32_SINT;
-            case VGPUTextureFormat_RG32Float:        return DXGI_FORMAT_R32G32_FLOAT;
-            case VGPUTextureFormat_RGBA16UInt:       return DXGI_FORMAT_R16G16B16A16_UINT;
-            case VGPUTextureFormat_RGBA16SInt:       return DXGI_FORMAT_R16G16B16A16_SINT;
-            case VGPUTextureFormat_RGBA16UNorm:      return DXGI_FORMAT_R16G16B16A16_UNORM;
-            case VGPUTextureFormat_RGBA16SNorm:      return DXGI_FORMAT_R16G16B16A16_SNORM;
-            case VGPUTextureFormat_RGBA16Float:      return DXGI_FORMAT_R16G16B16A16_FLOAT;
-                // 128-Bit formats
-            case VGPUTextureFormat_RGBA32UInt:       return DXGI_FORMAT_R32G32B32A32_UINT;
-            case VGPUTextureFormat_RGBA32SInt:       return DXGI_FORMAT_R32G32B32A32_SINT;
-            case VGPUTextureFormat_RGBA32Float:      return DXGI_FORMAT_R32G32B32A32_FLOAT;
-                // Depth-stencil formats
-            case VGPUTextureFormat_Depth16Unorm:		    return DXGI_FORMAT_D16_UNORM;
-            case VGPUTextureFormat_Depth32Float:			return DXGI_FORMAT_D32_FLOAT;
-            case VGPUTextureFormat_Stencil8:			    return DXGI_FORMAT_D24_UNORM_S8_UINT;
-            case VGPUTextureFormat_Depth24UnormStencil8:    return DXGI_FORMAT_D24_UNORM_S8_UINT;
-            case VGPUTextureFormat_Depth32FloatStencil8:    return DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
-                // Compressed BC formats
-            case VGPUTextureFormat_BC1UNorm:            return DXGI_FORMAT_BC1_UNORM;
-            case VGPUTextureFormat_BC1UNormSrgb:        return DXGI_FORMAT_BC1_UNORM_SRGB;
-            case VGPUTextureFormat_BC2UNorm:            return DXGI_FORMAT_BC2_UNORM;
-            case VGPUTextureFormat_BC2UNormSrgb:        return DXGI_FORMAT_BC2_UNORM_SRGB;
-            case VGPUTextureFormat_BC3UNorm:            return DXGI_FORMAT_BC3_UNORM;
-            case VGPUTextureFormat_BC3UNormSrgb:        return DXGI_FORMAT_BC3_UNORM_SRGB;
-            case VGPUTextureFormat_BC4SNorm:            return DXGI_FORMAT_BC4_SNORM;
-            case VGPUTextureFormat_BC4UNorm:            return DXGI_FORMAT_BC4_UNORM;
-            case VGPUTextureFormat_BC5SNorm:            return DXGI_FORMAT_BC5_SNORM;
-            case VGPUTextureFormat_BC5UNorm:            return DXGI_FORMAT_BC5_UNORM;
-            case VGPUTextureFormat_BC6HUFloat:          return DXGI_FORMAT_BC6H_UF16;
-            case VGPUTextureFormat_BC6HSFloat:          return DXGI_FORMAT_BC6H_SF16;
-            case VGPUTextureFormat_BC7UNorm:            return DXGI_FORMAT_BC7_UNORM;
-            case VGPUTextureFormat_BC7UNormSrgb:        return DXGI_FORMAT_BC7_UNORM_SRGB;
+        case VGPUTextureFormat_R8UNorm:         return DXGI_FORMAT_R8_UNORM;
+        case VGPUTextureFormat_R8SNorm:         return DXGI_FORMAT_R8_SNORM;
+        case VGPUTextureFormat_R8UInt:          return DXGI_FORMAT_R8_UINT;
+        case VGPUTextureFormat_R8SInt:          return DXGI_FORMAT_R8_SINT;
+            // 16-bit formats
+        case VGPUTextureFormat_R16UInt:         return DXGI_FORMAT_R16_UINT;
+        case VGPUTextureFormat_R16SInt:         return DXGI_FORMAT_R16_SINT;
+        case VGPUTextureFormat_R16UNorm:        return DXGI_FORMAT_R16_UNORM;
+        case VGPUTextureFormat_R16SNorm:        return DXGI_FORMAT_R16_SNORM;
+        case VGPUTextureFormat_R16Float:        return DXGI_FORMAT_R16_FLOAT;
+        case VGPUTextureFormat_RG8UNorm:        return DXGI_FORMAT_R8G8_UNORM;
+        case VGPUTextureFormat_RG8SNorm:        return DXGI_FORMAT_R8G8_SNORM;
+        case VGPUTextureFormat_RG8UInt:         return DXGI_FORMAT_R8G8_UINT;
+        case VGPUTextureFormat_RG8SInt:         return DXGI_FORMAT_R8G8_SINT;
+            // Packed 16-Bit Pixel Formats
+        case VGPUTextureFormat_BGRA4UNorm:      return DXGI_FORMAT_B4G4R4A4_UNORM;
+        case VGPUTextureFormat_B5G6R5UNorm:     return DXGI_FORMAT_B5G6R5_UNORM;
+        case VGPUTextureFormat_B5G5R5A1UNorm:   return DXGI_FORMAT_B5G5R5A1_UNORM;
+            // 32-bit formats
+        case VGPUTextureFormat_R32UInt:          return DXGI_FORMAT_R32_UINT;
+        case VGPUTextureFormat_R32SInt:          return DXGI_FORMAT_R32_SINT;
+        case VGPUTextureFormat_R32Float:         return DXGI_FORMAT_R32_FLOAT;
+        case VGPUTextureFormat_RG16UInt:         return DXGI_FORMAT_R16G16_UINT;
+        case VGPUTextureFormat_RG16SInt:         return DXGI_FORMAT_R16G16_SINT;
+        case VGPUTextureFormat_RG16UNorm:        return DXGI_FORMAT_R16G16_UNORM;
+        case VGPUTextureFormat_RG16SNorm:        return DXGI_FORMAT_R16G16_SNORM;
+        case VGPUTextureFormat_RG16Float:        return DXGI_FORMAT_R16G16_FLOAT;
+        case VGPUTextureFormat_RGBA8UInt:        return DXGI_FORMAT_R8G8B8A8_UINT;
+        case VGPUTextureFormat_RGBA8SInt:        return DXGI_FORMAT_R8G8B8A8_SINT;
+        case VGPUTextureFormat_RGBA8UNorm:       return DXGI_FORMAT_R8G8B8A8_UNORM;
+        case VGPUTextureFormat_RGBA8UNormSrgb:   return DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+        case VGPUTextureFormat_RGBA8SNorm:       return DXGI_FORMAT_R8G8B8A8_SNORM;
+        case VGPUTextureFormat_BGRA8UNorm:       return DXGI_FORMAT_B8G8R8A8_UNORM;
+        case VGPUTextureFormat_BGRA8UNormSrgb:   return DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
+            // Packed 32-Bit formats
+        case VGPUTextureFormat_RGB10A2UNorm:     return DXGI_FORMAT_R10G10B10A2_UNORM;
+        case VGPUTextureFormat_RG11B10Float:     return DXGI_FORMAT_R11G11B10_FLOAT;
+        case VGPUTextureFormat_RGB9E5Float:      return DXGI_FORMAT_R9G9B9E5_SHAREDEXP;
+            // 64-Bit formats
+        case VGPUTextureFormat_RG32UInt:         return DXGI_FORMAT_R32G32_UINT;
+        case VGPUTextureFormat_RG32SInt:         return DXGI_FORMAT_R32G32_SINT;
+        case VGPUTextureFormat_RG32Float:        return DXGI_FORMAT_R32G32_FLOAT;
+        case VGPUTextureFormat_RGBA16UInt:       return DXGI_FORMAT_R16G16B16A16_UINT;
+        case VGPUTextureFormat_RGBA16SInt:       return DXGI_FORMAT_R16G16B16A16_SINT;
+        case VGPUTextureFormat_RGBA16UNorm:      return DXGI_FORMAT_R16G16B16A16_UNORM;
+        case VGPUTextureFormat_RGBA16SNorm:      return DXGI_FORMAT_R16G16B16A16_SNORM;
+        case VGPUTextureFormat_RGBA16Float:      return DXGI_FORMAT_R16G16B16A16_FLOAT;
+            // 128-Bit formats
+        case VGPUTextureFormat_RGBA32UInt:       return DXGI_FORMAT_R32G32B32A32_UINT;
+        case VGPUTextureFormat_RGBA32SInt:       return DXGI_FORMAT_R32G32B32A32_SINT;
+        case VGPUTextureFormat_RGBA32Float:      return DXGI_FORMAT_R32G32B32A32_FLOAT;
+            // Depth-stencil formats
+        case VGPUTextureFormat_Depth16Unorm:		    return DXGI_FORMAT_D16_UNORM;
+        case VGPUTextureFormat_Depth32Float:			return DXGI_FORMAT_D32_FLOAT;
+        case VGPUTextureFormat_Stencil8:			    return DXGI_FORMAT_D24_UNORM_S8_UINT;
+        case VGPUTextureFormat_Depth24UnormStencil8:    return DXGI_FORMAT_D24_UNORM_S8_UINT;
+        case VGPUTextureFormat_Depth32FloatStencil8:    return DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
+            // Compressed BC formats
+        case VGPUTextureFormat_BC1UNorm:            return DXGI_FORMAT_BC1_UNORM;
+        case VGPUTextureFormat_BC1UNormSrgb:        return DXGI_FORMAT_BC1_UNORM_SRGB;
+        case VGPUTextureFormat_BC2UNorm:            return DXGI_FORMAT_BC2_UNORM;
+        case VGPUTextureFormat_BC2UNormSrgb:        return DXGI_FORMAT_BC2_UNORM_SRGB;
+        case VGPUTextureFormat_BC3UNorm:            return DXGI_FORMAT_BC3_UNORM;
+        case VGPUTextureFormat_BC3UNormSrgb:        return DXGI_FORMAT_BC3_UNORM_SRGB;
+        case VGPUTextureFormat_BC4SNorm:            return DXGI_FORMAT_BC4_SNORM;
+        case VGPUTextureFormat_BC4UNorm:            return DXGI_FORMAT_BC4_UNORM;
+        case VGPUTextureFormat_BC5SNorm:            return DXGI_FORMAT_BC5_SNORM;
+        case VGPUTextureFormat_BC5UNorm:            return DXGI_FORMAT_BC5_UNORM;
+        case VGPUTextureFormat_BC6HUFloat:          return DXGI_FORMAT_BC6H_UF16;
+        case VGPUTextureFormat_BC6HSFloat:          return DXGI_FORMAT_BC6H_SF16;
+        case VGPUTextureFormat_BC7UNorm:            return DXGI_FORMAT_BC7_UNORM;
+        case VGPUTextureFormat_BC7UNormSrgb:        return DXGI_FORMAT_BC7_UNORM_SRGB;
 
-            default:
-                return DXGI_FORMAT_UNKNOWN;
+        default:
+            return DXGI_FORMAT_UNKNOWN;
         }
     }
 
@@ -216,7 +216,7 @@ namespace
             // 8-bit formats
         case DXGI_FORMAT_R8_UNORM:              return VGPUTextureFormat_R8UNorm;
         case DXGI_FORMAT_R8_SNORM:              return VGPUTextureFormat_R8SNorm;
-        case DXGI_FORMAT_R8_UINT :              return VGPUTextureFormat_R8UInt;
+        case DXGI_FORMAT_R8_UINT:              return VGPUTextureFormat_R8UInt;
         case DXGI_FORMAT_R8_SINT:               return VGPUTextureFormat_R8SInt;
 #if TODO
             // 16-bit formats
@@ -299,19 +299,19 @@ namespace
     {
         switch (format)
         {
-            case VGPUTextureFormat_RGBA16Float:
-                return VGPUTextureFormat_RGBA16Float;
+        case VGPUTextureFormat_RGBA16Float:
+            return VGPUTextureFormat_RGBA16Float;
 
-            case VGPUTextureFormat_BGRA8UNorm:
-            case VGPUTextureFormat_BGRA8UNormSrgb:
-                return VGPUTextureFormat_BGRA8UNorm;
+        case VGPUTextureFormat_BGRA8UNorm:
+        case VGPUTextureFormat_BGRA8UNormSrgb:
+            return VGPUTextureFormat_BGRA8UNorm;
 
-            case VGPUTextureFormat_RGBA8UNorm:
-            case VGPUTextureFormat_RGBA8UNormSrgb:
-                return VGPUTextureFormat_RGBA8UNorm;
+        case VGPUTextureFormat_RGBA8UNorm:
+        case VGPUTextureFormat_RGBA8UNormSrgb:
+            return VGPUTextureFormat_RGBA8UNorm;
 
-            case VGPUTextureFormat_RGB10A2UNorm:
-                return VGPUTextureFormat_RGB10A2UNorm;
+        case VGPUTextureFormat_RGB10A2UNorm:
+            return VGPUTextureFormat_RGB10A2UNorm;
         }
 
         return VGPUTextureFormat_BGRA8UNorm;
@@ -321,20 +321,20 @@ namespace
     {
         switch (format)
         {
-            case VGPUTextureFormat_Depth16Unorm:
-                return DXGI_FORMAT_R16_TYPELESS;
-            case VGPUTextureFormat_Depth32Float:
-                return DXGI_FORMAT_R32_TYPELESS;
-            case VGPUTextureFormat_Stencil8:
-                return DXGI_FORMAT_R24G8_TYPELESS;
-            case VGPUTextureFormat_Depth24UnormStencil8:
-                return DXGI_FORMAT_R24G8_TYPELESS;
-            case VGPUTextureFormat_Depth32FloatStencil8:
-                return DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS;
+        case VGPUTextureFormat_Depth16Unorm:
+            return DXGI_FORMAT_R16_TYPELESS;
+        case VGPUTextureFormat_Depth32Float:
+            return DXGI_FORMAT_R32_TYPELESS;
+        case VGPUTextureFormat_Stencil8:
+            return DXGI_FORMAT_R24G8_TYPELESS;
+        case VGPUTextureFormat_Depth24UnormStencil8:
+            return DXGI_FORMAT_R24G8_TYPELESS;
+        case VGPUTextureFormat_Depth32FloatStencil8:
+            return DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS;
 
-            default:
-                VGPU_ASSERT(vgpuIsDepthFormat(format) == false);
-                return ToDXGIFormat(format);
+        default:
+            VGPU_ASSERT(vgpuIsDepthFormat(format) == false);
+            return ToDXGIFormat(format);
         }
     }
 
@@ -342,13 +342,13 @@ namespace
     {
         switch (mode)
         {
-            case VGPUPresentMode_Immediate:
-            case VGPUPresentMode_Fifo:
-                return 2;
-            case VGPUPresentMode_Mailbox:
-                return 3;
-            default:
-                return 2;
+        case VGPUPresentMode_Immediate:
+        case VGPUPresentMode_Fifo:
+            return 2;
+        case VGPUPresentMode_Mailbox:
+            return 3;
+        default:
+            return 2;
         }
     }
 
@@ -356,13 +356,13 @@ namespace
     {
         switch (mode)
         {
-            case VGPUPresentMode_Immediate:
-            case VGPUPresentMode_Mailbox:
-                return 0u;
+        case VGPUPresentMode_Immediate:
+        case VGPUPresentMode_Mailbox:
+            return 0u;
 
-            case VGPUPresentMode_Fifo:
-            default:
-                return 1u;
+        case VGPUPresentMode_Fifo:
+        default:
+            return 1u;
         }
     }
 
@@ -370,17 +370,17 @@ namespace
     {
         switch (function)
         {
-            case VGPUCompareFunction_Never:        return D3D12_COMPARISON_FUNC_NEVER;
-            case VGPUCompareFunction_Less:         return D3D12_COMPARISON_FUNC_LESS;
-            case VGPUCompareFunction_Equal:        return D3D12_COMPARISON_FUNC_EQUAL;
-            case VGPUCompareFunction_LessEqual:    return D3D12_COMPARISON_FUNC_LESS_EQUAL;
-            case VGPUCompareFunction_Greater:      return D3D12_COMPARISON_FUNC_GREATER;
-            case VGPUCompareFunction_NotEqual:     return D3D12_COMPARISON_FUNC_NOT_EQUAL;
-            case VGPUCompareFunction_GreaterEqual: return D3D12_COMPARISON_FUNC_GREATER_EQUAL;
-            case VGPUCompareFunction_Always:       return D3D12_COMPARISON_FUNC_ALWAYS;
+        case VGPUCompareFunction_Never:        return D3D12_COMPARISON_FUNC_NEVER;
+        case VGPUCompareFunction_Less:         return D3D12_COMPARISON_FUNC_LESS;
+        case VGPUCompareFunction_Equal:        return D3D12_COMPARISON_FUNC_EQUAL;
+        case VGPUCompareFunction_LessEqual:    return D3D12_COMPARISON_FUNC_LESS_EQUAL;
+        case VGPUCompareFunction_Greater:      return D3D12_COMPARISON_FUNC_GREATER;
+        case VGPUCompareFunction_NotEqual:     return D3D12_COMPARISON_FUNC_NOT_EQUAL;
+        case VGPUCompareFunction_GreaterEqual: return D3D12_COMPARISON_FUNC_GREATER_EQUAL;
+        case VGPUCompareFunction_Always:       return D3D12_COMPARISON_FUNC_ALWAYS;
 
-            default:
-                return D3D12_COMPARISON_FUNC_NEVER;
+        default:
+            return D3D12_COMPARISON_FUNC_NEVER;
         }
     }
 
@@ -388,11 +388,11 @@ namespace
     {
         switch (value)
         {
-            case VGPUSamplerFilter_Linear:
-                return D3D12_FILTER_TYPE_LINEAR;
-            default:
-            case VGPUSamplerFilter_Nearest:
-                return D3D12_FILTER_TYPE_POINT;
+        case VGPUSamplerFilter_Linear:
+            return D3D12_FILTER_TYPE_LINEAR;
+        default:
+        case VGPUSamplerFilter_Nearest:
+            return D3D12_FILTER_TYPE_POINT;
         }
     }
 
@@ -400,11 +400,11 @@ namespace
     {
         switch (value)
         {
-            case VGPUSamplerMipFilter_Linear:
-                return D3D12_FILTER_TYPE_LINEAR;
-            default:
-            case VGPUSamplerMipFilter_Nearest:
-                return D3D12_FILTER_TYPE_POINT;
+        case VGPUSamplerMipFilter_Linear:
+            return D3D12_FILTER_TYPE_LINEAR;
+        default:
+        case VGPUSamplerMipFilter_Nearest:
+            return D3D12_FILTER_TYPE_POINT;
         }
     }
 
@@ -412,18 +412,45 @@ namespace
     {
         switch (mode)
         {
-            case VGPUSamplerAddressMode_Mirror:
-                return D3D12_TEXTURE_ADDRESS_MODE_MIRROR;
-            case VGPUSamplerAddressMode_Clamp:
-                return D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-            case VGPUSamplerAddressMode_Border:
-                return D3D12_TEXTURE_ADDRESS_MODE_BORDER;
-                //case VGPUSamplerAddressMode_MirrorOnce:
-                //    return D3D12_TEXTURE_ADDRESS_MODE_MIRROR_ONCE;
+        case VGPUSamplerAddressMode_Mirror:
+            return D3D12_TEXTURE_ADDRESS_MODE_MIRROR;
+        case VGPUSamplerAddressMode_Clamp:
+            return D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+        case VGPUSamplerAddressMode_Border:
+            return D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+            //case VGPUSamplerAddressMode_MirrorOnce:
+            //    return D3D12_TEXTURE_ADDRESS_MODE_MIRROR_ONCE;
 
-            default:
-            case VGPUSamplerAddressMode_Wrap:
-                return D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+        default:
+        case VGPUSamplerAddressMode_Wrap:
+            return D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+        }
+    }
+
+    constexpr D3D_PRIMITIVE_TOPOLOGY ToD3DPrimitiveTopology(VGPUPrimitiveTopology type, uint32_t patchControlPoints = 1)
+    {
+        switch (type)
+        {
+        case VGPUPrimitiveTopology_PointList:
+            return D3D_PRIMITIVE_TOPOLOGY_POINTLIST;
+        case VGPUPrimitiveTopology_LineList:
+            return D3D_PRIMITIVE_TOPOLOGY_LINELIST;
+        case VGPUPrimitiveTopology_LineStrip:
+            return D3D_PRIMITIVE_TOPOLOGY_LINESTRIP;
+        case VGPUPrimitiveTopology_TriangleList:
+            return D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+        case VGPUPrimitiveTopology_TriangleStrip:
+            return D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
+        case VGPUPrimitiveTopology_PatchList:
+            if (patchControlPoints == 0 || patchControlPoints > 32)
+            {
+                return D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
+            }
+
+            return D3D_PRIMITIVE_TOPOLOGY(D3D_PRIMITIVE_TOPOLOGY_1_CONTROL_POINT_PATCHLIST + (patchControlPoints - 1));
+
+        default:
+            return D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
         }
     }
 }
@@ -545,7 +572,6 @@ struct D3D12_SwapChain
 #endif
     IDXGISwapChain3* handle = nullptr;
     VGPUTextureFormat format;
-    VGPUTextureFormat textureFormat;
     uint32_t backBufferCount;
     uint32_t syncInterval;
     std::vector<D3D12Resource*> backbufferTextures;
@@ -805,69 +831,69 @@ static D3D12_CPU_DESCRIPTOR_HANDLE d3d12_GetRTV(D3D12_Renderer* renderer, D3D12R
 
         switch (resourceDesc.Dimension)
         {
-            case D3D12_RESOURCE_DIMENSION_TEXTURE1D:
+        case D3D12_RESOURCE_DIMENSION_TEXTURE1D:
+        {
+            if (resourceDesc.DepthOrArraySize > 1)
             {
-                if (resourceDesc.DepthOrArraySize > 1)
+                viewDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE1DARRAY;
+                viewDesc.Texture1DArray.MipSlice = mipLevel;
+                viewDesc.Texture1DArray.FirstArraySlice = slice;
+                viewDesc.Texture1DArray.ArraySize = 1;
+            }
+            else
+            {
+                viewDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE1D;
+                viewDesc.Texture1D.MipSlice = mipLevel;
+            }
+        }
+        break;
+
+        case D3D12_RESOURCE_DIMENSION_TEXTURE2D:
+        {
+            if (resourceDesc.DepthOrArraySize > 1)
+            {
+                if (resourceDesc.SampleDesc.Count > 1)
                 {
-                    viewDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE1DARRAY;
-                    viewDesc.Texture1DArray.MipSlice = mipLevel;
-                    viewDesc.Texture1DArray.FirstArraySlice = slice;
-                    viewDesc.Texture1DArray.ArraySize = 1;
+                    viewDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2DMSARRAY;
+                    viewDesc.Texture2DMSArray.FirstArraySlice = slice;
+                    viewDesc.Texture2DMSArray.ArraySize = 1;
                 }
                 else
                 {
-                    viewDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE1D;
-                    viewDesc.Texture1D.MipSlice = mipLevel;
+                    viewDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2DARRAY;
+                    viewDesc.Texture2DArray.MipSlice = mipLevel;
+                    viewDesc.Texture2DArray.FirstArraySlice = slice;
+                    viewDesc.Texture2DArray.ArraySize = 1;
                 }
             }
-            break;
-
-            case D3D12_RESOURCE_DIMENSION_TEXTURE2D:
+            else
             {
-                if (resourceDesc.DepthOrArraySize > 1)
+                if (resourceDesc.SampleDesc.Count > 1)
                 {
-                    if (resourceDesc.SampleDesc.Count > 1)
-                    {
-                        viewDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2DMSARRAY;
-                        viewDesc.Texture2DMSArray.FirstArraySlice = slice;
-                        viewDesc.Texture2DMSArray.ArraySize = 1;
-                    }
-                    else
-                    {
-                        viewDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2DARRAY;
-                        viewDesc.Texture2DArray.MipSlice = mipLevel;
-                        viewDesc.Texture2DArray.FirstArraySlice = slice;
-                        viewDesc.Texture2DArray.ArraySize = 1;
-                    }
+                    viewDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2DMS;
                 }
                 else
                 {
-                    if (resourceDesc.SampleDesc.Count > 1)
-                    {
-                        viewDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2DMS;
-                    }
-                    else
-                    {
-                        viewDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
-                        viewDesc.Texture2D.MipSlice = mipLevel;
-                    }
+                    viewDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
+                    viewDesc.Texture2D.MipSlice = mipLevel;
                 }
             }
-            break;
+        }
+        break;
 
-            case D3D12_RESOURCE_DIMENSION_TEXTURE3D:
-            {
-                viewDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE3D;
-                viewDesc.Texture3D.MipSlice = mipLevel;
-                viewDesc.Texture3D.FirstWSlice = slice;
-                viewDesc.Texture3D.WSize = -1;
-                break;
-            }
+        case D3D12_RESOURCE_DIMENSION_TEXTURE3D:
+        {
+            viewDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE3D;
+            viewDesc.Texture3D.MipSlice = mipLevel;
+            viewDesc.Texture3D.FirstWSlice = slice;
+            viewDesc.Texture3D.WSize = -1;
             break;
+        }
+        break;
 
-            default:
-                vgpuLogError("D3D12: Invalid texture dimension");
-                return {};
+        default:
+            vgpuLogError("D3D12: Invalid texture dimension");
+            return {};
         }
 
         D3D12_CPU_DESCRIPTOR_HANDLE newView = renderer->rtvAllocator.Allocate();
@@ -896,63 +922,63 @@ static D3D12_CPU_DESCRIPTOR_HANDLE d3d12_GetDSV(D3D12_Renderer* renderer, D3D12R
 
         switch (resourceDesc.Dimension)
         {
-            case D3D12_RESOURCE_DIMENSION_TEXTURE1D:
+        case D3D12_RESOURCE_DIMENSION_TEXTURE1D:
+        {
+            if (resourceDesc.DepthOrArraySize > 1)
             {
-                if (resourceDesc.DepthOrArraySize > 1)
+                viewDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE1DARRAY;
+                viewDesc.Texture1DArray.MipSlice = mipLevel;
+                viewDesc.Texture1DArray.FirstArraySlice = slice;
+                viewDesc.Texture1DArray.ArraySize = 1;
+            }
+            else
+            {
+                viewDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE1D;
+                viewDesc.Texture1D.MipSlice = mipLevel;
+            }
+        }
+        break;
+
+        case D3D12_RESOURCE_DIMENSION_TEXTURE2D:
+        {
+            if (resourceDesc.DepthOrArraySize > 1)
+            {
+                if (resourceDesc.SampleDesc.Count > 1)
                 {
-                    viewDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE1DARRAY;
-                    viewDesc.Texture1DArray.MipSlice = mipLevel;
-                    viewDesc.Texture1DArray.FirstArraySlice = slice;
-                    viewDesc.Texture1DArray.ArraySize = 1;
+                    viewDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DMSARRAY;
+                    viewDesc.Texture2DMSArray.FirstArraySlice = slice;
+                    viewDesc.Texture2DMSArray.ArraySize = 1;
                 }
                 else
                 {
-                    viewDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE1D;
-                    viewDesc.Texture1D.MipSlice = mipLevel;
+                    viewDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
+                    viewDesc.Texture2DArray.MipSlice = mipLevel;
+                    viewDesc.Texture2DArray.FirstArraySlice = slice;
+                    viewDesc.Texture2DArray.ArraySize = 1;
                 }
             }
-            break;
-
-            case D3D12_RESOURCE_DIMENSION_TEXTURE2D:
+            else
             {
-                if (resourceDesc.DepthOrArraySize > 1)
+                if (resourceDesc.SampleDesc.Count > 1)
                 {
-                    if (resourceDesc.SampleDesc.Count > 1)
-                    {
-                        viewDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DMSARRAY;
-                        viewDesc.Texture2DMSArray.FirstArraySlice = slice;
-                        viewDesc.Texture2DMSArray.ArraySize = 1;
-                    }
-                    else
-                    {
-                        viewDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
-                        viewDesc.Texture2DArray.MipSlice = mipLevel;
-                        viewDesc.Texture2DArray.FirstArraySlice = slice;
-                        viewDesc.Texture2DArray.ArraySize = 1;
-                    }
+                    viewDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DMS;
                 }
                 else
                 {
-                    if (resourceDesc.SampleDesc.Count > 1)
-                    {
-                        viewDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DMS;
-                    }
-                    else
-                    {
-                        viewDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
-                        viewDesc.Texture2D.MipSlice = mipLevel;
-                    }
+                    viewDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+                    viewDesc.Texture2D.MipSlice = mipLevel;
                 }
             }
-            break;
+        }
+        break;
 
-            case D3D12_RESOURCE_DIMENSION_TEXTURE3D:
-                vgpuLogError("D3D12: Cannot create 3D texture DSV");
-                return {};
+        case D3D12_RESOURCE_DIMENSION_TEXTURE3D:
+            vgpuLogError("D3D12: Cannot create 3D texture DSV");
+            return {};
 
-            default:
-                vgpuLogError("D3D12: Invalid texture dimension");
-                return {};
+        default:
+            vgpuLogError("D3D12: Invalid texture dimension");
+            return {};
         }
 
         D3D12_CPU_DESCRIPTOR_HANDLE newView = renderer->dsvAllocator.Allocate();
@@ -1121,7 +1147,7 @@ static void d3d12_updateSwapChain(D3D12_Renderer* renderer, D3D12_SwapChain* swa
         texture->state = D3D12_RESOURCE_STATE_PRESENT;
         texture->width = swapChainDesc.Width;
         texture->height = swapChainDesc.Height;
-        texture->dxgiFormat = ToDXGIFormat(swapChain->textureFormat);
+        texture->dxgiFormat = ToDXGIFormat(swapChain->format);
         hr = swapChain->handle->GetBuffer(i, IID_PPV_ARGS(&texture->handle));
         VGPU_ASSERT(SUCCEEDED(hr));
 
@@ -1207,56 +1233,56 @@ static VGPUBool32 d3d12_queryFeature(VGFXRenderer* driverData, VGPUFeature featu
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
     switch (feature)
     {
-        case VGPUFeature_TextureCompressionBC:
-        case VGPUFeature_ShaderFloat16:
-        case VGPUFeature_PipelineStatisticsQuery:
-        case VGPUFeature_TimestampQuery:
-        case VGPUFeature_DepthClamping:
-        case VGPUFeature_Depth24UNormStencil8:
-        case VGPUFeature_Depth32FloatStencil8:
-        case VGPUFeature_IndependentBlend:
-        case VGPUFeature_TextureCubeArray:
-        case VGPUFeature_Tessellation:
-        case VGPUFeature_DescriptorIndexing:
-        case VGPUFeature_ConditionalRendering:
-        case VGPUFeature_DrawIndirectFirstInstance:
+    case VGPUFeature_TextureCompressionBC:
+    case VGPUFeature_ShaderFloat16:
+    case VGPUFeature_PipelineStatisticsQuery:
+    case VGPUFeature_TimestampQuery:
+    case VGPUFeature_DepthClamping:
+    case VGPUFeature_Depth24UNormStencil8:
+    case VGPUFeature_Depth32FloatStencil8:
+    case VGPUFeature_IndependentBlend:
+    case VGPUFeature_TextureCubeArray:
+    case VGPUFeature_Tessellation:
+    case VGPUFeature_DescriptorIndexing:
+    case VGPUFeature_ConditionalRendering:
+    case VGPUFeature_DrawIndirectFirstInstance:
+        return true;
+
+    case VGPUFeature_TextureCompressionETC2:
+    case VGPUFeature_TextureCompressionASTC:
+        return false;
+
+    case VGPUFeature_ShaderOutputViewportIndex:
+        return renderer->d3dFeatures.VPAndRTArrayIndexFromAnyShaderFeedingRasterizerSupportedWithoutGSEmulation() == TRUE;
+
+        // https://docs.microsoft.com/en-us/windows/win32/direct3d11/tiled-resources-texture-sampling-features
+    case VGPUFeature_SamplerMinMax:
+        return renderer->d3dFeatures.TiledResourcesTier() >= D3D12_TILED_RESOURCES_TIER_2;
+
+    case VGPUFeature_MeshShader:
+        if (renderer->d3dFeatures.MeshShaderTier() >= D3D12_MESH_SHADER_TIER_1)
+        {
             return true;
+        }
 
-        case VGPUFeature_TextureCompressionETC2:
-        case VGPUFeature_TextureCompressionASTC:
-            return false;
+        return false;
 
-        case VGPUFeature_ShaderOutputViewportIndex:
-            return renderer->d3dFeatures.VPAndRTArrayIndexFromAnyShaderFeedingRasterizerSupportedWithoutGSEmulation() == TRUE;
-
-            // https://docs.microsoft.com/en-us/windows/win32/direct3d11/tiled-resources-texture-sampling-features
-        case VGPUFeature_SamplerMinMax:
-            return renderer->d3dFeatures.TiledResourcesTier() >= D3D12_TILED_RESOURCES_TIER_2;
-
-        case VGPUFeature_MeshShader:
-            if (renderer->d3dFeatures.MeshShaderTier() >= D3D12_MESH_SHADER_TIER_1)
+    case VGPUFeature_RayTracing:
+        if (renderer->d3dFeatures.RaytracingTier() >= D3D12_RAYTRACING_TIER_1_1)
+        {
+            if (infoSize == sizeof(uint32_t))
             {
-                return true;
+                auto* pShaderGroupHandleSize = reinterpret_cast<uint32_t*>(pInfo);
+                *pShaderGroupHandleSize = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
             }
 
-            return false;
-
-        case VGPUFeature_RayTracing:
-            if (renderer->d3dFeatures.RaytracingTier() >= D3D12_RAYTRACING_TIER_1_1)
-            {
-                if (infoSize == sizeof(uint32_t))
-                {
-                    auto* pShaderGroupHandleSize = reinterpret_cast<uint32_t*>(pInfo);
-                    *pShaderGroupHandleSize = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
-                }
-
-                return true;
-            }
-            return false;
+            return true;
+        }
+        return false;
 
 
-        default:
-            return false;
+    default:
+        return false;
     }
 }
 
@@ -1295,25 +1321,25 @@ static void d3d12_getLimits(VGFXRenderer* driverData, VGPULimits* limits)
     uint32_t maxSamplersPerStage;
     switch (featureData.ResourceBindingTier)
     {
-        case D3D12_RESOURCE_BINDING_TIER_1:
-            maxCBVsPerStage = 14;
-            maxSRVsPerStage = 128;
-            maxUAVsAllStages = 64;
-            maxSamplersPerStage = 16;
-            break;
-        case D3D12_RESOURCE_BINDING_TIER_2:
-            maxCBVsPerStage = 14;
-            maxSRVsPerStage = 1'000'000;
-            maxUAVsAllStages = 64;
-            maxSamplersPerStage = 2048;
-            break;
-        case D3D12_RESOURCE_BINDING_TIER_3:
-        default:
-            maxCBVsPerStage = 1'100'000;
-            maxSRVsPerStage = 1'100'000;
-            maxUAVsAllStages = 1'100'000;
-            maxSamplersPerStage = 2048;
-            break;
+    case D3D12_RESOURCE_BINDING_TIER_1:
+        maxCBVsPerStage = 14;
+        maxSRVsPerStage = 128;
+        maxUAVsAllStages = 64;
+        maxSamplersPerStage = 16;
+        break;
+    case D3D12_RESOURCE_BINDING_TIER_2:
+        maxCBVsPerStage = 14;
+        maxSRVsPerStage = 1'000'000;
+        maxUAVsAllStages = 64;
+        maxSamplersPerStage = 2048;
+        break;
+    case D3D12_RESOURCE_BINDING_TIER_3:
+    default:
+        maxCBVsPerStage = 1'100'000;
+        maxSRVsPerStage = 1'100'000;
+        maxUAVsAllStages = 1'100'000;
+        maxSamplersPerStage = 2048;
+        break;
     }
 
     uint32_t maxUAVsPerStage = maxUAVsAllStages / 2;
@@ -1690,25 +1716,25 @@ static VGPUSampler d3d12_createSampler(VGFXRenderer* driverData, const VGPUSampl
     samplerDesc.ComparisonFunc = ToD3D12ComparisonFunc(desc->compareFunction);
     switch (desc->borderColor)
     {
-        case VGPUSamplerBorderColor_OpaqueBlack:
-            samplerDesc.BorderColor[0] = 0.0f;
-            samplerDesc.BorderColor[1] = 0.0f;
-            samplerDesc.BorderColor[2] = 0.0f;
-            samplerDesc.BorderColor[3] = 1.0f;
-            break;
+    case VGPUSamplerBorderColor_OpaqueBlack:
+        samplerDesc.BorderColor[0] = 0.0f;
+        samplerDesc.BorderColor[1] = 0.0f;
+        samplerDesc.BorderColor[2] = 0.0f;
+        samplerDesc.BorderColor[3] = 1.0f;
+        break;
 
-        case VGPUSamplerBorderColor_OpaqueWhite:
-            samplerDesc.BorderColor[0] = 1.0f;
-            samplerDesc.BorderColor[1] = 1.0f;
-            samplerDesc.BorderColor[2] = 1.0f;
-            samplerDesc.BorderColor[3] = 1.0f;
-            break;
-        default:
-            samplerDesc.BorderColor[0] = 0.0f;
-            samplerDesc.BorderColor[1] = 0.0f;
-            samplerDesc.BorderColor[2] = 0.0f;
-            samplerDesc.BorderColor[3] = 0.0f;
-            break;
+    case VGPUSamplerBorderColor_OpaqueWhite:
+        samplerDesc.BorderColor[0] = 1.0f;
+        samplerDesc.BorderColor[1] = 1.0f;
+        samplerDesc.BorderColor[2] = 1.0f;
+        samplerDesc.BorderColor[3] = 1.0f;
+        break;
+    default:
+        samplerDesc.BorderColor[0] = 0.0f;
+        samplerDesc.BorderColor[1] = 0.0f;
+        samplerDesc.BorderColor[2] = 0.0f;
+        samplerDesc.BorderColor[3] = 0.0f;
+        break;
     }
 
     samplerDesc.MinLOD = desc->lodMinClamp;
@@ -1767,15 +1793,62 @@ static VGPUPipeline d3d12_createRenderPipeline(VGFXRenderer* driverData, const V
     d3dDesc.PS = { fragmentShader->byteCode, fragmentShader->byteCodeSize };
     d3dDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
     d3dDesc.SampleMask = UINT_MAX;
-    d3dDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);;
-    d3dDesc.DepthStencilState.DepthEnable = FALSE;
-    d3dDesc.DepthStencilState.StencilEnable = FALSE;
+    d3dDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+
+    // DepthStencilState
+    const D3D12_DEPTH_STENCILOP_DESC defaultStencilOp = { D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, D3D12_COMPARISON_FUNC_ALWAYS };
+    if (desc->depthStencilFormat != VGPUTextureFormat_Undefined)
+    {
+        // Depth
+        d3dDesc.DepthStencilState.DepthEnable =
+            desc->depthStencilState.depthCompare != VGPUCompareFunction_Always || desc->depthStencilState.depthWriteEnabled;
+        d3dDesc.DepthStencilState.DepthWriteMask = desc->depthStencilState.depthWriteEnabled ? D3D12_DEPTH_WRITE_MASK_ALL : D3D12_DEPTH_WRITE_MASK_ZERO;
+        d3dDesc.DepthStencilState.DepthFunc = ToD3D12ComparisonFunc(desc->depthStencilState.depthCompare);
+    }
+    else
+    {
+        d3dDesc.DepthStencilState.DepthEnable = FALSE;
+        d3dDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+        d3dDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+        d3dDesc.DepthStencilState.StencilEnable = FALSE;
+        d3dDesc.DepthStencilState.StencilReadMask = D3D12_DEFAULT_STENCIL_READ_MASK;
+        d3dDesc.DepthStencilState.StencilWriteMask = D3D12_DEFAULT_STENCIL_WRITE_MASK;
+        d3dDesc.DepthStencilState.FrontFace = defaultStencilOp;
+        d3dDesc.DepthStencilState.BackFace = defaultStencilOp;
+        //d3dDesc.DepthStencilState.DepthBoundsTestEnable = FALSE;
+    }
     d3dDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
     d3dDesc.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
-    d3dDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-    d3dDesc.NumRenderTargets = 1;
-    d3dDesc.RTVFormats[0] = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
-    d3dDesc.SampleDesc.Count = 1;
+
+    switch (desc->primitiveTopology)
+    {
+    case VGPUPrimitiveTopology_PointList:
+        d3dDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT;
+        break;
+    case VGPUPrimitiveTopology_LineList:
+    case VGPUPrimitiveTopology_LineStrip:
+        d3dDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE;
+        break;
+    case VGPUPrimitiveTopology_TriangleList:
+    case VGPUPrimitiveTopology_TriangleStrip:
+        d3dDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+        break;
+    case VGPUPrimitiveTopology_PatchList:
+        d3dDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_PATCH;
+        break;
+    }
+
+    // RTV and DSV format
+    for (uint32_t i = 0; i < VGPU_MAX_COLOR_ATTACHMENTS; ++i)
+    {
+        if (desc->colorFormats[i] == VGPUTextureFormat_Undefined)
+            break;
+
+        d3dDesc.RTVFormats[d3dDesc.NumRenderTargets] = ToDXGIFormat(desc->colorFormats[i]);
+        d3dDesc.NumRenderTargets++;
+    }
+    d3dDesc.DSVFormat = ToDXGIFormat(desc->depthStencilFormat);
+    d3dDesc.SampleDesc.Count = desc->sampleCount;
 
     ID3D12PipelineState* pipelineState = nullptr;
     if (FAILED(renderer->device->CreateGraphicsPipelineState(&d3dDesc, IID_PPV_ARGS(&pipelineState))))
@@ -1787,7 +1860,7 @@ static VGPUPipeline d3d12_createRenderPipeline(VGFXRenderer* driverData, const V
 
     D3D12Pipeline* pipeline = new D3D12Pipeline();
     pipeline->handle = pipelineState;
-    pipeline->primitiveTopology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+    pipeline->primitiveTopology = ToD3DPrimitiveTopology(desc->primitiveTopology, desc->patchControlPoints);
     return (VGPUPipeline)pipeline;
 }
 
@@ -1930,13 +2003,12 @@ static VGPUSwapChain d3d12_createSwapChain(VGFXRenderer* driverData, void* windo
     D3D12_SwapChain* swapChain = new D3D12_SwapChain();
     swapChain->window = window;
     swapChain->handle = handle;
-    swapChain->format = ToDXGISwapChainFormat(desc->format);
-    swapChain->textureFormat = desc->format;
+    swapChain->format = desc->format;
     swapChain->backBufferCount = swapChainDesc.BufferCount;
     swapChain->syncInterval = PresentModeToSwapInterval(desc->presentMode);
     d3d12_updateSwapChain(renderer, swapChain);
     return (VGPUSwapChain)swapChain;
-}
+    }
 
 static void d3d12_destroySwapChain(VGFXRenderer* driverData, VGPUSwapChain swapChain)
 {
@@ -2189,35 +2261,35 @@ static void d3d12_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGPUR
 
         switch (attachment->loadOp)
         {
-            default:
-            case VGPULoadOp_Load:
-                commandBuffer->RTVs[numRTVS].BeginningAccess.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_PRESERVE;
-                break;
+        default:
+        case VGPULoadOp_Load:
+            commandBuffer->RTVs[numRTVS].BeginningAccess.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_PRESERVE;
+            break;
 
-            case VGPULoadOp_Clear:
-                commandBuffer->RTVs[numRTVS].BeginningAccess.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR;
-                commandBuffer->RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Format = texture->dxgiFormat;
-                commandBuffer->RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Color[0] = attachment->clearColor.r;
-                commandBuffer->RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Color[1] = attachment->clearColor.g;
-                commandBuffer->RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Color[2] = attachment->clearColor.b;
-                commandBuffer->RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Color[3] = attachment->clearColor.a;
-                break;
+        case VGPULoadOp_Clear:
+            commandBuffer->RTVs[numRTVS].BeginningAccess.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR;
+            commandBuffer->RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Format = texture->dxgiFormat;
+            commandBuffer->RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Color[0] = attachment->clearColor.r;
+            commandBuffer->RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Color[1] = attachment->clearColor.g;
+            commandBuffer->RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Color[2] = attachment->clearColor.b;
+            commandBuffer->RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Color[3] = attachment->clearColor.a;
+            break;
 
-            case VGPULoadOp_Discard:
-                commandBuffer->RTVs[numRTVS].BeginningAccess.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_DISCARD;
-                break;
+        case VGPULoadOp_DontCare:
+            commandBuffer->RTVs[numRTVS].BeginningAccess.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_DISCARD;
+            break;
         }
 
         switch (attachment->storeOp)
         {
-            default:
-            case VGPUStoreOp_Store:
-                commandBuffer->RTVs[numRTVS].EndingAccess.Type = D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_PRESERVE;
-                break;
+        default:
+        case VGPUStoreOp_Store:
+            commandBuffer->RTVs[numRTVS].EndingAccess.Type = D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_PRESERVE;
+            break;
 
-            case VGPUStoreOp_Discard:
-                commandBuffer->RTVs[numRTVS].EndingAccess.Type = D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_DISCARD;
-                break;
+        case VGPUStoreOp_DontCare:
+            commandBuffer->RTVs[numRTVS].EndingAccess.Type = D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_DISCARD;
+            break;
         }
 
         width = _VGPU_MIN(width, _VGPU_MAX(1U, texture->width >> level));
@@ -2239,60 +2311,60 @@ static void d3d12_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGPUR
 
         switch (attachment->depthLoadOp)
         {
-            default:
-            case VGPULoadOp_Load:
-                DSV.DepthBeginningAccess.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_PRESERVE;
-                break;
+        default:
+        case VGPULoadOp_Load:
+            DSV.DepthBeginningAccess.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_PRESERVE;
+            break;
 
-            case VGPULoadOp_Clear:
-                DSV.DepthBeginningAccess.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR;
-                DSV.DepthBeginningAccess.Clear.ClearValue.DepthStencil.Depth = attachment->clearDepth;
-                break;
+        case VGPULoadOp_Clear:
+            DSV.DepthBeginningAccess.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR;
+            DSV.DepthBeginningAccess.Clear.ClearValue.DepthStencil.Depth = attachment->clearDepth;
+            break;
 
-            case VGPULoadOp_Discard:
-                DSV.DepthBeginningAccess.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_DISCARD;
-                break;
+        case VGPULoadOp_DontCare:
+            DSV.DepthBeginningAccess.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_DISCARD;
+            break;
         }
 
         switch (attachment->depthStoreOp)
         {
-            default:
-            case VGPUStoreOp_Store:
-                DSV.DepthEndingAccess.Type = D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_PRESERVE;
-                break;
+        default:
+        case VGPUStoreOp_Store:
+            DSV.DepthEndingAccess.Type = D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_PRESERVE;
+            break;
 
-            case VGPUStoreOp_Discard:
-                DSV.DepthEndingAccess.Type = D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_DISCARD;
-                break;
+        case VGPUStoreOp_DontCare:
+            DSV.DepthEndingAccess.Type = D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_DISCARD;
+            break;
         }
 
         switch (attachment->stencilLoadOp)
         {
-            default:
-            case VGPULoadOp_Load:
-                DSV.StencilBeginningAccess.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_PRESERVE;
-                break;
+        default:
+        case VGPULoadOp_Load:
+            DSV.StencilBeginningAccess.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_PRESERVE;
+            break;
 
-            case VGPULoadOp_Clear:
-                DSV.StencilBeginningAccess.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR;
-                DSV.StencilBeginningAccess.Clear.ClearValue.DepthStencil.Stencil = attachment->clearStencil;
-                break;
+        case VGPULoadOp_Clear:
+            DSV.StencilBeginningAccess.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR;
+            DSV.StencilBeginningAccess.Clear.ClearValue.DepthStencil.Stencil = attachment->clearStencil;
+            break;
 
-            case VGPULoadOp_Discard:
-                DSV.StencilBeginningAccess.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_DISCARD;
-                break;
+        case VGPULoadOp_DontCare:
+            DSV.StencilBeginningAccess.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_DISCARD;
+            break;
         }
 
         switch (attachment->stencilStoreOp)
         {
-            default:
-            case VGPUStoreOp_Store:
-                DSV.DepthEndingAccess.Type = D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_PRESERVE;
-                break;
+        default:
+        case VGPUStoreOp_Store:
+            DSV.DepthEndingAccess.Type = D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_PRESERVE;
+            break;
 
-            case VGPUStoreOp_Discard:
-                DSV.DepthEndingAccess.Type = D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_DISCARD;
-                break;
+        case VGPUStoreOp_DontCare:
+            DSV.DepthEndingAccess.Type = D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_DISCARD;
+            break;
         }
 
         width = _VGPU_MIN(width, _VGPU_MAX(1U, texture->width >> level));
@@ -2372,7 +2444,7 @@ static void d3d12_setVertexBuffer(VGPUCommandBufferImpl* driverData, uint32_t in
     commandBuffer->commandList->IASetVertexBuffers(index, 1u, &commandBuffer->vboViews[index]);
 }
 
-static void d3d12_setIndexBuffer(VGPUCommandBufferImpl* driverData, VGPUBuffer buffer, uint64_t offset, VGPUIndexType indexType)
+static void d3d12_setIndexBuffer(VGPUCommandBufferImpl* driverData, VGPUBuffer buffer, uint64_t offset, VGPUIndexFormat format)
 {
     D3D12CommandBuffer* commandBuffer = (D3D12CommandBuffer*)driverData;
     D3D12Resource* d3d12Buffer = (D3D12Resource*)buffer;
@@ -2380,7 +2452,7 @@ static void d3d12_setIndexBuffer(VGPUCommandBufferImpl* driverData, VGPUBuffer b
     D3D12_INDEX_BUFFER_VIEW view;
     view.BufferLocation = d3d12Buffer->gpuAddress + (D3D12_GPU_VIRTUAL_ADDRESS)offset;
     view.SizeInBytes = (UINT)(d3d12Buffer->size - offset);
-    view.Format = (indexType == VGPUIndexType_UInt16 ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT);
+    view.Format = (format == VGPUIndexFormat_Uint16 ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT);
     commandBuffer->commandList->IASetIndexBuffer(&view);
 }
 
@@ -2861,8 +2933,8 @@ static VGPUDevice d3d12_createDevice(const VGPUDeviceDesc* info)
                 infoQueue->PushEmptyStorageFilter();
 
                 infoQueue->AddStorageFilterEntries(&filter);
+                }
             }
-        }
 
         // Create allocator
         D3D12MA::ALLOCATOR_DESC allocatorDesc = {};
@@ -2912,7 +2984,7 @@ static VGPUDevice d3d12_createDevice(const VGPUDeviceDesc* info)
 
         vgpuLogInfo("VGPU Driver: D3D12");
         vgpuLogInfo("D3D12 Adapter: %S", adapterDesc.Description);
-    }
+        }
 
     // Create command queues
     {
@@ -3036,7 +3108,7 @@ static VGPUDevice d3d12_createDevice(const VGPUDeviceDesc* info)
     ASSIGN_DRIVER(d3d12);
     device->driverData = (VGFXRenderer*)renderer;
     return device;
-}
+    }
 
 VGFXDriver D3D12_Driver = {
     VGPUBackendType_D3D12,

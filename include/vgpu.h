@@ -34,8 +34,8 @@
 #include <stdint.h>
 
 /* Version API */
-#define VGPU_VERSION_MAJOR  0
-#define VGPU_VERSION_MINOR	1
+#define VGPU_VERSION_MAJOR  1
+#define VGPU_VERSION_MINOR	0
 #define VGPU_VERSION_PATCH	0
 
 enum {
@@ -335,24 +335,24 @@ typedef enum VGPUFeature {
 typedef enum VGPULoadOp {
     VGPULoadOp_Load = 0,
     VGPULoadOp_Clear = 1,
-    VGPULoadOp_Discard = 2,
+    VGPULoadOp_DontCare = 2,
 
     _VGPULoadOp_Force32 = 0x7FFFFFFF
 } VGPULoadOp;
 
 typedef enum VGPUStoreOp {
     VGPUStoreOp_Store = 0,
-    VGPUStoreOp_Discard = 1,
+    VGPUStoreOp_DontCare = 1,
 
     _VGPUStoreOp_Force32 = 0x7FFFFFFF
 } VGPUStoreOp;
 
-typedef enum VGPUIndexType {
-    VGPUIndexType_UInt16 = 0,
-    VGPUIndexType_UInt32 = 1,
+typedef enum VGPUIndexFormat {
+    VGPUIndexFormat_Uint16 = 0,
+    VGPUIndexFormat_Uint32 = 1,
 
-    _VGPUIndexType_Force32 = 0x7FFFFFFF
-} VGPUIndexType;
+    _VGPUIndexFormat_Force32 = 0x7FFFFFFF
+} VGPUIndexFormat;
 
 typedef enum VGPUCompareFunction 
 {
@@ -402,6 +402,17 @@ typedef enum VGPUSamplerBorderColor
 
     _VGPUSamplerBorderColor_Force32 = 0x7FFFFFFF
 } VGPUSamplerBorderColor;
+
+typedef enum VGPUPrimitiveTopology {
+    VGPUPrimitiveTopology_PointList = 0,
+    VGPUPrimitiveTopology_LineList = 1,
+    VGPUPrimitiveTopology_LineStrip = 2,
+    VGPUPrimitiveTopology_TriangleList = 3,
+    VGPUPrimitiveTopology_TriangleStrip = 4,
+    VGPUPrimitiveTopology_PatchList = 5,
+
+    _VGPUPrimitiveTopology_Force32 = 0x7FFFFFFF
+} VGPUPrimitiveTopology;
 
 typedef struct VGPUColor {
     float r;
@@ -526,15 +537,35 @@ typedef struct VGPUSamplerDesc {
     VGPUSamplerBorderColor  borderColor;
 } VGPUSamplerDesc;
 
+typedef struct VGPUDepthStencilState
+{
+    VGPUBool32 depthWriteEnabled;
+    VGPUCompareFunction depthCompare;
+    uint32_t stencilReadMask;
+    uint32_t stencilWriteMask;
+    //VGPUStencilState frontFace{};
+    //VGPUStencilState backFace{};
+} VGPUDepthStencilState;
+
 typedef struct VGPURenderPipelineDesc {
     const char* label;
     VGPUShaderModule vertex;
     VGPUShaderModule fragment;
+
+    VGPUDepthStencilState depthStencilState;
+
+    VGPUPrimitiveTopology primitiveTopology;
+    uint32_t patchControlPoints;
+
+    VGPUTextureFormat colorFormats[VGPU_MAX_COLOR_ATTACHMENTS];
+    VGPUTextureFormat depthStencilFormat;
+    uint32_t sampleCount;
 } VGPURenderPipelineDesc;
 
 typedef struct VGPUComputePipelineDesc {
     const char* label;
     VGPUShaderModule shader;
+    
 } VGPUComputePipelineDesc;
 
 typedef struct VGPURayTracingPipelineDesc {
@@ -661,7 +692,7 @@ VGPU_API void vgpuSetViewports(VGPUCommandBuffer commandBuffer, uint32_t count, 
 VGPU_API void vgpuSetScissorRect(VGPUCommandBuffer commandBuffer, const VGPURect* rect);
 VGPU_API void vgpuSetScissorRects(VGPUCommandBuffer commandBuffer, uint32_t count, const VGPURect* rects);
 VGPU_API void vgpuSetVertexBuffer(VGPUCommandBuffer commandBuffer, uint32_t index, VGPUBuffer buffer, uint64_t offset);
-VGPU_API void vgpuSetIndexBuffer(VGPUCommandBuffer commandBuffer, VGPUBuffer buffer, uint64_t offset, VGPUIndexType indexType);
+VGPU_API void vgpuSetIndexBuffer(VGPUCommandBuffer commandBuffer, VGPUBuffer buffer, uint64_t offset, VGPUIndexFormat format);
 
 VGPU_API void vgpuDraw(VGPUCommandBuffer commandBuffer, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t baseInstance);
 
