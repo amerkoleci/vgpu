@@ -11,10 +11,6 @@ VGPU_DISABLE_WARNINGS()
 #include "vk_mem_alloc.h"
 #include <spirv_reflect.h>
 VGPU_ENABLE_WARNINGS()
-#include <vector>
-#include <deque>
-#include <mutex>
-#include <unordered_map>
 
 #if defined(VK_USE_PLATFORM_XLIB_KHR) || defined(VK_USE_PLATFORM_XCB_KHR)
 #include <dlfcn.h>
@@ -83,7 +79,7 @@ namespace
         // Log debug messge
         if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
         {
-            vgpuLogWarn("Vulkan - %s: %s", messageTypeStr, pCallbackData->pMessage);
+            vgpu_log_warn("Vulkan - %s: %s", messageTypeStr, pCallbackData->pMessage);
         }
         else if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
         {
@@ -109,7 +105,7 @@ namespace
 
             if (!found)
             {
-                vgpuLogWarn("Validation Layer '%s' not found", layer);
+                vgpu_log_warn("Validation Layer '%s' not found", layer);
                 return false;
             }
         }
@@ -147,7 +143,7 @@ namespace
                 return validation_layers;
             }
 
-            vgpuLogWarn("Couldn't enable validation layers (see log for error) - falling back");
+            vgpu_log_warn("Couldn't enable validation layers (see log for error) - falling back");
         }
 
         // Else return nothing
@@ -548,19 +544,19 @@ namespace
         }
     }
 
-    static_assert(sizeof(VGPUViewport) == sizeof(VkViewport), "Viewport mismatch");
-    static_assert(offsetof(VGPUViewport, x) == offsetof(VkViewport, x), "Layout mismatch");
-    static_assert(offsetof(VGPUViewport, y) == offsetof(VkViewport, y), "Layout mismatch");
-    static_assert(offsetof(VGPUViewport, width) == offsetof(VkViewport, width), "Layout mismatch");
-    static_assert(offsetof(VGPUViewport, height) == offsetof(VkViewport, height), "Layout mismatch");
-    static_assert(offsetof(VGPUViewport, minDepth) == offsetof(VkViewport, minDepth), "Layout mismatch");
-    static_assert(offsetof(VGPUViewport, maxDepth) == offsetof(VkViewport, maxDepth), "Layout mismatch");
+    static_assert(sizeof(vgpu_viewport) == sizeof(VkViewport), "Viewport mismatch");
+    static_assert(offsetof(vgpu_viewport, x) == offsetof(VkViewport, x), "Layout mismatch");
+    static_assert(offsetof(vgpu_viewport, y) == offsetof(VkViewport, y), "Layout mismatch");
+    static_assert(offsetof(vgpu_viewport, width) == offsetof(VkViewport, width), "Layout mismatch");
+    static_assert(offsetof(vgpu_viewport, height) == offsetof(VkViewport, height), "Layout mismatch");
+    static_assert(offsetof(vgpu_viewport, min_depth) == offsetof(VkViewport, minDepth), "Layout mismatch");
+    static_assert(offsetof(vgpu_viewport, max_depth) == offsetof(VkViewport, maxDepth), "Layout mismatch");
 
-    static_assert(sizeof(VGPURect) == sizeof(VkRect2D), "RectI mismatch");
-    static_assert(offsetof(VGPURect, x) == offsetof(VkRect2D, offset.x), "Layout mismatch");
-    static_assert(offsetof(VGPURect, y) == offsetof(VkRect2D, offset.y), "Layout mismatch");
-    static_assert(offsetof(VGPURect, width) == offsetof(VkRect2D, extent.width), "Layout mismatch");
-    static_assert(offsetof(VGPURect, height) == offsetof(VkRect2D, extent.height), "Layout mismatch");
+    static_assert(sizeof(vgpu_rect) == sizeof(VkRect2D), "vgpu_rect mismatch");
+    static_assert(offsetof(vgpu_rect, x) == offsetof(VkRect2D, offset.x), "vgpu_rect Layout mismatch");
+    static_assert(offsetof(vgpu_rect, y) == offsetof(VkRect2D, offset.y), "vgpu_rect Layout mismatch");
+    static_assert(offsetof(vgpu_rect, width) == offsetof(VkRect2D, extent.width), "vgpu_rect Layout mismatch");
+    static_assert(offsetof(vgpu_rect, height) == offsetof(VkRect2D, extent.height), "vgpu_rect Layout mismatch");
 }
 
 /// Helper macro to test the result of Vulkan calls which can return an error.
@@ -591,7 +587,7 @@ struct VulkanTexture
     uint32_t width = 0;
     uint32_t height = 0;
     VkFormat format = VK_FORMAT_UNDEFINED;
-    std::unordered_map<size_t, VkImageView> viewCache;
+    UnorderedMap<size_t, VkImageView> viewCache;
 };
 
 struct VulkanSampler
@@ -1342,7 +1338,7 @@ static VGPUBackendType vulkan_getBackendType(void)
     return VGPUBackendType_Vulkan;
 }
 
-static vgpu_bool vulkan_queryFeature(VGFXRenderer* driverData, VGPUFeature feature, void* pInfo, uint32_t infoSize)
+static bool vulkan_queryFeature(VGFXRenderer* driverData, VGPUFeature feature, void* pInfo, uint32_t infoSize)
 {
     (void)pInfo;
     (void)infoSize;
@@ -1506,7 +1502,7 @@ static void vulkan_getLimits(VGFXRenderer* driverData, VGPULimits* limits)
 }
 
 /* Buffer */
-static VGPUBuffer vulkan_createBuffer(VGFXRenderer* driverData, const VGPUBufferDesc* desc, const void* pInitialData)
+static vgpu_buffer* vulkan_createBuffer(VGFXRenderer* driverData, const VGPUBufferDesc* desc, const void* pInitialData)
 {
     VulkanRenderer* renderer = (VulkanRenderer*)driverData;
 
@@ -1527,7 +1523,7 @@ static VGPUBuffer vulkan_createBuffer(VGFXRenderer* driverData, const VGPUBuffer
 
     if (desc->usage & VGPUBufferUsage_Constant)
     {
-        bufferInfo.size = AlignUp(bufferInfo.size, renderer->properties2.properties.limits.minUniformBufferOffsetAlignment);
+        bufferInfo.size = VmaAlignUp(bufferInfo.size, renderer->properties2.properties.limits.minUniformBufferOffsetAlignment);
         bufferInfo.usage |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
     }
 
@@ -1630,10 +1626,10 @@ static VGPUBuffer vulkan_createBuffer(VGFXRenderer* driverData, const VGPUBuffer
         vulkan_SetObjectName(renderer, VK_OBJECT_TYPE_BUFFER, (uint64_t)buffer->handle, desc->label);
     }
 
-    return (VGPUBuffer)buffer;
+    return (vgpu_buffer*)buffer;
 }
 
-static void vulkan_destroyBuffer(VGFXRenderer* driverData, VGPUBuffer resource)
+static void vulkan_destroyBuffer(VGFXRenderer* driverData, vgpu_buffer* resource)
 {
     VulkanRenderer* renderer = (VulkanRenderer*)driverData;
     VulkanBuffer* buffer = (VulkanBuffer*)resource;
@@ -1661,35 +1657,35 @@ static VGPUTexture vulkan_createTexture(VGFXRenderer* driverData, const VGPUText
     imageInfo.pNext = nullptr;
     imageInfo.flags = 0;
     imageInfo.format = ToVkFormat(desc->format);
-    imageInfo.extent.width = desc->width;
+    imageInfo.extent.width = desc->size.width;
     imageInfo.extent.height = 1;
     imageInfo.extent.depth = 1;
 
     if (desc->type == VGPUTexture_Type1D)
     {
         imageInfo.imageType = VK_IMAGE_TYPE_1D;
-        imageInfo.arrayLayers = desc->depthOrArraySize;
+        imageInfo.arrayLayers = desc->size.depthOrArrayLayers;
     }
     else if (desc->type == VGPUTexture_Type3D)
     {
         imageInfo.imageType = VK_IMAGE_TYPE_3D;
         imageInfo.flags |= VK_IMAGE_CREATE_2D_ARRAY_COMPATIBLE_BIT;
-        imageInfo.extent.height = desc->height;
-        imageInfo.extent.depth = desc->depthOrArraySize;
+        imageInfo.extent.height = desc->size.height;
+        imageInfo.extent.depth = desc->size.depthOrArrayLayers;
         imageInfo.arrayLayers = 1;
         imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
     }
     else
     {
         imageInfo.imageType = VK_IMAGE_TYPE_2D;
-        imageInfo.extent.height = desc->height;
+        imageInfo.extent.height = desc->size.height;
         imageInfo.extent.depth = 1;
-        imageInfo.arrayLayers = desc->depthOrArraySize;
+        imageInfo.arrayLayers = desc->size.depthOrArrayLayers;
         imageInfo.samples = (VkSampleCountFlagBits)desc->sampleCount;
 
         if (desc->type == VGPUTexture_Type2D &&
-            desc->width == desc->height &&
-            desc->depthOrArraySize >= 6)
+            desc->size.width == desc->size.height &&
+            desc->size.depthOrArrayLayers >= 6)
         {
             imageInfo.flags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
         }
@@ -1757,6 +1753,7 @@ static VGPUTexture vulkan_createTexture(VGFXRenderer* driverData, const VGPUText
     texture->width = imageInfo.extent.width;
     texture->height = imageInfo.extent.height;
     texture->format = imageInfo.format;
+    texture->viewCache.clear();
 
     VkResult result = vmaCreateImage(renderer->allocator,
         &imageInfo, &memoryInfo,
@@ -2257,13 +2254,13 @@ static void vulkan_dispatch(VGPUCommandBufferImpl* driverData, uint32_t groupCou
     vkCmdDispatch(commandBuffer->handle, groupCountX, groupCountY, groupCountZ);
 }
 
-static void vulkan_dispatchIndirect(VGPUCommandBufferImpl* driverData, VGPUBuffer indirectBuffer, uint32_t indirectBufferOffset)
+static void vulkan_dispatchIndirect(VGPUCommandBufferImpl* driverData, vgpu_buffer* buffer, uint64_t offset)
 {
     VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
     vulkan_prepareDispatch(commandBuffer);
 
-    VulkanBuffer* vulkanBuffer = (VulkanBuffer*)indirectBuffer;
-    vkCmdDispatchIndirect(commandBuffer->handle, vulkanBuffer->handle, indirectBufferOffset);
+    VulkanBuffer* vulkanBuffer = (VulkanBuffer*)buffer;
+    vkCmdDispatchIndirect(commandBuffer->handle, vulkanBuffer->handle, offset);
 }
 
 static VGPUTexture vulkan_acquireSwapchainTexture(VGPUCommandBufferImpl* driverData, VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight)
@@ -2516,14 +2513,14 @@ static void vulkan_endRenderPass(VGPUCommandBufferImpl* driverData)
     commandBuffer->insideRenderPass = false;
 }
 
-static void vulkan_setVertexBuffer(VGPUCommandBufferImpl* driverData, uint32_t index, VGPUBuffer buffer, uint64_t offset)
+static void vulkan_setVertexBuffer(VGPUCommandBufferImpl* driverData, uint32_t index, vgpu_buffer* buffer, uint64_t offset)
 {
     VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
     VulkanBuffer* vulkanBuffer = (VulkanBuffer*)buffer;
     vkCmdBindVertexBuffers(commandBuffer->handle, index, 1, &vulkanBuffer->handle, &offset);
 }
 
-static void vulkan_setIndexBuffer(VGPUCommandBufferImpl* driverData, VGPUBuffer buffer, uint64_t offset, VGPUIndexType indexType)
+static void vulkan_setIndexBuffer(VGPUCommandBufferImpl* driverData, vgpu_buffer* buffer, uint64_t offset, VGPUIndexType indexType)
 {
     VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
     VulkanBuffer* vulkanBuffer = (VulkanBuffer*)buffer;
@@ -2536,7 +2533,7 @@ static void vulkan_prepareDraw(VulkanCommandBuffer* commandBuffer)
     VGPU_ASSERT(commandBuffer->insideRenderPass);
 }
 
-static void vulkan_setViewports(VGPUCommandBufferImpl* driverData, const VGPUViewport* viewports, uint32_t count)
+static void vulkan_setViewports(VGPUCommandBufferImpl* driverData, uint32_t count, const vgpu_viewport* viewports)
 {
     VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
 
@@ -2556,12 +2553,24 @@ static void vulkan_setViewports(VGPUCommandBufferImpl* driverData, const VGPUVie
     vkCmdSetViewport(commandBuffer->handle, 0, count, vkViewports);
 }
 
-static void vulkan_setScissorRects(VGPUCommandBufferImpl* driverData, const VGPURect* scissorRects, uint32_t count)
+static void vulkan_set_scissor_rect(VGPUCommandBufferImpl* driverData, const vgpu_rect* rect)
+{
+    VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
+    VkRect2D vk_rect = {};
+    vk_rect.offset.x = rect->x;
+    vk_rect.offset.y = rect->y;
+    vk_rect.extent.width = (uint32_t)rect->width;
+    vk_rect.extent.height = (uint32_t)rect->height;
+
+    vkCmdSetScissor(commandBuffer->handle, 0u, 1u, &vk_rect);
+}
+
+static void vulkan_set_scissor_rects(VGPUCommandBufferImpl* driverData, uint32_t count, const vgpu_rect* rects)
 {
     VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
     VGPU_ASSERT(count < commandBuffer->renderer->properties2.properties.limits.maxViewports);
 
-    vkCmdSetScissor(commandBuffer->handle, 0, count, (const VkRect2D*)scissorRects);
+    vkCmdSetScissor(commandBuffer->handle, 0, count, (const VkRect2D*)rects);
 }
 
 static void vulkan_draw(VGPUCommandBufferImpl* driverData, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t baseInstance)
@@ -2601,8 +2610,7 @@ static VGPUCommandBuffer vulkan_beginCommandBuffer(VGFXRenderer* driverData, con
             //binderPools[i].Init(device);
         }
 
-        VGPUCommandBuffer_T* commandBuffer = VGPU_ALLOC(VGPUCommandBuffer_T);
-        memset(commandBuffer, 0, sizeof(VGPUCommandBuffer_T));
+        VGPUCommandBuffer_T* commandBuffer = VGPU_ALLOC_CLEAR(VGPUCommandBuffer_T);
         ASSIGN_COMMAND_BUFFER(vulkan);
         commandBuffer->driverData = (VGPUCommandBufferImpl*)impl;
 
@@ -2770,7 +2778,7 @@ static void vulkan_submit(VGFXRenderer* driverData, VGPUCommandBuffer* commandBu
     renderer->initLocker.unlock();
 }
 
-static vgpu_bool vulkan_isSupported(void)
+static bool vulkan_isSupported(void)
 {
     static bool available_initialized = false;
     static bool available = false;
@@ -3664,8 +3672,7 @@ static VGPUDevice vulkan_createDevice(const VGPUDeviceDesc* info)
     vgpuLogInfo("VGPU Driver: Vulkan");
     vgpuLogInfo("Vulkan Adapter: %s", renderer->properties2.properties.deviceName);
 
-    VGPUDevice_T* device = VGPU_ALLOC(VGPUDevice_T);
-    memset(device, 0, sizeof(VGPUDevice_T));
+    VGPUDevice_T* device = VGPU_ALLOC_CLEAR(VGPUDevice_T);
     ASSIGN_DRIVER(vulkan);
 
     device->driverData = (VGFXRenderer*)renderer;

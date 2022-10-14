@@ -23,7 +23,7 @@
 VGPUDevice device = nullptr;
 VGPUSwapChain swapChain = nullptr;
 VGPUTexture depthStencilTexture = nullptr;
-VGPUBuffer vertexBuffer = nullptr;
+vgpu_buffer* vertex_buffer = nullptr;
 VGPUPipeline renderPipeline = nullptr;
 
 inline void vgpu_log(vgpu_log_level level, const char* message)
@@ -53,7 +53,7 @@ void init_gfx(GLFWwindow* window)
     deviceDesc.validationMode = VGPUValidationMode_Enabled;
 #endif
 
-    if (vgpuIsSupported(VGPUBackendType_Vulkan))
+    if (vgpuIsBackendSupported(VGPUBackendType_Vulkan))
     {
         deviceDesc.preferredBackend = VGPUBackendType_Vulkan;
     }
@@ -105,7 +105,7 @@ void init_gfx(GLFWwindow* window)
     bufferDesc.label = "Vertex Buffer";
     bufferDesc.size = sizeof(vertices);
     bufferDesc.usage = VGPUBufferUsage_Vertex;
-    vertexBuffer = vgpuCreateBuffer(device, &bufferDesc, vertices);
+    vertex_buffer = vgpuCreateBuffer(device, &bufferDesc, vertices);
 
     VGPURenderPipelineDesc renderPipelineDesc{};
     renderPipelineDesc.label = "Triangle";
@@ -200,7 +200,7 @@ int main()
         return EXIT_FAILURE;
     }
 
-    vgpu_set_log_callback(vgpu_log);
+    //vgpu_set_log_callback(vgpu_log);
 
     glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
@@ -215,7 +215,7 @@ int main()
     }
 
     vgpuWaitIdle(device);
-    vgpuDestroyBuffer(device, vertexBuffer);
+    vgpuDestroyBuffer(device, vertex_buffer);
     vgpuDestroyTexture(device, depthStencilTexture);
     vgpuDestroyPipeline(device, renderPipeline);
     vgpuDestroySwapChain(device, swapChain);

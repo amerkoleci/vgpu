@@ -10,10 +10,6 @@
 #include <dxgi1_6.h>
 //#include <windows.ui.xaml.media.dxinterop.h>
 #include <wrl/client.h>
-#include <unordered_map>
-#include <vector>
-#include <deque>
-#include <mutex>
 #include <sstream>
 
 #define D3D12MA_D3D12_HEADERS_ALREADY_INCLUDED
@@ -63,6 +59,17 @@ namespace
 #endif
 #endif
 
+    template <typename T>
+    static bool IsPow2(T x) { return (x & (x - 1)) == 0; }
+
+    // Aligns given value up to nearest multiply of align value. For example: AlignUp(11, 8) = 16.
+    // Use types like UINT, uint64_t as T.
+    template <typename T>
+    static T AlignUp(T val, T alignment)
+    {
+        VGPU_ASSERT(IsPow2(alignment));
+        return (val + alignment - 1) & ~(alignment - 1);
+    }
 
     inline std::string WCharToUTF8(const wchar_t* input)
     {
@@ -106,13 +113,13 @@ namespace
         }
     }
 
-    static_assert(sizeof(VGPUViewport) == sizeof(D3D12_VIEWPORT));
-    static_assert(offsetof(VGPUViewport, x) == offsetof(D3D12_VIEWPORT, TopLeftX));
-    static_assert(offsetof(VGPUViewport, y) == offsetof(D3D12_VIEWPORT, TopLeftY));
-    static_assert(offsetof(VGPUViewport, width) == offsetof(D3D12_VIEWPORT, Width));
-    static_assert(offsetof(VGPUViewport, height) == offsetof(D3D12_VIEWPORT, Height));
-    static_assert(offsetof(VGPUViewport, minDepth) == offsetof(D3D12_VIEWPORT, MinDepth));
-    static_assert(offsetof(VGPUViewport, maxDepth) == offsetof(D3D12_VIEWPORT, MaxDepth));
+    static_assert(sizeof(vgpu_viewport) == sizeof(D3D12_VIEWPORT));
+    static_assert(offsetof(vgpu_viewport, x) == offsetof(D3D12_VIEWPORT, TopLeftX));
+    static_assert(offsetof(vgpu_viewport, y) == offsetof(D3D12_VIEWPORT, TopLeftY));
+    static_assert(offsetof(vgpu_viewport, width) == offsetof(D3D12_VIEWPORT, Width));
+    static_assert(offsetof(vgpu_viewport, height) == offsetof(D3D12_VIEWPORT, Height));
+    static_assert(offsetof(vgpu_viewport, min_depth) == offsetof(D3D12_VIEWPORT, MinDepth));
+    static_assert(offsetof(vgpu_viewport, max_depth) == offsetof(D3D12_VIEWPORT, MaxDepth));
 
     static_assert(sizeof(VGPUDispatchIndirectCommand) == sizeof(D3D12_DISPATCH_ARGUMENTS), "DispatchIndirectCommand mismatch");
     static_assert(offsetof(VGPUDispatchIndirectCommand, x) == offsetof(D3D12_DISPATCH_ARGUMENTS, ThreadGroupCountX), "Layout mismatch");
@@ -1113,7 +1120,7 @@ static VGPUBackendType d3d12_getBackendType(void)
     return VGPUBackendType_D3D12;
 }
 
-static vgpu_bool d3d12_queryFeature(VGFXRenderer* driverData, VGPUFeature feature, void* pInfo, uint32_t infoSize)
+static bool d3d12_queryFeature(VGFXRenderer* driverData, VGPUFeature feature, void* pInfo, uint32_t infoSize)
 {
     (void)pInfo;
     (void)infoSize;
@@ -1270,7 +1277,7 @@ static void d3d12_getLimits(VGFXRenderer* driverData, VGPULimits* limits)
 }
 
 /* Buffer */
-static VGPUBuffer d3d12_createBuffer(VGFXRenderer* driverData, const VGPUBufferDesc* desc, const void* pInitialData)
+static vgpu_buffer* d3d12_createBuffer(VGFXRenderer* driverData, const VGPUBufferDesc* desc, const void* pInitialData)
 {
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
 
@@ -1412,10 +1419,10 @@ static VGPUBuffer d3d12_createBuffer(VGFXRenderer* driverData, const VGPUBufferD
         //buffer->SetBindlessUAV(bindlessUAV);
     }
 
-    return (VGPUBuffer)buffer;
+    return (vgpu_buffer*)buffer;
 }
 
-static void d3d12_destroyBuffer(VGFXRenderer* driverData, VGPUBuffer resource)
+static void d3d12_destroyBuffer(VGFXRenderer* driverData, vgpu_buffer* resource)
 {
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
     D3D12Resource* d3dBuffer = (D3D12Resource*)resource;
@@ -1446,9 +1453,9 @@ static VGPUTexture d3d12_createTexture(VGFXRenderer* driverData, const VGPUTextu
         resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
     }
     resourceDesc.Alignment = 0;
-    resourceDesc.Width = desc->width;
-    resourceDesc.Height = desc->height;
-    resourceDesc.DepthOrArraySize = (UINT16)desc->depthOrArraySize;
+    resourceDesc.Width = desc->size.width;
+    resourceDesc.Height = desc->size.height;
+    resourceDesc.DepthOrArraySize = (UINT16)desc->size.depthOrArrayLayers;
     resourceDesc.MipLevels = (UINT16)desc->mipLevels;
     resourceDesc.Format = ToDXGIFormat(desc->format);
     resourceDesc.SampleDesc.Count = desc->sampleCount;
@@ -1525,10 +1532,10 @@ static VGPUTexture d3d12_createTexture(VGFXRenderer* driverData, const VGPUTextu
     }
 
     // TODO: TextureLayout/State
-    D3D12Resource* texture = new D3D12Resource();
+    D3D12Resource* texture = VGPU_ALLOC_CLEAR(D3D12Resource);
     texture->state = resourceState;
-    texture->width = desc->width;
-    texture->height = desc->height;
+    texture->width = desc->size.width;
+    texture->height = desc->size.height;
     texture->dxgiFormat = resourceDesc.Format;
 
     HRESULT hr = renderer->allocator->CreateResource(
@@ -1571,7 +1578,7 @@ static void d3d12_destroyTexture(VGFXRenderer* driverData, VGPUTexture texture)
         renderer->dsvAllocator.Free(it.second);
     }
     d3dTexture->dsvCache.clear();
-    delete d3dTexture;
+    VGPU_FREE(d3dTexture);
 }
 
 /* Sampler */
@@ -1911,15 +1918,15 @@ static void d3d12_dispatch(VGPUCommandBufferImpl* driverData, uint32_t groupCoun
     commandBuffer->commandList->Dispatch(groupCountX, groupCountY, groupCountZ);
 }
 
-static void d3d12_dispatchIndirect(VGPUCommandBufferImpl* driverData, VGPUBuffer indirectBuffer, uint32_t indirectBufferOffset)
+static void d3d12_dispatchIndirect(VGPUCommandBufferImpl* driverData, vgpu_buffer* buffer, uint64_t offset)
 {
     D3D12CommandBuffer* commandBuffer = (D3D12CommandBuffer*)driverData;
     d3d12_prepareDispatch(commandBuffer);
 
-    D3D12Resource* d3dBuffer = (D3D12Resource*)indirectBuffer;
+    D3D12Resource* d3dBuffer = (D3D12Resource*)buffer;
     commandBuffer->commandList->ExecuteIndirect(commandBuffer->renderer->dispatchIndirectCommandSignature,
         1,
-        d3dBuffer->handle, indirectBufferOffset,
+        d3dBuffer->handle, offset,
         nullptr,
         0);
 }
@@ -2175,15 +2182,28 @@ static void d3d12_endRenderPass(VGPUCommandBufferImpl* driverData)
     commandBuffer->insideRenderPass = false;
 }
 
-static void d3d12_setViewports(VGPUCommandBufferImpl* driverData, const VGPUViewport* viewports, uint32_t count)
+static void d3d12_setViewports(VGPUCommandBufferImpl* driverData, uint32_t count, const vgpu_viewport* viewports)
 {
     VGPU_ASSERT(count < D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE);
 
     D3D12CommandBuffer* commandBuffer = (D3D12CommandBuffer*)driverData;
+
     commandBuffer->commandList->RSSetViewports(count, (const D3D12_VIEWPORT*)viewports);
 }
 
-static void d3d12_setScissorRects(VGPUCommandBufferImpl* driverData, const VGPURect* scissorRects, uint32_t count)
+static void d3d12_set_scissor_rect(VGPUCommandBufferImpl* driverData, const vgpu_rect* rect)
+{
+    D3D12CommandBuffer* commandBuffer = (D3D12CommandBuffer*)driverData;
+
+    D3D12_RECT d3d_rect = {};
+    d3d_rect.left = LONG(rect->x);
+    d3d_rect.top = LONG(rect->y);
+    d3d_rect.right = LONG(rect->x + rect->width);
+    d3d_rect.bottom = LONG(rect->y + rect->height);
+    commandBuffer->commandList->RSSetScissorRects(1u, &d3d_rect);
+}
+
+static void d3d12_set_scissor_rects(VGPUCommandBufferImpl* driverData, uint32_t count, const vgpu_rect* rects)
 {
     VGPU_ASSERT(count < D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE);
 
@@ -2192,15 +2212,15 @@ static void d3d12_setScissorRects(VGPUCommandBufferImpl* driverData, const VGPUR
     D3D12_RECT d3dScissorRects[VGPU_MAX_VIEWPORTS_AND_SCISSORS];
     for (uint32_t i = 0; i < count; i++)
     {
-        d3dScissorRects[i].left = scissorRects[i].x;
-        d3dScissorRects[i].top = scissorRects[i].y;
-        d3dScissorRects[i].right = scissorRects[i].x + scissorRects[i].width;
-        d3dScissorRects[i].bottom = scissorRects[i].y + scissorRects[i].height;
+        d3dScissorRects[i].left = LONG(rects[i].x);
+        d3dScissorRects[i].top = LONG(rects[i].y);
+        d3dScissorRects[i].right = LONG(rects[i].x + rects[i].width);
+        d3dScissorRects[i].bottom = LONG(rects[i].y + rects[i].height);
     }
     commandBuffer->commandList->RSSetScissorRects(count, d3dScissorRects);
 }
 
-static void d3d12_setVertexBuffer(VGPUCommandBufferImpl* driverData, uint32_t index, VGPUBuffer buffer, uint64_t offset)
+static void d3d12_setVertexBuffer(VGPUCommandBufferImpl* driverData, uint32_t index, vgpu_buffer* buffer, uint64_t offset)
 {
     D3D12CommandBuffer* commandBuffer = (D3D12CommandBuffer*)driverData;
     D3D12Resource* d3d12Buffer = (D3D12Resource*)buffer;
@@ -2210,7 +2230,7 @@ static void d3d12_setVertexBuffer(VGPUCommandBufferImpl* driverData, uint32_t in
     commandBuffer->vboViews[index].StrideInBytes = 0;
 }
 
-static void d3d12_setIndexBuffer(VGPUCommandBufferImpl* driverData, VGPUBuffer buffer, uint64_t offset, VGPUIndexType indexType)
+static void d3d12_setIndexBuffer(VGPUCommandBufferImpl* driverData, vgpu_buffer* buffer, uint64_t offset, VGPUIndexType indexType)
 {
     D3D12CommandBuffer* commandBuffer = (D3D12CommandBuffer*)driverData;
     D3D12Resource* d3d12Buffer = (D3D12Resource*)buffer;
@@ -2260,8 +2280,7 @@ static VGPUCommandBuffer d3d12_beginCommandBuffer(VGFXRenderer* driverData, cons
         );
         VGPU_ASSERT(SUCCEEDED(hr));
 
-        VGPUCommandBuffer_T* commandBuffer = VGPU_ALLOC(VGPUCommandBuffer_T);
-        memset(commandBuffer, 0, sizeof(VGPUCommandBuffer_T));
+        VGPUCommandBuffer_T* commandBuffer = VGPU_ALLOC_CLEAR(VGPUCommandBuffer_T);
         ASSIGN_COMMAND_BUFFER(d3d12);
         commandBuffer->driverData = (VGPUCommandBufferImpl*)impl;
 
@@ -2386,7 +2405,7 @@ static void d3d12_submit(VGFXRenderer* driverData, VGPUCommandBuffer* commandBuf
     // Signal
 }
 
-static vgpu_bool d3d12_isSupported(void)
+static bool d3d12_isSupported(void)
 {
     static bool available_initialized = false;
     static bool available = false;
@@ -2806,8 +2825,7 @@ static VGPUDevice d3d12_createDevice(const VGPUDeviceDesc* info)
         }
     }
 
-    VGPUDevice_T* device = VGPU_ALLOC(VGPUDevice_T);
-    memset(device, 0, sizeof(VGPUDevice_T));
+    VGPUDevice_T* device = VGPU_ALLOC_CLEAR(VGPUDevice_T);
     ASSIGN_DRIVER(d3d12);
     device->driverData = (VGFXRenderer*)renderer;
     return device;
