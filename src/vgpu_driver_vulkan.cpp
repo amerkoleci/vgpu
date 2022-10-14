@@ -1342,7 +1342,7 @@ static VGPUBackendType vulkan_getBackendType(void)
     return VGPUBackendType_Vulkan;
 }
 
-static bool vulkan_queryFeature(VGFXRenderer* driverData, VGPUFeature feature, void* pInfo, uint32_t infoSize)
+static vgpu_bool vulkan_queryFeature(VGFXRenderer* driverData, VGPUFeature feature, void* pInfo, uint32_t infoSize)
 {
     (void)pInfo;
     (void)infoSize;
@@ -2601,7 +2601,8 @@ static VGPUCommandBuffer vulkan_beginCommandBuffer(VGFXRenderer* driverData, con
             //binderPools[i].Init(device);
         }
 
-        VGPUCommandBuffer_T* commandBuffer = (VGPUCommandBuffer_T*)VGPU_MALLOC(sizeof(VGPUCommandBuffer_T));
+        VGPUCommandBuffer_T* commandBuffer = VGPU_ALLOC(VGPUCommandBuffer_T);
+        memset(commandBuffer, 0, sizeof(VGPUCommandBuffer_T));
         ASSIGN_COMMAND_BUFFER(vulkan);
         commandBuffer->driverData = (VGPUCommandBufferImpl*)impl;
 
@@ -2769,7 +2770,7 @@ static void vulkan_submit(VGFXRenderer* driverData, VGPUCommandBuffer* commandBu
     renderer->initLocker.unlock();
 }
 
-static bool vulkan_isSupported(void)
+static vgpu_bool vulkan_isSupported(void)
 {
     static bool available_initialized = false;
     static bool available = false;
@@ -3663,7 +3664,8 @@ static VGPUDevice vulkan_createDevice(const VGPUDeviceDesc* info)
     vgpuLogInfo("VGPU Driver: Vulkan");
     vgpuLogInfo("Vulkan Adapter: %s", renderer->properties2.properties.deviceName);
 
-    VGPUDevice_T* device = (VGPUDevice_T*)VGPU_MALLOC(sizeof(VGPUDevice_T));
+    VGPUDevice_T* device = VGPU_ALLOC(VGPUDevice_T);
+    memset(device, 0, sizeof(VGPUDevice_T));
     ASSIGN_DRIVER(vulkan);
 
     device->driverData = (VGFXRenderer*)renderer;

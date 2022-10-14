@@ -1113,7 +1113,7 @@ static VGPUBackendType d3d12_getBackendType(void)
     return VGPUBackendType_D3D12;
 }
 
-static bool d3d12_queryFeature(VGFXRenderer* driverData, VGPUFeature feature, void* pInfo, uint32_t infoSize)
+static vgpu_bool d3d12_queryFeature(VGFXRenderer* driverData, VGPUFeature feature, void* pInfo, uint32_t infoSize)
 {
     (void)pInfo;
     (void)infoSize;
@@ -2260,7 +2260,8 @@ static VGPUCommandBuffer d3d12_beginCommandBuffer(VGFXRenderer* driverData, cons
         );
         VGPU_ASSERT(SUCCEEDED(hr));
 
-        VGPUCommandBuffer_T* commandBuffer = (VGPUCommandBuffer_T*)VGPU_MALLOC(sizeof(VGPUCommandBuffer_T));
+        VGPUCommandBuffer_T* commandBuffer = VGPU_ALLOC(VGPUCommandBuffer_T);
+        memset(commandBuffer, 0, sizeof(VGPUCommandBuffer_T));
         ASSIGN_COMMAND_BUFFER(d3d12);
         commandBuffer->driverData = (VGPUCommandBufferImpl*)impl;
 
@@ -2385,7 +2386,7 @@ static void d3d12_submit(VGFXRenderer* driverData, VGPUCommandBuffer* commandBuf
     // Signal
 }
 
-static bool d3d12_isSupported(void)
+static vgpu_bool d3d12_isSupported(void)
 {
     static bool available_initialized = false;
     static bool available = false;
@@ -2805,7 +2806,8 @@ static VGPUDevice d3d12_createDevice(const VGPUDeviceDesc* info)
         }
     }
 
-    VGPUDevice_T* device = (VGPUDevice_T*)VGPU_MALLOC(sizeof(VGPUDevice_T));
+    VGPUDevice_T* device = VGPU_ALLOC(VGPUDevice_T);
+    memset(device, 0, sizeof(VGPUDevice_T));
     ASSIGN_DRIVER(d3d12);
     device->driverData = (VGFXRenderer*)renderer;
     return device;

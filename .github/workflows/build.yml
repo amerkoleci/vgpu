@@ -95,7 +95,7 @@ jobs:
         with:
           name: 'Build Artifacts'
           path: vgpu_libs.7z
-      - uses: geekyeggo/delete-artifact@v1
+      - uses: geekyeggo/delete-artifact@v2
         with:
           name: |
             vgpu_libs_windows

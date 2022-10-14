@@ -9,6 +9,10 @@
 #   include <Windows.h>
 #endif
 
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdarg.h>
+
 #define MAX_MESSAGE_SIZE 1024
 
 static void VGPU_DefaultLogCallback(vgpu_log_level level, const char* message)
@@ -73,6 +77,33 @@ void vgpu_set_log_callback(vgpu_log_callback func)
     s_LogFunc = func;
 }
 
+// Default allocation callbacks.
+void* vgpu_default_alloc(size_t size, void* user_data)
+{
+    _VGPU_UNUSED(user_data);
+    return malloc(size);
+}
+
+void vgpu_default_free(void* ptr, void* user_data)
+{
+    _VGPU_UNUSED(user_data);
+    free(ptr);
+}
+
+const vgpu_allocation_callbacks VGPU_DEFAULT_ALLOC_CB = { vgpu_default_alloc, vgpu_default_free };
+
+const vgpu_allocation_callbacks* VGPU_ALLOC_CB = &VGPU_DEFAULT_ALLOC_CB;
+
+void vgpu_set_allocation_callbacks(const vgpu_allocation_callbacks* callback)
+{
+    if (callback == NULL) {
+        VGPU_ALLOC_CB = &VGPU_DEFAULT_ALLOC_CB;
+    }
+    else {
+        VGPU_ALLOC_CB = callback;
+    }
+}
+
 static const VGFXDriver* drivers[] = {
 #if defined(VGPU_D3D12_DRIVER)
     &D3D12_Driver,
@@ -98,7 +129,7 @@ vgpu_bool vgpuIsSupported(VGPUBackendType backend)
 
         if (drivers[i]->backend == backend)
         {
-            return drivers[i]->isSupported();
+            return drivers[i]->is_supported();
         }
     }
 
@@ -119,7 +150,7 @@ retry:
             if (!drivers[i])
                 break;
 
-            if (drivers[i]->isSupported())
+            if (drivers[i]->is_supported())
             {
                 return drivers[i]->createDevice(desc);
             }
@@ -134,7 +165,7 @@ retry:
 
             if (drivers[i]->backend == backend)
             {
-                if (drivers[i]->isSupported())
+                if (drivers[i]->is_supported())
                 {
                     return drivers[i]->createDevice(desc);
                 }
@@ -256,9 +287,9 @@ VGPUTexture vgpuCreateTexture(VGPUDevice device, const VGPUTextureDesc* desc, co
 
     VGPU_ASSERT(desc_def.width > 0 && desc_def.height > 0 && desc_def.mipLevels >= 0);
 
-    const bool is3D = desc_def.type == VGPUTexture_Type3D;
-    const bool isDepthStencil = vgpuIsDepthStencilFormat(desc_def.format);
-    bool isCube = false;
+    const vgpu_bool is3D = desc_def.type == VGPUTexture_Type3D;
+    const vgpu_bool isDepthStencil = vgpuIsDepthStencilFormat(desc_def.format);
+    vgpu_bool isCube = false;
 
     if (desc_def.type == VGPUTexture_Type2D &&
         desc_def.width == desc_def.height &&

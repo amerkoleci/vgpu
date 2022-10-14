@@ -5,15 +5,17 @@
 #define _VGPU_DRIVER_H_
 
 #include "vgpu.h"
-#include <stdbool.h>
-#include <stdio.h>
-#include <stdarg.h>
+#include <stdlib.h> // malloc, free
+#include <string.h> // memset
+#include <float.h> // FLT_MAX
+#include <assert.h>
 
-#ifndef VGPU_MALLOC
-#   include <stdlib.h>
-#   define VGPU_MALLOC(s) malloc(s)
-#   define VGPU_FREE(p) free(p)
-#endif
+// Custom allocation callbacks.
+_VGPU_EXTERN const vgpu_allocation_callbacks* VGPU_ALLOC_CB;
+
+#define VGPU_ALLOC(type)     ((type*)VGPU_ALLOC_CB->allocate(sizeof(type), VGPU_ALLOC_CB->user_data))
+#define VGPU_ALLOCN(type, n) ((type*)VGPU_ALLOC_CB->allocate(sizeof(type)* n, VGPU_ALLOC_CB->user_data))
+#define VGPU_FREE(ptr)       (VGPU_ALLOC_CB->free(ptr, VGPU_ALLOC_CB->user_data))
 
 #ifndef VGPU_ASSERT
 #   include <assert.h>
@@ -128,7 +130,7 @@ typedef struct VGPUDevice_T
     uint64_t(*frame)(VGFXRenderer* driverData);
     void (*waitIdle)(VGFXRenderer* driverData);
     VGPUBackendType(*getBackendType)(void);
-    bool (*queryFeature)(VGFXRenderer* driverData, VGPUFeature feature, void* pInfo, uint32_t infoSize);
+    vgpu_bool (*queryFeature)(VGFXRenderer* driverData, VGPUFeature feature, void* pInfo, uint32_t infoSize);
     void (*getAdapterProperties)(VGFXRenderer* driverData, VGPUAdapterProperties* properties);
     void (*getLimits)(VGFXRenderer* driverData, VGPULimits* limits);
 
@@ -208,7 +210,7 @@ ASSIGN_DRIVER_FUNC(submit, name) \
 typedef struct VGFXDriver
 {
     VGPUBackendType backend;
-    bool (*isSupported)(void);
+    vgpu_bool(*is_supported)(void);
     VGPUDevice(*createDevice)(const VGPUDeviceDesc* desc);
 } VGFXDriver;
 
