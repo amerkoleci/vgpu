@@ -19,15 +19,6 @@
 #   include <dxgidebug.h>
 #endif
 
-#ifdef USING_D3D12_AGILITY_SDK
-extern "C"
-{
-    // Used to enable the "Agility SDK" components
-    __declspec(dllexport) extern const UINT D3D12SDKVersion = D3D12_SDK_VERSION;
-    __declspec(dllexport) extern const char* D3D12SDKPath = u8".\\D3D12\\";
-}
-#endif
-
 #define VALID_COMPUTE_QUEUE_RESOURCE_STATES \
     ( D3D12_RESOURCE_STATE_UNORDERED_ACCESS \
     | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE \
@@ -47,7 +38,7 @@ namespace
 
     static PFN_D3D12_GET_DEBUG_INTERFACE vgfxD3D12GetDebugInterface = nullptr;
     static PFN_D3D12_CREATE_DEVICE vgfxD3D12CreateDevice = nullptr;
-    static PFN_D3D12_SERIALIZE_VERSIONED_ROOT_SIGNATURE vgfxD3D12SerializeVersionedRootSignature = nullptr;
+    static PFN_D3D12_SERIALIZE_VERSIONED_ROOT_SIGNATURE vgpuD3D12SerializeVersionedRootSignature = nullptr;
 
 #if defined(_DEBUG)
     // Declare debug guids to avoid linking with "dxguid.lib"
@@ -106,20 +97,16 @@ namespace
                 std::wstring wide_name = UTF8ToWStr(name);
                 obj->SetName(wide_name.c_str());
             }
-            else
-            {
-                obj->SetName(nullptr);
-            }
         }
     }
 
-    static_assert(sizeof(vgpu_viewport) == sizeof(D3D12_VIEWPORT));
-    static_assert(offsetof(vgpu_viewport, x) == offsetof(D3D12_VIEWPORT, TopLeftX));
-    static_assert(offsetof(vgpu_viewport, y) == offsetof(D3D12_VIEWPORT, TopLeftY));
-    static_assert(offsetof(vgpu_viewport, width) == offsetof(D3D12_VIEWPORT, Width));
-    static_assert(offsetof(vgpu_viewport, height) == offsetof(D3D12_VIEWPORT, Height));
-    static_assert(offsetof(vgpu_viewport, min_depth) == offsetof(D3D12_VIEWPORT, MinDepth));
-    static_assert(offsetof(vgpu_viewport, max_depth) == offsetof(D3D12_VIEWPORT, MaxDepth));
+    static_assert(sizeof(VGPUViewport) == sizeof(D3D12_VIEWPORT));
+    static_assert(offsetof(VGPUViewport, x) == offsetof(D3D12_VIEWPORT, TopLeftX));
+    static_assert(offsetof(VGPUViewport, y) == offsetof(D3D12_VIEWPORT, TopLeftY));
+    static_assert(offsetof(VGPUViewport, width) == offsetof(D3D12_VIEWPORT, Width));
+    static_assert(offsetof(VGPUViewport, height) == offsetof(D3D12_VIEWPORT, Height));
+    static_assert(offsetof(VGPUViewport, minDepth) == offsetof(D3D12_VIEWPORT, MinDepth));
+    static_assert(offsetof(VGPUViewport, maxDepth) == offsetof(D3D12_VIEWPORT, MaxDepth));
 
     static_assert(sizeof(VGPUDispatchIndirectCommand) == sizeof(D3D12_DISPATCH_ARGUMENTS), "DispatchIndirectCommand mismatch");
     static_assert(offsetof(VGPUDispatchIndirectCommand, x) == offsetof(D3D12_DISPATCH_ARGUMENTS, ThreadGroupCountX), "Layout mismatch");
@@ -196,9 +183,10 @@ namespace
             case VGPUTextureFormat_RGBA32SInt:       return DXGI_FORMAT_R32G32B32A32_SINT;
             case VGPUTextureFormat_RGBA32Float:      return DXGI_FORMAT_R32G32B32A32_FLOAT;
                 // Depth-stencil formats
-            case VGPUTextureFormat_Depth16UNorm:		    return DXGI_FORMAT_D16_UNORM;
-            case VGPUTextureFormat_Depth24UNormStencil8:    return DXGI_FORMAT_D24_UNORM_S8_UINT;
+            case VGPUTextureFormat_Depth16Unorm:		    return DXGI_FORMAT_D16_UNORM;
             case VGPUTextureFormat_Depth32Float:			return DXGI_FORMAT_D32_FLOAT;
+            case VGPUTextureFormat_Stencil8:			    return DXGI_FORMAT_D24_UNORM_S8_UINT;
+            case VGPUTextureFormat_Depth24UnormStencil8:    return DXGI_FORMAT_D24_UNORM_S8_UINT;
             case VGPUTextureFormat_Depth32FloatStencil8:    return DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
                 // Compressed BC formats
             case VGPUTextureFormat_BC1UNorm:            return DXGI_FORMAT_BC1_UNORM;
@@ -218,6 +206,92 @@ namespace
 
             default:
                 return DXGI_FORMAT_UNKNOWN;
+        }
+    }
+
+    constexpr VGPUTextureFormat FromDxgiFormat(DXGI_FORMAT format)
+    {
+        switch (format)
+        {
+            // 8-bit formats
+        case DXGI_FORMAT_R8_UNORM:              return VGPUTextureFormat_R8UNorm;
+        case DXGI_FORMAT_R8_SNORM:              return VGPUTextureFormat_R8SNorm;
+        case DXGI_FORMAT_R8_UINT :              return VGPUTextureFormat_R8UInt;
+        case DXGI_FORMAT_R8_SINT:               return VGPUTextureFormat_R8SInt;
+#if TODO
+            // 16-bit formats
+        case VGPUTextureFormat_R16UInt:         return DXGI_FORMAT_R16_UINT;
+        case VGPUTextureFormat_R16SInt:         return DXGI_FORMAT_R16_SINT;
+        case VGPUTextureFormat_R16UNorm:        return DXGI_FORMAT_R16_UNORM;
+        case VGPUTextureFormat_R16SNorm:        return DXGI_FORMAT_R16_SNORM;
+        case VGPUTextureFormat_R16Float:        return DXGI_FORMAT_R16_FLOAT;
+        case VGPUTextureFormat_RG8UNorm:        return DXGI_FORMAT_R8G8_UNORM;
+        case VGPUTextureFormat_RG8SNorm:        return DXGI_FORMAT_R8G8_SNORM;
+        case VGPUTextureFormat_RG8UInt:         return DXGI_FORMAT_R8G8_UINT;
+        case VGPUTextureFormat_RG8SInt:         return DXGI_FORMAT_R8G8_SINT;
+            // Packed 16-Bit Pixel Formats
+        case VGPUTextureFormat_BGRA4UNorm:      return DXGI_FORMAT_B4G4R4A4_UNORM;
+        case VGPUTextureFormat_B5G6R5UNorm:     return DXGI_FORMAT_B5G6R5_UNORM;
+        case VGPUTextureFormat_B5G5R5A1UNorm:   return DXGI_FORMAT_B5G5R5A1_UNORM;
+            // 32-bit formats
+        case VGPUTextureFormat_R32UInt:          return DXGI_FORMAT_R32_UINT;
+        case VGPUTextureFormat_R32SInt:          return DXGI_FORMAT_R32_SINT;
+        case VGPUTextureFormat_R32Float:         return DXGI_FORMAT_R32_FLOAT;
+        case VGPUTextureFormat_RG16UInt:         return DXGI_FORMAT_R16G16_UINT;
+        case VGPUTextureFormat_RG16SInt:         return DXGI_FORMAT_R16G16_SINT;
+        case VGPUTextureFormat_RG16UNorm:        return DXGI_FORMAT_R16G16_UNORM;
+        case VGPUTextureFormat_RG16SNorm:        return DXGI_FORMAT_R16G16_SNORM;
+        case VGPUTextureFormat_RG16Float:        return DXGI_FORMAT_R16G16_FLOAT;
+        case VGPUTextureFormat_RGBA8UInt:        return DXGI_FORMAT_R8G8B8A8_UINT;
+        case VGPUTextureFormat_RGBA8SInt:        return DXGI_FORMAT_R8G8B8A8_SINT;
+        case VGPUTextureFormat_RGBA8UNorm:       return DXGI_FORMAT_R8G8B8A8_UNORM;
+        case VGPUTextureFormat_RGBA8UNormSrgb:   return DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+        case VGPUTextureFormat_RGBA8SNorm:       return DXGI_FORMAT_R8G8B8A8_SNORM;
+        case VGPUTextureFormat_BGRA8UNorm:       return DXGI_FORMAT_B8G8R8A8_UNORM;
+        case VGPUTextureFormat_BGRA8UNormSrgb:   return DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
+            // Packed 32-Bit formats
+        case VGPUTextureFormat_RGB10A2UNorm:     return DXGI_FORMAT_R10G10B10A2_UNORM;
+        case VGPUTextureFormat_RG11B10Float:     return DXGI_FORMAT_R11G11B10_FLOAT;
+        case VGPUTextureFormat_RGB9E5Float:      return DXGI_FORMAT_R9G9B9E5_SHAREDEXP;
+            // 64-Bit formats
+        case VGPUTextureFormat_RG32UInt:         return DXGI_FORMAT_R32G32_UINT;
+        case VGPUTextureFormat_RG32SInt:         return DXGI_FORMAT_R32G32_SINT;
+        case VGPUTextureFormat_RG32Float:        return DXGI_FORMAT_R32G32_FLOAT;
+        case VGPUTextureFormat_RGBA16UInt:       return DXGI_FORMAT_R16G16B16A16_UINT;
+        case VGPUTextureFormat_RGBA16SInt:       return DXGI_FORMAT_R16G16B16A16_SINT;
+        case VGPUTextureFormat_RGBA16UNorm:      return DXGI_FORMAT_R16G16B16A16_UNORM;
+        case VGPUTextureFormat_RGBA16SNorm:      return DXGI_FORMAT_R16G16B16A16_SNORM;
+        case VGPUTextureFormat_RGBA16Float:      return DXGI_FORMAT_R16G16B16A16_FLOAT;
+            // 128-Bit formats
+        case VGPUTextureFormat_RGBA32UInt:       return DXGI_FORMAT_R32G32B32A32_UINT;
+        case VGPUTextureFormat_RGBA32SInt:       return DXGI_FORMAT_R32G32B32A32_SINT;
+        case VGPUTextureFormat_RGBA32Float:      return DXGI_FORMAT_R32G32B32A32_FLOAT;
+            // Depth-stencil formats
+        case VGPUTextureFormat_Depth16Unorm:		    return DXGI_FORMAT_D16_UNORM;
+        case VGPUTextureFormat_Depth32Float:			return DXGI_FORMAT_D32_FLOAT;
+        case VGPUTextureFormat_Stencil8:			    return DXGI_FORMAT_D24_UNORM_S8_UINT;
+        case VGPUTextureFormat_Depth24UnormStencil8:    return DXGI_FORMAT_D24_UNORM_S8_UINT;
+        case VGPUTextureFormat_Depth32FloatStencil8:    return DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
+            // Compressed BC formats
+        case VGPUTextureFormat_BC1UNorm:            return DXGI_FORMAT_BC1_UNORM;
+        case VGPUTextureFormat_BC1UNormSrgb:        return DXGI_FORMAT_BC1_UNORM_SRGB;
+        case VGPUTextureFormat_BC2UNorm:            return DXGI_FORMAT_BC2_UNORM;
+        case VGPUTextureFormat_BC2UNormSrgb:        return DXGI_FORMAT_BC2_UNORM_SRGB;
+        case VGPUTextureFormat_BC3UNorm:            return DXGI_FORMAT_BC3_UNORM;
+        case VGPUTextureFormat_BC3UNormSrgb:        return DXGI_FORMAT_BC3_UNORM_SRGB;
+        case VGPUTextureFormat_BC4SNorm:            return DXGI_FORMAT_BC4_SNORM;
+        case VGPUTextureFormat_BC4UNorm:            return DXGI_FORMAT_BC4_UNORM;
+        case VGPUTextureFormat_BC5SNorm:            return DXGI_FORMAT_BC5_SNORM;
+        case VGPUTextureFormat_BC5UNorm:            return DXGI_FORMAT_BC5_UNORM;
+        case VGPUTextureFormat_BC6HUFloat:          return DXGI_FORMAT_BC6H_UF16;
+        case VGPUTextureFormat_BC6HSFloat:          return DXGI_FORMAT_BC6H_SF16;
+        case VGPUTextureFormat_BC7UNorm:            return DXGI_FORMAT_BC7_UNORM;
+        case VGPUTextureFormat_BC7UNormSrgb:        return DXGI_FORMAT_BC7_UNORM_SRGB;
+#endif // TODO
+
+
+        default:
+            return VGPUTextureFormat_Undefined;
         }
     }
 
@@ -247,11 +321,13 @@ namespace
     {
         switch (format)
         {
-            case VGPUTextureFormat_Depth16UNorm:
+            case VGPUTextureFormat_Depth16Unorm:
                 return DXGI_FORMAT_R16_TYPELESS;
             case VGPUTextureFormat_Depth32Float:
                 return DXGI_FORMAT_R32_TYPELESS;
-            case VGPUTextureFormat_Depth24UNormStencil8:
+            case VGPUTextureFormat_Stencil8:
+                return DXGI_FORMAT_R24G8_TYPELESS;
+            case VGPUTextureFormat_Depth24UnormStencil8:
                 return DXGI_FORMAT_R24G8_TYPELESS;
             case VGPUTextureFormat_Depth32FloatStencil8:
                 return DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS;
@@ -350,7 +426,6 @@ namespace
                 return D3D12_TEXTURE_ADDRESS_MODE_WRAP;
         }
     }
-
 }
 
 #if !WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
@@ -359,7 +434,7 @@ namespace
 #define vgfxD3D12GetDebugInterface D3D12GetDebugInterface
 #endif
 
-struct VGFXD3D12DescriptorAllocator
+struct D3D12DescriptorAllocator
 {
     ID3D12Device* device = nullptr;
     std::mutex locker;
@@ -451,7 +526,8 @@ struct D3D12Sampler
 
 struct D3D12Shader
 {
-    std::vector<uint8_t> byteCode;
+    void* byteCode;
+    size_t byteCodeSize;
 };
 
 struct D3D12Pipeline
@@ -544,15 +620,17 @@ struct D3D12_Renderer
     std::mutex uploadLocker;
     std::vector<D3D12_UploadContext> uploadFreeList;
 
-    VGFXD3D12DescriptorAllocator resourceAllocator;
-    VGFXD3D12DescriptorAllocator samplerAllocator;
-    VGFXD3D12DescriptorAllocator rtvAllocator;
-    VGFXD3D12DescriptorAllocator dsvAllocator;
+    D3D12DescriptorAllocator resourceAllocator;
+    D3D12DescriptorAllocator samplerAllocator;
+    D3D12DescriptorAllocator rtvAllocator;
+    D3D12DescriptorAllocator dsvAllocator;
 
     ID3D12CommandSignature* dispatchIndirectCommandSignature = nullptr;
     ID3D12CommandSignature* drawIndirectCommandSignature = nullptr;
     ID3D12CommandSignature* drawIndexedIndirectCommandSignature = nullptr;
     ID3D12CommandSignature* dispatchMeshIndirectCommandSignature = nullptr;
+
+    ID3D12RootSignature* globalRootSignature = nullptr;
 
     bool shuttingDown = false;
     std::mutex destroyMutex;
@@ -962,6 +1040,7 @@ static void d3d12_destroyDevice(VGPUDevice device)
     SAFE_RELEASE(renderer->drawIndirectCommandSignature);
     SAFE_RELEASE(renderer->drawIndexedIndirectCommandSignature);
     SAFE_RELEASE(renderer->dispatchMeshIndirectCommandSignature);
+    SAFE_RELEASE(renderer->globalRootSignature);
 
     for (size_t i = 0; i < renderer->commandBuffers.size(); ++i)
     {
@@ -1120,7 +1199,7 @@ static VGPUBackendType d3d12_getBackendType(void)
     return VGPUBackendType_D3D12;
 }
 
-static bool d3d12_queryFeature(VGFXRenderer* driverData, VGPUFeature feature, void* pInfo, uint32_t infoSize)
+static VGPUBool32 d3d12_queryFeature(VGFXRenderer* driverData, VGPUFeature feature, void* pInfo, uint32_t infoSize)
 {
     (void)pInfo;
     (void)infoSize;
@@ -1277,7 +1356,7 @@ static void d3d12_getLimits(VGFXRenderer* driverData, VGPULimits* limits)
 }
 
 /* Buffer */
-static vgpu_buffer* d3d12_createBuffer(VGFXRenderer* driverData, const VGPUBufferDesc* desc, const void* pInitialData)
+static VGPUBuffer d3d12_createBuffer(VGFXRenderer* driverData, const VGPUBufferDesc* desc, const void* pInitialData)
 {
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
 
@@ -1419,10 +1498,10 @@ static vgpu_buffer* d3d12_createBuffer(VGFXRenderer* driverData, const VGPUBuffe
         //buffer->SetBindlessUAV(bindlessUAV);
     }
 
-    return (vgpu_buffer*)buffer;
+    return (VGPUBuffer_T*)buffer;
 }
 
-static void d3d12_destroyBuffer(VGFXRenderer* driverData, vgpu_buffer* resource)
+static void d3d12_destroyBuffer(VGFXRenderer* driverData, VGPUBuffer resource)
 {
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
     D3D12Resource* d3dBuffer = (D3D12Resource*)resource;
@@ -1456,7 +1535,7 @@ static VGPUTexture d3d12_createTexture(VGFXRenderer* driverData, const VGPUTextu
     resourceDesc.Width = desc->size.width;
     resourceDesc.Height = desc->size.height;
     resourceDesc.DepthOrArraySize = (UINT16)desc->size.depthOrArrayLayers;
-    resourceDesc.MipLevels = (UINT16)desc->mipLevels;
+    resourceDesc.MipLevels = (UINT16)desc->mipLevelCount;
     resourceDesc.Format = ToDXGIFormat(desc->format);
     resourceDesc.SampleDesc.Count = desc->sampleCount;
     resourceDesc.SampleDesc.Quality = 0;
@@ -1532,7 +1611,7 @@ static VGPUTexture d3d12_createTexture(VGFXRenderer* driverData, const VGPUTextu
     }
 
     // TODO: TextureLayout/State
-    D3D12Resource* texture = VGPU_ALLOC_CLEAR(D3D12Resource);
+    D3D12Resource* texture = new D3D12Resource();
     texture->state = resourceState;
     texture->width = desc->size.width;
     texture->height = desc->size.height;
@@ -1578,7 +1657,7 @@ static void d3d12_destroyTexture(VGFXRenderer* driverData, VGPUTexture texture)
         renderer->dsvAllocator.Free(it.second);
     }
     d3dTexture->dsvCache.clear();
-    VGPU_FREE(d3dTexture);
+    delete d3dTexture;
 }
 
 /* Sampler */
@@ -1654,41 +1733,68 @@ static void d3d12_destroySampler(VGFXRenderer* driverData, VGPUSampler resource)
 /* ShaderModule */
 static VGPUShaderModule d3d12_createShaderModule(VGFXRenderer* driverData, const void* pCode, size_t codeSize)
 {
-    D3D12Shader* shader = new D3D12Shader();
-    shader->byteCode.resize(codeSize);
-    memcpy(shader->byteCode.data(), pCode, codeSize);
+    D3D12Shader* shader = VGPU_ALLOC(D3D12Shader);
+    shader->byteCode = _vgpu_alloc(codeSize);
+    shader->byteCodeSize = codeSize;
+
+    memcpy(shader->byteCode, pCode, codeSize);
     return (VGPUShaderModule)shader;
 }
 
 static void d3d12_destroyShaderModule(VGFXRenderer* driverData, VGPUShaderModule resource)
 {
     D3D12Shader* shader = (D3D12Shader*)resource;
-    delete shader;
+    VGPU_FREE(shader->byteCode);
+    VGPU_FREE(shader);
 }
 
 /* Pipeline */
 static VGPUPipeline d3d12_createRenderPipeline(VGFXRenderer* driverData, const VGPURenderPipelineDesc* desc)
 {
+    D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
+
     D3D12Pipeline* pipeline = new D3D12Pipeline();
     return (VGPUPipeline)pipeline;
 }
 
 static VGPUPipeline d3d12_createComputePipeline(VGFXRenderer* driverData, const VGPUComputePipelineDesc* desc)
 {
-    D3D12Pipeline* pipeline = new D3D12Pipeline();
+    D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
+    D3D12Shader* shader = (D3D12Shader*)desc->shader;
+
+    D3D12_SHADER_BYTECODE cs = { shader->byteCode, shader->byteCodeSize };
+
+    D3D12_COMPUTE_PIPELINE_STATE_DESC d3dDesc = {};
+    d3dDesc.pRootSignature = renderer->globalRootSignature;
+    d3dDesc.CS = cs;
+
+    ID3D12PipelineState* pipelineState = nullptr;
+    if (FAILED(renderer->device->CreateComputePipelineState(&d3dDesc, IID_PPV_ARGS(&pipelineState))))
+    {
+        return nullptr;
+    }
+
+    D3D12SetName(pipelineState, desc->label);
+
+    D3D12Pipeline* pipeline = VGPU_ALLOC(D3D12Pipeline);
+    pipeline->handle = pipelineState;
     return (VGPUPipeline)pipeline;
 }
 
 static VGPUPipeline d3d12_createRayTracingPipeline(VGFXRenderer* driverData, const VGPURayTracingPipelineDesc* desc)
 {
+    D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
     D3D12Pipeline* pipeline = new D3D12Pipeline();
     return (VGPUPipeline)pipeline;
 }
 
 static void d3d12_destroyPipeline(VGFXRenderer* driverData, VGPUPipeline resource)
 {
+    D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
     D3D12Pipeline* pipeline = (D3D12Pipeline*)resource;
-    delete pipeline;
+
+    d3d12_DeferDestroy(renderer, pipeline->handle, nullptr);
+    VGPU_FREE(pipeline);
 }
 
 /* SwapChain */
@@ -1918,7 +2024,7 @@ static void d3d12_dispatch(VGPUCommandBufferImpl* driverData, uint32_t groupCoun
     commandBuffer->commandList->Dispatch(groupCountX, groupCountY, groupCountZ);
 }
 
-static void d3d12_dispatchIndirect(VGPUCommandBufferImpl* driverData, vgpu_buffer* buffer, uint64_t offset)
+static void d3d12_dispatchIndirect(VGPUCommandBufferImpl* driverData, VGPUBuffer buffer, uint64_t offset)
 {
     D3D12CommandBuffer* commandBuffer = (D3D12CommandBuffer*)driverData;
     d3d12_prepareDispatch(commandBuffer);
@@ -2182,7 +2288,7 @@ static void d3d12_endRenderPass(VGPUCommandBufferImpl* driverData)
     commandBuffer->insideRenderPass = false;
 }
 
-static void d3d12_setViewports(VGPUCommandBufferImpl* driverData, uint32_t count, const vgpu_viewport* viewports)
+static void d3d12_setViewports(VGPUCommandBufferImpl* driverData, uint32_t count, const VGPUViewport* viewports)
 {
     VGPU_ASSERT(count < D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE);
 
@@ -2191,7 +2297,7 @@ static void d3d12_setViewports(VGPUCommandBufferImpl* driverData, uint32_t count
     commandBuffer->commandList->RSSetViewports(count, (const D3D12_VIEWPORT*)viewports);
 }
 
-static void d3d12_set_scissor_rect(VGPUCommandBufferImpl* driverData, const vgpu_rect* rect)
+static void d3d12_set_scissor_rect(VGPUCommandBufferImpl* driverData, const VGPURect* rect)
 {
     D3D12CommandBuffer* commandBuffer = (D3D12CommandBuffer*)driverData;
 
@@ -2203,7 +2309,7 @@ static void d3d12_set_scissor_rect(VGPUCommandBufferImpl* driverData, const vgpu
     commandBuffer->commandList->RSSetScissorRects(1u, &d3d_rect);
 }
 
-static void d3d12_set_scissor_rects(VGPUCommandBufferImpl* driverData, uint32_t count, const vgpu_rect* rects)
+static void d3d12_set_scissor_rects(VGPUCommandBufferImpl* driverData, uint32_t count, const VGPURect* rects)
 {
     VGPU_ASSERT(count < D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE);
 
@@ -2220,7 +2326,7 @@ static void d3d12_set_scissor_rects(VGPUCommandBufferImpl* driverData, uint32_t 
     commandBuffer->commandList->RSSetScissorRects(count, d3dScissorRects);
 }
 
-static void d3d12_setVertexBuffer(VGPUCommandBufferImpl* driverData, uint32_t index, vgpu_buffer* buffer, uint64_t offset)
+static void d3d12_setVertexBuffer(VGPUCommandBufferImpl* driverData, uint32_t index, VGPUBuffer buffer, uint64_t offset)
 {
     D3D12CommandBuffer* commandBuffer = (D3D12CommandBuffer*)driverData;
     D3D12Resource* d3d12Buffer = (D3D12Resource*)buffer;
@@ -2230,7 +2336,7 @@ static void d3d12_setVertexBuffer(VGPUCommandBufferImpl* driverData, uint32_t in
     commandBuffer->vboViews[index].StrideInBytes = 0;
 }
 
-static void d3d12_setIndexBuffer(VGPUCommandBufferImpl* driverData, vgpu_buffer* buffer, uint64_t offset, VGPUIndexType indexType)
+static void d3d12_setIndexBuffer(VGPUCommandBufferImpl* driverData, VGPUBuffer buffer, uint64_t offset, VGPUIndexType indexType)
 {
     D3D12CommandBuffer* commandBuffer = (D3D12CommandBuffer*)driverData;
     D3D12Resource* d3d12Buffer = (D3D12Resource*)buffer;
@@ -2405,7 +2511,26 @@ static void d3d12_submit(VGFXRenderer* driverData, VGPUCommandBuffer* commandBuf
     // Signal
 }
 
-static bool d3d12_isSupported(void)
+static void d3d12_CreateRootSignature(ID3D12Device* device, ID3D12RootSignature** rootSignature, const D3D12_ROOT_SIGNATURE_DESC1& desc)
+{
+    D3D12_VERSIONED_ROOT_SIGNATURE_DESC versionedDesc = { };
+    versionedDesc.Version = D3D_ROOT_SIGNATURE_VERSION_1_1;
+    versionedDesc.Desc_1_1 = desc;
+
+    ComPtr<ID3DBlob> signature;
+    ComPtr<ID3DBlob> error;
+    HRESULT hr = vgpuD3D12SerializeVersionedRootSignature(&versionedDesc, &signature, &error);
+    if (FAILED(hr))
+    {
+        const char* errString = error ? reinterpret_cast<const char*>(error->GetBufferPointer()) : "";
+
+        vgpuLogError("Failed to create root signature: %S", errString);
+    }
+
+    VHR(device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(rootSignature)));
+}
+
+static VGPUBool32 d3d12_isSupported(void)
 {
     static bool available_initialized = false;
     static bool available = false;
@@ -2443,8 +2568,8 @@ static bool d3d12_isSupported(void)
         return false;
     }
 
-    vgfxD3D12SerializeVersionedRootSignature = (PFN_D3D12_SERIALIZE_VERSIONED_ROOT_SIGNATURE)GetProcAddress(d3d12DLL, "D3D12SerializeVersionedRootSignature");
-    if (!vgfxD3D12SerializeVersionedRootSignature) {
+    vgpuD3D12SerializeVersionedRootSignature = (PFN_D3D12_SERIALIZE_VERSIONED_ROOT_SIGNATURE)GetProcAddress(d3d12DLL, "D3D12SerializeVersionedRootSignature");
+    if (!vgpuD3D12SerializeVersionedRootSignature) {
         return false;
     }
 #endif
@@ -2825,6 +2950,41 @@ static VGPUDevice d3d12_createDevice(const VGPUDeviceDesc* info)
         }
     }
 
+    // Create global root signature
+    {
+        // AMD : Try to stay below 13 DWORDs https://gpuopen.com/performance/
+        // 12 root constants + 4 root CBVs == 13 DWORDs, rest is bindless
+
+        D3D12_ROOT_PARAMETER1 rootParameters[5] = {};
+        rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+        rootParameters[0].Constants.Num32BitValues = 12;
+        rootParameters[0].Constants.ShaderRegister = 999;
+        rootParameters[0].Constants.RegisterSpace = 0;
+        rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+
+        for (uint32_t i = 1; i < 5; i++)
+        {
+            rootParameters[i].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+            rootParameters[i].Descriptor.ShaderRegister = i;
+            rootParameters[i].Descriptor.RegisterSpace = 0;
+            rootParameters[i].Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_NONE;
+            rootParameters[i].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+        }
+
+        D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = { };
+        rootSignatureDesc.NumParameters = _countof(rootParameters);
+        rootSignatureDesc.pParameters = rootParameters;
+        //rootSignatureDesc.NumStaticSamplers = 1;
+        //rootSignatureDesc.pStaticSamplers = staticSamplers;
+        rootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+
+#ifdef USING_D3D12_AGILITY_SDK
+        rootSignatureDesc.Flags |= D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED;
+#endif
+
+        d3d12_CreateRootSignature(renderer->device, &renderer->globalRootSignature, rootSignatureDesc);
+    }
+
     VGPUDevice_T* device = VGPU_ALLOC_CLEAR(VGPUDevice_T);
     ASSIGN_DRIVER(d3d12);
     device->driverData = (VGFXRenderer*)renderer;
@@ -2839,5 +2999,30 @@ VGFXDriver D3D12_Driver = {
 
 #undef VHR
 #undef SAFE_RELEASE
+
+uint32_t vgpuToDxgiFormat(VGPUTextureFormat format)
+{
+    return (uint32_t)ToDXGIFormat(format);
+}
+
+VGPUTextureFormat vgpuFromDxgiFormat(uint32_t dxgiFormat)
+{
+    return FromDxgiFormat(static_cast<DXGI_FORMAT>(dxgiFormat));
+}
+
+#else
+
+uint32_t vgpuToDxgiFormat(VGPUTextureFormat format)
+{
+    _VGPU_UNUSED(format);
+    return 0;
+}
+
+
+VGPUTextureFormat vgpuFromDxgiFormat(uint32_t dxgiFormat)
+{
+    _VGPU_UNUSED(dxgiFormat);
+    return VGPUTextureFormat_Undefined;
+}
 
 #endif /* VGPU_D3D12_DRIVER */

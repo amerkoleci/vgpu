@@ -9,12 +9,13 @@
 #   include <Windows.h>
 #endif
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdarg.h>
 
 #define MAX_MESSAGE_SIZE 1024
 
-static void VGPU_DefaultLogCallback(vgpu_log_level level, const char* message)
+static void VGPU_DefaultLogCallback(VGPULogLevel level, const char* message)
 {
 #if defined(__EMSCRIPTEN__)
     switch (level)
@@ -71,7 +72,7 @@ void vgpuLogError(const char* format, ...)
     s_LogFunc(VGPU_LOG_LEVEL_ERROR, msg);
 }
 
-void vgpu_set_log_callback(vgpu_log_callback func)
+void vgpuSetLogCallback(vgpu_log_callback func)
 {
     s_LogFunc = func;
 }
@@ -95,7 +96,7 @@ const vgpu_allocation_callbacks VGPU_DEFAULT_ALLOC_CB = { vgpu_default_alloc, vg
 
 const vgpu_allocation_callbacks* VGPU_ALLOC_CB = &VGPU_DEFAULT_ALLOC_CB;
 
-void vgpu_set_allocation_callbacks(const vgpu_allocation_callbacks* callback)
+void vgpuSetAllocationCallbacks(const vgpu_allocation_callbacks* callback)
 {
     if (callback == NULL) {
         VGPU_ALLOC_CB = &VGPU_DEFAULT_ALLOC_CB;
@@ -140,7 +141,7 @@ static const VGFXDriver* drivers[] = {
 #define NULL_RETURN(name) if (name == NULL) { return; }
 #define NULL_RETURN_NULL(name) if (name == NULL) { return NULL; }
 
-bool vgpuIsBackendSupported(VGPUBackendType backend)
+VGPUBool32 vgpuIsBackendSupported(VGPUBackendType backend)
 {
     for (uint32_t i = 0; i < _VGPU_COUNT_OF(drivers); ++i)
     {
@@ -233,7 +234,7 @@ VGPUBackendType vgpuGetBackendType(VGPUDevice device)
     return device->getBackendType();
 }
 
-bool vgpuQueryFeature(VGPUDevice device, VGPUFeature feature, void* pInfo, uint32_t infoSize)
+VGPUBool32 vgpuQueryFeature(VGPUDevice device, VGPUFeature feature, void* pInfo, uint32_t infoSize)
 {
     if (device == NULL) {
         return false;
@@ -266,7 +267,7 @@ static VGPUBufferDesc _vgpuBufferDescDef(const VGPUBufferDesc* desc)
     return def;
 }
 
-vgpu_buffer* vgpuCreateBuffer(VGPUDevice device, const VGPUBufferDesc* desc, const void* pInitialData)
+VGPUBuffer vgpuCreateBuffer(VGPUDevice device, const VGPUBufferDesc* desc, const void* pInitialData)
 {
     NULL_RETURN_NULL(device);
     NULL_RETURN_NULL(desc);
@@ -275,7 +276,7 @@ vgpu_buffer* vgpuCreateBuffer(VGPUDevice device, const VGPUBufferDesc* desc, con
     return device->createBuffer(device->driverData, &desc_def, pInitialData);
 }
 
-void vgpuDestroyBuffer(VGPUDevice device, vgpu_buffer* buffer)
+void vgpuDestroyBuffer(VGPUDevice device, VGPUBuffer buffer)
 {
     NULL_RETURN(device);
     NULL_RETURN(buffer);
@@ -293,7 +294,7 @@ static VGPUTextureDesc _vgpuTextureDescDef(const VGPUTextureDesc* desc)
     def.size.width = _VGPU_DEF(def.size.width, 1);
     def.size.height = _VGPU_DEF(def.size.height, 1);
     def.size.depthOrArrayLayers = _VGPU_DEF(def.size.depthOrArrayLayers, 1);
-    def.mipLevels = _VGPU_DEF(def.mipLevels, 1);
+    def.mipLevelCount = _VGPU_DEF(def.mipLevelCount, 1);
     def.sampleCount = _VGPU_DEF(def.sampleCount, 1);
     return def;
 }
@@ -305,7 +306,7 @@ VGPUTexture vgpuCreateTexture(VGPUDevice device, const VGPUTextureDesc* desc, co
 
     VGPUTextureDesc desc_def = _vgpuTextureDescDef(desc);
 
-    VGPU_ASSERT(desc_def.size.width > 0 && desc_def.size.height > 0 && desc_def.mipLevels >= 0);
+    VGPU_ASSERT(desc_def.size.width > 0 && desc_def.size.height > 0 && desc_def.mipLevelCount >= 0);
 
     const bool is3D = desc_def.type == VGPUTexture_Type3D;
     const bool isDepthStencil = vgpuIsDepthStencilFormat(desc_def.format);
@@ -318,7 +319,7 @@ VGPUTexture vgpuCreateTexture(VGPUDevice device, const VGPUTextureDesc* desc, co
         isCube = true;
     }
 
-    uint32_t mipLevels = desc_def.mipLevels;
+    uint32_t mipLevels = desc_def.mipLevelCount;
     if (mipLevels == 0)
     {
         if (is3D)
@@ -381,28 +382,28 @@ VGPUTexture vgpuCreateTexture(VGPUDevice device, const VGPUTextureDesc* desc, co
     return device->createTexture(device->driverData, &desc_def, pInitialData);
 }
 
-VGPUTexture vgpuCreateTexture2D(VGPUDevice device, uint32_t width, uint32_t height, VGPUTextureFormat format, uint32_t mipLevels, VGPUTextureUsage usage, const void* pInitialData)
+VGPUTexture vgpuCreateTexture2D(VGPUDevice device, uint32_t width, uint32_t height, VGPUTextureFormat format, uint32_t mipLevelCount, VGPUTextureUsage usage, const void* pInitialData)
 {
     VGPUTextureDesc desc = {
         .size = {width, height, 1u},
         .type = VGPUTexture_Type2D,
         .format = format,
         .usage = usage,
-        .mipLevels = mipLevels,
+        .mipLevelCount = mipLevelCount,
         .sampleCount = 1u
     };
 
     return vgpuCreateTexture(device, &desc, pInitialData);
 }
 
-VGPUTexture vgpuCreateTextureCube(VGPUDevice device, uint32_t size, VGPUTextureFormat format, uint32_t mipLevels, const void* pInitialData)
+VGPUTexture vgpuCreateTextureCube(VGPUDevice device, uint32_t size, VGPUTextureFormat format, uint32_t mipLevelCount, const void* pInitialData)
 {
     VGPUTextureDesc desc = {
          .size = {size, size, 6u},
         .type = VGPUTexture_Type2D,
         .format = format,
         .usage = VGPUTextureUsage_ShaderRead,
-        .mipLevels = mipLevels,
+        .mipLevelCount = mipLevelCount,
         .sampleCount = 1u
     };
 
@@ -470,9 +471,27 @@ VGPUPipeline vgpuCreateRenderPipeline(VGPUDevice device, const VGPURenderPipelin
 {
     NULL_RETURN_NULL(device);
     NULL_RETURN_NULL(desc);
+    VGPU_ASSERT(desc->vertex);
 
     VGPURenderPipelineDesc desc_def = _vgpuRenderPipelineDescDef(desc);
     return device->createRenderPipeline(device->driverData, &desc_def);
+}
+
+VGPUPipeline vgpuCreateComputePipeline(VGPUDevice device, const VGPUComputePipelineDesc* desc)
+{
+    NULL_RETURN_NULL(device);
+    NULL_RETURN_NULL(desc);
+    VGPU_ASSERT(desc->shader);
+
+    return device->createComputePipeline(device->driverData, desc);
+}
+
+VGPUPipeline vgpuCreateRayTracingPipeline(VGPUDevice device, const VGPURayTracingPipelineDesc* desc)
+{
+    NULL_RETURN_NULL(device);
+    NULL_RETURN_NULL(desc);
+
+    return device->createRayTracingPipeline(device->driverData, desc);
 }
 
 void vgpuDestroyPipeline(VGPUDevice device, VGPUPipeline pipeline)
@@ -549,12 +568,12 @@ void vgpuSetPipeline(VGPUCommandBuffer commandBuffer, VGPUPipeline pipeline)
     commandBuffer->setPipeline(commandBuffer->driverData, pipeline);
 }
 
-void vgpu_dispatch(VGPUCommandBuffer commandBuffer, uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)
+void vgpuDispatch(VGPUCommandBuffer commandBuffer, uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)
 {
     commandBuffer->dispatch(commandBuffer->driverData, groupCountX, groupCountY, groupCountZ);
 }
 
-void vgpu_dispatch_indirect(VGPUCommandBuffer commandBuffer, vgpu_buffer* buffer, uint64_t offset)
+void vgpuDispatchIndirect(VGPUCommandBuffer commandBuffer, VGPUBuffer buffer, uint64_t offset)
 {
     NULL_RETURN(buffer);
 
@@ -578,7 +597,7 @@ void vgpuEndRenderPass(VGPUCommandBuffer commandBuffer)
     commandBuffer->endRenderPass(commandBuffer->driverData);
 }
 
-void vgpu_set_viewports(VGPUCommandBuffer commandBuffer, uint32_t count, const vgpu_viewport* viewports)
+void vgpuSetViewports(VGPUCommandBuffer commandBuffer, uint32_t count, const VGPUViewport* viewports)
 {
     VGPU_ASSERT(viewports);
     VGPU_ASSERT(count < VGPU_MAX_VIEWPORTS_AND_SCISSORS);
@@ -586,13 +605,13 @@ void vgpu_set_viewports(VGPUCommandBuffer commandBuffer, uint32_t count, const v
     commandBuffer->setViewports(commandBuffer->driverData, count, viewports);
 }
 
-void vgpuSetScissorRect(VGPUCommandBuffer commandBuffer, const vgpu_rect* rect)
+void vgpuSetScissorRect(VGPUCommandBuffer commandBuffer, const VGPURect* rect)
 {
     VGPU_ASSERT(rect);
     commandBuffer->set_scissor_rect(commandBuffer->driverData, rect);
 }
 
-void vgpuSetScissorRects(VGPUCommandBuffer commandBuffer, uint32_t count, const vgpu_rect* rects)
+void vgpuSetScissorRects(VGPUCommandBuffer commandBuffer, uint32_t count, const VGPURect* rects)
 {
     VGPU_ASSERT(rects);
     VGPU_ASSERT(count < VGPU_MAX_VIEWPORTS_AND_SCISSORS);
@@ -600,12 +619,12 @@ void vgpuSetScissorRects(VGPUCommandBuffer commandBuffer, uint32_t count, const 
     commandBuffer->set_scissor_rects(commandBuffer->driverData, count, rects);
 }
 
-void vgpuSetVertexBuffer(VGPUCommandBuffer commandBuffer, uint32_t index, vgpu_buffer* buffer, uint64_t offset)
+void vgpuSetVertexBuffer(VGPUCommandBuffer commandBuffer, uint32_t index, VGPUBuffer buffer, uint64_t offset)
 {
     commandBuffer->setVertexBuffer(commandBuffer->driverData, index, buffer, offset);
 }
 
-void vgpuSetIndexBuffer(VGPUCommandBuffer commandBuffer, vgpu_buffer* buffer, uint64_t offset, VGPUIndexType indexType)
+void vgpuSetIndexBuffer(VGPUCommandBuffer commandBuffer, VGPUBuffer buffer, uint64_t offset, VGPUIndexType indexType)
 {
     commandBuffer->setIndexBuffer(commandBuffer->driverData, buffer, offset, indexType);
 }
@@ -626,115 +645,172 @@ void vgpuSubmit(VGPUDevice device, VGPUCommandBuffer* commandBuffers, uint32_t c
 // Format mapping table. The rows must be in the exactly same order as Format enum members are defined.
 static const VGPUFormatInfo c_FormatInfo[] = {
     //        format                   name             bytes blk         kind               red   green   blue  alpha  depth  stencl signed  srgb
-    { VGPUTextureFormat_Undefined,      "Undefined",           0,   0,  VGPU_TEXTURE_FORMAT_KIND_INTEGER,      false, false, false, false, false, false, false, false },
-    { VGPUTextureFormat_R8UNorm,        "R8_UNORM",          1,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  false, false, false, false, false, false, false },
-    { VGPUTextureFormat_R8SNorm,        "R8_SNORM",          1,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  false, false, false, false, false, false, false },
-    { VGPUTextureFormat_R8UInt,         "R8_UINT",           1,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,      true,  false, false, false, false, false, false, false },
-    { VGPUTextureFormat_R8SInt,         "R8_SINT",           1,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,      true,  false, false, false, false, false, true,  false },
+    { VGPUTextureFormat_Undefined,      "Undefined",            0,   0, 0,  VGPU_TEXTURE_FORMAT_KIND_INTEGER },
+    { VGPUTextureFormat_R8UNorm,        "R8_UNORM",             1,   1, 1, VGPUTextureFormatKind_Unorm },
+    { VGPUTextureFormat_R8SNorm,        "R8_SNORM",             1,   1, 1, VGPUTextureFormatKind_Snorm },
+    { VGPUTextureFormat_R8UInt,         "R8_UINT",              1,   1, 1, VGPU_TEXTURE_FORMAT_KIND_INTEGER },
+    { VGPUTextureFormat_R8SInt,         "R8_SINT",              1,   1, 1, VGPU_TEXTURE_FORMAT_KIND_INTEGER },
 
-    { VGPUTextureFormat_R16UInt,          "R16_UINT",          2,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,      true,  false, false, false, false, false, false, false },
-    { VGPUTextureFormat_R16SInt,          "R16_SINT",          2,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,      true,  false, false, false, false, false, true,  false },
-    { VGPUTextureFormat_R16UNorm,         "R16_UNORM",         2,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  false, false, false, false, false, false, false },
-    { VGPUTextureFormat_R16SNorm,         "R16_SNORM",         2,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  false, false, false, false, false, false, false },
-    { VGPUTextureFormat_R16Float,         "R16_FLOAT",         2,   1, VGPU_TEXTURE_FORMAT_KIND_FLOAT,        true,  false, false, false, false, false, true,  false },
-    { VGPUTextureFormat_RG8UInt,          "RG8_UINT",          2,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,      true,  true,  false, false, false, false, false, false },
-    { VGPUTextureFormat_RG8SInt,          "RG8_SINT",          2,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,      true,  true,  false, false, false, false, true,  false },
-    { VGPUTextureFormat_RG8UNorm,         "RG8_UNORM",         2,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  true,  false, false, false, false, false, false },
-    { VGPUTextureFormat_RG8SNorm,         "RG8_SNORM",         2,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  true,  false, false, false, false, false, false },
+    { VGPUTextureFormat_R16UInt,          "R16_UINT",           2,   1, 1, VGPU_TEXTURE_FORMAT_KIND_INTEGER },
+    { VGPUTextureFormat_R16SInt,          "R16_SINT",           2,   1, 1, VGPU_TEXTURE_FORMAT_KIND_INTEGER },
+    { VGPUTextureFormat_R16UNorm,         "R16_UNORM",          2,   1, 1, VGPUTextureFormatKind_Unorm },
+    { VGPUTextureFormat_R16SNorm,         "R16_SNORM",          2,   1, 1, VGPUTextureFormatKind_Snorm },
+    { VGPUTextureFormat_R16Float,         "R16_FLOAT",          2,   1, 1, VGPUTextureFormatKind_Float },
+    { VGPUTextureFormat_RG8UInt,          "RG8_UINT",           2,   1, 1, VGPU_TEXTURE_FORMAT_KIND_INTEGER },
+    { VGPUTextureFormat_RG8SInt,          "RG8_SINT",           2,   1, 1, VGPU_TEXTURE_FORMAT_KIND_INTEGER },
+    { VGPUTextureFormat_RG8UNorm,         "RG8_UNORM",          2,   1, 1, VGPUTextureFormatKind_Unorm },
+    { VGPUTextureFormat_RG8SNorm,         "RG8_SNORM",          2,   1, 1, VGPUTextureFormatKind_Snorm },
 
-    { VGPUTextureFormat_BGRA4UNorm,       "BGRA4_UNORM",       2,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  true,  true,  true,  false, false, false, false },
-    { VGPUTextureFormat_B5G6R5UNorm,      "B5G6R5_UNORM",      2,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  true,  true,  false, false, false, false, false },
-    { VGPUTextureFormat_B5G5R5A1UNorm,    "B5G5R5A1_UNORM",    2,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  true,  true,  true,  false, false, false, false },
+    { VGPUTextureFormat_BGRA4UNorm,       "BGRA4_UNORM",        2,   1, 1, VGPUTextureFormatKind_Unorm },
+    { VGPUTextureFormat_B5G6R5UNorm,      "B5G6R5_UNORM",       2,   1, 1, VGPUTextureFormatKind_Unorm },
+    { VGPUTextureFormat_B5G5R5A1UNorm,    "B5G5R5A1_UNORM",     2,   1, 1, VGPUTextureFormatKind_Unorm },
 
-    { VGPUTextureFormat_R32UInt,          "R32_UINT",          4,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,      true,  false, false, false, false, false, false, false },
-    { VGPUTextureFormat_R32SInt,          "R32_SINT",          4,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,      true,  false, false, false, false, false, true,  false },
-    { VGPUTextureFormat_R32Float,         "R32_FLOAT",         4,   1, VGPU_TEXTURE_FORMAT_KIND_FLOAT,        true,  false, false, false, false, false, true,  false },
-    { VGPUTextureFormat_RG16UInt,         "RG16_UINT",         4,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,      true,  true,  false, false, false, false, false, false },
-    { VGPUTextureFormat_RG16SInt,         "RG16_SINT",         4,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,      true,  true,  false, false, false, false, true,  false },
-    { VGPUTextureFormat_RG16UNorm,        "RG16_UNORM",        4,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  true,  false, false, false, false, false, false },
-    { VGPUTextureFormat_RG16SNorm,        "RG16_SNORM",        4,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  true,  false, false, false, false, false, false },
-    { VGPUTextureFormat_RG16Float,        "RG16_FLOAT",        4,   1, VGPU_TEXTURE_FORMAT_KIND_FLOAT,        true,  true,  false, false, false, false, true,  false },
+    { VGPUTextureFormat_R32UInt,          "R32_UINT",           4,   1, 1, VGPU_TEXTURE_FORMAT_KIND_INTEGER },
+    { VGPUTextureFormat_R32SInt,          "R32_SINT",           4,   1, 1, VGPU_TEXTURE_FORMAT_KIND_INTEGER },
+    { VGPUTextureFormat_R32Float,         "R32_FLOAT",          4,   1, 1, VGPUTextureFormatKind_Float },
+    { VGPUTextureFormat_RG16UInt,         "RG16_UINT",          4,   1, 1, VGPU_TEXTURE_FORMAT_KIND_INTEGER },
+    { VGPUTextureFormat_RG16SInt,         "RG16_SINT",          4,   1, 1, VGPU_TEXTURE_FORMAT_KIND_INTEGER },
+    { VGPUTextureFormat_RG16UNorm,        "RG16_UNORM",         4,   1, 1, VGPUTextureFormatKind_Unorm },
+    { VGPUTextureFormat_RG16SNorm,        "RG16_SNORM",         4,   1, 1, VGPUTextureFormatKind_Snorm },
+    { VGPUTextureFormat_RG16Float,        "RG16_FLOAT",         4,   1, 1, VGPUTextureFormatKind_Float },
 
-    { VGPUTextureFormat_RGBA8UInt,        "RGBA8_UINT",        4,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,      true,  true,  true,  true,  false, false, false, false },
-    { VGPUTextureFormat_RGBA8SInt,        "RGBA8_SINT",        4,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,      true,  true,  true,  true,  false, false, true,  false },
-    { VGPUTextureFormat_RGBA8UNorm,       "RGBA8_UNORM",       4,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  true,  true,  true,  false, false, false, false },
-    { VGPUTextureFormat_RGBA8UNormSrgb,      "SRGBA8_UNORM",      4,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  true,  true,  true,  false, false, false, true  },
-    { VGPUTextureFormat_RGBA8SNorm,       "RGBA8_SNORM",       4,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  true,  true,  true,  false, false, false, false },
-    { VGPUTextureFormat_BGRA8UNorm,       "BGRA8_UNORM",       4,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  true,  true,  true,  false, false, false, false },
-    { VGPUTextureFormat_BGRA8UNormSrgb,      "SBGRA8_UNORM",      4,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  true,  true,  true,  false, false, false, false },
+    { VGPUTextureFormat_RGBA8UInt,        "RGBA8_UINT",         4,   1, 1, VGPU_TEXTURE_FORMAT_KIND_INTEGER },
+    { VGPUTextureFormat_RGBA8SInt,        "RGBA8_SINT",         4,   1, 1, VGPU_TEXTURE_FORMAT_KIND_INTEGER },
+    { VGPUTextureFormat_RGBA8UNorm,       "RGBA8_UNORM",        4,   1, 1, VGPUTextureFormatKind_Unorm },
+    { VGPUTextureFormat_RGBA8UNormSrgb,      "SRGBA8_UNORM",    4,   1, 1, VGPUTextureFormatKind_UnormSrgb  },
+    { VGPUTextureFormat_RGBA8SNorm,       "RGBA8_SNORM",        4,   1, 1, VGPUTextureFormatKind_Snorm },
+    { VGPUTextureFormat_BGRA8UNorm,       "BGRA8_UNORM",        4,   1, 1, VGPUTextureFormatKind_Unorm },
+    { VGPUTextureFormat_BGRA8UNormSrgb,      "SBGRA8_UNORM",    4,   1, 1, VGPUTextureFormatKind_UnormSrgb },
 
-    { VGPUTextureFormat_RGB10A2UNorm,   "R10G10B10A2_UNORM",    4,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,          true,  true,  true,  true,  false, false, false, false },
-    { VGPUTextureFormat_RG11B10Float,   "R11G11B10_FLOAT",      4,   1, VGPU_TEXTURE_FORMAT_KIND_FLOAT,     true,  true,  true,  false, false, false, false, false },
-    { VGPUTextureFormat_RGB9E5Float,    "RGB9E5Float",          4,   1, VGPU_TEXTURE_FORMAT_KIND_FLOAT,     true,  true,  true,  false, false, false, false, false },
+    { VGPUTextureFormat_RGB10A2UNorm,   "R10G10B10A2_UNORM",    4,   1, 1, VGPUTextureFormatKind_Unorm },
+    { VGPUTextureFormat_RG11B10Float,   "R11G11B10_FLOAT",      4,   1, 1, VGPUTextureFormatKind_Float },
+    { VGPUTextureFormat_RGB9E5Float,    "RGB9E5Float",          4,   1, 1, VGPUTextureFormatKind_Float },
 
-    { VGPUTextureFormat_RG32UInt,         "RG32_UINT",         8,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,    true,  true,  false, false, false, false, false, false },
-    { VGPUTextureFormat_RG32SInt,         "RG32_SINT",         8,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,    true,  true,  false, false, false, false, true,  false },
-    { VGPUTextureFormat_RG32Float,        "RG32_FLOAT",        8,   1, VGPU_TEXTURE_FORMAT_KIND_FLOAT,      true,  true,  false, false, false, false, true,  false },
-    { VGPUTextureFormat_RGBA16UInt,       "RGBA16_UINT",       8,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,    true,  true,  true,  true,  false, false, false, false },
-    { VGPUTextureFormat_RGBA16SInt,       "RGBA16_SINT",       8,   1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,    true,  true,  true,  true,  false, false, true,  false },
-    { VGPUTextureFormat_RGBA16UNorm,      "RGBA16_UNORM",      8,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,           true,  true,  true,  true,  false, false, false, false },
-    { VGPUTextureFormat_RGBA16SNorm,      "RGBA16_SNORM",      8,   1, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,           true,  true,  true,  true,  false, false, false, false },
-    { VGPUTextureFormat_RGBA16Float,      "RGBA16_FLOAT",      8,   1, VGPU_TEXTURE_FORMAT_KIND_FLOAT,      true,  true,  true,  true,  false, false, true,  false },
+    { VGPUTextureFormat_RG32UInt,         "RG32_UINT",          8,   1, 1, VGPU_TEXTURE_FORMAT_KIND_INTEGER },
+    { VGPUTextureFormat_RG32SInt,         "RG32_SINT",          8,   1, 1, VGPU_TEXTURE_FORMAT_KIND_INTEGER },
+    { VGPUTextureFormat_RG32Float,        "RG32_FLOAT",         8,   1, 1, VGPUTextureFormatKind_Float },
+    { VGPUTextureFormat_RGBA16UInt,       "RGBA16_UINT",        8,   1, 1, VGPU_TEXTURE_FORMAT_KIND_INTEGER },
+    { VGPUTextureFormat_RGBA16SInt,       "RGBA16_SINT",        8,   1, 1, VGPU_TEXTURE_FORMAT_KIND_INTEGER },
+    { VGPUTextureFormat_RGBA16UNorm,      "RGBA16_UNORM",       8,   1, 1, VGPUTextureFormatKind_Unorm },
+    { VGPUTextureFormat_RGBA16SNorm,      "RGBA16_SNORM",       8,   1, 1, VGPUTextureFormatKind_Snorm },
+    { VGPUTextureFormat_RGBA16Float,      "RGBA16_FLOAT",       8,   1, 1, VGPUTextureFormatKind_Float },
 
-    { VGPUTextureFormat_RGBA32UInt,       "RGBA32_UINT",       16,  1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,    true,  true,  true,  true,  false, false, false, false },
-    { VGPUTextureFormat_RGBA32SInt,       "RGBA32_SINT",       16,  1, VGPU_TEXTURE_FORMAT_KIND_INTEGER,    true,  true,  true,  true,  false, false, true,  false },
-    { VGPUTextureFormat_RGBA32Float,      "RGBA32_FLOAT",      16,  1, VGPU_TEXTURE_FORMAT_KIND_FLOAT,      true,  true,  true,  true,  false, false, true,  false },
+    { VGPUTextureFormat_RGBA32UInt,       "RGBA32_UINT",        16,  1, 1, VGPU_TEXTURE_FORMAT_KIND_INTEGER },
+    { VGPUTextureFormat_RGBA32SInt,       "RGBA32_SINT",        16,  1, 1, VGPU_TEXTURE_FORMAT_KIND_INTEGER },
+    { VGPUTextureFormat_RGBA32Float,      "RGBA32_FLOAT",       16,  1, 1, VGPUTextureFormatKind_Float },
 
-    { VGPUTextureFormat_Depth16UNorm,           "Depth16UNorm", 2,   1, VGPU_TEXTURE_FORMAT_KIND_DEPTH_STENCIL, false, false, false, false, true,  false, false, false },
-    { VGPUTextureFormat_Depth24UNormStencil8,   "D24S8",         4,   1, VGPU_TEXTURE_FORMAT_KIND_DEPTH_STENCIL, false, false, false, false, true,  true,  false, false },
-    { VGPUTextureFormat_Depth32Float,           "D32",           4,   1, VGPU_TEXTURE_FORMAT_KIND_DEPTH_STENCIL, false, false, false, false, true,  false, false, false },
-    { VGPUTextureFormat_Depth32FloatStencil8,   "D32S8",         8,   1, VGPU_TEXTURE_FORMAT_KIND_DEPTH_STENCIL, false, false, false, false, true,  true,  false, false },
+    // Depth-stencil formats
+    { VGPUTextureFormat_Depth16Unorm,           "Depth16Unorm",             2,   1, 1, VGPUTextureFormatKind_Unorm },
+    { VGPUTextureFormat_Depth32Float,           "Depth32Float",             4,   1, 1, VGPUTextureFormatKind_Float },
+    { VGPUTextureFormat_Stencil8,               "Stencil8",                 4,   1, 1, VGPUTextureFormatKind_Float },
+    { VGPUTextureFormat_Depth24UnormStencil8,   "Depth24UnormStencil8",     4,   1, 1, VGPUTextureFormatKind_Unorm },
+    { VGPUTextureFormat_Depth32FloatStencil8,   "Depth32FloatStencil8",     8,   1, 1, VGPUTextureFormatKind_Float },
 
-    { VGPUTextureFormat_BC1UNorm,       "BC1UNorm",         8,   4, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  true,  true,  true,  false, false, false, false },
-    { VGPUTextureFormat_BC1UNormSrgb,   "BC1UNormSrgb",    8,   4, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  true,  true,  true,  false, false, false, true  },
-    { VGPUTextureFormat_BC2UNorm,       "BC2UNorm",         16,  4, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  true,  true,  true,  false, false, false, false },
-    { VGPUTextureFormat_BC2UNormSrgb,   "BC2UNormSrgb",    16,  4, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  true,  true,  true,  false, false, false, true  },
-    { VGPUTextureFormat_BC3UNorm,       "BC3UNorm",         16,  4, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  true,  true,  true,  false, false, false, false },
-    { VGPUTextureFormat_BC3UNormSrgb,   "BC3UNormSrgb",    16,  4, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  true,  true,  true,  false, false, false, true  },
-    { VGPUTextureFormat_BC4UNorm,       "BC4UNorm",         8,   4, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  false, false, false, false, false, false, false },
-    { VGPUTextureFormat_BC4SNorm,       "BC4SNorm",         8,   4, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  false, false, false, false, false, false, false },
-    { VGPUTextureFormat_BC5UNorm,       "BC5UNorm",         16,  4, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  true,  false, false, false, false, false, false },
-    { VGPUTextureFormat_BC5SNorm,       "BC5SNorm",         16,  4, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  true,  false, false, false, false, false, false },
-    { VGPUTextureFormat_BC6HUFloat,     "BC6HUFloat",       16,  4, VGPU_TEXTURE_FORMAT_KIND_FLOAT, true,  true,  true,  false, false, false, false, false },
-    { VGPUTextureFormat_BC6HSFloat,     "BC6HSFloat",       16,  4, VGPU_TEXTURE_FORMAT_KIND_FLOAT, true,  true,  true,  false, false, false, true,  false },
-    { VGPUTextureFormat_BC7UNorm,       "BC7UNorm",         16,  4, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  true,  true,  true,  false, false, false, false },
-    { VGPUTextureFormat_BC7UNormSrgb,   "BC7UNormSrgb",    16,  4, VGPU_TEXTURE_FORMAT_KIND_NORMALIZED,   true,  true,  true,  true,  false, false, false, true  },
+    // BC compressed formats
+    { VGPUTextureFormat_BC1UNorm,       "BC1UNorm",         8,   4, 4, VGPUTextureFormatKind_Unorm },
+    { VGPUTextureFormat_BC1UNormSrgb,   "BC1UNormSrgb",     8,   4, 4, VGPUTextureFormatKind_UnormSrgb  },
+    { VGPUTextureFormat_BC2UNorm,       "BC2UNorm",         16,  4, 4, VGPUTextureFormatKind_Unorm },
+    { VGPUTextureFormat_BC2UNormSrgb,   "BC2UNormSrgb",     16,  4, 4, VGPUTextureFormatKind_UnormSrgb  },
+    { VGPUTextureFormat_BC3UNorm,       "BC3UNorm",         16,  4, 4, VGPUTextureFormatKind_Unorm },
+    { VGPUTextureFormat_BC3UNormSrgb,   "BC3UNormSrgb",     16,  4, 4, VGPUTextureFormatKind_UnormSrgb  },
+    { VGPUTextureFormat_BC4UNorm,       "BC4UNorm",         8,   4, 4, VGPUTextureFormatKind_Unorm },
+    { VGPUTextureFormat_BC4SNorm,       "BC4SNorm",         8,   4, 4, VGPUTextureFormatKind_Snorm },
+    { VGPUTextureFormat_BC5UNorm,       "BC5UNorm",         16,  4, 4, VGPUTextureFormatKind_Unorm },
+    { VGPUTextureFormat_BC5SNorm,       "BC5SNorm",         16,  4, 4, VGPUTextureFormatKind_Snorm },
+    { VGPUTextureFormat_BC6HUFloat,     "BC6HUFloat",       16,  4, 4, VGPUTextureFormatKind_Float },
+    { VGPUTextureFormat_BC6HSFloat,     "BC6HSFloat",       16,  4, 4, VGPUTextureFormatKind_Float },
+    { VGPUTextureFormat_BC7UNorm,       "BC7UNorm",         16,  4, 4, VGPUTextureFormatKind_Unorm },
+    { VGPUTextureFormat_BC7UNormSrgb,   "BC7UNormSrgb",     16,  4, 4, VGPUTextureFormatKind_UnormSrgb },
+
+    // ETC2/EAC compressed formats
+    { VGPUTextureFormat_Etc2Rgb8Unorm,       "Etc2Rgb8Unorm",         8,   4, 4, VGPUTextureFormatKind_Unorm },
+    { VGPUTextureFormat_Etc2Rgb8UnormSrgb,   "Etc2Rgb8UnormSrgb",     8,   4, 4, VGPUTextureFormatKind_UnormSrgb },
+    { VGPUTextureFormat_Etc2Rgb8A1Unorm,     "Etc2Rgb8A1Unorm,",     16,   4, 4, VGPUTextureFormatKind_Unorm },
+    { VGPUTextureFormat_Etc2Rgb8A1UnormSrgb, "Etc2Rgb8A1UnormSrgb",  16,   4, 4, VGPUTextureFormatKind_UnormSrgb },
+    { VGPUTextureFormat_Etc2Rgba8Unorm,      "Etc2Rgba8Unorm",       16,   4, 4, VGPUTextureFormatKind_Unorm },
+    { VGPUTextureFormat_Etc2Rgba8UnormSrgb,  "Etc2Rgba8UnormSrgb",   16,   4, 4, VGPUTextureFormatKind_UnormSrgb },
+    { VGPUTextureFormat_EacR11Unorm,         "EacR11Unorm",          8,    4, 4, VGPUTextureFormatKind_Unorm },
+    { VGPUTextureFormat_EacR11Snorm,         "EacR11Snorm",          8,    4, 4, VGPUTextureFormatKind_Snorm },
+    { VGPUTextureFormat_EacRg11Unorm,        "EacRg11Unorm",         16,   4, 4, VGPUTextureFormatKind_Unorm },
+    { VGPUTextureFormat_EacRg11Snorm,        "EacRg11Snorm",         16,   4, 4, VGPUTextureFormatKind_Snorm },
+
+    // ASTC compressed formats
+    { VGPUTextureFormat_Astc4x4Unorm,        "ASTC4x4Unorm",         16,   4, 4, VGPUTextureFormatKind_Unorm },
+    { VGPUTextureFormat_Astc4x4UnormSrgb,    "ASTC4x4UnormSrgb",     16,   4, 4, VGPUTextureFormatKind_UnormSrgb },
+    { VGPUTextureFormat_Astc5x4Unorm,        "ASTC5x4Unorm",         16,   5, 4, VGPUTextureFormatKind_Unorm },
+    { VGPUTextureFormat_Astc5x4UnormSrgb,    "ASTC5x4UnormSrgb",     16,   5, 4, VGPUTextureFormatKind_UnormSrgb },
+    { VGPUTextureFormat_Astc5x5Unorm,        "ASTC5x5UnormSrgb",     16,   5, 5, VGPUTextureFormatKind_Unorm },
+    { VGPUTextureFormat_Astc5x5UnormSrgb,    "ASTC5x5UnormSrgb",     16,   5, 5, VGPUTextureFormatKind_UnormSrgb },
+    { VGPUTextureFormat_Astc6x5Unorm,        "ASTC6x5Unorm",         16,   6, 5, VGPUTextureFormatKind_Unorm },
+    { VGPUTextureFormat_Astc6x5UnormSrgb,    "ASTC6x5UnormSrgb",     16,   6, 5, VGPUTextureFormatKind_UnormSrgb },
+    { VGPUTextureFormat_Astc6x6Unorm,        "ASTC6x6Unorm",         16,   6, 6, VGPUTextureFormatKind_Unorm },
+    { VGPUTextureFormat_Astc6x6UnormSrgb,    "ASTC6x6UnormSrgb",     16,   6, 6, VGPUTextureFormatKind_UnormSrgb },
+    { VGPUTextureFormat_Astc8x5Unorm,        "ASTC8x5Unorm",         16,   8, 5, VGPUTextureFormatKind_Unorm },
+    { VGPUTextureFormat_Astc8x5UnormSrgb,    "ASTC8x5UnormSrgb",     16,   8, 5, VGPUTextureFormatKind_UnormSrgb },
+    { VGPUTextureFormat_Astc8x6Unorm,        "ASTC8x6Unorm",         16,   8, 6, VGPUTextureFormatKind_Unorm },
+    { VGPUTextureFormat_Astc8x6UnormSrgb,    "ASTC8x6UnormSrgb",     16,   8, 6, VGPUTextureFormatKind_UnormSrgb },
+    { VGPUTextureFormat_Astc8x8Unorm,        "ASTC8x8Unorm",         16,   8, 8, VGPUTextureFormatKind_Unorm },
+    { VGPUTextureFormat_Astc8x8UnormSrgb,    "ASTC8x8UnormSrgb",     16,   8, 8, VGPUTextureFormatKind_UnormSrgb },
+    { VGPUTextureFormat_Astc10x5Unorm,       "ASTC10x5Unorm",        16,   10, 5, VGPUTextureFormatKind_Unorm },
+    { VGPUTextureFormat_Astc10x5UnormSrgb,   "ASTC10x5UnormSrgb",    16,   10, 5, VGPUTextureFormatKind_UnormSrgb },
+    { VGPUTextureFormat_Astc10x6Unorm,       "ASTC10x6Unorm",        16,   10, 6, VGPUTextureFormatKind_Unorm },
+    { VGPUTextureFormat_Astc10x6UnormSrgb,   "ASTC10x6UnormSrgb",    16,   10, 6, VGPUTextureFormatKind_UnormSrgb },
+    { VGPUTextureFormat_Astc10x8Unorm,       "ASTC10x8Unorm",        16,   10, 8, VGPUTextureFormatKind_Unorm },
+    { VGPUTextureFormat_Astc10x8UnormSrgb,   "ASTC10x8UnormSrgb",    16,   10, 8, VGPUTextureFormatKind_UnormSrgb },
+    { VGPUTextureFormat_Astc10x10Unorm,      "ASTC10x10Unorm",       16,   10, 10, VGPUTextureFormatKind_Unorm  },
+    { VGPUTextureFormat_Astc10x10UnormSrgb,  "ASTC10x10UnormSrgb",   16,   10, 10, VGPUTextureFormatKind_UnormSrgb },
+    { VGPUTextureFormat_Astc12x10Unorm,      "ASTC12x10Unorm",       16,   12, 10, VGPUTextureFormatKind_Unorm  },
+    { VGPUTextureFormat_Astc12x10UnormSrgb,  "ASTC12x10UnormSrgb",   16,   12, 10, VGPUTextureFormatKind_UnormSrgb },
+    { VGPUTextureFormat_Astc12x12Unorm,      "ASTC12x12Unorm",       16,   12, 12, VGPUTextureFormatKind_Unorm  },
+    { VGPUTextureFormat_Astc12x12UnormSrgb,  "ASTC12x12UnormSrgb",   16,   12, 12, VGPUTextureFormatKind_UnormSrgb },
 };
 
-void vgpuGetFormatInfo(VGPUTextureFormat format, const VGPUFormatInfo* pInfo)
+VGPUBool32 vgpuIsDepthFormat(VGPUTextureFormat format)
 {
-    VGPU_ASSERT(pInfo);
-
-    //static_assert(sizeof(c_FormatInfo) / sizeof(VGFXFormatInfo) == _VGFXTextureFormat_Count,
-    //    "The format info table doesn't have the right number of elements");
-
-    if (format >= _VGPUTextureFormat_Count)
+    switch (format)
     {
-        // UNKNOWN
-        pInfo = &c_FormatInfo[0];
-        return;
+    case VGPUTextureFormat_Depth16Unorm:
+    case VGPUTextureFormat_Depth32Float:
+    case VGPUTextureFormat_Depth24UnormStencil8:
+    case VGPUTextureFormat_Depth32FloatStencil8:
+        return true;
+    default:
+        return false;
     }
-
-    pInfo = &c_FormatInfo[(uint32_t)format];
-    VGPU_ASSERT(pInfo->format == format);
 }
 
-bool vgpuIsDepthFormat(VGPUTextureFormat format)
+VGPUBool32 vgpuIsStencilFormat(VGPUTextureFormat format)
 {
-    VGPU_ASSERT(c_FormatInfo[(uint32_t)format].format == format);
-    return c_FormatInfo[(uint32_t)format].hasDepth;
+    switch (format)
+    {
+    case VGPUTextureFormat_Stencil8:
+    case VGPUTextureFormat_Depth24UnormStencil8:
+    case VGPUTextureFormat_Depth32FloatStencil8:
+        return true;
+    default:
+        return false;
+    }
 }
 
-bool vgpuIsStencilFormat(VGPUTextureFormat format)
+VGPUBool32 vgpuIsDepthStencilFormat(VGPUTextureFormat format)
 {
-    VGPU_ASSERT(c_FormatInfo[(uint32_t)format].format == format);
-    return c_FormatInfo[(uint32_t)format].hasStencil;
+    switch (format)
+    {
+    case VGPUTextureFormat_Depth16Unorm:
+    case VGPUTextureFormat_Depth32Float:
+    case VGPUTextureFormat_Stencil8:
+    case VGPUTextureFormat_Depth24UnormStencil8:
+    case VGPUTextureFormat_Depth32FloatStencil8:
+        return true;
+    default:
+        return false;
+    }
 }
 
-bool vgpuIsDepthStencilFormat(VGPUTextureFormat format)
+VGPUTextureFormatKind vgpuGetPixelFormatKind(VGPUTextureFormat format)
 {
     VGPU_ASSERT(c_FormatInfo[(uint32_t)format].format == format);
-    return c_FormatInfo[(uint32_t)format].hasDepth || c_FormatInfo[(uint32_t)format].hasStencil;
+    return c_FormatInfo[(uint32_t)format].kind;
 }
 
 uint32_t vgpuNumMipLevels(uint32_t width, uint32_t height, uint32_t depth)
@@ -751,3 +827,5 @@ uint32_t vgpuNumMipLevels(uint32_t width, uint32_t height, uint32_t depth)
 
     return mipLevels;
 }
+
+

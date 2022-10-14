@@ -14,8 +14,8 @@
 _VGPU_EXTERN const vgpu_allocation_callbacks* VGPU_ALLOC_CB;
 
 #define VGPU_ALLOC(type)        ((type*)_vgpu_alloc(sizeof(type)))
-#define VGPU_FREE(ptr)          (VGPU_ALLOC_CB->free(ptr, VGPU_ALLOC_CB->user_data))
 #define VGPU_ALLOC_CLEAR(type)  ((type*)_vgpu_alloc_clear(sizeof(type)))
+#define VGPU_FREE(ptr)          (VGPU_ALLOC_CB->free(ptr, VGPU_ALLOC_CB->user_data))
 
 _VGPU_EXTERN void* _vgpu_alloc(size_t size);
 _VGPU_EXTERN void* _vgpu_alloc_clear(size_t size);
@@ -89,72 +89,6 @@ namespace
         std::hash<T> hasher;
         seed ^= hasher(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
     }
-
-    /// STL allocator that forwards to our allocation functions
-    template <typename T>
-    class STLAllocator
-    {
-    public:
-        using value_type = T;
-
-        /// Pointer to type
-        using pointer = T*;
-        using const_pointer = const T*;
-
-        /// Reference to type.
-        /// Can be removed in C++20.
-        using reference = T&;
-        using const_reference = const T&;
-
-        using size_type = size_t;
-        using difference_type = ptrdiff_t;
-
-        /// Constructor
-        inline					STLAllocator() = default;
-
-        /// Constructor from other allocator
-        template <typename T2>
-        inline					STLAllocator(const STLAllocator<T2>&) { }
-
-        /// Allocate memory
-        inline pointer	allocate(size_type size)
-        {
-            if (0 == size)
-                return NULL;
-
-            pointer temp = (pointer)_vgpu_alloc(size * sizeof(T));
-            if (temp == NULL)
-                throw std::bad_alloc();
-            return temp;
-        }
-
-        /// Free memory
-        inline void deallocate(pointer inPointer, size_type)
-        {
-            _vgpu_free(inPointer);
-        }
-
-        /// Allocators are stateless so assumed to be equal
-        inline bool				operator == (const STLAllocator<T>&) const
-        {
-            return true;
-        }
-
-        inline bool				operator != (const STLAllocator<T>&) const
-        {
-            return false;
-        }
-
-        /// Converting to allocator for other type
-        template <typename T2>
-        struct rebind
-        {
-            using other = STLAllocator<T2>;
-        };
-    };
-
-    //template <class Key, class Hash = std::hash<Key>, class KeyEqual = std::equal_to<Key>> using UnorderedSet = std::unordered_set<Key, Hash, KeyEqual, STLAllocator<Key>>;
-    template <class Key, class T, class Hash = std::hash<Key>, class KeyEqual = std::equal_to<Key>> using UnorderedMap = std::unordered_map<Key, T, Hash, KeyEqual, STLAllocator<std::pair<const Key, T>>>;
 }
 
 #endif /* __cplusplus */
@@ -169,17 +103,17 @@ typedef struct VGPUCommandBuffer_T {
 
     void (*setPipeline)(VGPUCommandBufferImpl* driverData, VGPUPipeline pipeline);
     void (*dispatch)(VGPUCommandBufferImpl* driverData, uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ);
-    void (*dispatchIndirect)(VGPUCommandBufferImpl* driverData, vgpu_buffer* buffer, uint64_t offset);
+    void (*dispatchIndirect)(VGPUCommandBufferImpl* driverData, VGPUBuffer buffer, uint64_t offset);
 
     VGPUTexture(*acquireSwapchainTexture)(VGPUCommandBufferImpl* driverData, VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight);
     void (*beginRenderPass)(VGPUCommandBufferImpl* driverData, const VGPURenderPassDesc* desc);
     void (*endRenderPass)(VGPUCommandBufferImpl* driverData);
 
-    void (*setViewports)(VGPUCommandBufferImpl* driverData, uint32_t count, const vgpu_viewport* viewports);
-    void (*set_scissor_rect)(VGPUCommandBufferImpl* driverData, const vgpu_rect* rects);
-    void (*set_scissor_rects)(VGPUCommandBufferImpl* driverData, uint32_t count, const vgpu_rect* rects);
-    void (*setVertexBuffer)(VGPUCommandBufferImpl* driverData, uint32_t index, vgpu_buffer* buffer, uint64_t offset);
-    void (*setIndexBuffer)(VGPUCommandBufferImpl* driverData, vgpu_buffer* buffer, uint64_t offset, VGPUIndexType indexType);
+    void (*setViewports)(VGPUCommandBufferImpl* driverData, uint32_t count, const VGPUViewport* viewports);
+    void (*set_scissor_rect)(VGPUCommandBufferImpl* driverData, const VGPURect* rects);
+    void (*set_scissor_rects)(VGPUCommandBufferImpl* driverData, uint32_t count, const VGPURect* rects);
+    void (*setVertexBuffer)(VGPUCommandBufferImpl* driverData, uint32_t index, VGPUBuffer buffer, uint64_t offset);
+    void (*setIndexBuffer)(VGPUCommandBufferImpl* driverData, VGPUBuffer buffer, uint64_t offset, VGPUIndexType indexType);
 
     void (*draw)(VGPUCommandBufferImpl* driverData, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t baseInstance);
 
@@ -193,12 +127,12 @@ typedef struct VGPUDevice_T
     uint64_t(*frame)(VGFXRenderer* driverData);
     void (*waitIdle)(VGFXRenderer* driverData);
     VGPUBackendType(*getBackendType)(void);
-    bool (*queryFeature)(VGFXRenderer* driverData, VGPUFeature feature, void* pInfo, uint32_t infoSize);
+    VGPUBool32(*queryFeature)(VGFXRenderer* driverData, VGPUFeature feature, void* pInfo, uint32_t infoSize);
     void (*getAdapterProperties)(VGFXRenderer* driverData, VGPUAdapterProperties* properties);
     void (*getLimits)(VGFXRenderer* driverData, VGPULimits* limits);
 
-    vgpu_buffer*(*createBuffer)(VGFXRenderer* driverData, const VGPUBufferDesc* desc, const void* pInitialData);
-    void(*destroyBuffer)(VGFXRenderer* driverData, vgpu_buffer* resource);
+    VGPUBuffer(*createBuffer)(VGFXRenderer* driverData, const VGPUBufferDesc* desc, const void* pInitialData);
+    void(*destroyBuffer)(VGFXRenderer* driverData, VGPUBuffer resource);
 
     VGPUTexture(*createTexture)(VGFXRenderer* driverData, const VGPUTextureDesc* desc, const void* pInitialData);
     void(*destroyTexture)(VGFXRenderer* driverData, VGPUTexture resource);
@@ -274,7 +208,7 @@ ASSIGN_DRIVER_FUNC(submit, name) \
 typedef struct VGFXDriver
 {
     VGPUBackendType backend;
-    bool(*is_supported)(void);
+    VGPUBool32(*is_supported)(void);
     VGPUDevice(*createDevice)(const VGPUDeviceDesc* desc);
 } VGFXDriver;
 

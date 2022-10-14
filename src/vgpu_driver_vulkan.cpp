@@ -356,10 +356,11 @@ namespace
             case VGPUTextureFormat_RGBA32SInt:       return VK_FORMAT_R32G32B32A32_SINT;
             case VGPUTextureFormat_RGBA32Float:      return VK_FORMAT_R32G32B32A32_SFLOAT;
                 // Depth-stencil formats
-            case VGPUTextureFormat_Depth16UNorm:     return VK_FORMAT_D16_UNORM;
-            case VGPUTextureFormat_Depth32Float:     return VK_FORMAT_D32_SFLOAT;
-            case VGPUTextureFormat_Depth24UNormStencil8: return VK_FORMAT_D24_UNORM_S8_UINT;
-            case VGPUTextureFormat_Depth32FloatStencil8: return VK_FORMAT_D32_SFLOAT_S8_UINT;
+            case VGPUTextureFormat_Depth16Unorm:            return VK_FORMAT_D16_UNORM;
+            case VGPUTextureFormat_Depth32Float:            return VK_FORMAT_D32_SFLOAT;
+            case VGPUTextureFormat_Stencil8:                return VK_FORMAT_S8_UINT;
+            case VGPUTextureFormat_Depth24UnormStencil8:    return VK_FORMAT_D24_UNORM_S8_UINT;
+            case VGPUTextureFormat_Depth32FloatStencil8:    return VK_FORMAT_D32_SFLOAT_S8_UINT;
                 // Compressed BC formats
             case VGPUTextureFormat_BC1UNorm:         return VK_FORMAT_BC1_RGBA_UNORM_BLOCK;
             case VGPUTextureFormat_BC1UNormSrgb:     return VK_FORMAT_BC1_RGBA_SRGB_BLOCK;
@@ -376,45 +377,45 @@ namespace
             case VGPUTextureFormat_BC7UNorm:         return VK_FORMAT_BC7_UNORM_BLOCK;
             case VGPUTextureFormat_BC7UNormSrgb:     return VK_FORMAT_BC7_SRGB_BLOCK;
                 // EAC/ETC compressed formats
-            case VGPUTextureFormat_ETC2RGB8UNorm:            return VK_FORMAT_ETC2_R8G8B8_UNORM_BLOCK;
-            case VGPUTextureFormat_ETC2RGB8UNormSrgb:        return VK_FORMAT_ETC2_R8G8B8_SRGB_BLOCK;
-            case VGPUTextureFormat_ETC2RGB8A1UNorm:          return VK_FORMAT_ETC2_R8G8B8A1_UNORM_BLOCK;
-            case VGPUTextureFormat_ETC2RGB8A1UNormSrgb:      return VK_FORMAT_ETC2_R8G8B8A1_SRGB_BLOCK;
-            case VGPUTextureFormat_ETC2RGBA8UNorm:           return VK_FORMAT_ETC2_R8G8B8A8_UNORM_BLOCK;
-            case VGPUTextureFormat_ETC2RGBA8UNormSrgb:       return VK_FORMAT_ETC2_R8G8B8A8_SRGB_BLOCK;
-            case VGPUTextureFormat_EACR11UNorm:              return VK_FORMAT_EAC_R11_UNORM_BLOCK;
-            case VGPUTextureFormat_EACR11SNorm:              return VK_FORMAT_EAC_R11_SNORM_BLOCK;
-            case VGPUTextureFormat_EACRG11UNorm:             return VK_FORMAT_EAC_R11G11_UNORM_BLOCK;
-            case VGPUTextureFormat_EACRG11SNorm:             return VK_FORMAT_EAC_R11G11_SNORM_BLOCK;
+            case VGPUTextureFormat_Etc2Rgb8Unorm:              return VK_FORMAT_ETC2_R8G8B8_UNORM_BLOCK;
+            case VGPUTextureFormat_Etc2Rgb8UnormSrgb:          return VK_FORMAT_ETC2_R8G8B8_SRGB_BLOCK;
+            case VGPUTextureFormat_Etc2Rgb8A1Unorm:            return VK_FORMAT_ETC2_R8G8B8A1_UNORM_BLOCK;
+            case VGPUTextureFormat_Etc2Rgb8A1UnormSrgb:        return VK_FORMAT_ETC2_R8G8B8A1_SRGB_BLOCK;
+            case VGPUTextureFormat_Etc2Rgba8Unorm:             return VK_FORMAT_ETC2_R8G8B8A8_UNORM_BLOCK;
+            case VGPUTextureFormat_Etc2Rgba8UnormSrgb:         return VK_FORMAT_ETC2_R8G8B8A8_SRGB_BLOCK;
+            case VGPUTextureFormat_EacR11Unorm:                return VK_FORMAT_EAC_R11_UNORM_BLOCK;
+            case VGPUTextureFormat_EacR11Snorm:                return VK_FORMAT_EAC_R11_SNORM_BLOCK;
+            case VGPUTextureFormat_EacRg11Unorm:               return VK_FORMAT_EAC_R11G11_UNORM_BLOCK;
+            case VGPUTextureFormat_EacRg11Snorm:               return VK_FORMAT_EAC_R11G11_SNORM_BLOCK;
                 // ASTC compressed formats
-            case VGPUTextureFormat_ASTC4x4UNorm:            return VK_FORMAT_ASTC_4x4_UNORM_BLOCK;
-            case VGPUTextureFormat_ASTC4x4UNormSrgb:        return VK_FORMAT_ASTC_4x4_SRGB_BLOCK;
-            case VGPUTextureFormat_ASTC5x4UNorm:            return VK_FORMAT_ASTC_5x4_UNORM_BLOCK;
-            case VGPUTextureFormat_ASTC5x4UNormSrgb:        return VK_FORMAT_ASTC_5x4_SRGB_BLOCK;
-            case VGPUTextureFormat_ASTC5x5UNorm:            return VK_FORMAT_ASTC_5x5_UNORM_BLOCK;
-            case VGPUTextureFormat_ASTC5x5UNormSrgb:        return VK_FORMAT_ASTC_5x5_SRGB_BLOCK;
-            case VGPUTextureFormat_ASTC6x5UNorm:            return VK_FORMAT_ASTC_6x5_UNORM_BLOCK;
-            case VGPUTextureFormat_ASTC6x5UNormSrgb:        return VK_FORMAT_ASTC_6x5_SRGB_BLOCK;
-            case VGPUTextureFormat_ASTC6x6UNorm:            return VK_FORMAT_ASTC_6x6_UNORM_BLOCK;
-            case VGPUTextureFormat_ASTC6x6UNormSrgb:        return VK_FORMAT_ASTC_6x6_SRGB_BLOCK;
-            case VGPUTextureFormat_ASTC8x5UNorm:            return VK_FORMAT_ASTC_8x5_UNORM_BLOCK;
-            case VGPUTextureFormat_ASTC8x5UNormSrgb:        return VK_FORMAT_ASTC_8x5_SRGB_BLOCK;
-            case VGPUTextureFormat_ASTC8x6UNorm:            return VK_FORMAT_ASTC_8x6_UNORM_BLOCK;
-            case VGPUTextureFormat_ASTC8x6UNormSrgb:        return VK_FORMAT_ASTC_8x6_SRGB_BLOCK;
-            case VGPUTextureFormat_ASTC8x8UNorm:            return VK_FORMAT_ASTC_8x8_UNORM_BLOCK;
-            case VGPUTextureFormat_ASTC8x8UNormSrgb:        return VK_FORMAT_ASTC_8x8_SRGB_BLOCK;
-            case VGPUTextureFormat_ASTC10x5UNorm:           return VK_FORMAT_ASTC_10x5_UNORM_BLOCK;
-            case VGPUTextureFormat_ASTC10x5UNormSrgb:       return VK_FORMAT_ASTC_10x5_SRGB_BLOCK;
-            case VGPUTextureFormat_ASTC10x6UNorm:           return VK_FORMAT_ASTC_10x6_UNORM_BLOCK;
-            case VGPUTextureFormat_ASTC10x6UNormSrgb:       return VK_FORMAT_ASTC_10x6_SRGB_BLOCK;
-            case VGPUTextureFormat_ASTC10x8UNorm:           return VK_FORMAT_ASTC_10x8_UNORM_BLOCK;
-            case VGPUTextureFormat_ASTC10x8UNormSrgb:       return VK_FORMAT_ASTC_10x8_SRGB_BLOCK;
-            case VGPUTextureFormat_ASTC10x10UNorm:          return VK_FORMAT_ASTC_10x10_UNORM_BLOCK;
-            case VGPUTextureFormat_ASTC10x10UNormSrgb:      return VK_FORMAT_ASTC_10x10_SRGB_BLOCK;
-            case VGPUTextureFormat_ASTC12x10UNorm:          return VK_FORMAT_ASTC_12x10_UNORM_BLOCK;
-            case VGPUTextureFormat_ASTC12x10UNormSrgb:      return VK_FORMAT_ASTC_12x10_SRGB_BLOCK;
-            case VGPUTextureFormat_ASTC12x12UNorm:          return VK_FORMAT_ASTC_12x12_UNORM_BLOCK;
-            case VGPUTextureFormat_ASTC12x12UNormSrgb:      return VK_FORMAT_ASTC_12x12_SRGB_BLOCK;
+            case VGPUTextureFormat_Astc4x4Unorm:               return VK_FORMAT_ASTC_4x4_UNORM_BLOCK;
+            case VGPUTextureFormat_Astc4x4UnormSrgb:           return VK_FORMAT_ASTC_4x4_SRGB_BLOCK;
+            case VGPUTextureFormat_Astc5x4Unorm:               return VK_FORMAT_ASTC_5x4_UNORM_BLOCK;
+            case VGPUTextureFormat_Astc5x4UnormSrgb:           return VK_FORMAT_ASTC_5x4_SRGB_BLOCK;
+            case VGPUTextureFormat_Astc5x5Unorm:               return VK_FORMAT_ASTC_5x5_UNORM_BLOCK;
+            case VGPUTextureFormat_Astc5x5UnormSrgb:           return VK_FORMAT_ASTC_5x5_SRGB_BLOCK;
+            case VGPUTextureFormat_Astc6x5Unorm:               return VK_FORMAT_ASTC_6x5_UNORM_BLOCK;
+            case VGPUTextureFormat_Astc6x5UnormSrgb:           return VK_FORMAT_ASTC_6x5_SRGB_BLOCK;
+            case VGPUTextureFormat_Astc6x6Unorm:               return VK_FORMAT_ASTC_6x6_UNORM_BLOCK;
+            case VGPUTextureFormat_Astc6x6UnormSrgb:           return VK_FORMAT_ASTC_6x6_SRGB_BLOCK;
+            case VGPUTextureFormat_Astc8x5Unorm:               return VK_FORMAT_ASTC_8x5_UNORM_BLOCK;
+            case VGPUTextureFormat_Astc8x5UnormSrgb:           return VK_FORMAT_ASTC_8x5_SRGB_BLOCK;
+            case VGPUTextureFormat_Astc8x6Unorm:               return VK_FORMAT_ASTC_8x6_UNORM_BLOCK;
+            case VGPUTextureFormat_Astc8x6UnormSrgb:           return VK_FORMAT_ASTC_8x6_SRGB_BLOCK;
+            case VGPUTextureFormat_Astc8x8Unorm:               return VK_FORMAT_ASTC_8x8_UNORM_BLOCK;
+            case VGPUTextureFormat_Astc8x8UnormSrgb:           return VK_FORMAT_ASTC_8x8_SRGB_BLOCK;
+            case VGPUTextureFormat_Astc10x5Unorm:              return VK_FORMAT_ASTC_10x5_UNORM_BLOCK;
+            case VGPUTextureFormat_Astc10x5UnormSrgb:          return VK_FORMAT_ASTC_10x5_SRGB_BLOCK;
+            case VGPUTextureFormat_Astc10x6Unorm:              return VK_FORMAT_ASTC_10x6_UNORM_BLOCK;
+            case VGPUTextureFormat_Astc10x6UnormSrgb:          return VK_FORMAT_ASTC_10x6_SRGB_BLOCK;
+            case VGPUTextureFormat_Astc10x8Unorm:              return VK_FORMAT_ASTC_10x8_UNORM_BLOCK;
+            case VGPUTextureFormat_Astc10x8UnormSrgb:          return VK_FORMAT_ASTC_10x8_SRGB_BLOCK;
+            case VGPUTextureFormat_Astc10x10Unorm:             return VK_FORMAT_ASTC_10x10_UNORM_BLOCK;
+            case VGPUTextureFormat_Astc10x10UnormSrgb:         return VK_FORMAT_ASTC_10x10_SRGB_BLOCK;
+            case VGPUTextureFormat_Astc12x10Unorm:             return VK_FORMAT_ASTC_12x10_UNORM_BLOCK;
+            case VGPUTextureFormat_Astc12x10UnormSrgb:         return VK_FORMAT_ASTC_12x10_SRGB_BLOCK;
+            case VGPUTextureFormat_Astc12x12Unorm:             return VK_FORMAT_ASTC_12x12_UNORM_BLOCK;
+            case VGPUTextureFormat_Astc12x12UnormSrgb:         return VK_FORMAT_ASTC_12x12_SRGB_BLOCK;
 
             default:
                 return VK_FORMAT_UNDEFINED;
@@ -544,19 +545,19 @@ namespace
         }
     }
 
-    static_assert(sizeof(vgpu_viewport) == sizeof(VkViewport), "Viewport mismatch");
-    static_assert(offsetof(vgpu_viewport, x) == offsetof(VkViewport, x), "Layout mismatch");
-    static_assert(offsetof(vgpu_viewport, y) == offsetof(VkViewport, y), "Layout mismatch");
-    static_assert(offsetof(vgpu_viewport, width) == offsetof(VkViewport, width), "Layout mismatch");
-    static_assert(offsetof(vgpu_viewport, height) == offsetof(VkViewport, height), "Layout mismatch");
-    static_assert(offsetof(vgpu_viewport, min_depth) == offsetof(VkViewport, minDepth), "Layout mismatch");
-    static_assert(offsetof(vgpu_viewport, max_depth) == offsetof(VkViewport, maxDepth), "Layout mismatch");
+    static_assert(sizeof(VGPUViewport) == sizeof(VkViewport), "Viewport mismatch");
+    static_assert(offsetof(VGPUViewport, x) == offsetof(VkViewport, x), "Layout mismatch");
+    static_assert(offsetof(VGPUViewport, y) == offsetof(VkViewport, y), "Layout mismatch");
+    static_assert(offsetof(VGPUViewport, width) == offsetof(VkViewport, width), "Layout mismatch");
+    static_assert(offsetof(VGPUViewport, height) == offsetof(VkViewport, height), "Layout mismatch");
+    static_assert(offsetof(VGPUViewport, minDepth) == offsetof(VkViewport, minDepth), "Layout mismatch");
+    static_assert(offsetof(VGPUViewport, maxDepth) == offsetof(VkViewport, maxDepth), "Layout mismatch");
 
-    static_assert(sizeof(vgpu_rect) == sizeof(VkRect2D), "vgpu_rect mismatch");
-    static_assert(offsetof(vgpu_rect, x) == offsetof(VkRect2D, offset.x), "vgpu_rect Layout mismatch");
-    static_assert(offsetof(vgpu_rect, y) == offsetof(VkRect2D, offset.y), "vgpu_rect Layout mismatch");
-    static_assert(offsetof(vgpu_rect, width) == offsetof(VkRect2D, extent.width), "vgpu_rect Layout mismatch");
-    static_assert(offsetof(vgpu_rect, height) == offsetof(VkRect2D, extent.height), "vgpu_rect Layout mismatch");
+    static_assert(sizeof(VGPURect) == sizeof(VkRect2D), "vgpu_rect mismatch");
+    static_assert(offsetof(VGPURect, x) == offsetof(VkRect2D, offset.x), "vgpu_rect Layout mismatch");
+    static_assert(offsetof(VGPURect, y) == offsetof(VkRect2D, offset.y), "vgpu_rect Layout mismatch");
+    static_assert(offsetof(VGPURect, width) == offsetof(VkRect2D, extent.width), "vgpu_rect Layout mismatch");
+    static_assert(offsetof(VGPURect, height) == offsetof(VkRect2D, extent.height), "vgpu_rect Layout mismatch");
 }
 
 /// Helper macro to test the result of Vulkan calls which can return an error.
@@ -587,7 +588,7 @@ struct VulkanTexture
     uint32_t width = 0;
     uint32_t height = 0;
     VkFormat format = VK_FORMAT_UNDEFINED;
-    UnorderedMap<size_t, VkImageView> viewCache;
+    std::unordered_map<size_t, VkImageView> viewCache;
 };
 
 struct VulkanSampler
@@ -1338,7 +1339,7 @@ static VGPUBackendType vulkan_getBackendType(void)
     return VGPUBackendType_Vulkan;
 }
 
-static bool vulkan_queryFeature(VGFXRenderer* driverData, VGPUFeature feature, void* pInfo, uint32_t infoSize)
+static VGPUBool32 vulkan_queryFeature(VGFXRenderer* driverData, VGPUFeature feature, void* pInfo, uint32_t infoSize)
 {
     (void)pInfo;
     (void)infoSize;
@@ -1502,7 +1503,7 @@ static void vulkan_getLimits(VGFXRenderer* driverData, VGPULimits* limits)
 }
 
 /* Buffer */
-static vgpu_buffer* vulkan_createBuffer(VGFXRenderer* driverData, const VGPUBufferDesc* desc, const void* pInitialData)
+static VGPUBuffer vulkan_createBuffer(VGFXRenderer* driverData, const VGPUBufferDesc* desc, const void* pInitialData)
 {
     VulkanRenderer* renderer = (VulkanRenderer*)driverData;
 
@@ -1626,10 +1627,10 @@ static vgpu_buffer* vulkan_createBuffer(VGFXRenderer* driverData, const VGPUBuff
         vulkan_SetObjectName(renderer, VK_OBJECT_TYPE_BUFFER, (uint64_t)buffer->handle, desc->label);
     }
 
-    return (vgpu_buffer*)buffer;
+    return (VGPUBuffer_T*)buffer;
 }
 
-static void vulkan_destroyBuffer(VGFXRenderer* driverData, vgpu_buffer* resource)
+static void vulkan_destroyBuffer(VGFXRenderer* driverData, VGPUBuffer resource)
 {
     VulkanRenderer* renderer = (VulkanRenderer*)driverData;
     VulkanBuffer* buffer = (VulkanBuffer*)resource;
@@ -1690,7 +1691,7 @@ static VGPUTexture vulkan_createTexture(VGFXRenderer* driverData, const VGPUText
             imageInfo.flags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
         }
     }
-    imageInfo.mipLevels = desc->mipLevels;
+    imageInfo.mipLevels = desc->mipLevelCount;
     imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
     imageInfo.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
@@ -2254,7 +2255,7 @@ static void vulkan_dispatch(VGPUCommandBufferImpl* driverData, uint32_t groupCou
     vkCmdDispatch(commandBuffer->handle, groupCountX, groupCountY, groupCountZ);
 }
 
-static void vulkan_dispatchIndirect(VGPUCommandBufferImpl* driverData, vgpu_buffer* buffer, uint64_t offset)
+static void vulkan_dispatchIndirect(VGPUCommandBufferImpl* driverData, VGPUBuffer buffer, uint64_t offset)
 {
     VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
     vulkan_prepareDispatch(commandBuffer);
@@ -2513,14 +2514,14 @@ static void vulkan_endRenderPass(VGPUCommandBufferImpl* driverData)
     commandBuffer->insideRenderPass = false;
 }
 
-static void vulkan_setVertexBuffer(VGPUCommandBufferImpl* driverData, uint32_t index, vgpu_buffer* buffer, uint64_t offset)
+static void vulkan_setVertexBuffer(VGPUCommandBufferImpl* driverData, uint32_t index, VGPUBuffer buffer, uint64_t offset)
 {
     VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
     VulkanBuffer* vulkanBuffer = (VulkanBuffer*)buffer;
     vkCmdBindVertexBuffers(commandBuffer->handle, index, 1, &vulkanBuffer->handle, &offset);
 }
 
-static void vulkan_setIndexBuffer(VGPUCommandBufferImpl* driverData, vgpu_buffer* buffer, uint64_t offset, VGPUIndexType indexType)
+static void vulkan_setIndexBuffer(VGPUCommandBufferImpl* driverData, VGPUBuffer buffer, uint64_t offset, VGPUIndexType indexType)
 {
     VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
     VulkanBuffer* vulkanBuffer = (VulkanBuffer*)buffer;
@@ -2533,7 +2534,7 @@ static void vulkan_prepareDraw(VulkanCommandBuffer* commandBuffer)
     VGPU_ASSERT(commandBuffer->insideRenderPass);
 }
 
-static void vulkan_setViewports(VGPUCommandBufferImpl* driverData, uint32_t count, const vgpu_viewport* viewports)
+static void vulkan_setViewports(VGPUCommandBufferImpl* driverData, uint32_t count, const VGPUViewport* viewports)
 {
     VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
 
@@ -2553,7 +2554,7 @@ static void vulkan_setViewports(VGPUCommandBufferImpl* driverData, uint32_t coun
     vkCmdSetViewport(commandBuffer->handle, 0, count, vkViewports);
 }
 
-static void vulkan_set_scissor_rect(VGPUCommandBufferImpl* driverData, const vgpu_rect* rect)
+static void vulkan_set_scissor_rect(VGPUCommandBufferImpl* driverData, const VGPURect* rect)
 {
     VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
     VkRect2D vk_rect = {};
@@ -2565,7 +2566,7 @@ static void vulkan_set_scissor_rect(VGPUCommandBufferImpl* driverData, const vgp
     vkCmdSetScissor(commandBuffer->handle, 0u, 1u, &vk_rect);
 }
 
-static void vulkan_set_scissor_rects(VGPUCommandBufferImpl* driverData, uint32_t count, const vgpu_rect* rects)
+static void vulkan_set_scissor_rects(VGPUCommandBufferImpl* driverData, uint32_t count, const VGPURect* rects)
 {
     VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
     VGPU_ASSERT(count < commandBuffer->renderer->properties2.properties.limits.maxViewports);
@@ -2778,7 +2779,7 @@ static void vulkan_submit(VGFXRenderer* driverData, VGPUCommandBuffer* commandBu
     renderer->initLocker.unlock();
 }
 
-static bool vulkan_isSupported(void)
+static VGPUBool32 vulkan_isSupported(void)
 {
     static bool available_initialized = false;
     static bool available = false;
@@ -3684,5 +3685,18 @@ VGFXDriver Vulkan_Driver = {
     vulkan_isSupported,
     vulkan_createDevice
 };
+
+uint32_t vgpuToVkFormat(VGPUTextureFormat format)
+{
+    return ToVkFormat(format);
+}
+
+#else
+
+uint32_t vgpuToVkFormat(VGPUTextureFormat format)
+{
+    _VGPU_UNUSED(format);
+    return 0;
+}
 
 #endif /* VGPU_VULKAN_DRIVER */

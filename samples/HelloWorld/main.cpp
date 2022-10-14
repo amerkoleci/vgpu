@@ -23,10 +23,10 @@
 VGPUDevice device = nullptr;
 VGPUSwapChain swapChain = nullptr;
 VGPUTexture depthStencilTexture = nullptr;
-vgpu_buffer* vertex_buffer = nullptr;
+VGPUBuffer vertexBuffer = nullptr;
 VGPUPipeline renderPipeline = nullptr;
 
-inline void vgpu_log(vgpu_log_level level, const char* message)
+inline void vgpu_log(VGPULogLevel level, const char* message)
 {
 }
 
@@ -55,7 +55,7 @@ void init_gfx(GLFWwindow* window)
 
     if (vgpuIsBackendSupported(VGPUBackendType_Vulkan))
     {
-        deviceDesc.preferredBackend = VGPUBackendType_Vulkan;
+        //deviceDesc.preferredBackend = VGPUBackendType_Vulkan;
     }
 
     device = vgpuCreateDevice(&deviceDesc);
@@ -105,11 +105,11 @@ void init_gfx(GLFWwindow* window)
     bufferDesc.label = "Vertex Buffer";
     bufferDesc.size = sizeof(vertices);
     bufferDesc.usage = VGPUBufferUsage_Vertex;
-    vertex_buffer = vgpuCreateBuffer(device, &bufferDesc, vertices);
+    vertexBuffer = vgpuCreateBuffer(device, &bufferDesc, vertices);
 
-    VGPURenderPipelineDesc renderPipelineDesc{};
-    renderPipelineDesc.label = "Triangle";
-    renderPipeline = vgpuCreateRenderPipeline(device, &renderPipelineDesc);
+    //VGPURenderPipelineDesc renderPipelineDesc{};
+    //renderPipelineDesc.label = "Triangle";
+    //renderPipeline = vgpuCreateRenderPipeline(device, &renderPipelineDesc);
 }
 
 #if defined(__EMSCRIPTEN__)
@@ -180,7 +180,7 @@ void draw_frame()
         renderPass.colorAttachments = &colorAttachment;
         renderPass.depthStencilAttachment = &depthStencilAttachment;
         vgpuBeginRenderPass(commandBuffer, &renderPass);
-        //vgpuSetVertexBuffer(commandBuffer, 0, vertexBuffer, 0);
+        vgpuSetVertexBuffer(commandBuffer, 0, vertexBuffer, 0);
         //vgpuDraw(commandBuffer, 0, 3, 1, 0);
         vgpuEndRenderPass(commandBuffer);
     }
@@ -215,7 +215,7 @@ int main()
     }
 
     vgpuWaitIdle(device);
-    vgpuDestroyBuffer(device, vertex_buffer);
+    vgpuDestroyBuffer(device, vertexBuffer);
     vgpuDestroyTexture(device, depthStencilTexture);
     vgpuDestroyPipeline(device, renderPipeline);
     vgpuDestroySwapChain(device, swapChain);
