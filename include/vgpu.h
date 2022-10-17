@@ -154,56 +154,57 @@ typedef VGPUFlags VGPUTextureUsageFlags;
 typedef enum VGPUTextureFormat {
     VGPUTextureFormat_Undefined,
     /* 8-bit formats */
-    VGPUTextureFormat_R8UNorm,
-    VGPUTextureFormat_R8SNorm,
-    VGPUTextureFormat_R8UInt,
-    VGPUTextureFormat_R8SInt,
+    VGPUTextureFormat_R8Unorm,
+    VGPUTextureFormat_R8Snorm,
+    VGPUTextureFormat_R8Uint,
+    VGPUTextureFormat_R8Sint,
     /* 16-bit formats */
-    VGPUTextureFormat_R16UInt,
-    VGPUTextureFormat_R16SInt,
-    VGPUTextureFormat_R16UNorm,
-    VGPUTextureFormat_R16SNorm,
+    VGPUTextureFormat_R16Unorm,
+    VGPUTextureFormat_R16Snorm,
+    VGPUTextureFormat_R16Uint,
+    VGPUTextureFormat_R16Sint,
     VGPUTextureFormat_R16Float,
-    VGPUTextureFormat_RG8UInt,
-    VGPUTextureFormat_RG8SInt,
-    VGPUTextureFormat_RG8UNorm,
-    VGPUTextureFormat_RG8SNorm,
+    VGPUTextureFormat_RG8Unorm,
+    VGPUTextureFormat_RG8Snorm,
+    VGPUTextureFormat_RG8Uint,
+    VGPUTextureFormat_RG8Sint,
     /* Packed 16-Bit Pixel Formats */
-    VGPUTextureFormat_BGRA4UNorm,
-    VGPUTextureFormat_B5G6R5UNorm,
-    VGPUTextureFormat_B5G5R5A1UNorm,
+    VGPUTextureFormat_BGRA4Unorm,
+    VGPUTextureFormat_B5G6R5Unorm,
+    VGPUTextureFormat_B5G5R5A1Unorm,
     /* 32-bit formats */
-    VGPUTextureFormat_R32UInt,
-    VGPUTextureFormat_R32SInt,
+    VGPUTextureFormat_R32Uint,
+    VGPUTextureFormat_R32Sint,
     VGPUTextureFormat_R32Float,
-    VGPUTextureFormat_RG16UInt,
-    VGPUTextureFormat_RG16SInt,
-    VGPUTextureFormat_RG16UNorm,
-    VGPUTextureFormat_RG16SNorm,
+    VGPUTextureFormat_RG16Unorm,
+    VGPUTextureFormat_RG16Snorm,
+    VGPUTextureFormat_RG16Uint,
+    VGPUTextureFormat_RG16Sint,
     VGPUTextureFormat_RG16Float,
-    VGPUTextureFormat_RGBA8UInt,
-    VGPUTextureFormat_RGBA8SInt,
-    VGPUTextureFormat_RGBA8UNorm,
-    VGPUTextureFormat_RGBA8UNormSrgb,
-    VGPUTextureFormat_RGBA8SNorm,
-    VGPUTextureFormat_BGRA8UNorm,
-    VGPUTextureFormat_BGRA8UNormSrgb,
+    VGPUTextureFormat_RGBA8Uint,
+    VGPUTextureFormat_RGBA8Sint,
+    VGPUTextureFormat_RGBA8Unorm,
+    VGPUTextureFormat_RGBA8UnormSrgb,
+    VGPUTextureFormat_RGBA8Snorm,
+    VGPUTextureFormat_BGRA8Unorm,
+    VGPUTextureFormat_BGRA8UnormSrgb,
     /* Packed 32-Bit formats */
-    VGPUTextureFormat_RGB10A2UNorm,
+    VGPUTextureFormat_RGB9E5Ufloat,
+    VGPUTextureFormat_RGB10A2Unorm,
+    VGPUTextureFormat_RGB10A2Uint,
     VGPUTextureFormat_RG11B10Float,
-    VGPUTextureFormat_RGB9E5Float,
     /* 64-Bit formats */
-    VGPUTextureFormat_RG32UInt,
-    VGPUTextureFormat_RG32SInt,
+    VGPUTextureFormat_RG32Uint,
+    VGPUTextureFormat_RG32Sint,
     VGPUTextureFormat_RG32Float,
-    VGPUTextureFormat_RGBA16UInt,
-    VGPUTextureFormat_RGBA16SInt,
-    VGPUTextureFormat_RGBA16UNorm,
-    VGPUTextureFormat_RGBA16SNorm,
+    VGPUTextureFormat_RGBA16Unorm,
+    VGPUTextureFormat_RGBA16Snorm,
+    VGPUTextureFormat_RGBA16Uint,
+    VGPUTextureFormat_RGBA16Sint,
     VGPUTextureFormat_RGBA16Float,
     /* 128-Bit formats */
-    VGPUTextureFormat_RGBA32UInt,
-    VGPUTextureFormat_RGBA32SInt,
+    VGPUTextureFormat_RGBA32Uint,
+    VGPUTextureFormat_RGBA32Sint,
     VGPUTextureFormat_RGBA32Float,
     /* Depth-stencil formats */
     VGPUTextureFormat_Depth16Unorm,
@@ -212,20 +213,20 @@ typedef enum VGPUTextureFormat {
     VGPUTextureFormat_Depth24UnormStencil8,
     VGPUTextureFormat_Depth32FloatStencil8,
     /* Compressed BC formats */
-    VGPUTextureFormat_BC1UNorm,
-    VGPUTextureFormat_BC1UNormSrgb,
-    VGPUTextureFormat_BC2UNorm,
-    VGPUTextureFormat_BC2UNormSrgb,
-    VGPUTextureFormat_BC3UNorm,
-    VGPUTextureFormat_BC3UNormSrgb,
-    VGPUTextureFormat_BC4UNorm,
-    VGPUTextureFormat_BC4SNorm,
-    VGPUTextureFormat_BC5UNorm,
-    VGPUTextureFormat_BC5SNorm,
-    VGPUTextureFormat_BC6HUFloat,
-    VGPUTextureFormat_BC6HSFloat,
-    VGPUTextureFormat_BC7UNorm,
-    VGPUTextureFormat_BC7UNormSrgb,
+    VGPUTextureFormat_BC1Unorm,
+    VGPUTextureFormat_BC1UnormSrgb,
+    VGPUTextureFormat_BC2Unorm,
+    VGPUTextureFormat_BC2UnormSrgb,
+    VGPUTextureFormat_BC3Unorm,
+    VGPUTextureFormat_BC3UnormSrgb,
+    VGPUTextureFormat_BC4Unorm,
+    VGPUTextureFormat_BC4Snorm,
+    VGPUTextureFormat_BC5Unorm,
+    VGPUTextureFormat_BC5Snorm,
+    VGPUTextureFormat_BC6HRGBUfloat,
+    VGPUTextureFormat_BC6HRGBFloat,
+    VGPUTextureFormat_BC7Unorm,
+    VGPUTextureFormat_BC7UnormSrgb,
     /* ETC2/EAC compressed formats */
     VGPUTextureFormat_Etc2Rgb8Unorm,
     VGPUTextureFormat_Etc2Rgb8UnormSrgb,
@@ -272,7 +273,6 @@ typedef enum VGPUTextureFormat {
 } VGPUTextureFormat;
 
 typedef enum VGPUTextureFormatKind {
-    VGPU_TEXTURE_FORMAT_KIND_INTEGER,
     VGPUTextureFormatKind_Unorm,
     VGPUTextureFormatKind_UnormSrgb,
     VGPUTextureFormatKind_Snorm,
@@ -354,7 +354,7 @@ typedef enum VGPUIndexFormat {
     _VGPUIndexFormat_Force32 = 0x7FFFFFFF
 } VGPUIndexFormat;
 
-typedef enum VGPUCompareFunction 
+typedef enum VGPUCompareFunction
 {
     VGPUCompareFunction_Never,
     VGPUCompareFunction_Less,
@@ -368,7 +368,7 @@ typedef enum VGPUCompareFunction
     _VGPUCompareFunction_Force32 = 0x7FFFFFFF
 } VGPUCompareFunction;
 
-typedef enum VGPUSamplerFilter 
+typedef enum VGPUSamplerFilter
 {
     VGPUSamplerFilter_Nearest = 0,
     VGPUSamplerFilter_Linear,
@@ -394,8 +394,7 @@ typedef enum VGPUSamplerAddressMode
     _VGPUSamplerAddressMode_Force32 = 0x7FFFFFFF
 } VGPUSamplerAddressMode;
 
-typedef enum VGPUSamplerBorderColor 
-{
+typedef enum VGPUSamplerBorderColor {
     VGPUSamplerBorderColor_TransparentBlack = 0,
     VGPUSamplerBorderColor_OpaqueBlack,
     VGPUSamplerBorderColor_OpaqueWhite,
@@ -414,6 +413,52 @@ typedef enum VGPUPrimitiveTopology {
     _VGPUPrimitiveTopology_Force32 = 0x7FFFFFFF
 } VGPUPrimitiveTopology;
 
+typedef enum VGPUBlendFactor {
+    VGPUBlendFactor_Zero = 0,
+    VGPUBlendFactor_One = 1,
+    VGPUBlendFactor_SourceColor = 2,
+    VGPUBlendFactor_OneMinusSourceColor = 3,
+    VGPUBlendFactor_SourceAlpha = 4,
+    VGPUBlendFactor_OneMinusSourceAlpha = 5,
+    VGPUBlendFactor_DestinationColor = 6,
+    VGPUBlendFactor_OneMinusDestinationColor = 7,
+    VGPUBlendFactor_DestinationAlpha = 8,
+    VGPUBlendFactor_OneMinusDestinationAlpha = 9,
+    VGPUBlendFactor_SourceAlphaSaturated = 10,
+    VGPUBlendFactor_BlendColor = 11,
+    VGPUBlendFactor_OneMinusBlendColor = 12,
+    VGPUBlendFactor_BlendAlpha = 13,
+    VGPUBlendFactor_OneMinusBlendAlpha = 14,
+    VGPUBlendFactor_Source1Color = 15,
+    VGPUBlendFactor_OneMinusSource1Color = 16,
+    VGPUBlendFactor_Source1Alpha = 17,
+    VGPUBlendFactor_OneMinusSource1Alpha = 18,
+
+    _VGPUBlendFactor_Force32 = 0x7FFFFFFF
+} VGPUBlendFactor;
+
+typedef enum VGPUBlendOperation {
+    VGPUBlendOperation_Add = 0,
+    VGPUBlendOperation_Subtract = 1,
+    VGPUBlendOperation_ReverseSubtract = 2,
+    VGPUBlendOperation_Min = 3,
+    VGPUBlendOperation_Max = 4,
+
+    _VGPUBlendOperation_Force32 = 0x7FFFFFFF
+} VGPUBlendOperation;
+
+typedef enum VGPUColorWriteMask {
+    VGPUColorWriteMask_None = 0,
+    VGPUColorWriteMask_Red = 1,
+    VGPUColorWriteMask_Green = 2,
+    VGPUColorWriteMask_Blue = 4,
+    VGPUColorWriteMask_Alpha = 8,
+    VGPUColorWriteMask_All = 15,
+
+    _VGPUColorWriteMask_Force32 = 0x7FFFFFFF
+} VGPUColorWriteMask;
+typedef VGPUFlags VGPUColorWriteMaskFlags;
+
 typedef struct VGPUColor {
     float r;
     float g;
@@ -421,10 +466,10 @@ typedef struct VGPUColor {
     float a;
 } VGPUColor;
 
-typedef struct vgpu_extent2d {
+typedef struct VGPUExtent2D {
     uint32_t width;
     uint32_t height;
-} vgpu_extent2d;
+} VGPUExtent2D;
 
 typedef struct VGPUExtent3D {
     uint32_t width;
@@ -522,7 +567,7 @@ typedef struct VGPUTextureDesc
 } VGPUTextureDesc;
 
 typedef struct VGPUSamplerDesc {
-    const char*             label;
+    const char* label;
     VGPUSamplerFilter       minFilter;
     VGPUSamplerFilter       magFilter;
     VGPUSamplerMipFilter    mipFilter;
@@ -547,6 +592,19 @@ typedef struct VGPUDepthStencilState
     //VGPUStencilState backFace{};
 } VGPUDepthStencilState;
 
+typedef struct RenderPipelineColorAttachmentDesc
+{
+    VGPUTextureFormat       format;
+    VGPUBool32              blendEnabled;
+    VGPUBlendFactor         srcColorBlendFactor;
+    VGPUBlendFactor         dstColorBlendFactor;
+    VGPUBlendOperation      colorBlendOperation;
+    VGPUBlendFactor         srcAlphaBlendFactor;
+    VGPUBlendFactor         dstAlphaBlendFactor;
+    VGPUBlendOperation      alphaBlendOperation;
+    VGPUColorWriteMaskFlags colorWriteMask;
+} RenderPipelineColorAttachmentDesc;
+
 typedef struct VGPURenderPipelineDesc {
     const char* label;
     VGPUShaderModule vertex;
@@ -557,15 +615,17 @@ typedef struct VGPURenderPipelineDesc {
     VGPUPrimitiveTopology primitiveTopology;
     uint32_t patchControlPoints;
 
-    VGPUTextureFormat colorFormats[VGPU_MAX_COLOR_ATTACHMENTS];
+    uint32_t colorAttachmentCount;
+    const RenderPipelineColorAttachmentDesc* colorAttachments;
     VGPUTextureFormat depthStencilFormat;
     uint32_t sampleCount;
+    VGPUBool32 alphaToCoverageEnabled;
 } VGPURenderPipelineDesc;
 
 typedef struct VGPUComputePipelineDesc {
     const char* label;
     VGPUShaderModule shader;
-    
+
 } VGPUComputePipelineDesc;
 
 typedef struct VGPURayTracingPipelineDesc {
@@ -600,14 +660,6 @@ typedef struct VGPULimits {
     uint32_t maxTextureDimension2D;
     uint32_t maxTextureDimension3D;
     uint32_t maxTextureArrayLayers;
-    uint32_t maxBindGroups;
-    uint32_t maxDynamicUniformBuffersPerPipelineLayout;
-    uint32_t maxDynamicStorageBuffersPerPipelineLayout;
-    uint32_t maxSampledTexturesPerShaderStage;
-    uint32_t maxSamplersPerShaderStage;
-    uint32_t maxStorageBuffersPerShaderStage;
-    uint32_t maxStorageTexturesPerShaderStage;
-    uint32_t maxUniformBuffersPerShaderStage;
     uint64_t maxUniformBufferBindingSize;
     uint64_t maxStorageBufferBindingSize;
     uint32_t minUniformBufferOffsetAlignment;
@@ -615,7 +667,6 @@ typedef struct VGPULimits {
     uint32_t maxVertexBuffers;
     uint32_t maxVertexAttributes;
     uint32_t maxVertexBufferArrayStride;
-    uint32_t maxInterStageShaderComponents;
     uint32_t maxComputeWorkgroupStorageSize;
     uint32_t maxComputeInvocationsPerWorkGroup;
     uint32_t maxComputeWorkGroupSizeX;
@@ -624,8 +675,8 @@ typedef struct VGPULimits {
     uint32_t maxComputeWorkGroupsPerDimension;
 } VGPULimits;
 
-typedef void (*vgpu_log_callback)(VGPULogLevel level, const char* message);
-VGPU_API void vgpuSetLogCallback(vgpu_log_callback func);
+typedef void (*VGPULogCallback)(VGPULogLevel level, const char* message, void* userData);
+VGPU_API void vgpuSetLogCallback(VGPULogCallback func, void* userData);
 
 typedef struct vgpu_allocation_callbacks {
     void* (*allocate)(size_t size, void* user_data);

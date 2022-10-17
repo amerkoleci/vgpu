@@ -128,7 +128,7 @@ void init_gfx(GLFWwindow* window)
     VGPUSwapChainDesc swapChainDesc{};
     swapChainDesc.width = width;
     swapChainDesc.height = height;
-    swapChainDesc.format = VGPUTextureFormat_BGRA8UNormSrgb;
+    swapChainDesc.format = VGPUTextureFormat_BGRA8UnormSrgb;
     swapChainDesc.presentMode = VGPUPresentMode_Fifo;
     swapChain = vgpuCreateSwapChain(device, windowHandle, &swapChainDesc);
 
@@ -156,12 +156,19 @@ void init_gfx(GLFWwindow* window)
     VGPUShaderModule vertexShader = LoadShader("triangleVertex");
     VGPUShaderModule fragmentShader = LoadShader("triangleFragment");
 
+    RenderPipelineColorAttachmentDesc colorAttachment{};
+    colorAttachment.format = vgpuSwapChainGetFormat(device, swapChain);
+
     VGPURenderPipelineDesc renderPipelineDesc{};
     renderPipelineDesc.label = "Triangle";
     renderPipelineDesc.vertex = vertexShader;
     renderPipelineDesc.fragment = fragmentShader;
     renderPipelineDesc.primitiveTopology = VGPUPrimitiveTopology_TriangleList;
-    renderPipelineDesc.colorFormats[0] = vgpuSwapChainGetFormat(device, swapChain);
+    renderPipelineDesc.colorAttachmentCount = 1u;
+    renderPipelineDesc.colorAttachments = &colorAttachment;
+    renderPipelineDesc.depthStencilFormat = VGPUTextureFormat_Depth32Float;
+    renderPipelineDesc.depthStencilState.depthWriteEnabled = true;
+    renderPipelineDesc.depthStencilState.depthCompare = VGPUCompareFunction_Less;
 
     renderPipeline = vgpuCreateRenderPipeline(device, &renderPipelineDesc);
     vgpuDestroyShader(device, vertexShader);
