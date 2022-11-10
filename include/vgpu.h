@@ -659,6 +659,7 @@ typedef struct VGPULimits {
     uint32_t maxTextureDimension1D;
     uint32_t maxTextureDimension2D;
     uint32_t maxTextureDimension3D;
+    uint32_t maxTextureDimensionCube;
     uint32_t maxTextureArrayLayers;
     uint64_t maxUniformBufferBindingSize;
     uint64_t maxStorageBufferBindingSize;
@@ -673,6 +674,7 @@ typedef struct VGPULimits {
     uint32_t maxComputeWorkGroupSizeY;
     uint32_t maxComputeWorkGroupSizeZ;
     uint32_t maxComputeWorkGroupsPerDimension;
+    uint32_t maxViewports;
 } VGPULimits;
 
 typedef void (*VGPULogCallback)(VGPULogLevel level, const char* message, void* userData);

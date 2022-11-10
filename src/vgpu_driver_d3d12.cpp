@@ -1392,6 +1392,7 @@ static void d3d12_getLimits(VGFXRenderer* driverData, VGPULimits* limits)
     limits->maxTextureDimension1D = D3D12_REQ_TEXTURE1D_U_DIMENSION;
     limits->maxTextureDimension2D = D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION;
     limits->maxTextureDimension3D = D3D12_REQ_TEXTURE3D_U_V_OR_W_DIMENSION;
+    limits->maxTextureDimensionCube = D3D12_REQ_TEXTURECUBE_DIMENSION;
     limits->maxTextureArrayLayers = D3D12_REQ_TEXTURE2D_ARRAY_AXIS_DIMENSION;
     limits->maxUniformBufferBindingSize = D3D12_REQ_CONSTANT_BUFFER_ELEMENT_COUNT * 16;
     // D3D12 has no documented limit on the size of a storage buffer binding.
@@ -1415,6 +1416,8 @@ static void d3d12_getLimits(VGFXRenderer* driverData, VGPULimits* limits)
 
     // https://docs.maxComputeWorkgroupSizeXmicrosoft.com/en-us/windows/win32/api/d3d12/ns-d3d12-d3d12_dispatch_arguments
     limits->maxComputeWorkGroupsPerDimension = D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION;
+
+    limits->maxViewports = D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE;
 }
 
 /* Buffer */

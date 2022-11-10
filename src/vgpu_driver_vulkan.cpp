@@ -1472,6 +1472,7 @@ static void vulkan_getLimits(VGFXRenderer* driverData, VGPULimits* limits)
     SET_LIMIT_FROM_VULKAN(maxImageDimension1D, maxTextureDimension1D);
     SET_LIMIT_FROM_VULKAN(maxImageDimension2D, maxTextureDimension2D);
     SET_LIMIT_FROM_VULKAN(maxImageDimension3D, maxTextureDimension3D);
+    SET_LIMIT_FROM_VULKAN(maxImageDimensionCube, maxTextureDimensionCube);
     SET_LIMIT_FROM_VULKAN(maxImageArrayLayers, maxTextureArrayLayers);
     //SET_LIMIT_FROM_VULKAN(maxBoundDescriptorSets, maxBindGroups);
     //SET_LIMIT_FROM_VULKAN(maxDescriptorSetUniformBuffersDynamic, maxDynamicUniformBuffersPerPipelineLayout);
@@ -1506,6 +1507,8 @@ static void vulkan_getLimits(VGFXRenderer* driverData, VGPULimits* limits)
             renderer->properties2.properties.limits.maxComputeWorkGroupCount[1]),
         renderer->properties2.properties.limits.maxComputeWorkGroupCount[2]
     );
+
+    limits->maxViewports = renderer->properties2.properties.limits.maxViewports;
 
 #undef SET_LIMIT_FROM_VULKAN
 }
