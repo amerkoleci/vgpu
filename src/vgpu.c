@@ -288,6 +288,14 @@ void vgpuDestroyBuffer(VGPUDevice device, VGPUBuffer buffer)
     device->destroyBuffer(device->driverData, buffer);
 }
 
+VGPUDeviceAddress vgpuGetDeviceAddress(VGPUDevice device, VGPUBuffer buffer)
+{
+    VGPU_ASSERT(device);
+    VGPU_ASSERT(buffer);
+
+    return device->getDeviceAddress(device->driverData, buffer);
+}
+
 /* Texture */
 static VGPUTextureDesc _vgpuTextureDescDef(const VGPUTextureDesc* desc)
 {
@@ -604,10 +612,17 @@ void vgpuEndRenderPass(VGPUCommandBuffer commandBuffer)
     commandBuffer->endRenderPass(commandBuffer->driverData);
 }
 
+void vgpuSetViewport(VGPUCommandBuffer commandBuffer, const VGPUViewport* viewport)
+{
+    VGPU_ASSERT(viewport);
+
+    commandBuffer->setViewport(commandBuffer->driverData, viewport);
+}
+
 void vgpuSetViewports(VGPUCommandBuffer commandBuffer, uint32_t count, const VGPUViewport* viewports)
 {
     VGPU_ASSERT(viewports);
-    VGPU_ASSERT(count < VGPU_MAX_VIEWPORTS_AND_SCISSORS);
+    //VGPU_ASSERT(count < VGPU_MAX_VIEWPORTS_AND_SCISSORS);
 
     commandBuffer->setViewports(commandBuffer->driverData, count, viewports);
 }
@@ -621,7 +636,7 @@ void vgpuSetScissorRect(VGPUCommandBuffer commandBuffer, const VGPURect* rect)
 void vgpuSetScissorRects(VGPUCommandBuffer commandBuffer, uint32_t count, const VGPURect* rects)
 {
     VGPU_ASSERT(rects);
-    VGPU_ASSERT(count < VGPU_MAX_VIEWPORTS_AND_SCISSORS);
+    //VGPU_ASSERT(count < VGPU_MAX_VIEWPORTS_AND_SCISSORS);
 
     commandBuffer->setScissorRects(commandBuffer->driverData, count, rects);
 }

@@ -685,12 +685,11 @@ struct D3D12CommandBuffer
 
     bool insideRenderPass;
 
-    D3D12_VERTEX_BUFFER_VIEW vboViews[VGPU_MAX_VERTEX_BUFFERS] = {};
+    D3D12_VERTEX_BUFFER_VIEW vboViews[D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT] = {};
 
     D3D12_RENDER_PASS_RENDER_TARGET_DESC RTVs[VGPU_MAX_COLOR_ATTACHMENTS] = {};
     // Due to a API bug, this resolve_subresources array must be kept alive between BeginRenderpass() and EndRenderpass()!
     D3D12_RENDER_PASS_ENDING_ACCESS_RESOLVE_SUBRESOURCE_PARAMETERS resolveSubresources[D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT] = {};
-
 
     std::vector<D3D12_SwapChain*> swapChains;
 };
@@ -855,7 +854,7 @@ static D3D12_UploadContext d3d12_AllocateUpload(D3D12_Renderer* renderer, uint32
         // Release old one first
         d3d12_DeferDestroy(renderer, context.uploadBuffer, context.uploadBufferAllocation);
 
-        uint64_t newSize = vgfxNextPowerOfTwo(size);
+        uint64_t newSize = vgpuNextPowerOfTwo(size);
 
         D3D12MA::ALLOCATION_DESC allocationDesc = {};
         allocationDesc.HeapType = D3D12_HEAP_TYPE_UPLOAD;
@@ -1240,7 +1239,7 @@ static void d3d12_updateSwapChain(D3D12_Renderer* renderer, D3D12_SwapChain* swa
     }
 }
 
-static uint64_t d3d12_frame(VGFXRenderer* driverData)
+static uint64_t d3d12_frame(VGPURenderer* driverData)
 {
     HRESULT hr = S_OK;
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
@@ -1281,7 +1280,7 @@ static uint64_t d3d12_frame(VGFXRenderer* driverData)
     return renderer->frameCount - 1;
 }
 
-static void d3d12_waitIdle(VGFXRenderer* driverData)
+static void d3d12_waitIdle(VGPURenderer* driverData)
 {
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
 
@@ -1307,7 +1306,7 @@ static VGPUBackendType d3d12_getBackendType(void)
     return VGPUBackendType_D3D12;
 }
 
-static VGPUBool32 d3d12_queryFeature(VGFXRenderer* driverData, VGPUFeature feature, void* pInfo, uint32_t infoSize)
+static VGPUBool32 d3d12_queryFeature(VGPURenderer* driverData, VGPUFeature feature, void* pInfo, uint32_t infoSize)
 {
     (void)pInfo;
     (void)infoSize;
@@ -1368,7 +1367,7 @@ static VGPUBool32 d3d12_queryFeature(VGFXRenderer* driverData, VGPUFeature featu
     }
 }
 
-static void d3d12_getAdapterProperties(VGFXRenderer* driverData, VGPUAdapterProperties* properties)
+static void d3d12_getAdapterProperties(VGPURenderer* driverData, VGPUAdapterProperties* properties)
 {
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
 
@@ -1379,7 +1378,7 @@ static void d3d12_getAdapterProperties(VGFXRenderer* driverData, VGPUAdapterProp
     properties->adapterType = renderer->adapterType;
 }
 
-static void d3d12_getLimits(VGFXRenderer* driverData, VGPULimits* limits)
+static void d3d12_getLimits(VGPURenderer* driverData, VGPULimits* limits)
 {
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
 
@@ -1418,10 +1417,13 @@ static void d3d12_getLimits(VGFXRenderer* driverData, VGPULimits* limits)
     limits->maxComputeWorkGroupsPerDimension = D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION;
 
     limits->maxViewports = D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE;
+    limits->maxViewportDimensions[0] = D3D12_VIEWPORT_BOUNDS_MAX;
+    limits->maxViewportDimensions[1] = D3D12_VIEWPORT_BOUNDS_MAX;
+    limits->maxColorAttachments = D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT;
 }
 
 /* Buffer */
-static VGPUBuffer d3d12_createBuffer(VGFXRenderer* driverData, const VGPUBufferDesc* desc, const void* pInitialData)
+static VGPUBuffer d3d12_createBuffer(VGPURenderer* driverData, const VGPUBufferDesc* desc, const void* pInitialData)
 {
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
 
@@ -1431,8 +1433,8 @@ static VGPUBuffer d3d12_createBuffer(VGFXRenderer* driverData, const VGPUBufferD
         resourceFlags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     }
 
-    if (!(desc->usage & VGPUBufferUsage_ShaderRead)/*
-        && !CheckBitsAny(info.usage, BufferUsage::RayTracing)*/)
+    if (!(desc->usage & VGPUBufferUsage_ShaderRead) &&
+        !(desc->usage & VGPUBufferUsage_RayTracing))
     {
         resourceFlags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
     }
@@ -1566,7 +1568,7 @@ static VGPUBuffer d3d12_createBuffer(VGFXRenderer* driverData, const VGPUBufferD
     return (VGPUBuffer_T*)buffer;
 }
 
-static void d3d12_destroyBuffer(VGFXRenderer* driverData, VGPUBuffer resource)
+static void d3d12_destroyBuffer(VGPURenderer* driverData, VGPUBuffer resource)
 {
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
     D3D12Resource* d3dBuffer = (D3D12Resource*)resource;
@@ -1575,8 +1577,16 @@ static void d3d12_destroyBuffer(VGFXRenderer* driverData, VGPUBuffer resource)
     delete d3dBuffer;
 }
 
+static VGPUDeviceAddress d3d12_getDeviceAddress(VGPURenderer* driverData, VGPUBuffer resource)
+{
+    D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
+    D3D12Resource* d3dBuffer = (D3D12Resource*)resource;
+
+    return d3dBuffer->gpuAddress;
+}
+
 /* Texture */
-static VGPUTexture d3d12_createTexture(VGFXRenderer* driverData, const VGPUTextureDesc* desc, const void* pInitialData)
+static VGPUTexture d3d12_createTexture(VGPURenderer* driverData, const VGPUTextureDesc* desc, const void* pInitialData)
 {
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
 
@@ -1706,7 +1716,7 @@ static VGPUTexture d3d12_createTexture(VGFXRenderer* driverData, const VGPUTextu
     return (VGPUTexture)texture;
 }
 
-static void d3d12_destroyTexture(VGFXRenderer* driverData, VGPUTexture texture)
+static void d3d12_destroyTexture(VGPURenderer* driverData, VGPUTexture texture)
 {
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
     D3D12Resource* d3dTexture = (D3D12Resource*)texture;
@@ -1726,7 +1736,7 @@ static void d3d12_destroyTexture(VGFXRenderer* driverData, VGPUTexture texture)
 }
 
 /* Sampler */
-static VGPUSampler d3d12_createSampler(VGFXRenderer* driverData, const VGPUSamplerDesc* desc)
+static VGPUSampler d3d12_createSampler(VGPURenderer* driverData, const VGPUSamplerDesc* desc)
 {
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
 
@@ -1787,7 +1797,7 @@ static VGPUSampler d3d12_createSampler(VGFXRenderer* driverData, const VGPUSampl
     return (VGPUSampler)sampler;
 }
 
-static void d3d12_destroySampler(VGFXRenderer* driverData, VGPUSampler resource)
+static void d3d12_destroySampler(VGPURenderer* driverData, VGPUSampler resource)
 {
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
     D3D12Sampler* sampler = (D3D12Sampler*)resource;
@@ -1796,7 +1806,7 @@ static void d3d12_destroySampler(VGFXRenderer* driverData, VGPUSampler resource)
 }
 
 /* ShaderModule */
-static VGPUShaderModule d3d12_createShaderModule(VGFXRenderer* driverData, const void* pCode, size_t codeSize)
+static VGPUShaderModule d3d12_createShaderModule(VGPURenderer* driverData, const void* pCode, size_t codeSize)
 {
     D3D12Shader* shader = VGPU_ALLOC(D3D12Shader);
     shader->byteCode = _vgpu_alloc(codeSize);
@@ -1806,7 +1816,7 @@ static VGPUShaderModule d3d12_createShaderModule(VGFXRenderer* driverData, const
     return (VGPUShaderModule)shader;
 }
 
-static void d3d12_destroyShaderModule(VGFXRenderer* driverData, VGPUShaderModule resource)
+static void d3d12_destroyShaderModule(VGPURenderer* driverData, VGPUShaderModule resource)
 {
     D3D12Shader* shader = (D3D12Shader*)resource;
     VGPU_FREE(shader->byteCode);
@@ -1814,7 +1824,7 @@ static void d3d12_destroyShaderModule(VGFXRenderer* driverData, VGPUShaderModule
 }
 
 /* Pipeline */
-static VGPUPipeline d3d12_createRenderPipeline(VGFXRenderer* driverData, const VGPURenderPipelineDesc* desc)
+static VGPUPipeline d3d12_createRenderPipeline(VGPURenderer* driverData, const VGPURenderPipelineDesc* desc)
 {
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
     D3D12Shader* vertexShader = (D3D12Shader*)desc->vertex;
@@ -1863,7 +1873,8 @@ static VGPUPipeline d3d12_createRenderPipeline(VGFXRenderer* driverData, const V
 
     // DepthStencilState
     const D3D12_DEPTH_STENCILOP_DESC defaultStencilOp = { D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, D3D12_COMPARISON_FUNC_ALWAYS };
-    if (desc->depthStencilFormat != VGPUTextureFormat_Undefined)
+    if (desc->depthAttachmentFormat != VGPUTextureFormat_Undefined ||
+        desc->stencilAttachmentFormat != VGPUTextureFormat_Undefined)
     {
         // Depth
         d3dDesc.DepthStencilState.DepthEnable =
@@ -1905,7 +1916,7 @@ static VGPUPipeline d3d12_createRenderPipeline(VGFXRenderer* driverData, const V
     }
 
     // DSV format
-    d3dDesc.DSVFormat = ToDXGIFormat(desc->depthStencilFormat);
+    d3dDesc.DSVFormat = ToDXGIFormat(desc->depthAttachmentFormat);
     d3dDesc.SampleDesc.Count = desc->sampleCount;
 
     ID3D12PipelineState* pipelineState = nullptr;
@@ -1922,7 +1933,7 @@ static VGPUPipeline d3d12_createRenderPipeline(VGFXRenderer* driverData, const V
     return (VGPUPipeline)pipeline;
 }
 
-static VGPUPipeline d3d12_createComputePipeline(VGFXRenderer* driverData, const VGPUComputePipelineDesc* desc)
+static VGPUPipeline d3d12_createComputePipeline(VGPURenderer* driverData, const VGPUComputePipelineDesc* desc)
 {
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
     D3D12Shader* shader = (D3D12Shader*)desc->shader;
@@ -1946,14 +1957,14 @@ static VGPUPipeline d3d12_createComputePipeline(VGFXRenderer* driverData, const 
     return (VGPUPipeline)pipeline;
 }
 
-static VGPUPipeline d3d12_createRayTracingPipeline(VGFXRenderer* driverData, const VGPURayTracingPipelineDesc* desc)
+static VGPUPipeline d3d12_createRayTracingPipeline(VGPURenderer* driverData, const VGPURayTracingPipelineDesc* desc)
 {
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
     D3D12Pipeline* pipeline = new D3D12Pipeline();
     return (VGPUPipeline)pipeline;
 }
 
-static void d3d12_destroyPipeline(VGFXRenderer* driverData, VGPUPipeline resource)
+static void d3d12_destroyPipeline(VGPURenderer* driverData, VGPUPipeline resource)
 {
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
     D3D12Pipeline* pipeline = (D3D12Pipeline*)resource;
@@ -1963,7 +1974,7 @@ static void d3d12_destroyPipeline(VGFXRenderer* driverData, VGPUPipeline resourc
 }
 
 /* SwapChain */
-static VGPUSwapChain d3d12_createSwapChain(VGFXRenderer* driverData, void* windowHandle, const VGPUSwapChainDesc* desc)
+static VGPUSwapChain d3d12_createSwapChain(VGPURenderer* driverData, void* windowHandle, const VGPUSwapChainDesc* desc)
 {
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
 
@@ -2068,7 +2079,7 @@ static VGPUSwapChain d3d12_createSwapChain(VGFXRenderer* driverData, void* windo
     return (VGPUSwapChain)swapChain;
 }
 
-static void d3d12_destroySwapChain(VGFXRenderer* driverData, VGPUSwapChain swapChain)
+static void d3d12_destroySwapChain(VGPURenderer* driverData, VGPUSwapChain swapChain)
 {
     D3D12_SwapChain* d3d12SwapChain = (D3D12_SwapChain*)swapChain;
 
@@ -2082,7 +2093,7 @@ static void d3d12_destroySwapChain(VGFXRenderer* driverData, VGPUSwapChain swapC
     delete d3d12SwapChain;
 }
 
-static VGPUTextureFormat d3d12_getSwapChainFormat(VGFXRenderer*, VGPUSwapChain swapChain)
+static VGPUTextureFormat d3d12_getSwapChainFormat(VGPURenderer*, VGPUSwapChain swapChain)
 {
     D3D12_SwapChain* d3dSwapChain = (D3D12_SwapChain*)swapChain;
     return d3dSwapChain->format;
@@ -2233,12 +2244,12 @@ static VGPUTexture d3d12_acquireSwapchainTexture(VGPUCommandBufferImpl* driverDa
     if (width != swapChainDesc.Width ||
         height != swapChainDesc.Height)
     {
-        d3d12_waitIdle((VGFXRenderer*)commandBuffer->renderer);
+        d3d12_waitIdle((VGPURenderer*)commandBuffer->renderer);
 
         // Release resources that are tied to the swap chain and update fence values.
         for (size_t i = 0, count = d3d12SwapChain->backbufferTextures.size(); i < count; ++i)
         {
-            d3d12_destroyTexture((VGFXRenderer*)commandBuffer->renderer, (VGPUTexture)d3d12SwapChain->backbufferTextures[i]);
+            d3d12_destroyTexture((VGPURenderer*)commandBuffer->renderer, (VGPUTexture)d3d12SwapChain->backbufferTextures[i]);
         }
         d3d12SwapChain->backbufferTextures.clear();
 
@@ -2299,8 +2310,8 @@ static void d3d12_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGPUR
 {
     D3D12CommandBuffer* commandBuffer = (D3D12CommandBuffer*)driverData;
 
-    uint32_t width = _VGPU_DEF(desc->width, UINT32_MAX);
-    uint32_t height = _VGPU_DEF(desc->height, UINT32_MAX);
+    uint32_t width =  UINT32_MAX;
+    uint32_t height = UINT32_MAX;
     uint32_t numRTVS = 0;
     D3D12_RENDER_PASS_FLAGS renderPassFlags = D3D12_RENDER_PASS_FLAG_NONE;
     D3D12_RENDER_PASS_DEPTH_STENCIL_DESC DSV = {};
@@ -2452,6 +2463,13 @@ static void d3d12_endRenderPass(VGPUCommandBufferImpl* driverData)
     commandBuffer->insideRenderPass = false;
 }
 
+static void d3d12_setViewport(VGPUCommandBufferImpl* driverData, const VGPUViewport* viewports)
+{
+    D3D12CommandBuffer* commandBuffer = (D3D12CommandBuffer*)driverData;
+
+    commandBuffer->commandList->RSSetViewports(1, (const D3D12_VIEWPORT*)viewports);
+}
+
 static void d3d12_setViewports(VGPUCommandBufferImpl* driverData, uint32_t count, const VGPUViewport* viewports)
 {
     VGPU_ASSERT(count < D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE);
@@ -2479,7 +2497,7 @@ static void d3d12_setScissorRects(VGPUCommandBufferImpl* driverData, uint32_t co
 
     D3D12CommandBuffer* commandBuffer = (D3D12CommandBuffer*)driverData;
 
-    D3D12_RECT d3dScissorRects[VGPU_MAX_VIEWPORTS_AND_SCISSORS];
+    D3D12_RECT d3dScissorRects[D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE];
     for (uint32_t i = 0; i < count; i++)
     {
         d3dScissorRects[i].left = LONG(rects[i].x);
@@ -2526,7 +2544,7 @@ static void d3d12_draw(VGPUCommandBufferImpl* driverData, uint32_t vertexStart, 
     commandBuffer->commandList->DrawInstanced(vertexCount, instanceCount, vertexStart, baseInstance);
 }
 
-static VGPUCommandBuffer d3d12_beginCommandBuffer(VGFXRenderer* driverData, VGPUCommandQueue queueType, const char* label)
+static VGPUCommandBuffer d3d12_beginCommandBuffer(VGPURenderer* driverData, VGPUCommandQueue queueType, const char* label)
 {
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
 
@@ -2605,7 +2623,7 @@ static VGPUCommandBuffer d3d12_beginCommandBuffer(VGFXRenderer* driverData, VGPU
     return renderer->commandBuffers.back();
 }
 
-static void d3d12_submit(VGFXRenderer* driverData, VGPUCommandBuffer* commandBuffers, uint32_t count)
+static void d3d12_submit(VGPURenderer* driverData, VGPUCommandBuffer* commandBuffers, uint32_t count)
 {
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
 
@@ -3169,7 +3187,7 @@ static VGPUDevice d3d12_createDevice(const VGPUDeviceDesc* info)
 
     VGPUDevice_T* device = VGPU_ALLOC_CLEAR(VGPUDevice_T);
     ASSIGN_DRIVER(d3d12);
-    device->driverData = (VGFXRenderer*)renderer;
+    device->driverData = (VGPURenderer*)renderer;
     return device;
 }
 

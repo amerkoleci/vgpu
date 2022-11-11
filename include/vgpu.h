@@ -41,13 +41,11 @@
 enum {
     VGPU_MAX_INFLIGHT_FRAMES = 2,
     VGPU_MAX_COLOR_ATTACHMENTS = 8,
-    VGPU_MAX_VERTEX_BUFFERS = 8,
-    VGPU_MAX_VERTEX_ATTRIBUTES = 16,
-    VGPU_MAX_VIEWPORTS_AND_SCISSORS = 8,
 };
 
 typedef uint32_t VGPUBool32;
 typedef uint32_t VGPUFlags;
+typedef uint64_t VGPUDeviceAddress;
 
 typedef struct VGPUDevice_T* VGPUDevice;
 typedef struct VGPUBuffer_T* VGPUBuffer;
@@ -540,8 +538,6 @@ typedef struct VGPURenderPassDepthStencilAttachment {
 } VGPURenderPassDepthStencilAttachment;
 
 typedef struct VGPURenderPassDesc {
-    uint32_t width;
-    uint32_t height;
     uint32_t colorAttachmentCount;
     const VGPURenderPassColorAttachment* colorAttachments;
     const VGPURenderPassDepthStencilAttachment* depthStencilAttachment;
@@ -549,21 +545,22 @@ typedef struct VGPURenderPassDesc {
 
 typedef struct VGPUBufferDesc
 {
-    const char* label;
     uint32_t size;
     VGPUBufferUsageFlags usage;
     VGPUCpuAccessMode cpuAccess;
+    uintptr_t handle;
+    const char* label;
 } VGPUBufferDesc;
 
 typedef struct VGPUTextureDesc
 {
-    const char* label;
     VGPUTextureUsageFlags usage;
     VGPUTextureType type;
     VGPUExtent3D size;
     VGPUTextureFormat format;
     uint32_t mipLevelCount;
     uint32_t sampleCount;
+    const char* label;
 } VGPUTextureDesc;
 
 typedef struct VGPUSamplerDesc {
@@ -617,7 +614,8 @@ typedef struct VGPURenderPipelineDesc {
 
     uint32_t colorAttachmentCount;
     const RenderPipelineColorAttachmentDesc* colorAttachments;
-    VGPUTextureFormat depthStencilFormat;
+    VGPUTextureFormat depthAttachmentFormat;
+    VGPUTextureFormat stencilAttachmentFormat;
     uint32_t sampleCount;
     VGPUBool32 alphaToCoverageEnabled;
 } VGPURenderPipelineDesc;
@@ -675,6 +673,9 @@ typedef struct VGPULimits {
     uint32_t maxComputeWorkGroupSizeZ;
     uint32_t maxComputeWorkGroupsPerDimension;
     uint32_t maxViewports;
+    /// Maximum viewport dimensions.
+    uint32_t maxViewportDimensions[2];
+    uint32_t maxColorAttachments;
 } VGPULimits;
 
 typedef void (*VGPULogCallback)(VGPULogLevel level, const char* message, void* userData);
@@ -700,6 +701,7 @@ VGPU_API void vgpuGetLimits(VGPUDevice device, VGPULimits* limits);
 /* Buffer */
 VGPU_API VGPUBuffer vgpuCreateBuffer(VGPUDevice device, const VGPUBufferDesc* desc, const void* pInitialData);
 VGPU_API void vgpuDestroyBuffer(VGPUDevice device, VGPUBuffer buffer);
+VGPU_API VGPUDeviceAddress vgpuGetDeviceAddress(VGPUDevice device, VGPUBuffer buffer);
 
 /* Texture */
 VGPU_API VGPUTexture vgpuCreateTexture(VGPUDevice device, const VGPUTextureDesc* desc, const void* pInitialData);
@@ -741,6 +743,7 @@ VGPU_API void vgpuDispatchIndirect(VGPUCommandBuffer commandBuffer, VGPUBuffer b
 VGPU_API VGPUTexture vgpuAcquireSwapchainTexture(VGPUCommandBuffer commandBuffer, VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight);
 VGPU_API void vgpuBeginRenderPass(VGPUCommandBuffer commandBuffer, const VGPURenderPassDesc* desc);
 VGPU_API void vgpuEndRenderPass(VGPUCommandBuffer commandBuffer);
+VGPU_API void vgpuSetViewport(VGPUCommandBuffer commandBuffer, const VGPUViewport* viewport);
 VGPU_API void vgpuSetViewports(VGPUCommandBuffer commandBuffer, uint32_t count, const VGPUViewport* viewports);
 VGPU_API void vgpuSetScissorRect(VGPUCommandBuffer commandBuffer, const VGPURect* rect);
 VGPU_API void vgpuSetScissorRects(VGPUCommandBuffer commandBuffer, uint32_t count, const VGPURect* rects);

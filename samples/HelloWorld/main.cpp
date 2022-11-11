@@ -166,7 +166,7 @@ void init_gfx(GLFWwindow* window)
     renderPipelineDesc.primitiveTopology = VGPUPrimitiveTopology_TriangleList;
     renderPipelineDesc.colorAttachmentCount = 1u;
     renderPipelineDesc.colorAttachments = &colorAttachment;
-    renderPipelineDesc.depthStencilFormat = VGPUTextureFormat_Depth32Float;
+    renderPipelineDesc.depthAttachmentFormat = VGPUTextureFormat_Depth32Float;
     renderPipelineDesc.depthStencilState.depthWriteEnabled = true;
     renderPipelineDesc.depthStencilState.depthCompare = VGPUCompareFunction_Less;
 

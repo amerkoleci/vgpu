@@ -70,7 +70,7 @@ _VGPU_EXTERN void vgpuLogError(const char* format, ...);
 namespace
 {
     /// Round up to next power of two.
-    constexpr uint64_t vgfxNextPowerOfTwo(uint64_t value)
+    constexpr uint64_t vgpuNextPowerOfTwo(uint64_t value)
     {
         // http://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2
         --value;
@@ -93,7 +93,7 @@ namespace
 
 #endif /* __cplusplus */
 
-typedef struct VGFXRenderer VGFXRenderer;
+typedef struct VGPURenderer VGPURenderer;
 typedef struct VGPUCommandBufferImpl VGPUCommandBufferImpl;
 
 typedef struct VGPUCommandBuffer_T {
@@ -109,6 +109,7 @@ typedef struct VGPUCommandBuffer_T {
     void (*beginRenderPass)(VGPUCommandBufferImpl* driverData, const VGPURenderPassDesc* desc);
     void (*endRenderPass)(VGPUCommandBufferImpl* driverData);
 
+    void (*setViewport)(VGPUCommandBufferImpl* driverData, const VGPUViewport* viewport);
     void (*setViewports)(VGPUCommandBufferImpl* driverData, uint32_t count, const VGPUViewport* viewports);
     void (*setScissorRect)(VGPUCommandBufferImpl* driverData, const VGPURect* rects);
     void (*setScissorRects)(VGPUCommandBufferImpl* driverData, uint32_t count, const VGPURect* rects);
@@ -124,39 +125,40 @@ typedef struct VGPUCommandBuffer_T {
 typedef struct VGPUDevice_T
 {
     void (*destroyDevice)(VGPUDevice device);
-    uint64_t(*frame)(VGFXRenderer* driverData);
-    void (*waitIdle)(VGFXRenderer* driverData);
+    uint64_t(*frame)(VGPURenderer* driverData);
+    void (*waitIdle)(VGPURenderer* driverData);
     VGPUBackendType(*getBackendType)(void);
-    VGPUBool32(*queryFeature)(VGFXRenderer* driverData, VGPUFeature feature, void* pInfo, uint32_t infoSize);
-    void (*getAdapterProperties)(VGFXRenderer* driverData, VGPUAdapterProperties* properties);
-    void (*getLimits)(VGFXRenderer* driverData, VGPULimits* limits);
+    VGPUBool32(*queryFeature)(VGPURenderer* driverData, VGPUFeature feature, void* pInfo, uint32_t infoSize);
+    void (*getAdapterProperties)(VGPURenderer* driverData, VGPUAdapterProperties* properties);
+    void (*getLimits)(VGPURenderer* driverData, VGPULimits* limits);
 
-    VGPUBuffer(*createBuffer)(VGFXRenderer* driverData, const VGPUBufferDesc* desc, const void* pInitialData);
-    void(*destroyBuffer)(VGFXRenderer* driverData, VGPUBuffer resource);
+    VGPUBuffer(*createBuffer)(VGPURenderer* driverData, const VGPUBufferDesc* desc, const void* pInitialData);
+    void(*destroyBuffer)(VGPURenderer* driverData, VGPUBuffer resource);
+    VGPUDeviceAddress(*getDeviceAddress)(VGPURenderer* driverData, VGPUBuffer resource);
 
-    VGPUTexture(*createTexture)(VGFXRenderer* driverData, const VGPUTextureDesc* desc, const void* pInitialData);
-    void(*destroyTexture)(VGFXRenderer* driverData, VGPUTexture resource);
+    VGPUTexture(*createTexture)(VGPURenderer* driverData, const VGPUTextureDesc* desc, const void* pInitialData);
+    void(*destroyTexture)(VGPURenderer* driverData, VGPUTexture resource);
 
-    VGPUSampler(*createSampler)(VGFXRenderer* driverData, const VGPUSamplerDesc* desc);
-    void(*destroySampler)(VGFXRenderer* driverData, VGPUSampler resource);
+    VGPUSampler(*createSampler)(VGPURenderer* driverData, const VGPUSamplerDesc* desc);
+    void(*destroySampler)(VGPURenderer* driverData, VGPUSampler resource);
 
-    VGPUShaderModule(*createShaderModule)(VGFXRenderer* driverData, const void* pCode, size_t codeSize);
-    void(*destroyShaderModule)(VGFXRenderer* driverData, VGPUShaderModule resource);
+    VGPUShaderModule(*createShaderModule)(VGPURenderer* driverData, const void* pCode, size_t codeSize);
+    void(*destroyShaderModule)(VGPURenderer* driverData, VGPUShaderModule resource);
 
-    VGPUPipeline(*createRenderPipeline)(VGFXRenderer* driverData, const VGPURenderPipelineDesc* desc);
-    VGPUPipeline(*createComputePipeline)(VGFXRenderer* driverData, const VGPUComputePipelineDesc* desc);
-    VGPUPipeline(*createRayTracingPipeline)(VGFXRenderer* driverData, const VGPURayTracingPipelineDesc* desc);
-    void(*destroyPipeline)(VGFXRenderer* driverData, VGPUPipeline resource);
+    VGPUPipeline(*createRenderPipeline)(VGPURenderer* driverData, const VGPURenderPipelineDesc* desc);
+    VGPUPipeline(*createComputePipeline)(VGPURenderer* driverData, const VGPUComputePipelineDesc* desc);
+    VGPUPipeline(*createRayTracingPipeline)(VGPURenderer* driverData, const VGPURayTracingPipelineDesc* desc);
+    void(*destroyPipeline)(VGPURenderer* driverData, VGPUPipeline resource);
 
-    VGPUSwapChain(*createSwapChain)(VGFXRenderer* driverData, void* windowHandle, const VGPUSwapChainDesc* desc);
-    void(*destroySwapChain)(VGFXRenderer* driverData, VGPUSwapChain swapChain);
-    VGPUTextureFormat(*getSwapChainFormat)(VGFXRenderer* driverData, VGPUSwapChain swapChain);
+    VGPUSwapChain(*createSwapChain)(VGPURenderer* driverData, void* windowHandle, const VGPUSwapChainDesc* desc);
+    void(*destroySwapChain)(VGPURenderer* driverData, VGPUSwapChain swapChain);
+    VGPUTextureFormat(*getSwapChainFormat)(VGPURenderer* driverData, VGPUSwapChain swapChain);
 
-    VGPUCommandBuffer(*beginCommandBuffer)(VGFXRenderer* driverData, VGPUCommandQueue queueType, const char* label);
-    void (*submit)(VGFXRenderer* driverData, VGPUCommandBuffer* commandBuffers, uint32_t count);
+    VGPUCommandBuffer(*beginCommandBuffer)(VGPURenderer* driverData, VGPUCommandQueue queueType, const char* label);
+    void (*submit)(VGPURenderer* driverData, VGPUCommandBuffer* commandBuffers, uint32_t count);
 
     /* Opaque pointer for the Driver */
-    VGFXRenderer* driverData;
+    VGPURenderer* driverData;
 } VGPUDevice_T;
 
 #define ASSIGN_DRIVER_FUNC(func, name) device->func = name##_##func;
@@ -172,6 +174,7 @@ ASSIGN_COMMAND_BUFFER_FUNC(dispatchIndirect, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(acquireSwapchainTexture, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(beginRenderPass, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(endRenderPass, name) \
+ASSIGN_COMMAND_BUFFER_FUNC(setViewport, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(setViewports, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(setScissorRect, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(setScissorRects, name) \
@@ -189,6 +192,7 @@ ASSIGN_DRIVER_FUNC(getAdapterProperties, name) \
 ASSIGN_DRIVER_FUNC(getLimits, name) \
 ASSIGN_DRIVER_FUNC(createBuffer, name) \
 ASSIGN_DRIVER_FUNC(destroyBuffer, name) \
+ASSIGN_DRIVER_FUNC(getDeviceAddress, name) \
 ASSIGN_DRIVER_FUNC(createTexture, name) \
 ASSIGN_DRIVER_FUNC(destroyTexture, name) \
 ASSIGN_DRIVER_FUNC(createSampler, name) \
