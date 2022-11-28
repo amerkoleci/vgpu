@@ -26,8 +26,8 @@
 VGPUDevice device = nullptr;
 VGPUSwapChain swapChain = nullptr;
 VGPUTexture depthStencilTexture = nullptr;
-VGPUBuffer vertexBuffer = nullptr;
-VGPUPipeline renderPipeline = nullptr;
+VGPUBuffer* vertexBuffer = nullptr;
+VGPUPipeline* renderPipeline = nullptr;
 
 inline void vgpu_log(VGPULogLevel level, const char* message)
 {
@@ -101,7 +101,7 @@ void init_gfx(GLFWwindow* window)
 
     if (vgpuIsBackendSupported(VGPUBackendType_Vulkan))
     {
-        deviceDesc.preferredBackend = VGPUBackendType_Vulkan;
+        //deviceDesc.preferredBackend = VGPUBackendType_Vulkan;
     }
 
     device = vgpuCreateDevice(&deviceDesc);
@@ -225,7 +225,7 @@ void draw_frame()
     {
         VGPURenderPassColorAttachment colorAttachment = {};
         colorAttachment.texture = swapChainTexture;
-        colorAttachment.loadOp = VGPULoadOp_Clear;
+        colorAttachment.loadOp = VGPULoadAction_Clear;
         colorAttachment.storeOp = VGPUStoreOp_Store;
         colorAttachment.clearColor.r = 0.3f;
         colorAttachment.clearColor.g = 0.3f;
@@ -234,7 +234,7 @@ void draw_frame()
 
         VGPURenderPassDepthStencilAttachment depthStencilAttachment{};
         depthStencilAttachment.texture = depthStencilTexture;
-        depthStencilAttachment.depthLoadOp = VGPULoadOp_Clear;
+        depthStencilAttachment.depthLoadOp = VGPULoadAction_Clear;
         depthStencilAttachment.depthStoreOp = VGPUStoreOp_Store;
         depthStencilAttachment.clearDepth = 1.0f;
 

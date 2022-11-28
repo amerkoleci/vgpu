@@ -101,9 +101,9 @@ typedef struct VGPUCommandBuffer_T {
     void (*popDebugGroup)(VGPUCommandBufferImpl* driverData);
     void (*insertDebugMarker)(VGPUCommandBufferImpl* driverData, const char* debugLabel);
 
-    void (*setPipeline)(VGPUCommandBufferImpl* driverData, VGPUPipeline pipeline);
+    void (*setPipeline)(VGPUCommandBufferImpl* driverData, VGPUPipeline* pipeline);
     void (*dispatch)(VGPUCommandBufferImpl* driverData, uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ);
-    void (*dispatchIndirect)(VGPUCommandBufferImpl* driverData, VGPUBuffer buffer, uint64_t offset);
+    void (*dispatchIndirect)(VGPUCommandBufferImpl* driverData, VGPUBuffer* buffer, uint64_t offset);
 
     VGPUTexture(*acquireSwapchainTexture)(VGPUCommandBufferImpl* driverData, VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight);
     void (*beginRenderPass)(VGPUCommandBufferImpl* driverData, const VGPURenderPassDesc* desc);
@@ -113,8 +113,8 @@ typedef struct VGPUCommandBuffer_T {
     void (*setViewports)(VGPUCommandBufferImpl* driverData, uint32_t count, const VGPUViewport* viewports);
     void (*setScissorRect)(VGPUCommandBufferImpl* driverData, const VGPURect* rects);
     void (*setScissorRects)(VGPUCommandBufferImpl* driverData, uint32_t count, const VGPURect* rects);
-    void (*setVertexBuffer)(VGPUCommandBufferImpl* driverData, uint32_t index, VGPUBuffer buffer, uint64_t offset);
-    void (*setIndexBuffer)(VGPUCommandBufferImpl* driverData, VGPUBuffer buffer, uint64_t offset, VGPUIndexFormat format);
+    void (*setVertexBuffer)(VGPUCommandBufferImpl* driverData, uint32_t index, VGPUBuffer* buffer, uint64_t offset);
+    void (*setIndexBuffer)(VGPUCommandBufferImpl* driverData, VGPUBuffer* buffer, uint64_t offset, VGPUIndexFormat format);
 
     void (*draw)(VGPUCommandBufferImpl* driverData, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t baseInstance);
 
@@ -131,10 +131,11 @@ typedef struct VGPUDevice_T
     VGPUBool32(*queryFeature)(VGPURenderer* driverData, VGPUFeature feature, void* pInfo, uint32_t infoSize);
     void (*getAdapterProperties)(VGPURenderer* driverData, VGPUAdapterProperties* properties);
     void (*getLimits)(VGPURenderer* driverData, VGPULimits* limits);
+    void (*setLabel)(VGPURenderer* driverData, const char* label);
 
-    VGPUBuffer(*createBuffer)(VGPURenderer* driverData, const VGPUBufferDesc* desc, const void* pInitialData);
-    void(*destroyBuffer)(VGPURenderer* driverData, VGPUBuffer resource);
-    VGPUDeviceAddress(*getDeviceAddress)(VGPURenderer* driverData, VGPUBuffer resource);
+    VGPUBuffer*(*createBuffer)(VGPURenderer* driverData, const VGPUBufferDesc* desc, const void* pInitialData);
+    void(*destroyBuffer)(VGPURenderer* driverData, VGPUBuffer* resource);
+    VGPUDeviceAddress(*getDeviceAddress)(VGPURenderer* driverData, VGPUBuffer* resource);
 
     VGPUTexture(*createTexture)(VGPURenderer* driverData, const VGPUTextureDesc* desc, const void* pInitialData);
     void(*destroyTexture)(VGPURenderer* driverData, VGPUTexture resource);
@@ -145,10 +146,10 @@ typedef struct VGPUDevice_T
     VGPUShaderModule(*createShaderModule)(VGPURenderer* driverData, const void* pCode, size_t codeSize);
     void(*destroyShaderModule)(VGPURenderer* driverData, VGPUShaderModule resource);
 
-    VGPUPipeline(*createRenderPipeline)(VGPURenderer* driverData, const VGPURenderPipelineDesc* desc);
-    VGPUPipeline(*createComputePipeline)(VGPURenderer* driverData, const VGPUComputePipelineDesc* desc);
-    VGPUPipeline(*createRayTracingPipeline)(VGPURenderer* driverData, const VGPURayTracingPipelineDesc* desc);
-    void(*destroyPipeline)(VGPURenderer* driverData, VGPUPipeline resource);
+    VGPUPipeline*(*createRenderPipeline)(VGPURenderer* driverData, const VGPURenderPipelineDesc* desc);
+    VGPUPipeline*(*createComputePipeline)(VGPURenderer* driverData, const VGPUComputePipelineDesc* desc);
+    VGPUPipeline*(*createRayTracingPipeline)(VGPURenderer* driverData, const VGPURayTracingPipelineDesc* desc);
+    void(*destroyPipeline)(VGPURenderer* driverData, VGPUPipeline* resource);
 
     VGPUSwapChain(*createSwapChain)(VGPURenderer* driverData, void* windowHandle, const VGPUSwapChainDesc* desc);
     void(*destroySwapChain)(VGPURenderer* driverData, VGPUSwapChain swapChain);
@@ -190,6 +191,7 @@ ASSIGN_DRIVER_FUNC(getBackendType, name) \
 ASSIGN_DRIVER_FUNC(queryFeature, name) \
 ASSIGN_DRIVER_FUNC(getAdapterProperties, name) \
 ASSIGN_DRIVER_FUNC(getLimits, name) \
+ASSIGN_DRIVER_FUNC(setLabel, name) \
 ASSIGN_DRIVER_FUNC(createBuffer, name) \
 ASSIGN_DRIVER_FUNC(destroyBuffer, name) \
 ASSIGN_DRIVER_FUNC(getDeviceAddress, name) \

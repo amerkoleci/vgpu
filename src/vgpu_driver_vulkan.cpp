@@ -425,13 +425,13 @@ namespace
         }
     }
 
-    constexpr VkAttachmentLoadOp ToVkAttachmentLoadOp(VGPULoadOp op)
+    constexpr VkAttachmentLoadOp ToVkAttachmentLoadOp(VGPULoadAction op)
     {
         switch (op)
         {
-            case VGPULoadOp_Clear:
+            case VGPULoadAction_Clear:
                 return VK_ATTACHMENT_LOAD_OP_CLEAR;
-            case VGPULoadOp_DontCare:
+            case VGPULoadAction_DontCare:
                 return VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 
             default:
@@ -877,7 +877,7 @@ static VkImageView vulkan_GetRTV(VulkanRenderer* renderer, VulkanTexture* textur
 struct VulkanRenderPassAttachment
 {
     VkFormat format;
-    VGPULoadOp loadAction;
+    VGPULoadAction loadAction;
     VGPUStoreOp storeAction;
 };
 
@@ -1504,10 +1504,10 @@ static void vulkan_getAdapterProperties(VGPURenderer* driverData, VGPUAdapterPro
             properties->adapterType = VGPUAdapterType_DiscreteGPU;
             break;
         case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU:
-            properties->adapterType = VGPUAdapterType_VirtualGpu;
+            properties->adapterType = VGPUAdapterType_VirtualGPU;
             break;
         case VK_PHYSICAL_DEVICE_TYPE_CPU:
-            properties->adapterType = VGPUAdapterType_Cpu;
+            properties->adapterType = VGPUAdapterType_CPU;
             break;
         default:
             properties->adapterType = VGPUAdapterType_Other;
@@ -1568,8 +1568,14 @@ static void vulkan_getLimits(VGPURenderer* driverData, VGPULimits* limits)
 #undef SET_LIMIT_FROM_VULKAN
 }
 
+static void vulkan_setLabel(VGPURenderer* driverData, const char* label)
+{
+    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
+    vulkan_SetObjectName(renderer, VK_OBJECT_TYPE_DEVICE, (uint64_t)renderer->device, label);
+}
+
 /* Buffer */
-static VGPUBuffer vulkan_createBuffer(VGPURenderer* driverData, const VGPUBufferDesc* desc, const void* pInitialData)
+static VGPUBuffer* vulkan_createBuffer(VGPURenderer* driverData, const VGPUBufferDesc* desc, const void* pInitialData)
 {
     VulkanRenderer* renderer = (VulkanRenderer*)driverData;
 
@@ -1586,7 +1592,7 @@ static VGPUBuffer vulkan_createBuffer(VGPURenderer* driverData, const VGPUBuffer
             vulkan_SetObjectName(renderer, VK_OBJECT_TYPE_BUFFER, (uint64_t)buffer->handle, desc->label);
         }
 
-        return (VGPUBuffer_T*)buffer;
+        return (VGPUBuffer*)buffer;
     }
 
     VkBufferCreateInfo bufferInfo = {};
@@ -1734,10 +1740,10 @@ static VGPUBuffer vulkan_createBuffer(VGPURenderer* driverData, const VGPUBuffer
         }
     }
 
-    return (VGPUBuffer_T*)buffer;
+    return (VGPUBuffer*)buffer;
 }
 
-static void vulkan_destroyBuffer(VGPURenderer* driverData, VGPUBuffer resource)
+static void vulkan_destroyBuffer(VGPURenderer* driverData, VGPUBuffer* resource)
 {
     VulkanRenderer* renderer = (VulkanRenderer*)driverData;
     VulkanBuffer* buffer = (VulkanBuffer*)resource;
@@ -1752,7 +1758,7 @@ static void vulkan_destroyBuffer(VGPURenderer* driverData, VGPUBuffer resource)
     delete buffer;
 }
 
-static VGPUDeviceAddress vulkan_getDeviceAddress(VGPURenderer* driverData, VGPUBuffer resource)
+static VGPUDeviceAddress vulkan_getDeviceAddress(VGPURenderer* driverData, VGPUBuffer* resource)
 {
     _VGPU_UNUSED(driverData);
     VulkanBuffer* buffer = (VulkanBuffer*)resource;
@@ -2042,7 +2048,7 @@ static void vulkan_destroyShaderModule(VGPURenderer* driverData, VGPUShaderModul
 }
 
 /* Pipeline */
-static VGPUPipeline vulkan_createRenderPipeline(VGPURenderer* driverData, const VGPURenderPipelineDesc* desc)
+static VGPUPipeline* vulkan_createRenderPipeline(VGPURenderer* driverData, const VGPURenderPipelineDesc* desc)
 {
     VulkanRenderer* renderer = (VulkanRenderer*)driverData;
 
@@ -2198,7 +2204,7 @@ static VGPUPipeline vulkan_createRenderPipeline(VGPURenderer* driverData, const 
             VGPU_ASSERT(desc->colorAttachments[i].format != VGPUTextureFormat_Undefined);
 
             colorAttachments[renderPassKey.colorAttachmentCount].format = ToVkFormat(desc->colorAttachments[i].format);
-            colorAttachments[renderPassKey.colorAttachmentCount].loadAction = VGPULoadOp_DontCare;
+            colorAttachments[renderPassKey.colorAttachmentCount].loadAction = VGPULoadAction_DontCare;
             colorAttachments[renderPassKey.colorAttachmentCount].storeAction = VGPUStoreOp_Store;
             renderPassKey.colorAttachmentCount++;
         }
@@ -2208,14 +2214,14 @@ static VGPUPipeline vulkan_createRenderPipeline(VGPURenderer* driverData, const 
         if (desc->depthAttachmentFormat != VGPUTextureFormat_Undefined)
         {
             depthAttachment.format = ToVkFormat(desc->depthAttachmentFormat);
-            depthAttachment.loadAction = VGPULoadOp_Load;
+            depthAttachment.loadAction = VGPULoadAction_Load;
             depthAttachment.storeAction = VGPUStoreOp_DontCare;
             renderPassKey.depthAttachment = &depthAttachment;
 
             //if (IsStencilFormat(desc.depthStencilFormat))
             //{
             //    stencilAttachment.format = desc.depthStencilFormat;
-            //    stencilAttachment.loadAction = VGPULoadOp_Load;
+            //    stencilAttachment.loadAction = VGPULoadAction_Load;
             //    stencilAttachment.storeAction = VGPUStoreOp_DontCare;
             //
             //    renderPassKey.stencilAttachment = &stencilAttachment;
@@ -2235,10 +2241,10 @@ static VGPUPipeline vulkan_createRenderPipeline(VGPURenderer* driverData, const 
 
     VulkanPipeline* pipeline = VGPU_ALLOC_CLEAR(VulkanPipeline);
     pipeline->handle = handle;
-    return (VGPUPipeline)pipeline;
+    return (VGPUPipeline*)pipeline;
 }
 
-static VGPUPipeline vulkan_createComputePipeline(VGPURenderer* driverData, const VGPUComputePipelineDesc* desc)
+static VGPUPipeline* vulkan_createComputePipeline(VGPURenderer* driverData, const VGPUComputePipelineDesc* desc)
 {
     VulkanRenderer* renderer = (VulkanRenderer*)driverData;
     VulkanShader* shader = (VulkanShader*)desc->shader;
@@ -2264,16 +2270,16 @@ static VGPUPipeline vulkan_createComputePipeline(VGPURenderer* driverData, const
 
     VulkanPipeline* pipeline = VGPU_ALLOC_CLEAR(VulkanPipeline);
     pipeline->handle = handle;
-    return (VGPUPipeline)pipeline;
+    return (VGPUPipeline*)pipeline;
 }
 
-static VGPUPipeline vulkan_createRayTracingPipeline(VGPURenderer* driverData, const VGPURayTracingPipelineDesc* desc)
+static VGPUPipeline* vulkan_createRayTracingPipeline(VGPURenderer* driverData, const VGPURayTracingPipelineDesc* desc)
 {
     VulkanPipeline* pipeline = VGPU_ALLOC_CLEAR(VulkanPipeline);
-    return (VGPUPipeline)pipeline;
+    return (VGPUPipeline*)pipeline;
 }
 
-static void vulkan_destroyPipeline(VGPURenderer* driverData, VGPUPipeline resource)
+static void vulkan_destroyPipeline(VGPURenderer* driverData, VGPUPipeline* resource)
 {
     VulkanRenderer* renderer = (VulkanRenderer*)driverData;
     VulkanPipeline* pipeline = (VulkanPipeline*)resource;
@@ -2594,7 +2600,7 @@ static void vulkan_insertDebugMarker(VGPUCommandBufferImpl* driverData, const ch
     vkCmdInsertDebugUtilsLabelEXT(commandBuffer->handle, &label);
 }
 
-static void vulkan_setPipeline(VGPUCommandBufferImpl* driverData, VGPUPipeline pipeline)
+static void vulkan_setPipeline(VGPUCommandBufferImpl* driverData, VGPUPipeline* pipeline)
 {
     VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
     VulkanPipeline* vulkanPipeline = (VulkanPipeline*)pipeline;
@@ -2613,7 +2619,7 @@ static void vulkan_dispatch(VGPUCommandBufferImpl* driverData, uint32_t groupCou
     vkCmdDispatch(commandBuffer->handle, groupCountX, groupCountY, groupCountZ);
 }
 
-static void vulkan_dispatchIndirect(VGPUCommandBufferImpl* driverData, VGPUBuffer buffer, uint64_t offset)
+static void vulkan_dispatchIndirect(VGPUCommandBufferImpl* driverData, VGPUBuffer* buffer, uint64_t offset)
 {
     VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
     vulkan_prepareDispatch(commandBuffer);
@@ -2886,14 +2892,14 @@ static void vulkan_endRenderPass(VGPUCommandBufferImpl* driverData)
     commandBuffer->insideRenderPass = false;
 }
 
-static void vulkan_setVertexBuffer(VGPUCommandBufferImpl* driverData, uint32_t index, VGPUBuffer buffer, uint64_t offset)
+static void vulkan_setVertexBuffer(VGPUCommandBufferImpl* driverData, uint32_t index, VGPUBuffer* buffer, uint64_t offset)
 {
     VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
     VulkanBuffer* vulkanBuffer = (VulkanBuffer*)buffer;
     vkCmdBindVertexBuffers(commandBuffer->handle, index, 1, &vulkanBuffer->handle, &offset);
 }
 
-static void vulkan_setIndexBuffer(VGPUCommandBufferImpl* driverData, VGPUBuffer buffer, uint64_t offset, VGPUIndexFormat format)
+static void vulkan_setIndexBuffer(VGPUCommandBufferImpl* driverData, VGPUBuffer* buffer, uint64_t offset, VGPUIndexFormat format)
 {
     VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
     VulkanBuffer* vulkanBuffer = (VulkanBuffer*)buffer;

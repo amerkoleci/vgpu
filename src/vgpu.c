@@ -263,6 +263,14 @@ void vgpuGetLimits(VGPUDevice device, VGPULimits* limits)
     device->getLimits(device->driverData, limits);
 }
 
+void vgpuDeviceSetLabel(VGPUDevice device, const char* label)
+{
+    NULL_RETURN(device);
+    NULL_RETURN(label);
+
+    device->setLabel(device->driverData, label);
+}
+
 /* Buffer */
 static VGPUBufferDesc _vgpuBufferDescDef(const VGPUBufferDesc* desc)
 {
@@ -271,7 +279,7 @@ static VGPUBufferDesc _vgpuBufferDescDef(const VGPUBufferDesc* desc)
     return def;
 }
 
-VGPUBuffer vgpuCreateBuffer(VGPUDevice device, const VGPUBufferDesc* desc, const void* pInitialData)
+VGPUBuffer* vgpuCreateBuffer(VGPUDevice device, const VGPUBufferDesc* desc, const void* pInitialData)
 {
     NULL_RETURN_NULL(device);
     NULL_RETURN_NULL(desc);
@@ -280,7 +288,7 @@ VGPUBuffer vgpuCreateBuffer(VGPUDevice device, const VGPUBufferDesc* desc, const
     return device->createBuffer(device->driverData, &desc_def, pInitialData);
 }
 
-void vgpuDestroyBuffer(VGPUDevice device, VGPUBuffer buffer)
+void vgpuDestroyBuffer(VGPUDevice device, VGPUBuffer* buffer)
 {
     NULL_RETURN(device);
     NULL_RETURN(buffer);
@@ -288,7 +296,7 @@ void vgpuDestroyBuffer(VGPUDevice device, VGPUBuffer buffer)
     device->destroyBuffer(device->driverData, buffer);
 }
 
-VGPUDeviceAddress vgpuGetDeviceAddress(VGPUDevice device, VGPUBuffer buffer)
+VGPUDeviceAddress vgpuGetDeviceAddress(VGPUDevice device, VGPUBuffer* buffer)
 {
     VGPU_ASSERT(device);
     VGPU_ASSERT(buffer);
@@ -482,7 +490,7 @@ static VGPURenderPipelineDesc _vgpuRenderPipelineDescDef(const VGPURenderPipelin
     return def;
 }
 
-VGPUPipeline vgpuCreateRenderPipeline(VGPUDevice device, const VGPURenderPipelineDesc* desc)
+VGPUPipeline* vgpuCreateRenderPipeline(VGPUDevice device, const VGPURenderPipelineDesc* desc)
 {
     NULL_RETURN_NULL(device);
     NULL_RETURN_NULL(desc);
@@ -492,7 +500,7 @@ VGPUPipeline vgpuCreateRenderPipeline(VGPUDevice device, const VGPURenderPipelin
     return device->createRenderPipeline(device->driverData, &desc_def);
 }
 
-VGPUPipeline vgpuCreateComputePipeline(VGPUDevice device, const VGPUComputePipelineDesc* desc)
+VGPUPipeline* vgpuCreateComputePipeline(VGPUDevice device, const VGPUComputePipelineDesc* desc)
 {
     NULL_RETURN_NULL(device);
     NULL_RETURN_NULL(desc);
@@ -501,7 +509,7 @@ VGPUPipeline vgpuCreateComputePipeline(VGPUDevice device, const VGPUComputePipel
     return device->createComputePipeline(device->driverData, desc);
 }
 
-VGPUPipeline vgpuCreateRayTracingPipeline(VGPUDevice device, const VGPURayTracingPipelineDesc* desc)
+VGPUPipeline* vgpuCreateRayTracingPipeline(VGPUDevice device, const VGPURayTracingPipelineDesc* desc)
 {
     NULL_RETURN_NULL(device);
     NULL_RETURN_NULL(desc);
@@ -509,7 +517,7 @@ VGPUPipeline vgpuCreateRayTracingPipeline(VGPUDevice device, const VGPURayTracin
     return device->createRayTracingPipeline(device->driverData, desc);
 }
 
-void vgpuDestroyPipeline(VGPUDevice device, VGPUPipeline pipeline)
+void vgpuDestroyPipeline(VGPUDevice device, VGPUPipeline* pipeline)
 {
     NULL_RETURN(device);
     NULL_RETURN(pipeline);
@@ -576,7 +584,7 @@ void vgpuInsertDebugMarker(VGPUCommandBuffer commandBuffer, const char* debugLab
     commandBuffer->insertDebugMarker(commandBuffer->driverData, debugLabel);
 }
 
-void vgpuSetPipeline(VGPUCommandBuffer commandBuffer, VGPUPipeline pipeline)
+void vgpuSetPipeline(VGPUCommandBuffer commandBuffer, VGPUPipeline* pipeline)
 {
     VGPU_ASSERT(pipeline);
 
@@ -588,7 +596,7 @@ void vgpuDispatch(VGPUCommandBuffer commandBuffer, uint32_t groupCountX, uint32_
     commandBuffer->dispatch(commandBuffer->driverData, groupCountX, groupCountY, groupCountZ);
 }
 
-void vgpuDispatchIndirect(VGPUCommandBuffer commandBuffer, VGPUBuffer buffer, uint64_t offset)
+void vgpuDispatchIndirect(VGPUCommandBuffer commandBuffer, VGPUBuffer* buffer, uint64_t offset)
 {
     NULL_RETURN(buffer);
 
@@ -641,12 +649,12 @@ void vgpuSetScissorRects(VGPUCommandBuffer commandBuffer, uint32_t count, const 
     commandBuffer->setScissorRects(commandBuffer->driverData, count, rects);
 }
 
-void vgpuSetVertexBuffer(VGPUCommandBuffer commandBuffer, uint32_t index, VGPUBuffer buffer, uint64_t offset)
+void vgpuSetVertexBuffer(VGPUCommandBuffer commandBuffer, uint32_t index, VGPUBuffer* buffer, uint64_t offset)
 {
     commandBuffer->setVertexBuffer(commandBuffer->driverData, index, buffer, offset);
 }
 
-void vgpuSetIndexBuffer(VGPUCommandBuffer commandBuffer, VGPUBuffer buffer, uint64_t offset, VGPUIndexFormat format)
+void vgpuSetIndexBuffer(VGPUCommandBuffer commandBuffer, VGPUBuffer* buffer, uint64_t offset, VGPUIndexFormat format)
 {
     commandBuffer->setIndexBuffer(commandBuffer->driverData, buffer, offset, format);
 }
