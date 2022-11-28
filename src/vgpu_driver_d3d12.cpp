@@ -190,20 +190,20 @@ namespace
         case VGPUTextureFormat_Depth24UnormStencil8:    return DXGI_FORMAT_D24_UNORM_S8_UINT;
         case VGPUTextureFormat_Depth32FloatStencil8:    return DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
             // Compressed BC formats
-        case VGPUTextureFormat_BC1Unorm:            return DXGI_FORMAT_BC1_UNORM;
-        case VGPUTextureFormat_BC1UnormSrgb:        return DXGI_FORMAT_BC1_UNORM_SRGB;
-        case VGPUTextureFormat_BC2Unorm:            return DXGI_FORMAT_BC2_UNORM;
-        case VGPUTextureFormat_BC2UnormSrgb:        return DXGI_FORMAT_BC2_UNORM_SRGB;
-        case VGPUTextureFormat_BC3Unorm:            return DXGI_FORMAT_BC3_UNORM;
-        case VGPUTextureFormat_BC3UnormSrgb:        return DXGI_FORMAT_BC3_UNORM_SRGB;
-        case VGPUTextureFormat_BC4Snorm:            return DXGI_FORMAT_BC4_SNORM;
-        case VGPUTextureFormat_BC4Unorm:            return DXGI_FORMAT_BC4_UNORM;
-        case VGPUTextureFormat_BC5Snorm:            return DXGI_FORMAT_BC5_SNORM;
-        case VGPUTextureFormat_BC5Unorm:            return DXGI_FORMAT_BC5_UNORM;
-        case VGPUTextureFormat_BC6HRGBUfloat:       return DXGI_FORMAT_BC6H_UF16;
-        case VGPUTextureFormat_BC6HRGBFloat:        return DXGI_FORMAT_BC6H_SF16;
-        case VGPUTextureFormat_BC7Unorm:            return DXGI_FORMAT_BC7_UNORM;
-        case VGPUTextureFormat_BC7UnormSrgb:        return DXGI_FORMAT_BC7_UNORM_SRGB;
+        case VGPUTextureFormat_Bc1RgbaUnorm:            return DXGI_FORMAT_BC1_UNORM;
+        case VGPUTextureFormat_Bc1RgbaUnormSrgb:        return DXGI_FORMAT_BC1_UNORM_SRGB;
+        case VGPUTextureFormat_Bc2RgbaUnorm:            return DXGI_FORMAT_BC2_UNORM;
+        case VGPUTextureFormat_Bc2RgbaUnormSrgb:        return DXGI_FORMAT_BC2_UNORM_SRGB;
+        case VGPUTextureFormat_Bc3RgbaUnorm:            return DXGI_FORMAT_BC3_UNORM;
+        case VGPUTextureFormat_Bc3RgbaUnormSrgb:        return DXGI_FORMAT_BC3_UNORM_SRGB;
+        case VGPUTextureFormat_Bc4RSnorm:               return DXGI_FORMAT_BC4_SNORM;
+        case VGPUTextureFormat_Bc4RUnorm:               return DXGI_FORMAT_BC4_UNORM;
+        case VGPUTextureFormat_Bc5RgSnorm:              return DXGI_FORMAT_BC5_SNORM;
+        case VGPUTextureFormat_Bc5RgUnorm:              return DXGI_FORMAT_BC5_UNORM;
+        case VGPUTextureFormat_Bc6hRgbUfloat:           return DXGI_FORMAT_BC6H_UF16;
+        case VGPUTextureFormat_Bc6hRgbSfloat:           return DXGI_FORMAT_BC6H_SF16;
+        case VGPUTextureFormat_Bc7RgbaUnorm:            return DXGI_FORMAT_BC7_UNORM;
+        case VGPUTextureFormat_Bc7RgbaUnormSrgb:        return DXGI_FORMAT_BC7_UNORM_SRGB;
 
         default:
             return DXGI_FORMAT_UNKNOWN;

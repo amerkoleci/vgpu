@@ -21,8 +21,6 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v3
-      with:
-        submodules: true
 
     - name: Configure Win64
       run: cmake . -G "Visual Studio 17 2022" -A x64 -Bbuild_win_64 -DCMAKE_BUILD_TYPE:String=Release
@@ -40,11 +38,6 @@ jobs:
     - name: Build UWP ARM64
       run: cmake --build build_uwp_arm64 --config Release
 
-    - name: Configure UWP ARM
-      run: cmake . -G "Visual Studio 17 2022" -A ARM -Bbuild_uwp_arm -DCMAKE_SYSTEM_NAME:String=WindowsStore -DCMAKE_SYSTEM_VERSION:String="10.0" -DCMAKE_BUILD_TYPE:String=Release
-    - name: Build UWP ARM
-      run: cmake --build build_uwp_arm --config Release
-
     - name: Configure UWP x64
       run: cmake . -G "Visual Studio 17 2022" -A x64 -Bbuild_uwp_x64 -DCMAKE_SYSTEM_NAME:String=WindowsStore -DCMAKE_SYSTEM_VERSION:String="10.0" -DCMAKE_BUILD_TYPE:String=Release
     - name: Build UWP x64
@@ -52,16 +45,14 @@ jobs:
 
     - name: Package Windows
       run: |
-        mkdir bin/win-x64
-        mkdir bin/win-arm64
-        mkdir bin/win10-arm64
-        mkdir bin/win10-arm
-        mkdir bin/win10-x64
-        mv build_win_64\bin\Release\vgpu.dll bin/win-x64
-        mv build_win_arm64\bin\Release\vgpu.dll bin/win-arm64
-        mv build_uwp_arm64\bin\Release\vgpu.dll bin/win10-arm64
-        mv build_uwp_arm\bin\Release\vgpu.dll bin/win10-arm
-        mv build_uwp_x64\bin\Release\vgpu.dll bin/win10-x64
+        mkdir bin/win-x64/native
+        mkdir bin/win-arm64/native
+        mkdir bin/win10-x64/native
+        mkdir bin/win10-arm64/native
+        mv build_win_64\bin\Release\vgpu.dll bin/win-x64/native
+        mv build_win_arm64\bin\Release\vgpu.dll bin/win-arm64/native
+        mv build_uwp_x64\bin\Release\vgpu.dll bin/win10-x64/native
+        mv build_uwp_arm64\bin\Release\vgpu.dll bin/win10-arm64/native
     - uses: actions/upload-artifact@v3
       with:
         name: vgpu_libs_windows
@@ -73,7 +64,7 @@ jobs:
     needs: [windows]
     steps:
       - name: download artifacts
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           path: artifacts
       - name: Display structure of downloaded files

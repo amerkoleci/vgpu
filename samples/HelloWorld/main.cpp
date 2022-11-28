@@ -101,7 +101,7 @@ void init_gfx(GLFWwindow* window)
 
     if (vgpuIsBackendSupported(VGPUBackendType_Vulkan))
     {
-        //deviceDesc.preferredBackend = VGPUBackendType_Vulkan;
+        deviceDesc.preferredBackend = VGPUBackendType_Vulkan;
     }
 
     device = vgpuCreateDevice(&deviceDesc);

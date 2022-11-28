@@ -1,20 +1,30 @@
 # CMake version
-cmake_minimum_required (VERSION 3.14)
+cmake_minimum_required (VERSION 3.16)
 
 if (${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
 	message(FATAL_ERROR "In-source builds are not supported. Please choose a different binary directory.")
 	return()
 endif()
 
+# Build version
+set (VGPU_VERSION_MAJOR 1)
+set (VGPU_VERSION_MINOR 0)
+set (VGPU_VERSION_PATCH 0)
+set (VGPU_VERSION ${VGPU_VERSION_MAJOR}.${VGPU_VERSION_MINOR}.${VGPU_VERSION_PATCH})
+
 # Project declaration
-project (vgpu)
+project (vgpu
+    VERSION ${VGPU_VERSION}
+    DESCRIPTION "Cross platform low-level graphics API"
+    HOMEPAGE_URL "https://github.com/amerkoleci/vgpu"
+    LANGUAGES CXX C
+)
 
 # Configure CMake global variables
 set (CMAKE_CXX_STANDARD 11)
 set (CMAKE_CXX_STANDARD_REQUIRED ON)
 set (CMAKE_CXX_EXTENSIONS OFF)
-
-option(BUILD_SHARED_LIBS "Build shared library" ON)
+set (CMAKE_C_STANDARD 99)
 
 # Configure CMake global variables
 set(CMAKE_INSTALL_MESSAGE LAZY)
@@ -25,7 +35,6 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 # Use solution folders to organize projects
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
-
 
 # Build Type
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
@@ -48,19 +57,17 @@ endif()
 
 # Options
 include(CMakeDependentOption)
+if (IOS OR EMSCRIPTEN)
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL "Disable shared library on (IOS, WEB)" FORCE)
+else()
+    option(BUILD_SHARED_LIBS "Build shared library" ON)
+endif ()
 
-option(VGPU_BUILD_SHARED "Build vgpu as a shared library (DLL or .so)" ON)
 option(VGPU_INSTALL "Generate install rules for vgpu" ON)
 cmake_dependent_option(VGPU_VULKAN_DRIVER "Build the Vulkan backend" ON "NOT EMSCRIPTEN;NOT WINDOWS_STORE" OFF)
 cmake_dependent_option(VGPU_D3D12_DRIVER "Build the D3D12 backend" ON "WIN32" OFF)
 cmake_dependent_option(VGPU_WEBGPU_DRIVER "Build the WebGPU backend" ON "EMSCRIPTEN" OFF)
 cmake_dependent_option(VGPU_SAMPLES "Build samples" ON "NOT WINDOWS_STORE" OFF)
-
-# Build version
-set (VGPU_VERSION_MAJOR 1)
-set (VGPU_VERSION_MINOR 0)
-set (VGPU_VERSION_PATCH 0)
-set (VGPU_VERSION "${VGPU_VERSION_MAJOR}.${VGPU_VERSION_MINOR}.${VGPU_VERSION_PATCH}")
 
 execute_process(COMMAND git rev-list --count HEAD
     OUTPUT_VARIABLE VGPU_REVISION_ID
@@ -108,10 +115,6 @@ if(EMSCRIPTEN)
 	set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -s ENVIRONMENT=web -s MINIMAL_RUNTIME=2 -s TEXTDECODER=2 -s ABORTING_MALLOC=0 -s ALLOW_MEMORY_GROWTH=0 -s SUPPORT_ERRNO=0 -s MALLOC=emmalloc -s NO_FILESYSTEM=1 --output_eol=linux")
 endif ()
 
-if (IOS OR EMSCRIPTEN)
-    set(VGPU_BUILD_SHARED OFF CACHE BOOL "Always Disable shared library on (IOS, WEB)" FORCE)
-endif ()
-
 # Third party
 add_subdirectory(third_party)
 
@@ -122,14 +125,12 @@ set(SOURCE_FILES
     src/vgpu.c
 )
 
-if (VGPU_BUILD_SHARED)
-    add_library(${PROJECT_NAME} SHARED ${SOURCE_FILES})
+add_library(${PROJECT_NAME} ${SOURCE_FILES})
+if (BUILD_SHARED_LIBS)
     target_compile_definitions(${PROJECT_NAME}
         PUBLIC VGPU_SHARED_LIBRARY=1
         PRIVATE VGPU_IMPLEMENTATION=1
     )
-else()
-    add_library(${PROJECT_NAME} STATIC ${SOURCE_FILES})
 endif ()
 
 # MinGW builds should statically link libgcc
@@ -278,7 +279,7 @@ message(STATUS "GIT ChangeSet: ${VGPU_CHANGE_SET}")
 message(STATUS "GIT ChangeSet Date: ${VGPU_CHANGE_SET_DATE}")
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 
-if (VGPU_BUILD_SHARED)
+if (BUILD_SHARED_LIBS)
     message(STATUS "  Library         SHARED")
 else ()
     message(STATUS "  Library         STATIC")

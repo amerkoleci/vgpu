@@ -52,7 +52,7 @@ void vgpuLogInfo(const char* format, ...)
     va_start(args, format);
     vsnprintf(msg, MAX_MESSAGE_SIZE, format, args);
     va_end(args);
-    s_LogFunc(VGPU_LOG_LEVEL_INFO, msg, s_userData);
+    s_LogFunc(VGPULogLevel_Info, msg, s_userData);
 }
 
 void vgpu_log_warn(const char* format, ...)
@@ -62,7 +62,7 @@ void vgpu_log_warn(const char* format, ...)
     va_start(args, format);
     vsnprintf(msg, MAX_MESSAGE_SIZE, format, args);
     va_end(args);
-    s_LogFunc(VGPU_LOG_LEVEL_WARN, msg, s_userData);
+    s_LogFunc(VGPULogLevel_Warn, msg, s_userData);
 }
 
 void vgpuLogError(const char* format, ...)
@@ -72,7 +72,7 @@ void vgpuLogError(const char* format, ...)
     va_start(args, format);
     vsnprintf(msg, MAX_MESSAGE_SIZE, format, args);
     va_end(args);
-    s_LogFunc(VGPU_LOG_LEVEL_ERROR, msg, s_userData);
+    s_LogFunc(VGPULogLevel_Error, msg, s_userData);
 }
 
 void vgpuSetLogCallback(VGPULogCallback func, void* userData)
@@ -730,20 +730,20 @@ static const VGPUFormatInfo c_FormatInfo[] = {
     { VGPUTextureFormat_Depth32FloatStencil8,   "Depth32FloatStencil8",     8,   1, 1, VGPUTextureFormatKind_Float },
 
     // BC compressed formats
-    { VGPUTextureFormat_BC1Unorm,       "BC1Unorm",         8,   4, 4, VGPUTextureFormatKind_Unorm },
-    { VGPUTextureFormat_BC1UnormSrgb,   "BC1UnormSrgb",     8,   4, 4, VGPUTextureFormatKind_UnormSrgb  },
-    { VGPUTextureFormat_BC2Unorm,       "BC2Unorm",         16,  4, 4, VGPUTextureFormatKind_Unorm },
-    { VGPUTextureFormat_BC2UnormSrgb,   "BC2UnormSrgb",     16,  4, 4, VGPUTextureFormatKind_UnormSrgb  },
-    { VGPUTextureFormat_BC3Unorm,       "BC3Unorm",         16,  4, 4, VGPUTextureFormatKind_Unorm },
-    { VGPUTextureFormat_BC3UnormSrgb,   "BC3UnormSrgb",     16,  4, 4, VGPUTextureFormatKind_UnormSrgb  },
-    { VGPUTextureFormat_BC4Unorm,       "BC4Unorm",         8,   4, 4, VGPUTextureFormatKind_Unorm },
-    { VGPUTextureFormat_BC4Snorm,       "BC4Snorm",         8,   4, 4, VGPUTextureFormatKind_Snorm },
-    { VGPUTextureFormat_BC5Unorm,       "BC5Unorm",         16,  4, 4, VGPUTextureFormatKind_Unorm },
-    { VGPUTextureFormat_BC5Snorm,       "BC5Snorm",         16,  4, 4, VGPUTextureFormatKind_Snorm },
-    { VGPUTextureFormat_BC6HRGBUfloat,  "BC6HRGBUfloat",       16,  4, 4, VGPUTextureFormatKind_Float },
-    { VGPUTextureFormat_BC6HRGBFloat,   "BC6HRGBFloat",       16,  4, 4, VGPUTextureFormatKind_Float },
-    { VGPUTextureFormat_BC7Unorm,       "BC7Unorm",         16,  4, 4, VGPUTextureFormatKind_Unorm },
-    { VGPUTextureFormat_BC7UnormSrgb,   "BC7UnormSrgb",     16,  4, 4, VGPUTextureFormatKind_UnormSrgb },
+    { VGPUTextureFormat_Bc1RgbaUnorm,       "BC1RgbaUnorm",         8,   4, 4, VGPUTextureFormatKind_Unorm },
+    { VGPUTextureFormat_Bc1RgbaUnormSrgb,   "BC1RgbaUnormSrgb",     8,   4, 4, VGPUTextureFormatKind_UnormSrgb  },
+    { VGPUTextureFormat_Bc2RgbaUnorm,       "BC2RgbaUnorm",         16,  4, 4, VGPUTextureFormatKind_Unorm },
+    { VGPUTextureFormat_Bc2RgbaUnormSrgb,   "BC2RgbaUnormSrgb",     16,  4, 4, VGPUTextureFormatKind_UnormSrgb  },
+    { VGPUTextureFormat_Bc3RgbaUnorm,       "BC3RgbaUnorm",         16,  4, 4, VGPUTextureFormatKind_Unorm },
+    { VGPUTextureFormat_Bc3RgbaUnormSrgb,   "BC3RgbaUnormSrgb",     16,  4, 4, VGPUTextureFormatKind_UnormSrgb  },
+    { VGPUTextureFormat_Bc4RUnorm,          "BC4RUnorm",            8,   4, 4, VGPUTextureFormatKind_Unorm },
+    { VGPUTextureFormat_Bc4RSnorm,          "BC4RSnorm",            8,   4, 4, VGPUTextureFormatKind_Snorm },
+    { VGPUTextureFormat_Bc5RgUnorm,         "BC5Unorm",             16,  4, 4, VGPUTextureFormatKind_Unorm },
+    { VGPUTextureFormat_Bc5RgSnorm,         "BC5Snorm",             16,  4, 4, VGPUTextureFormatKind_Snorm },
+    { VGPUTextureFormat_Bc6hRgbUfloat,      "Bc6hRgbUfloat",        16,  4, 4, VGPUTextureFormatKind_Float },
+    { VGPUTextureFormat_Bc6hRgbSfloat,      "Bc6hRgbSfloat",         16,  4, 4, VGPUTextureFormatKind_Float },
+    { VGPUTextureFormat_Bc7RgbaUnorm,       "Bc7RgbaUnorm",         16,  4, 4, VGPUTextureFormatKind_Unorm },
+    { VGPUTextureFormat_Bc7RgbaUnormSrgb,   "Bc7RgbaUnormSrgb",     16,  4, 4, VGPUTextureFormatKind_UnormSrgb },
 
     // ETC2/EAC compressed formats
     { VGPUTextureFormat_Etc2Rgb8Unorm,       "Etc2Rgb8Unorm",         8,   4, 4, VGPUTextureFormatKind_Unorm },

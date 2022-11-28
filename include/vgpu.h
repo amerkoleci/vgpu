@@ -58,9 +58,9 @@ typedef struct VGPUPipeline_T* VGPUPipeline;
 typedef struct VGPUCommandBuffer_T* VGPUCommandBuffer;
 
 typedef enum VGPULogLevel {
-    VGPU_LOG_LEVEL_INFO = 0,
-    VGPU_LOG_LEVEL_WARN,
-    VGPU_LOG_LEVEL_ERROR,
+    VGPULogLevel_Info = 0,
+    VGPULogLevel_Warn,
+    VGPULogLevel_Error,
 
     _VGPULogLevel_Count,
     _VGPULogLevel_Force32 = 0x7FFFFFFF
@@ -211,20 +211,20 @@ typedef enum VGPUTextureFormat {
     VGPUTextureFormat_Depth24UnormStencil8,
     VGPUTextureFormat_Depth32FloatStencil8,
     /* Compressed BC formats */
-    VGPUTextureFormat_BC1Unorm,
-    VGPUTextureFormat_BC1UnormSrgb,
-    VGPUTextureFormat_BC2Unorm,
-    VGPUTextureFormat_BC2UnormSrgb,
-    VGPUTextureFormat_BC3Unorm,
-    VGPUTextureFormat_BC3UnormSrgb,
-    VGPUTextureFormat_BC4Unorm,
-    VGPUTextureFormat_BC4Snorm,
-    VGPUTextureFormat_BC5Unorm,
-    VGPUTextureFormat_BC5Snorm,
-    VGPUTextureFormat_BC6HRGBUfloat,
-    VGPUTextureFormat_BC6HRGBFloat,
-    VGPUTextureFormat_BC7Unorm,
-    VGPUTextureFormat_BC7UnormSrgb,
+    VGPUTextureFormat_Bc1RgbaUnorm,
+    VGPUTextureFormat_Bc1RgbaUnormSrgb,
+    VGPUTextureFormat_Bc2RgbaUnorm,
+    VGPUTextureFormat_Bc2RgbaUnormSrgb,
+    VGPUTextureFormat_Bc3RgbaUnorm,
+    VGPUTextureFormat_Bc3RgbaUnormSrgb,
+    VGPUTextureFormat_Bc4RUnorm,
+    VGPUTextureFormat_Bc4RSnorm,
+    VGPUTextureFormat_Bc5RgUnorm,
+    VGPUTextureFormat_Bc5RgSnorm,
+    VGPUTextureFormat_Bc6hRgbUfloat,
+    VGPUTextureFormat_Bc6hRgbSfloat,
+    VGPUTextureFormat_Bc7RgbaUnorm,
+    VGPUTextureFormat_Bc7RgbaUnormSrgb,
     /* ETC2/EAC compressed formats */
     VGPUTextureFormat_Etc2Rgb8Unorm,
     VGPUTextureFormat_Etc2Rgb8UnormSrgb,
