@@ -139,7 +139,7 @@ if(MINGW)
 endif()
 
 if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    target_compile_options(${PROJECT_NAME} PRIVATE -Wpedantic -Wextra)
+    target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wpedantic -Wextra)
 endif()
 
 if (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")

@@ -24,9 +24,9 @@
 #include <vgpu.h>
 
 VGPUDevice device = nullptr;
-VGPUSwapChain swapChain = nullptr;
+VGPUSwapChain* swapChain = nullptr;
 VGPUTexture depthStencilTexture = nullptr;
-VGPUBuffer* vertexBuffer = nullptr;
+vgpu_buffer* vertex_buffer = nullptr;
 VGPUPipeline* renderPipeline = nullptr;
 
 inline void vgpu_log(VGPULogLevel level, const char* message)
@@ -101,7 +101,7 @@ void init_gfx(GLFWwindow* window)
 
     if (vgpuIsBackendSupported(VGPUBackendType_Vulkan))
     {
-        //deviceDesc.preferredBackend = VGPUBackendType_Vulkan;
+        deviceDesc.preferredBackend = VGPUBackendType_Vulkan;
     }
 
     device = vgpuCreateDevice(&deviceDesc);
@@ -147,11 +147,11 @@ void init_gfx(GLFWwindow* window)
         -0.5f, -0.5f, 0.5f,     0.0f, 0.0f, 1.0f, 1.0f
     };
 
-    VGPUBufferDesc bufferDesc{};
-    bufferDesc.label = "Vertex Buffer";
-    bufferDesc.size = sizeof(vertices);
-    bufferDesc.usage = VGPUBufferUsage_Vertex;
-    vertexBuffer = vgpuCreateBuffer(device, &bufferDesc, vertices);
+    vgpu_buffer_desc vertex_buffer_desc{};
+    vertex_buffer_desc.label = "Vertex Buffer";
+    vertex_buffer_desc.size = sizeof(vertices);
+    vertex_buffer_desc.usage = VGPU_BUFFER_USAGE_VERTEX;
+    vertex_buffer = vgpu_buffer_create(device, &vertex_buffer_desc, vertices);
 
     VGPUShaderModule vertexShader = LoadShader("triangleVertex");
     VGPUShaderModule fragmentShader = LoadShader("triangleFragment");
@@ -244,7 +244,7 @@ void draw_frame()
         renderPass.depthStencilAttachment = &depthStencilAttachment;
         vgpuBeginRenderPass(commandBuffer, &renderPass);
         vgpuSetPipeline(commandBuffer, renderPipeline);
-        vgpuSetVertexBuffer(commandBuffer, 0, vertexBuffer, 0);
+        vgpuSetVertexBuffer(commandBuffer, 0, vertex_buffer, 0);
         vgpuDraw(commandBuffer, 0, 3, 1, 0);
         vgpuEndRenderPass(commandBuffer);
     }
@@ -279,7 +279,7 @@ int main()
     }
 
     vgpuWaitIdle(device);
-    vgpuDestroyBuffer(device, vertexBuffer);
+    vgpu_buffer_destroy(device, vertex_buffer);
     vgpuDestroyTexture(device, depthStencilTexture);
     vgpuDestroyPipeline(device, renderPipeline);
     vgpuDestroySwapChain(device, swapChain);

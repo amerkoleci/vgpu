@@ -614,13 +614,12 @@ struct D3D12Resource
     D3D12MA::Allocation* allocation = nullptr;
     D3D12_RESOURCE_STATES state = D3D12_RESOURCE_STATE_COMMON;
     D3D12_RESOURCE_STATES transitioningState = (D3D12_RESOURCE_STATES)-1;
-    D3D12_GPU_VIRTUAL_ADDRESS gpuVirtualAddress = 0u;
 
     uint32_t width = 0;
     uint32_t height = 0;
     DXGI_FORMAT dxgiFormat = DXGI_FORMAT_UNKNOWN;
     D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint{};
-    uint32_t size = 0;
+    uint64_t size = 0;
     uint64_t allocatedSize = 0;
     D3D12_GPU_VIRTUAL_ADDRESS gpuAddress = {};
     void* pMappedData{ nullptr };
@@ -665,7 +664,7 @@ struct D3D12_UploadContext
     ID3D12GraphicsCommandList* commandList = nullptr;
     ID3D12Fence* fence = nullptr;
 
-    uint32_t uploadBufferSize = 0;
+    uint64_t uploadBufferSize = 0;
     ID3D12Resource* uploadBuffer = nullptr;
     D3D12MA::Allocation* uploadBufferAllocation = nullptr;
     void* uploadBufferData = nullptr;
@@ -808,7 +807,7 @@ static void d3d12_ProcessDeletionQueue(D3D12_Renderer* renderer)
     renderer->destroyMutex.unlock();
 }
 
-static D3D12_UploadContext d3d12_AllocateUpload(D3D12_Renderer* renderer, uint32_t size)
+static D3D12_UploadContext d3d12_AllocateUpload(D3D12_Renderer* renderer, uint64_t size)
 {
     renderer->uploadLocker.lock();
 
@@ -1429,25 +1428,45 @@ static void d3d12_setLabel(VGPURenderer* driverData, const char* label)
 }
 
 /* Buffer */
-static VGPUBuffer* d3d12_createBuffer(VGPURenderer* driverData, const VGPUBufferDesc* desc, const void* pInitialData)
+static vgpu_buffer* d3d12_createBuffer(VGPURenderer* driverData, const vgpu_buffer_desc* desc, const void* pInitialData)
 {
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
 
+    if (desc->handle)
+    {
+        D3D12Resource* buffer = new D3D12Resource();
+        buffer->handle = (ID3D12Resource*)desc->handle;
+        buffer->handle->AddRef();
+        buffer->allocation = nullptr;
+        buffer->state = D3D12_RESOURCE_STATE_COMMON;
+        buffer->size = desc->size;
+        buffer->allocatedSize = 0u;
+
+        if (desc->label)
+        {
+            D3D12SetName(buffer->handle, desc->label);
+        }
+
+        buffer->gpuAddress = buffer->handle->GetGPUVirtualAddress();
+
+        return (vgpu_buffer*)buffer;
+    }
+
     D3D12_RESOURCE_FLAGS resourceFlags = D3D12_RESOURCE_FLAG_NONE;
-    if (desc->usage & VGPUBufferUsage_ShaderRead)
+    if (desc->usage & VGPU_BUFFER_USAGE_SHADER_WRITE)
     {
         resourceFlags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     }
 
-    if (!(desc->usage & VGPUBufferUsage_ShaderRead) &&
-        !(desc->usage & VGPUBufferUsage_RayTracing))
+    if (!(desc->usage & VGPU_BUFFER_USAGE_SHADER_READ) &&
+        !(desc->usage & VGPU_BUFFER_USAGE_RAY_TRACING))
     {
         resourceFlags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
     }
 
     D3D12_RESOURCE_DESC resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(desc->size, resourceFlags);
 
-    if (desc->usage & VGPUBufferUsage_Constant)
+    if (desc->usage & VGPU_BUFFER_USAGE_CONSTANT)
     {
         resourceDesc.Width = AlignUp<UINT64>(resourceDesc.Width, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
     }
@@ -1455,13 +1474,13 @@ static VGPUBuffer* d3d12_createBuffer(VGPURenderer* driverData, const VGPUBuffer
     D3D12MA::ALLOCATION_DESC allocationDesc = {};
     D3D12_RESOURCE_STATES resourceState = D3D12_RESOURCE_STATE_COMMON;
     allocationDesc.HeapType = D3D12_HEAP_TYPE_DEFAULT;
-    if (desc->cpuAccess == VGPUCpuAccessMode_Read)
+    if (desc->access == VGPU_CPU_ACCESS_READ)
     {
         allocationDesc.HeapType = D3D12_HEAP_TYPE_READBACK;
         resourceState = D3D12_RESOURCE_STATE_COPY_DEST;
         resourceDesc.Flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
     }
-    else if (desc->cpuAccess == VGPUCpuAccessMode_Write)
+    else if (desc->access == VGPU_CPU_ACCESS_WRITE)
     {
         allocationDesc.HeapType = D3D12_HEAP_TYPE_UPLOAD;
         resourceState = D3D12_RESOURCE_STATE_GENERIC_READ;
@@ -1496,11 +1515,11 @@ static VGPUBuffer* d3d12_createBuffer(VGPURenderer* driverData, const VGPUBuffer
 
     buffer->gpuAddress = buffer->handle->GetGPUVirtualAddress();
 
-    if (desc->cpuAccess == VGPUCpuAccessMode_Read)
+    if (desc->access == VGPU_CPU_ACCESS_READ)
     {
         buffer->handle->Map(0, nullptr, &buffer->pMappedData);
     }
-    else if (desc->cpuAccess == VGPUCpuAccessMode_Write)
+    else if (desc->access == VGPU_CPU_ACCESS_WRITE)
     {
         D3D12_RANGE readRange = {};
         buffer->handle->Map(0, &readRange, &buffer->pMappedData);
@@ -1530,7 +1549,7 @@ static VGPUBuffer* d3d12_createBuffer(VGPURenderer* driverData, const VGPUBuffer
         }
     }
 
-    if (desc->usage & VGPUBufferUsage_ShaderRead)
+    if (desc->usage & VGPU_BUFFER_USAGE_SHADER_READ)
     {
         // Create Raw Buffer
         const uint64_t offset = 0;
@@ -1551,7 +1570,7 @@ static VGPUBuffer* d3d12_createBuffer(VGPURenderer* driverData, const VGPUBuffer
         //buffer->SetBindlessSRV(bindlessSRV);
     }
 
-    if (desc->usage & VGPUBufferUsage_ShaderWrite)
+    if (desc->usage & VGPU_BUFFER_USAGE_SHADER_WRITE)
     {
         // Create Raw Buffer
         const uint64_t offset = 0;
@@ -1571,10 +1590,10 @@ static VGPUBuffer* d3d12_createBuffer(VGPURenderer* driverData, const VGPUBuffer
         //buffer->SetBindlessUAV(bindlessUAV);
     }
 
-    return (VGPUBuffer*)buffer;
+    return (vgpu_buffer*)buffer;
 }
 
-static void d3d12_destroyBuffer(VGPURenderer* driverData, VGPUBuffer* resource)
+static void d3d12_destroyBuffer(VGPURenderer* driverData, vgpu_buffer* resource)
 {
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
     D3D12Resource* d3dBuffer = (D3D12Resource*)resource;
@@ -1583,12 +1602,18 @@ static void d3d12_destroyBuffer(VGPURenderer* driverData, VGPUBuffer* resource)
     delete d3dBuffer;
 }
 
-static VGPUDeviceAddress d3d12_getDeviceAddress(VGPURenderer* driverData, VGPUBuffer* resource)
+static VGPUDeviceAddress d3d12_buffer_get_device_address(vgpu_buffer* resource)
 {
-    D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
     D3D12Resource* d3dBuffer = (D3D12Resource*)resource;
-
     return d3dBuffer->gpuAddress;
+}
+
+static void d3d12_buffer_set_label(VGPURenderer* driverData, vgpu_buffer* resource, const char* label)
+{
+    VGPU_UNUSED(driverData);
+
+    D3D12Resource* buffer = (D3D12Resource*)resource;
+    D3D12SetName(buffer->handle, label);
 }
 
 /* Texture */
@@ -1742,7 +1767,7 @@ static void d3d12_destroyTexture(VGPURenderer* driverData, VGPUTexture texture)
 }
 
 /* Sampler */
-static VGPUSampler d3d12_createSampler(VGPURenderer* driverData, const VGPUSamplerDesc* desc)
+static VGPUSampler* d3d12_createSampler(VGPURenderer* driverData, const VGPUSamplerDesc* desc)
 {
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
 
@@ -1800,10 +1825,10 @@ static VGPUSampler d3d12_createSampler(VGPURenderer* driverData, const VGPUSampl
     renderer->device->CreateSampler(&samplerDesc, sampler->descriptor);
     //sampler->bindlessIndex = AllocateBindlessSampler(sampler->descriptor);
 
-    return (VGPUSampler)sampler;
+    return (VGPUSampler*)sampler;
 }
 
-static void d3d12_destroySampler(VGPURenderer* driverData, VGPUSampler resource)
+static void d3d12_destroySampler(VGPURenderer* driverData, VGPUSampler* resource)
 {
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
     D3D12Sampler* sampler = (D3D12Sampler*)resource;
@@ -1980,7 +2005,7 @@ static void d3d12_destroyPipeline(VGPURenderer* driverData, VGPUPipeline* resour
 }
 
 /* SwapChain */
-static VGPUSwapChain d3d12_createSwapChain(VGPURenderer* driverData, void* windowHandle, const VGPUSwapChainDesc* desc)
+static VGPUSwapChain* d3d12_createSwapChain(VGPURenderer* driverData, void* windowHandle, const VGPUSwapChainDesc* desc)
 {
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
 
@@ -2082,10 +2107,10 @@ static VGPUSwapChain d3d12_createSwapChain(VGPURenderer* driverData, void* windo
     swapChain->backBufferCount = swapChainDesc.BufferCount;
     swapChain->syncInterval = PresentModeToSwapInterval(desc->presentMode);
     d3d12_updateSwapChain(renderer, swapChain);
-    return (VGPUSwapChain)swapChain;
+    return (VGPUSwapChain*)swapChain;
 }
 
-static void d3d12_destroySwapChain(VGPURenderer* driverData, VGPUSwapChain swapChain)
+static void d3d12_destroySwapChain(VGPURenderer* driverData, VGPUSwapChain* swapChain)
 {
     D3D12_SwapChain* d3d12SwapChain = (D3D12_SwapChain*)swapChain;
 
@@ -2099,7 +2124,7 @@ static void d3d12_destroySwapChain(VGPURenderer* driverData, VGPUSwapChain swapC
     delete d3d12SwapChain;
 }
 
-static VGPUTextureFormat d3d12_getSwapChainFormat(VGPURenderer*, VGPUSwapChain swapChain)
+static VGPUTextureFormat d3d12_getSwapChainFormat(VGPURenderer*, VGPUSwapChain* swapChain)
 {
     D3D12_SwapChain* d3dSwapChain = (D3D12_SwapChain*)swapChain;
     return d3dSwapChain->format;
@@ -2205,7 +2230,7 @@ static void d3d12_dispatch(VGPUCommandBufferImpl* driverData, uint32_t groupCoun
     commandBuffer->commandList->Dispatch(groupCountX, groupCountY, groupCountZ);
 }
 
-static void d3d12_dispatchIndirect(VGPUCommandBufferImpl* driverData, VGPUBuffer* buffer, uint64_t offset)
+static void d3d12_dispatchIndirect(VGPUCommandBufferImpl* driverData, vgpu_buffer* buffer, uint64_t offset)
 {
     D3D12CommandBuffer* commandBuffer = (D3D12CommandBuffer*)driverData;
     d3d12_prepareDispatch(commandBuffer);
@@ -2218,7 +2243,7 @@ static void d3d12_dispatchIndirect(VGPUCommandBufferImpl* driverData, VGPUBuffer
         0);
 }
 
-static VGPUTexture d3d12_acquireSwapchainTexture(VGPUCommandBufferImpl* driverData, VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight)
+static VGPUTexture d3d12_acquireSwapchainTexture(VGPUCommandBufferImpl* driverData, VGPUSwapChain* swapChain, uint32_t* pWidth, uint32_t* pHeight)
 {
     D3D12CommandBuffer* commandBuffer = (D3D12CommandBuffer*)driverData;
     D3D12_SwapChain* d3d12SwapChain = (D3D12_SwapChain*)swapChain;
@@ -2514,7 +2539,7 @@ static void d3d12_setScissorRects(VGPUCommandBufferImpl* driverData, uint32_t co
     commandBuffer->commandList->RSSetScissorRects(count, d3dScissorRects);
 }
 
-static void d3d12_setVertexBuffer(VGPUCommandBufferImpl* driverData, uint32_t index, VGPUBuffer* buffer, uint64_t offset)
+static void d3d12_setVertexBuffer(VGPUCommandBufferImpl* driverData, uint32_t index, vgpu_buffer* buffer, uint64_t offset)
 {
     D3D12CommandBuffer* commandBuffer = (D3D12CommandBuffer*)driverData;
     D3D12Resource* d3d12Buffer = (D3D12Resource*)buffer;
@@ -2526,7 +2551,7 @@ static void d3d12_setVertexBuffer(VGPUCommandBufferImpl* driverData, uint32_t in
     commandBuffer->commandList->IASetVertexBuffers(index, 1u, &commandBuffer->vboViews[index]);
 }
 
-static void d3d12_setIndexBuffer(VGPUCommandBufferImpl* driverData, VGPUBuffer* buffer, uint64_t offset, VGPUIndexFormat format)
+static void d3d12_setIndexBuffer(VGPUCommandBufferImpl* driverData, vgpu_buffer* buffer, uint64_t offset, VGPUIndexType type)
 {
     D3D12CommandBuffer* commandBuffer = (D3D12CommandBuffer*)driverData;
     D3D12Resource* d3d12Buffer = (D3D12Resource*)buffer;
@@ -2534,7 +2559,7 @@ static void d3d12_setIndexBuffer(VGPUCommandBufferImpl* driverData, VGPUBuffer* 
     D3D12_INDEX_BUFFER_VIEW view;
     view.BufferLocation = d3d12Buffer->gpuAddress + (D3D12_GPU_VIRTUAL_ADDRESS)offset;
     view.SizeInBytes = (UINT)(d3d12Buffer->size - offset);
-    view.Format = (format == VGPUIndexFormat_Uint16 ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT);
+    view.Format = (type == VGPU_INDEX_TYPE_UINT16 ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT);
     commandBuffer->commandList->IASetIndexBuffer(&view);
 }
 

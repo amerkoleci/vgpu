@@ -1,8 +1,8 @@
 // Copyright © Amer Koleci and Contributors.
 // Licensed under the MIT License (MIT). See LICENSE in the repository root for more information.
 
-#ifndef _VGPU_DRIVER_H_
-#define _VGPU_DRIVER_H_
+#ifndef VGPU_DRIVER_H_
+#define VGPU_DRIVER_H_ 1
 
 #include "vgpu.h"
 #include <stdlib.h> // malloc, free
@@ -26,7 +26,7 @@ _VGPU_EXTERN void _vgpu_free(void* ptr);
 #   define VGPU_ASSERT(c) assert(c)
 #endif
 
-#define _VGPU_UNUSED(x) (void)(x)
+#define VGPU_UNUSED(x) (void)(x)
 
 #define _VGPU_COUNT_OF(arr) (sizeof(arr) / sizeof((arr)[0]))
 #define _VGPU_DEF(val, def) (((val) == 0) ? (def) : (val))
@@ -103,9 +103,9 @@ typedef struct VGPUCommandBuffer_T {
 
     void (*setPipeline)(VGPUCommandBufferImpl* driverData, VGPUPipeline* pipeline);
     void (*dispatch)(VGPUCommandBufferImpl* driverData, uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ);
-    void (*dispatchIndirect)(VGPUCommandBufferImpl* driverData, VGPUBuffer* buffer, uint64_t offset);
+    void (*dispatchIndirect)(VGPUCommandBufferImpl* driverData, vgpu_buffer* buffer, uint64_t offset);
 
-    VGPUTexture(*acquireSwapchainTexture)(VGPUCommandBufferImpl* driverData, VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight);
+    VGPUTexture(*acquireSwapchainTexture)(VGPUCommandBufferImpl* driverData, VGPUSwapChain* swapChain, uint32_t* pWidth, uint32_t* pHeight);
     void (*beginRenderPass)(VGPUCommandBufferImpl* driverData, const VGPURenderPassDesc* desc);
     void (*endRenderPass)(VGPUCommandBufferImpl* driverData);
 
@@ -113,8 +113,8 @@ typedef struct VGPUCommandBuffer_T {
     void (*setViewports)(VGPUCommandBufferImpl* driverData, uint32_t count, const VGPUViewport* viewports);
     void (*setScissorRect)(VGPUCommandBufferImpl* driverData, const VGPURect* rects);
     void (*setScissorRects)(VGPUCommandBufferImpl* driverData, uint32_t count, const VGPURect* rects);
-    void (*setVertexBuffer)(VGPUCommandBufferImpl* driverData, uint32_t index, VGPUBuffer* buffer, uint64_t offset);
-    void (*setIndexBuffer)(VGPUCommandBufferImpl* driverData, VGPUBuffer* buffer, uint64_t offset, VGPUIndexFormat format);
+    void (*setVertexBuffer)(VGPUCommandBufferImpl* driverData, uint32_t index, vgpu_buffer* buffer, uint64_t offset);
+    void (*setIndexBuffer)(VGPUCommandBufferImpl* driverData, vgpu_buffer* buffer, uint64_t offset, VGPUIndexType type);
 
     void (*draw)(VGPUCommandBufferImpl* driverData, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t baseInstance);
 
@@ -133,15 +133,16 @@ typedef struct VGPUDevice_T
     void (*getLimits)(VGPURenderer* driverData, VGPULimits* limits);
     void (*setLabel)(VGPURenderer* driverData, const char* label);
 
-    VGPUBuffer*(*createBuffer)(VGPURenderer* driverData, const VGPUBufferDesc* desc, const void* pInitialData);
-    void(*destroyBuffer)(VGPURenderer* driverData, VGPUBuffer* resource);
-    VGPUDeviceAddress(*getDeviceAddress)(VGPURenderer* driverData, VGPUBuffer* resource);
+    vgpu_buffer*(*createBuffer)(VGPURenderer* driverData, const vgpu_buffer_desc* desc, const void* pInitialData);
+    void(*destroyBuffer)(VGPURenderer* driverData, vgpu_buffer* resource);
+    VGPUDeviceAddress(*buffer_get_device_address)(vgpu_buffer* resource);
+    void(*buffer_set_label)(VGPURenderer* driverData, vgpu_buffer* resource, const char* label);
 
     VGPUTexture(*createTexture)(VGPURenderer* driverData, const VGPUTextureDesc* desc, const void* pInitialData);
     void(*destroyTexture)(VGPURenderer* driverData, VGPUTexture resource);
 
-    VGPUSampler(*createSampler)(VGPURenderer* driverData, const VGPUSamplerDesc* desc);
-    void(*destroySampler)(VGPURenderer* driverData, VGPUSampler resource);
+    VGPUSampler*(*createSampler)(VGPURenderer* driverData, const VGPUSamplerDesc* desc);
+    void(*destroySampler)(VGPURenderer* driverData, VGPUSampler* resource);
 
     VGPUShaderModule(*createShaderModule)(VGPURenderer* driverData, const void* pCode, size_t codeSize);
     void(*destroyShaderModule)(VGPURenderer* driverData, VGPUShaderModule resource);
@@ -151,9 +152,9 @@ typedef struct VGPUDevice_T
     VGPUPipeline*(*createRayTracingPipeline)(VGPURenderer* driverData, const VGPURayTracingPipelineDesc* desc);
     void(*destroyPipeline)(VGPURenderer* driverData, VGPUPipeline* resource);
 
-    VGPUSwapChain(*createSwapChain)(VGPURenderer* driverData, void* windowHandle, const VGPUSwapChainDesc* desc);
-    void(*destroySwapChain)(VGPURenderer* driverData, VGPUSwapChain swapChain);
-    VGPUTextureFormat(*getSwapChainFormat)(VGPURenderer* driverData, VGPUSwapChain swapChain);
+    VGPUSwapChain*(*createSwapChain)(VGPURenderer* driverData, void* windowHandle, const VGPUSwapChainDesc* desc);
+    void(*destroySwapChain)(VGPURenderer* driverData, VGPUSwapChain* swapChain);
+    VGPUTextureFormat(*getSwapChainFormat)(VGPURenderer* driverData, VGPUSwapChain* swapChain);
 
     VGPUCommandBuffer(*beginCommandBuffer)(VGPURenderer* driverData, VGPUCommandQueue queueType, const char* label);
     void (*submit)(VGPURenderer* driverData, VGPUCommandBuffer* commandBuffers, uint32_t count);
@@ -194,7 +195,8 @@ ASSIGN_DRIVER_FUNC(getLimits, name) \
 ASSIGN_DRIVER_FUNC(setLabel, name) \
 ASSIGN_DRIVER_FUNC(createBuffer, name) \
 ASSIGN_DRIVER_FUNC(destroyBuffer, name) \
-ASSIGN_DRIVER_FUNC(getDeviceAddress, name) \
+ASSIGN_DRIVER_FUNC(buffer_get_device_address, name) \
+ASSIGN_DRIVER_FUNC(buffer_set_label, name) \
 ASSIGN_DRIVER_FUNC(createTexture, name) \
 ASSIGN_DRIVER_FUNC(destroyTexture, name) \
 ASSIGN_DRIVER_FUNC(createSampler, name) \
@@ -222,4 +224,4 @@ _VGPU_EXTERN VGFXDriver Vulkan_Driver;
 _VGPU_EXTERN VGFXDriver D3D12_Driver;
 //_VGPU_EXTERN VGFXDriver webgpu_driver;
 
-#endif /* _VGPU_DRIVER_H_ */
+#endif /* VGPU_DRIVER_H_ */
