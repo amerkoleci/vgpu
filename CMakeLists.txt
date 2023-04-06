@@ -65,6 +65,7 @@ endif ()
 
 option(VGPU_INSTALL "Generate install rules for vgpu" ON)
 cmake_dependent_option(VGPU_VULKAN_DRIVER "Build the Vulkan backend" ON "NOT EMSCRIPTEN;NOT WINDOWS_STORE" OFF)
+cmake_dependent_option(VGPU_D3D11_DRIVER "Build the D3D11 backend" ON "WIN32" OFF)
 cmake_dependent_option(VGPU_D3D12_DRIVER "Build the D3D12 backend" ON "WIN32" OFF)
 cmake_dependent_option(VGPU_WEBGPU_DRIVER "Build the WebGPU backend" ON "EMSCRIPTEN" OFF)
 cmake_dependent_option(VGPU_SAMPLES "Build samples" ON "NOT WINDOWS_STORE" OFF)
@@ -174,14 +175,25 @@ if (WIN32)
     target_compile_definitions(${PROJECT_NAME} PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
 endif ()
 
+if (VGPU_D3D11_DRIVER)
+    target_sources(${PROJECT_NAME} PRIVATE
+        src/vgpu_driver_d3d11.cpp
+    )
+
+    target_compile_definitions(${PROJECT_NAME} PRIVATE VGPU_D3D11_DRIVER=1)
+
+    if(WINDOWS_STORE)
+        target_link_libraries(${PROJECT_NAME} PRIVATE d3d11 dxgi)
+    endif ()
+endif ()
+
 if (VGPU_D3D12_DRIVER)
     target_sources(${PROJECT_NAME} PRIVATE
         src/vgpu_driver_d3d12.cpp
-        src/lib/D3D12MemAlloc.cpp
-        src/lib/D3D12MemAlloc.h
     )
 
     target_compile_definitions(${PROJECT_NAME} PRIVATE VGPU_D3D12_DRIVER=1)
+    target_link_libraries(${PROJECT_NAME} PRIVATE DirectX-Headers D3D12MemoryAllocator)
 
     if(WINDOWS_STORE)
         target_link_libraries(${PROJECT_NAME} PRIVATE d3d12 dxgi)
@@ -289,6 +301,9 @@ message(STATUS "  Backends:")
 if (VGPU_VULKAN_DRIVER)
     message(STATUS "      - Vulkan")
 endif()
+if (VGPU_D3D11_DRIVER)
+    message(STATUS "      - Direct3D11")
+endif ()
 if (VGPU_D3D12_DRIVER)
     message(STATUS "      - Direct3D12")
 endif ()

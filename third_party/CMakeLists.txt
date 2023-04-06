@@ -28,6 +28,29 @@ if(VGPU_VULKAN_DRIVER)
     set_property(TARGET spirv-reflect PROPERTY FOLDER "ThirdParty")
 endif()
 
+if (VGPU_D3D12_DRIVER)
+    # DirectX-Headers
+    add_library(DirectX-Headers INTERFACE)
+    set(DIRECTX_HEADERS_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/DirectX-Headers/include)
+    target_sources(DirectX-Headers INTERFACE 
+        ${DIRECTX_HEADERS_INCLUDE_DIR}/directx/d3d12.h
+        ${DIRECTX_HEADERS_INCLUDE_DIR}/directx/d3dx12.h
+        ${DIRECTX_HEADERS_INCLUDE_DIR}/directx/d3d12shader.h
+    )
+    target_include_directories(DirectX-Headers INTERFACE ${DIRECTX_HEADERS_INCLUDE_DIR})
+
+    # D3D12MemoryAllocator
+    set(D3D12MA_DIR "${CMAKE_CURRENT_SOURCE_DIR}/D3D12MemoryAllocator")
+    set(D3D12MA_FILES
+        "${D3D12MA_DIR}/include/D3D12MemAlloc.h"
+        "${D3D12MA_DIR}/src/D3D12MemAlloc.cpp"
+    )
+
+    add_library(D3D12MemoryAllocator STATIC ${D3D12MA_FILES})
+    target_include_directories(D3D12MemoryAllocator PUBLIC "${D3D12MA_DIR}/include")
+    set_property(TARGET D3D12MemoryAllocator PROPERTY FOLDER "ThirdParty")
+endif ()
+
 if (VGPU_OPENGL_DRIVER AND NOT EMSCRIPTEN)
     set(GLAD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/glad")
     set(GLAD_FILES
