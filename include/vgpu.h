@@ -70,6 +70,8 @@ typedef enum VGPUBackendType {
     _VGPUBackendType_Default = 0,
     VGPUBackendType_Vulkan,
     VGPUBackendType_D3D12,
+    VGPUBackendType_D3D11,
+    VGPUBackendType_OpenGL,
 
     _VGPUBackendType_Count,
     _VGPUBackendType_Force32 = 0x7FFFFFFF
@@ -643,6 +645,10 @@ typedef struct VGPUDeviceDesc {
     const char* label;
     VGPUBackendType preferredBackend;
     VGPUValidationMode validationMode;
+
+    struct {
+        void*(*gl_get_proc_address)(const char* name);
+    } gl;
 } VGPUDeviceDesc;
 
 typedef struct VGPUAdapterProperties {

@@ -221,7 +221,9 @@ typedef struct VGFXDriver
 } VGFXDriver;
 
 _VGPU_EXTERN VGFXDriver Vulkan_Driver;
+_VGPU_EXTERN VGFXDriver D3D11_Driver;
 _VGPU_EXTERN VGFXDriver D3D12_Driver;
-//_VGPU_EXTERN VGFXDriver webgpu_driver;
+_VGPU_EXTERN VGFXDriver OpenGL_Driver;
+//_VGPU_EXTERN VGFXDriver WebGPU_driver;
 
 #endif /* VGPU_DRIVER_H_ */

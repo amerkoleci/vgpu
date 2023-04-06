@@ -5,6 +5,11 @@
 
 #include "vgpu_driver.h"
 
+#ifdef _WIN32
+#define NOMINMAX
+#define WIN32_LEAN_AND_MEAN
+#endif
+
 VGPU_DISABLE_WARNINGS()
 #include "volk.h"
 #define VMA_IMPLEMENTATION
@@ -857,8 +862,6 @@ static Vulkan_UploadContext vulkan_AllocateUpload(VGPURenderer* driverData, uint
 {
     VulkanRenderer* renderer = (VulkanRenderer*)driverData;
     renderer->uploadLocker.lock();
-
-    HRESULT hr = S_OK;
 
     // Create a new command list if there are no free ones.
     if (renderer->uploadFreeList.empty())
@@ -2613,8 +2616,8 @@ static void vulkan_updateSwapChain(VulkanRenderer* renderer, VulkanSwapChain* sw
     }
     else
     {
-        swapChain->extent.width = std::max(caps.minImageExtent.width, std::min(caps.maxImageExtent.width, swapChain->extent.width));
-        swapChain->extent.height = std::max(caps.minImageExtent.height, std::min(caps.maxImageExtent.height, swapChain->extent.height));
+        swapChain->extent.width = _VGPU_MAX(caps.minImageExtent.width, _VGPU_MIN(caps.maxImageExtent.width, swapChain->extent.width));
+        swapChain->extent.height = _VGPU_MAX(caps.minImageExtent.height, _VGPU_MIN(caps.maxImageExtent.height, swapChain->extent.height));
     }
 
     // Determine the number of images

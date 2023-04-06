@@ -22,15 +22,15 @@ static void VGPU_DefaultLogCallback(VGPULogLevel level, const char* message, voi
 #if defined(__EMSCRIPTEN__)
     switch (level)
     {
-        case VGFX_LOG_LEVEL_WARN:
-            emscripten_log(EM_LOG_CONSOLE | EM_LOG_WARN, "%s", message);
-            break;
-        case VGFX_LOG_LEVEL_ERROR:
-            emscripten_log(EM_LOG_CONSOLE | EM_LOG_ERROR, "%s", message);
-            break;
-        default:
-            emscripten_log(EM_LOG_CONSOLE, "%s", message);
-            break;
+    case VGFX_LOG_LEVEL_WARN:
+        emscripten_log(EM_LOG_CONSOLE | EM_LOG_WARN, "%s", message);
+        break;
+    case VGFX_LOG_LEVEL_ERROR:
+        emscripten_log(EM_LOG_CONSOLE | EM_LOG_ERROR, "%s", message);
+        break;
+    default:
+        emscripten_log(EM_LOG_CONSOLE, "%s", message);
+        break;
     }
 #elif defined(_WIN32)
     VGPU_UNUSED(level);
@@ -130,14 +130,20 @@ void _vgpu_free(void* ptr)
 }
 
 static const VGFXDriver* drivers[] = {
+//#if defined(VGPU_D3D11_DRIVER)
+//    &D3D11_Driver,
+//#endif
 #if defined(VGPU_D3D12_DRIVER)
     &D3D12_Driver,
 #endif
 #if defined(VGPU_VULKAN_DRIVER)
     &Vulkan_Driver,
 #endif
+#if defined(VGPU_OPENGL_DRIVER)
+    &OpenGL_Driver,
+#endif
 #if defined(VGPU_WEBGPU_DRIVER)
-    &webgpu_driver,
+    &WebGPU_driver,
 #endif
     NULL
 };
@@ -808,13 +814,13 @@ VGPUBool32 vgpuIsDepthFormat(VGPUTextureFormat format)
 {
     switch (format)
     {
-        case VGPUTextureFormat_Depth16Unorm:
-        case VGPUTextureFormat_Depth32Float:
-        case VGPUTextureFormat_Depth24UnormStencil8:
-        case VGPUTextureFormat_Depth32FloatStencil8:
-            return true;
-        default:
-            return false;
+    case VGPUTextureFormat_Depth16Unorm:
+    case VGPUTextureFormat_Depth32Float:
+    case VGPUTextureFormat_Depth24UnormStencil8:
+    case VGPUTextureFormat_Depth32FloatStencil8:
+        return true;
+    default:
+        return false;
     }
 }
 
@@ -822,12 +828,12 @@ VGPUBool32 vgpuIsStencilFormat(VGPUTextureFormat format)
 {
     switch (format)
     {
-        case VGPUTextureFormat_Stencil8:
-        case VGPUTextureFormat_Depth24UnormStencil8:
-        case VGPUTextureFormat_Depth32FloatStencil8:
-            return true;
-        default:
-            return false;
+    case VGPUTextureFormat_Stencil8:
+    case VGPUTextureFormat_Depth24UnormStencil8:
+    case VGPUTextureFormat_Depth32FloatStencil8:
+        return true;
+    default:
+        return false;
     }
 }
 
@@ -835,14 +841,14 @@ VGPUBool32 vgpuIsDepthStencilFormat(VGPUTextureFormat format)
 {
     switch (format)
     {
-        case VGPUTextureFormat_Depth16Unorm:
-        case VGPUTextureFormat_Depth32Float:
-        case VGPUTextureFormat_Stencil8:
-        case VGPUTextureFormat_Depth24UnormStencil8:
-        case VGPUTextureFormat_Depth32FloatStencil8:
-            return true;
-        default:
-            return false;
+    case VGPUTextureFormat_Depth16Unorm:
+    case VGPUTextureFormat_Depth32Float:
+    case VGPUTextureFormat_Stencil8:
+    case VGPUTextureFormat_Depth24UnormStencil8:
+    case VGPUTextureFormat_Depth32FloatStencil8:
+        return true;
+    default:
+        return false;
     }
 }
 

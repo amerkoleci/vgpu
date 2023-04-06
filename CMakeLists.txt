@@ -67,6 +67,7 @@ option(VGPU_INSTALL "Generate install rules for vgpu" ON)
 cmake_dependent_option(VGPU_VULKAN_DRIVER "Build the Vulkan backend" ON "NOT EMSCRIPTEN;NOT WINDOWS_STORE" OFF)
 cmake_dependent_option(VGPU_D3D11_DRIVER "Build the D3D11 backend" ON "WIN32" OFF)
 cmake_dependent_option(VGPU_D3D12_DRIVER "Build the D3D12 backend" ON "WIN32" OFF)
+cmake_dependent_option(VGPU_OPENGL_DRIVER "Build the OpenGL backend" ON "NOT EMSCRIPTEN;NOT WINDOWS_STORE" OFF)
 cmake_dependent_option(VGPU_WEBGPU_DRIVER "Build the WebGPU backend" ON "EMSCRIPTEN" OFF)
 cmake_dependent_option(VGPU_SAMPLES "Build samples" ON "NOT WINDOWS_STORE" OFF)
 
@@ -171,10 +172,6 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
     endif()
 endif ()
 
-if (WIN32)
-    target_compile_definitions(${PROJECT_NAME} PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
-endif ()
-
 if (VGPU_D3D11_DRIVER)
     target_sources(${PROJECT_NAME} PRIVATE
         src/vgpu_driver_d3d11.cpp
@@ -201,24 +198,7 @@ if (VGPU_D3D12_DRIVER)
 endif ()
 
 if (VGPU_VULKAN_DRIVER)
-    if(ANDROID)
-        target_compile_definitions(${PROJECT_NAME} PRIVATE VK_USE_PLATFORM_ANDROID_KHR)
-    elseif(WIN32)
-        target_compile_definitions(${PROJECT_NAME} PRIVATE VK_USE_PLATFORM_WIN32_KHR)
-    elseif(APPLE)
-        target_compile_definitions(${PROJECT_NAME} PRIVATE INTERFACE VK_USE_PLATFORM_METAL_EXT)
-    elseif(UNIX)
-        find_package(X11 REQUIRED)
-
-        target_compile_definitions(${PROJECT_NAME} PRIVATE INTERFACE VK_USE_PLATFORM_XLIB_KHR)
-        target_include_directories(${PROJECT_NAME} PRIVATE ${X11_INCLUDE_DIR})
-        target_link_libraries(${PROJECT_NAME} PRIVATE ${X11_LIBRARIES})
-    endif()
-
     target_sources(${PROJECT_NAME} PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/volk/volk.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/volk/volk.c
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/lib/vma/include/vk_mem_alloc.h
         ${CMAKE_CURRENT_SOURCE_DIR}/src/vgpu_driver_vulkan.cpp
     )
 
@@ -228,7 +208,15 @@ if (VGPU_VULKAN_DRIVER)
     )
 
     target_compile_definitions(${PROJECT_NAME} PRIVATE VGPU_VULKAN_DRIVER=1)
-    target_link_libraries(${PROJECT_NAME} PRIVATE vulkan spirv-reflect)
+    target_link_libraries(${PROJECT_NAME} PRIVATE volk vma spirv-reflect)
+endif ()
+
+if (VGPU_OPENGL_DRIVER)
+    target_sources(${PROJECT_NAME} PRIVATE
+        src/vgpu_driver_opengl.cpp
+    )
+
+    target_compile_definitions(${PROJECT_NAME} PRIVATE VGPU_OPENGL_DRIVER=1)
 endif ()
 
 if (VGPU_WEBGPU_DRIVER)
@@ -243,14 +231,13 @@ endif ()
 target_include_directories(${PROJECT_NAME} PUBLIC
 	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
 	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/lib>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>
 )
 
 # Libraries
-target_link_libraries(${PROJECT_NAME} PRIVATE
-    stb
-)
+#target_link_libraries(${PROJECT_NAME} PRIVATE
+#    stb
+#)
 
 # Soname
 set_target_properties(vgpu PROPERTIES
@@ -306,6 +293,9 @@ if (VGPU_D3D11_DRIVER)
 endif ()
 if (VGPU_D3D12_DRIVER)
     message(STATUS "      - Direct3D12")
+endif ()
+if (VGPU_OPENGL_DRIVER)
+    message(STATUS "      - OpenGL")
 endif ()
 
 if (VGPU_SAMPLES)

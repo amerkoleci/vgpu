@@ -1273,8 +1273,6 @@ static uint64_t d3d12_frame(VGPURenderer* driverData)
     // Safe delete deferred destroys
     d3d12_ProcessDeletionQueue(renderer);
 
-
-
     // Return current frame
     return renderer->frameCount - 1;
 }
