@@ -430,17 +430,19 @@ namespace
         }
     }
 
-    constexpr VkAttachmentLoadOp ToVkAttachmentLoadOp(VGPULoadAction op)
+    constexpr VkAttachmentLoadOp ToVkAttachmentLoadOp(vgpu_load_action op)
     {
         switch (op)
         {
-            case VGPULoadAction_Clear:
-                return VK_ATTACHMENT_LOAD_OP_CLEAR;
-            case VGPULoadAction_DontCare:
-                return VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-
             default:
+            case VGPU_LOAD_ACTION_LOAD:
                 return VK_ATTACHMENT_LOAD_OP_LOAD;
+
+            case VGPU_LOAD_ACTION_CLEAR:
+                return VK_ATTACHMENT_LOAD_OP_CLEAR;
+
+            case VGPU_LOAD_ACTION_DONT_CARE:
+                return VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         }
     }
 
@@ -448,11 +450,12 @@ namespace
     {
         switch (op)
         {
+            default:
+            case VGPU_STORE_ACTION_STORE:
+                return VK_ATTACHMENT_STORE_OP_STORE;
+
             case VGPU_STORE_ACTION_DONT_CARE:
                 return VK_ATTACHMENT_STORE_OP_DONT_CARE;
-
-            default:
-                return VK_ATTACHMENT_STORE_OP_STORE;
         }
     }
 
@@ -566,6 +569,24 @@ namespace
     static_assert(offsetof(VGPURect, y) == offsetof(VkRect2D, offset.y), "vgpu_rect Layout mismatch");
     static_assert(offsetof(VGPURect, width) == offsetof(VkRect2D, extent.width), "vgpu_rect Layout mismatch");
     static_assert(offsetof(VGPURect, height) == offsetof(VkRect2D, extent.height), "vgpu_rect Layout mismatch");
+
+    static_assert(sizeof(VGPUDispatchIndirectCommand) == sizeof(VkDispatchIndirectCommand), "DispatchIndirectCommand mismatch");
+    static_assert(offsetof(VGPUDispatchIndirectCommand, x) == offsetof(VkDispatchIndirectCommand, x), "Layout mismatch");
+    static_assert(offsetof(VGPUDispatchIndirectCommand, y) == offsetof(VkDispatchIndirectCommand, y), "Layout mismatch");
+    static_assert(offsetof(VGPUDispatchIndirectCommand, z) == offsetof(VkDispatchIndirectCommand, z), "Layout mismatch");
+
+    static_assert(sizeof(VGPUDrawIndirectCommand) == sizeof(VkDrawIndirectCommand), "DrawIndirectCommand mismatch");
+    static_assert(offsetof(VGPUDrawIndirectCommand, vertexCount) == offsetof(VkDrawIndirectCommand, vertexCount), "Layout mismatch");
+    static_assert(offsetof(VGPUDrawIndirectCommand, instanceCount) == offsetof(VkDrawIndirectCommand, instanceCount), "Layout mismatch");
+    static_assert(offsetof(VGPUDrawIndirectCommand, firstVertex) == offsetof(VkDrawIndirectCommand, firstVertex), "Layout mismatch");
+    static_assert(offsetof(VGPUDrawIndirectCommand, firstInstance) == offsetof(VkDrawIndirectCommand, firstInstance), "Layout mismatch");
+
+    static_assert(sizeof(VGPUDrawIndexedIndirectCommand) == sizeof(VkDrawIndexedIndirectCommand), "DrawIndexedIndirectCommand mismatch");
+    static_assert(offsetof(VGPUDrawIndexedIndirectCommand, indexCount) == offsetof(VkDrawIndexedIndirectCommand, indexCount), "Layout mismatch");
+    static_assert(offsetof(VGPUDrawIndexedIndirectCommand, instanceCount) == offsetof(VkDrawIndexedIndirectCommand, instanceCount), "Layout mismatch");
+    static_assert(offsetof(VGPUDrawIndexedIndirectCommand, firstIndex) == offsetof(VkDrawIndexedIndirectCommand, firstIndex), "Layout mismatch");
+    static_assert(offsetof(VGPUDrawIndexedIndirectCommand, baseVertex) == offsetof(VkDrawIndexedIndirectCommand, vertexOffset), "Layout mismatch");
+    static_assert(offsetof(VGPUDrawIndexedIndirectCommand, firstInstance) == offsetof(VkDrawIndexedIndirectCommand, firstInstance), "Layout mismatch");
 }
 
 /// Helper macro to test the result of Vulkan calls which can return an error.
@@ -1044,7 +1065,7 @@ static VkImageView vulkan_GetRTV(VulkanRenderer* renderer, VulkanTexture* textur
 struct VulkanRenderPassAttachment
 {
     VkFormat format;
-    VGPULoadAction loadAction;
+    vgpu_load_action load_action;
     vgpu_store_action store_action;
 };
 
@@ -1065,21 +1086,21 @@ static VkRenderPass vulkan_RequestRenderPass(VulkanRenderer* renderer, const Vul
     for (uint32_t i = 0; i < key->colorAttachmentCount; ++i)
     {
         hash_combine(hash, (uint32_t)key->colorAttachments[i].format);
-        hash_combine(hash, (uint32_t)key->colorAttachments[i].loadAction);
+        hash_combine(hash, (uint32_t)key->colorAttachments[i].load_action);
         hash_combine(hash, (uint32_t)key->colorAttachments[i].store_action);
     }
 
     if (key->depthAttachment != nullptr)
     {
         hash_combine(hash, (uint32_t)key->depthAttachment->format);
-        hash_combine(hash, (uint32_t)key->depthAttachment->loadAction);
+        hash_combine(hash, (uint32_t)key->depthAttachment->load_action);
         hash_combine(hash, (uint32_t)key->depthAttachment->store_action);
     }
 
     if (key->stencilAttachment != nullptr)
     {
         hash_combine(hash, (uint32_t)key->stencilAttachment->format);
-        hash_combine(hash, (uint32_t)key->stencilAttachment->loadAction);
+        hash_combine(hash, (uint32_t)key->stencilAttachment->load_action);
         hash_combine(hash, (uint32_t)key->stencilAttachment->store_action);
     }
 
@@ -1115,7 +1136,7 @@ static VkRenderPass vulkan_RequestRenderPass(VulkanRenderer* renderer, const Vul
             attachmentDesc.flags = 0;
             attachmentDesc.format = attachment.format;
             attachmentDesc.samples = sampleCount;
-            attachmentDesc.loadOp = ToVkAttachmentLoadOp(attachment.loadAction);
+            attachmentDesc.loadOp = ToVkAttachmentLoadOp(attachment.load_action);
             attachmentDesc.storeOp = ToVkAttachmentStoreOp(attachment.store_action);
             attachmentDesc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
             attachmentDesc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
@@ -1145,11 +1166,11 @@ static VkRenderPass vulkan_RequestRenderPass(VulkanRenderer* renderer, const Vul
             attachmentDesc.flags = 0;
             attachmentDesc.format = depthAttachment->format;
             attachmentDesc.samples = sampleCount;
-            attachmentDesc.loadOp = ToVkAttachmentLoadOp(depthAttachment->loadAction);
+            attachmentDesc.loadOp = ToVkAttachmentLoadOp(depthAttachment->load_action);
             attachmentDesc.storeOp = ToVkAttachmentStoreOp(depthAttachment->store_action);
             if (depthStencilAttachmentRef.aspectMask & VK_IMAGE_ASPECT_STENCIL_BIT)
             {
-                attachmentDesc.stencilLoadOp = ToVkAttachmentLoadOp(stencilAttachment->loadAction);
+                attachmentDesc.stencilLoadOp = ToVkAttachmentLoadOp(stencilAttachment->load_action);
                 attachmentDesc.stencilStoreOp = ToVkAttachmentStoreOp(stencilAttachment->store_action);
             }
             else
@@ -2479,7 +2500,7 @@ static VGPUPipeline* vulkan_createRenderPipeline(VGPURenderer* driverData, const
             VGPU_ASSERT(desc->colorAttachments[i].format != VGPUTextureFormat_Undefined);
 
             colorAttachments[renderPassKey.colorAttachmentCount].format = ToVkFormat(desc->colorAttachments[i].format);
-            colorAttachments[renderPassKey.colorAttachmentCount].loadAction = VGPULoadAction_DontCare;
+            colorAttachments[renderPassKey.colorAttachmentCount].load_action = VGPU_LOAD_ACTION_DONT_CARE;
             colorAttachments[renderPassKey.colorAttachmentCount].store_action = VGPU_STORE_ACTION_STORE;
             renderPassKey.colorAttachmentCount++;
         }
@@ -2489,7 +2510,7 @@ static VGPUPipeline* vulkan_createRenderPipeline(VGPURenderer* driverData, const
         if (desc->depthAttachmentFormat != VGPUTextureFormat_Undefined)
         {
             depthAttachment.format = ToVkFormat(desc->depthAttachmentFormat);
-            depthAttachment.loadAction = VGPULoadAction_Load;
+            depthAttachment.load_action = VGPU_LOAD_ACTION_LOAD;
             depthAttachment.store_action = VGPU_STORE_ACTION_DONT_CARE;
             renderPassKey.depthAttachment = &depthAttachment;
 
@@ -3015,13 +3036,13 @@ static void vulkan_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGPU
             colorAttachments[renderingInfo.colorAttachmentCount].imageView = vulkan_GetRTV(commandBuffer->renderer, texture, level, slice);
             colorAttachments[renderingInfo.colorAttachmentCount].imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
             colorAttachments[renderingInfo.colorAttachmentCount].resolveMode = VK_RESOLVE_MODE_NONE;
-            colorAttachments[renderingInfo.colorAttachmentCount].loadOp = ToVkAttachmentLoadOp(attachment->loadOp);
+            colorAttachments[renderingInfo.colorAttachmentCount].loadOp = ToVkAttachmentLoadOp(attachment->load_action);
             colorAttachments[renderingInfo.colorAttachmentCount].storeOp = ToVkAttachmentStoreOp(attachment->store_action);
 
-            colorAttachments[renderingInfo.colorAttachmentCount].clearValue.color.float32[0] = attachment->clear_color.r;
-            colorAttachments[renderingInfo.colorAttachmentCount].clearValue.color.float32[1] = attachment->clear_color.g;
-            colorAttachments[renderingInfo.colorAttachmentCount].clearValue.color.float32[2] = attachment->clear_color.b;
-            colorAttachments[renderingInfo.colorAttachmentCount].clearValue.color.float32[3] = attachment->clear_color.a;
+            colorAttachments[renderingInfo.colorAttachmentCount].clearValue.color.float32[0] = attachment->clearColor.r;
+            colorAttachments[renderingInfo.colorAttachmentCount].clearValue.color.float32[1] = attachment->clearColor.g;
+            colorAttachments[renderingInfo.colorAttachmentCount].clearValue.color.float32[2] = attachment->clearColor.b;
+            colorAttachments[renderingInfo.colorAttachmentCount].clearValue.color.float32[3] = attachment->clearColor.a;
 
             renderingInfo.colorAttachmentCount++;
         }
@@ -3082,17 +3103,17 @@ static void vulkan_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGPU
             VulkanTexture* texture = (VulkanTexture*)attachment->texture;
             const uint32_t level = attachment->level;
 
-            commandBuffer->clearValues[commandBuffer->clearValueCount].color.float32[0] = attachment->clear_color.r;
-            commandBuffer->clearValues[commandBuffer->clearValueCount].color.float32[1] = attachment->clear_color.g;
-            commandBuffer->clearValues[commandBuffer->clearValueCount].color.float32[2] = attachment->clear_color.b;
-            commandBuffer->clearValues[commandBuffer->clearValueCount].color.float32[3] = attachment->clear_color.a;
+            commandBuffer->clearValues[commandBuffer->clearValueCount].color.float32[0] = attachment->clearColor.r;
+            commandBuffer->clearValues[commandBuffer->clearValueCount].color.float32[1] = attachment->clearColor.g;
+            commandBuffer->clearValues[commandBuffer->clearValueCount].color.float32[2] = attachment->clearColor.b;
+            commandBuffer->clearValues[commandBuffer->clearValueCount].color.float32[3] = attachment->clearColor.a;
             commandBuffer->clearValueCount++;
 
             width = _VGPU_MIN(width, _VGPU_MAX(1U, texture->width >> level));
             height = _VGPU_MIN(height, _VGPU_MAX(1U, texture->height >> level));
 
             colorAttachments[renderPassKey.colorAttachmentCount].format = texture->format;
-            colorAttachments[renderPassKey.colorAttachmentCount].loadAction = attachment->loadOp;
+            colorAttachments[renderPassKey.colorAttachmentCount].load_action = attachment->load_action;
             colorAttachments[renderPassKey.colorAttachmentCount].store_action = attachment->store_action;
             renderPassKey.colorAttachmentCount++;
         }
@@ -3112,7 +3133,7 @@ static void vulkan_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGPU
             height = _VGPU_MIN(height, _VGPU_MAX(1U, texture->height >> level));
 
             depthAttachment.format = texture->format;
-            depthAttachment.loadAction = attachment->depthLoadOp;
+            depthAttachment.load_action = attachment->depthLoadOp;
             depthAttachment.store_action = attachment->depthStoreOp;
             renderPassKey.depthAttachment = &depthAttachment;
         }
@@ -3244,11 +3265,18 @@ static void vulkan_setScissorRects(VGPUCommandBufferImpl* driverData, uint32_t c
     vkCmdSetScissor(commandBuffer->handle, 0, count, (const VkRect2D*)rects);
 }
 
-static void vulkan_draw(VGPUCommandBufferImpl* driverData, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t baseInstance)
+static void vulkan_draw(VGPUCommandBufferImpl* driverData, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t firstInstance)
 {
     VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
     vulkan_prepareDraw(commandBuffer);
-    vkCmdDraw(commandBuffer->handle, vertexCount, instanceCount, vertexStart, baseInstance);
+    vkCmdDraw(commandBuffer->handle, vertexCount, instanceCount, vertexStart, firstInstance);
+}
+
+static void vulkan_drawIndexed(VGPUCommandBufferImpl* driverData, uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t baseVertex, uint32_t firstInstance)
+{
+    VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
+    vulkan_prepareDraw(commandBuffer);
+    vkCmdDrawIndexed(commandBuffer->handle, indexCount, instanceCount, firstIndex, baseVertex, firstInstance);
 }
 
 static VGPUCommandBuffer vulkan_beginCommandBuffer(VGPURenderer* driverData, VGPUCommandQueue queueType, const char* label)

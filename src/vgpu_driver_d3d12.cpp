@@ -116,15 +116,15 @@ namespace
     static_assert(sizeof(VGPUDrawIndirectCommand) == sizeof(D3D12_DRAW_ARGUMENTS), "DrawIndirectCommand mismatch");
     static_assert(offsetof(VGPUDrawIndirectCommand, vertexCount) == offsetof(D3D12_DRAW_ARGUMENTS, VertexCountPerInstance), "Layout mismatch");
     static_assert(offsetof(VGPUDrawIndirectCommand, instanceCount) == offsetof(D3D12_DRAW_ARGUMENTS, InstanceCount), "Layout mismatch");
-    static_assert(offsetof(VGPUDrawIndirectCommand, vertexStart) == offsetof(D3D12_DRAW_ARGUMENTS, StartVertexLocation), "Layout mismatch");
-    static_assert(offsetof(VGPUDrawIndirectCommand, baseInstance) == offsetof(D3D12_DRAW_ARGUMENTS, StartInstanceLocation), "Layout mismatch");
+    static_assert(offsetof(VGPUDrawIndirectCommand, firstVertex) == offsetof(D3D12_DRAW_ARGUMENTS, StartVertexLocation), "Layout mismatch");
+    static_assert(offsetof(VGPUDrawIndirectCommand, firstInstance) == offsetof(D3D12_DRAW_ARGUMENTS, StartInstanceLocation), "Layout mismatch");
 
     static_assert(sizeof(VGPUDrawIndexedIndirectCommand) == sizeof(D3D12_DRAW_INDEXED_ARGUMENTS), "DrawIndexedIndirectCommand mismatch");
     static_assert(offsetof(VGPUDrawIndexedIndirectCommand, indexCount) == offsetof(D3D12_DRAW_INDEXED_ARGUMENTS, IndexCountPerInstance), "Layout mismatch");
     static_assert(offsetof(VGPUDrawIndexedIndirectCommand, instanceCount) == offsetof(D3D12_DRAW_INDEXED_ARGUMENTS, InstanceCount), "Layout mismatch");
-    static_assert(offsetof(VGPUDrawIndexedIndirectCommand, startIndex) == offsetof(D3D12_DRAW_INDEXED_ARGUMENTS, StartIndexLocation), "Layout mismatch");
+    static_assert(offsetof(VGPUDrawIndexedIndirectCommand, firstIndex) == offsetof(D3D12_DRAW_INDEXED_ARGUMENTS, StartIndexLocation), "Layout mismatch");
     static_assert(offsetof(VGPUDrawIndexedIndirectCommand, baseVertex) == offsetof(D3D12_DRAW_INDEXED_ARGUMENTS, BaseVertexLocation), "Layout mismatch");
-    static_assert(offsetof(VGPUDrawIndexedIndirectCommand, baseInstance) == offsetof(D3D12_DRAW_INDEXED_ARGUMENTS, StartInstanceLocation), "Layout mismatch");
+    static_assert(offsetof(VGPUDrawIndexedIndirectCommand, firstInstance) == offsetof(D3D12_DRAW_INDEXED_ARGUMENTS, StartInstanceLocation), "Layout mismatch");
 
     constexpr DXGI_FORMAT ToDXGIFormat(vgpu_pixel_format format)
     {
@@ -2357,23 +2357,23 @@ static void d3d12_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGPUR
         // Transition to RenderTarget
         d3d12_TransitionResource(commandBuffer, texture, D3D12_RESOURCE_STATE_RENDER_TARGET, true);
 
-        switch (attachment->loadOp)
+        switch (attachment->load_action)
         {
             default:
-            case VGPULoadAction_Load:
+            case VGPU_LOAD_ACTION_LOAD:
                 commandBuffer->RTVs[numRTVS].BeginningAccess.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_PRESERVE;
                 break;
 
-            case VGPULoadAction_Clear:
+            case VGPU_LOAD_ACTION_CLEAR:
                 commandBuffer->RTVs[numRTVS].BeginningAccess.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR;
                 commandBuffer->RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Format = texture->dxgiFormat;
-                commandBuffer->RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Color[0] = attachment->clear_color.r;
-                commandBuffer->RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Color[1] = attachment->clear_color.g;
-                commandBuffer->RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Color[2] = attachment->clear_color.b;
-                commandBuffer->RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Color[3] = attachment->clear_color.a;
+                commandBuffer->RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Color[0] = attachment->clearColor.r;
+                commandBuffer->RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Color[1] = attachment->clearColor.g;
+                commandBuffer->RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Color[2] = attachment->clearColor.b;
+                commandBuffer->RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Color[3] = attachment->clearColor.a;
                 break;
 
-            case VGPULoadAction_DontCare:
+            case VGPU_LOAD_ACTION_DONT_CARE:
                 commandBuffer->RTVs[numRTVS].BeginningAccess.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_DISCARD;
                 break;
         }
@@ -2389,10 +2389,10 @@ static void d3d12_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGPUR
                 commandBuffer->RTVs[numRTVS].EndingAccess.Type = D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_PRESERVE;
                 break;
 
-            case VGPU_STORE_ACTION_RESOLVE:
-            case VGPU_STORE_ACTION_RESOLVE_AND_RESOLVE:
-                commandBuffer->RTVs[numRTVS].EndingAccess.Type = D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_RESOLVE;
-                break;
+            //case VGPU_STORE_ACTION_RESOLVE:
+            //case VGPU_STORE_ACTION_RESOLVE_AND_RESOLVE:
+            //    commandBuffer->RTVs[numRTVS].EndingAccess.Type = D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_RESOLVE;
+            //    break;
         }
 
         width = _VGPU_MIN(width, _VGPU_MAX(1U, texture->width >> level));
@@ -2415,16 +2415,16 @@ static void d3d12_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGPUR
         switch (attachment->depthLoadOp)
         {
             default:
-            case VGPULoadAction_Load:
+            case VGPU_LOAD_ACTION_LOAD:
                 DSV.DepthBeginningAccess.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_PRESERVE;
                 break;
 
-            case VGPULoadAction_Clear:
+            case VGPU_LOAD_ACTION_CLEAR:
                 DSV.DepthBeginningAccess.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR;
                 DSV.DepthBeginningAccess.Clear.ClearValue.DepthStencil.Depth = attachment->clearDepth;
                 break;
 
-            case VGPULoadAction_DontCare:
+            case VGPU_LOAD_ACTION_DONT_CARE:
                 DSV.DepthBeginningAccess.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_DISCARD;
                 break;
         }
@@ -2444,16 +2444,16 @@ static void d3d12_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGPUR
         switch (attachment->stencilLoadOp)
         {
             default:
-            case VGPULoadAction_Load:
+            case VGPU_LOAD_ACTION_LOAD:
                 DSV.StencilBeginningAccess.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_PRESERVE;
                 break;
 
-            case VGPULoadAction_Clear:
+            case VGPU_LOAD_ACTION_CLEAR:
                 DSV.StencilBeginningAccess.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR;
                 DSV.StencilBeginningAccess.Clear.ClearValue.DepthStencil.Stencil = attachment->clearStencil;
                 break;
 
-            case VGPULoadAction_DontCare:
+            case VGPU_LOAD_ACTION_DONT_CARE:
                 DSV.StencilBeginningAccess.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_DISCARD;
                 break;
         }
@@ -2571,11 +2571,18 @@ static void d3d12_prepareDraw(D3D12CommandBuffer* commandBuffer)
     VGPU_ASSERT(commandBuffer->insideRenderPass);
 }
 
-static void d3d12_draw(VGPUCommandBufferImpl* driverData, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t baseInstance)
+static void d3d12_draw(VGPUCommandBufferImpl* driverData, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t firstInstance)
 {
     D3D12CommandBuffer* commandBuffer = (D3D12CommandBuffer*)driverData;
     d3d12_prepareDraw(commandBuffer);
-    commandBuffer->commandList->DrawInstanced(vertexCount, instanceCount, vertexStart, baseInstance);
+    commandBuffer->commandList->DrawInstanced(vertexCount, instanceCount, vertexStart, firstInstance);
+}
+
+static void d3d12_drawIndexed(VGPUCommandBufferImpl* driverData, uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t baseVertex, uint32_t firstInstance)
+{
+    D3D12CommandBuffer* commandBuffer = (D3D12CommandBuffer*)driverData;
+    d3d12_prepareDraw(commandBuffer);
+    commandBuffer->commandList->DrawIndexedInstanced(indexCount, instanceCount, firstIndex, baseVertex, firstInstance);
 }
 
 static VGPUCommandBuffer d3d12_beginCommandBuffer(VGPURenderer* driverData, VGPUCommandQueue queueType, const char* label)

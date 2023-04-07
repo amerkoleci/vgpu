@@ -282,13 +282,13 @@ static vgpu_buffer_desc _vgpu_buffer_desc_def(const vgpu_buffer_desc* desc)
     return def;
 }
 
-vgpu_buffer* vgpu_buffer_create(const vgpu_buffer_desc* desc, const void* pInitialData)
+vgpu_buffer* vgpu_buffer_create(const vgpu_buffer_desc* desc, const void* init_data)
 {
     VGPU_ASSERT(s_renderer);
     NULL_RETURN_NULL(desc);
 
     vgpu_buffer_desc desc_def = _vgpu_buffer_desc_def(desc);
-    return s_renderer->createBuffer(s_renderer->driverData, &desc_def, pInitialData);
+    return s_renderer->createBuffer(s_renderer->driverData, &desc_def, init_data);
 }
 
 void vgpu_buffer_destroy(vgpu_buffer* buffer)
@@ -330,7 +330,7 @@ static VGPUTextureDesc _vgpuTextureDescDef(const VGPUTextureDesc* desc)
     return def;
 }
 
-VGPUTexture vgpuCreateTexture(const VGPUTextureDesc* desc, const void* pInitialData)
+VGPUTexture vgpu_texture_create(const VGPUTextureDesc* desc, const void* init_data)
 {
     VGPU_ASSERT(s_renderer);
     NULL_RETURN_NULL(desc);
@@ -410,10 +410,10 @@ VGPUTexture vgpuCreateTexture(const VGPUTextureDesc* desc, const void* pInitialD
         return NULL;
     }
 
-    return s_renderer->createTexture(s_renderer->driverData, &desc_def, pInitialData);
+    return s_renderer->createTexture(s_renderer->driverData, &desc_def, init_data);
 }
 
-VGPUTexture vgpuCreateTexture2D(uint32_t width, uint32_t height, vgpu_pixel_format format, uint32_t mipLevelCount, VGPUTextureUsage usage, const void* pInitialData)
+VGPUTexture vgpu_texture_create_2d(uint32_t width, uint32_t height, vgpu_pixel_format format, uint32_t mipLevelCount, VGPUTextureUsage usage, const void* init_data)
 {
     VGPUTextureDesc desc = {
         .size = {width, height, 1u},
@@ -424,10 +424,10 @@ VGPUTexture vgpuCreateTexture2D(uint32_t width, uint32_t height, vgpu_pixel_form
         .sampleCount = 1u
     };
 
-    return vgpuCreateTexture(&desc, pInitialData);
+    return vgpu_texture_create(&desc, init_data);
 }
 
-VGPUTexture vgpuCreateTextureCube(uint32_t size, vgpu_pixel_format format, uint32_t mipLevelCount, const void* pInitialData)
+VGPUTexture vgpu_texture_create_cube(uint32_t size, vgpu_pixel_format format, uint32_t mipLevelCount, const void* init_data)
 {
     VGPUTextureDesc desc = {
          .size = {size, size, 6u},
@@ -438,7 +438,7 @@ VGPUTexture vgpuCreateTextureCube(uint32_t size, vgpu_pixel_format format, uint3
         .sampleCount = 1u
     };
 
-    return vgpuCreateTexture(&desc, pInitialData);
+    return vgpu_texture_create(&desc, init_data);
 }
 
 void vgpu_texture_destroy(VGPUTexture texture)
@@ -598,7 +598,7 @@ void vgpuInsertDebugMarker(VGPUCommandBuffer commandBuffer, const char* debugLab
     commandBuffer->insertDebugMarker(commandBuffer->driverData, debugLabel);
 }
 
-void vgpu_set_pipeline(VGPUCommandBuffer commandBuffer, VGPUPipeline* pipeline)
+void vgpuSetPipeline(VGPUCommandBuffer commandBuffer, VGPUPipeline* pipeline)
 {
     VGPU_ASSERT(pipeline);
 
@@ -647,19 +647,24 @@ void vgpuSetScissorRect(VGPUCommandBuffer commandBuffer, const VGPURect* rect)
     commandBuffer->setScissorRect(commandBuffer->driverData, rect);
 }
 
-void vgpu_set_vertex_buffer(VGPUCommandBuffer commandBuffer, uint32_t index, vgpu_buffer* buffer, uint64_t offset)
+void vgpuSetVertexBuffer(VGPUCommandBuffer commandBuffer, uint32_t index, vgpu_buffer* buffer, uint64_t offset)
 {
     commandBuffer->setVertexBuffer(commandBuffer->driverData, index, buffer, offset);
 }
 
-void vgpu_set_index_buffer(VGPUCommandBuffer commandBuffer, vgpu_buffer* buffer, uint64_t offset, vgpu_index_type type)
+void vgpuSetIndexBuffer(VGPUCommandBuffer commandBuffer, vgpu_buffer* buffer, uint64_t offset, vgpu_index_type type)
 {
     commandBuffer->setIndexBuffer(commandBuffer->driverData, buffer, offset, type);
 }
 
-void vgpu_draw(VGPUCommandBuffer commandBuffer, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t baseInstance)
+void vgpuDraw(VGPUCommandBuffer commandBuffer, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t firstInstance)
 {
-    commandBuffer->draw(commandBuffer->driverData, vertexStart, vertexCount, instanceCount, baseInstance);
+    commandBuffer->draw(commandBuffer->driverData, vertexStart, vertexCount, instanceCount, firstInstance);
+}
+
+void vgpuDrawIndexed(VGPUCommandBuffer commandBuffer, uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t baseVertex, uint32_t firstInstance)
+{
+    commandBuffer->drawIndexed(commandBuffer->driverData, indexCount, instanceCount, firstIndex, firstIndex, firstInstance);
 }
 
 void vgpu_submit(VGPUCommandBuffer* commandBuffers, uint32_t count)

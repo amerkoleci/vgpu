@@ -331,19 +331,17 @@ typedef enum VGPUFeature {
     _VGPUFeature_Force32 = 0x7FFFFFFF
 } VGPUFeature;
 
-typedef enum VGPULoadAction {
-    VGPULoadAction_Load = 0,
-    VGPULoadAction_Clear = 1,
-    VGPULoadAction_DontCare = 2,
+typedef enum vgpu_load_action {
+    VGPU_LOAD_ACTION_LOAD = 0,
+    VGPU_LOAD_ACTION_CLEAR = 1,
+    VGPU_LOAD_ACTION_DONT_CARE = 2,
 
-    _VGPULoadAction_Force32 = 0x7FFFFFFF
-} VGPULoadAction;
+    _VGPU_LOAD_ACTION_FORCE_U32 = 0x7FFFFFFF
+} vgpu_load_action;
 
 typedef enum vgpu_store_action {
-    VGPU_STORE_ACTION_DONT_CARE = 0,
-    VGPU_STORE_ACTION_STORE = 1,
-    VGPU_STORE_ACTION_RESOLVE = 2,
-    VGPU_STORE_ACTION_RESOLVE_AND_RESOLVE = 3,
+    VGPU_STORE_ACTION_STORE = 0,
+    VGPU_STORE_ACTION_DONT_CARE = 1,
 
     _VGPU_STORE_ACTION_FORCE_U32 = 0x7FFFFFFF
 } vgpu_store_action;
@@ -507,36 +505,36 @@ typedef struct VGPUDrawIndirectCommand
 {
     uint32_t vertexCount;
     uint32_t instanceCount;
-    uint32_t vertexStart;
-    uint32_t baseInstance;
+    uint32_t firstVertex;
+    uint32_t firstInstance;
 } VGPUDrawIndirectCommand;
 
 typedef struct VGPUDrawIndexedIndirectCommand
 {
     uint32_t indexCount;
     uint32_t instanceCount;
-    uint32_t startIndex;
+    uint32_t firstIndex;
     int32_t  baseVertex;
-    uint32_t baseInstance;
+    uint32_t firstInstance;
 } VGPUDrawIndexedIndirectCommand;
 
 typedef struct VGPURenderPassColorAttachment {
     VGPUTexture         texture;
     uint32_t            level;
     uint32_t            slice;
-    VGPULoadAction      loadOp;
+    vgpu_load_action    load_action;
     vgpu_store_action   store_action;
-    VGPUColor           clear_color;
+    VGPUColor           clearColor;
 } VGPURenderPassColorAttachment;
 
 typedef struct VGPURenderPassDepthStencilAttachment {
     VGPUTexture         texture;
     uint32_t            level;
     uint32_t            slice;
-    VGPULoadAction      depthLoadOp;
+    vgpu_load_action    depthLoadOp;
     vgpu_store_action   depthStoreOp;
     float               clearDepth;
-    VGPULoadAction      stencilLoadOp;
+    vgpu_load_action    stencilLoadOp;
     vgpu_store_action   stencilStoreOp;
     uint8_t             clearStencil;
 } VGPURenderPassDepthStencilAttachment;
@@ -707,15 +705,15 @@ VGPU_API void vgpuGetAdapterProperties(VGPUAdapterProperties* properties);
 VGPU_API void vgpu_get_limits(VGPULimits* limits);
 
 /* Buffer */
-VGPU_API vgpu_buffer* vgpu_buffer_create(const vgpu_buffer_desc* desc, const void* pInitialData);
+VGPU_API vgpu_buffer* vgpu_buffer_create(const vgpu_buffer_desc* desc, const void* init_data);
 VGPU_API void vgpu_buffer_destroy(vgpu_buffer* buffer);
 VGPU_API VGPUDeviceAddress vgpu_buffer_get_device_address(vgpu_buffer* buffer);
 VGPU_API void vgpu_buffer_set_label(vgpu_buffer* buffer, const char* label);
 
 /* Texture */
-VGPU_API VGPUTexture vgpuCreateTexture(const VGPUTextureDesc* desc, const void* pInitialData);
-VGPU_API VGPUTexture vgpuCreateTexture2D(uint32_t width, uint32_t height, vgpu_pixel_format format, uint32_t mipLevelCount, VGPUTextureUsage usage, const void* pInitialData);
-VGPU_API VGPUTexture vgpuCreateTextureCube(uint32_t size, vgpu_pixel_format format, uint32_t mipLevelCount, const void* pInitialData);
+VGPU_API VGPUTexture vgpu_texture_create(const VGPUTextureDesc* desc, const void* init_data);
+VGPU_API VGPUTexture vgpu_texture_create_2d(uint32_t width, uint32_t height, vgpu_pixel_format format, uint32_t mipLevelCount, VGPUTextureUsage usage, const void* init_data);
+VGPU_API VGPUTexture vgpu_texture_create_cube(uint32_t size, vgpu_pixel_format format, uint32_t mipLevelCount, const void* init_data);
 VGPU_API void vgpu_texture_destroy(VGPUTexture texture);
 
 /* Sampler */
@@ -742,7 +740,7 @@ VGPU_API VGPUCommandBuffer vgpuBeginCommandBuffer(VGPUCommandQueue queueType, co
 VGPU_API void vgpuPushDebugGroup(VGPUCommandBuffer commandBuffer, const char* groupLabel);
 VGPU_API void vgpuPopDebugGroup(VGPUCommandBuffer commandBuffer);
 VGPU_API void vgpuInsertDebugMarker(VGPUCommandBuffer commandBuffer, const char* debugLabel);
-VGPU_API void vgpu_set_pipeline(VGPUCommandBuffer commandBuffer, VGPUPipeline* pipeline);
+VGPU_API void vgpuSetPipeline(VGPUCommandBuffer commandBuffer, VGPUPipeline* pipeline);
 
 /* Compute commands */
 VGPU_API void vgpuDispatch(VGPUCommandBuffer commandBuffer, uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ);
@@ -754,10 +752,11 @@ VGPU_API void vgpuBeginRenderPass(VGPUCommandBuffer commandBuffer, const VGPURen
 VGPU_API void vgpuEndRenderPass(VGPUCommandBuffer commandBuffer);
 VGPU_API void vgpuSetViewport(VGPUCommandBuffer commandBuffer, const VGPUViewport* viewport);
 VGPU_API void vgpuSetScissorRect(VGPUCommandBuffer commandBuffer, const VGPURect* rect);
-VGPU_API void vgpu_set_vertex_buffer(VGPUCommandBuffer commandBuffer, uint32_t index, vgpu_buffer* buffer, uint64_t offset);
-VGPU_API void vgpu_set_index_buffer(VGPUCommandBuffer commandBuffer, vgpu_buffer* buffer, uint64_t offset, vgpu_index_type type);
+VGPU_API void vgpuSetVertexBuffer(VGPUCommandBuffer commandBuffer, uint32_t index, vgpu_buffer* buffer, uint64_t offset);
+VGPU_API void vgpuSetIndexBuffer(VGPUCommandBuffer commandBuffer, vgpu_buffer* buffer, uint64_t offset, vgpu_index_type type);
 
-VGPU_API void vgpu_draw(VGPUCommandBuffer commandBuffer, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t baseInstance);
+VGPU_API void vgpuDraw(VGPUCommandBuffer commandBuffer, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t firstInstance);
+VGPU_API void vgpuDrawIndexed(VGPUCommandBuffer commandBuffer, uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t baseVertex, uint32_t firstInstance);
 
 VGPU_API void vgpu_submit(VGPUCommandBuffer* commandBuffers, uint32_t count);
 

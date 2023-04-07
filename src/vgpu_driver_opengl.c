@@ -870,7 +870,7 @@ static void gl_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGPURend
     GL_CommandBuffer* commandBuffer = (GL_CommandBuffer*)driverData;
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    glClearBufferfv(GL_COLOR, 0, &desc->colorAttachments[0].clear_color.r);
+    glClearBufferfv(GL_COLOR, 0, &desc->colorAttachments[0].clearColor.r);
 
     commandBuffer->insideRenderPass = true;
 }
@@ -911,11 +911,17 @@ static void gl_prepareDraw(GL_CommandBuffer* commandBuffer)
     VGPU_ASSERT(commandBuffer->insideRenderPass);
 }
 
-static void gl_draw(VGPUCommandBufferImpl* driverData, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t baseInstance)
+static void gl_draw(VGPUCommandBufferImpl* driverData, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t firstInstance)
 {
     GL_CommandBuffer* commandBuffer = (GL_CommandBuffer*)driverData;
     gl_prepareDraw(commandBuffer);
-    //commandBuffer->commandList->DrawInstanced(vertexCount, instanceCount, vertexStart, baseInstance);
+    //commandBuffer->commandList->DrawInstanced(vertexCount, instanceCount, vertexStart, firstInstance);
+}
+
+static void gl_drawIndexed(VGPUCommandBufferImpl* driverData, uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t baseVertex, uint32_t firstInstance)
+{
+    GL_CommandBuffer* commandBuffer = (GL_CommandBuffer*)driverData;
+    gl_prepareDraw(commandBuffer);
 }
 
 static VGPUCommandBuffer gl_beginCommandBuffer(VGPURenderer* driverData, VGPUCommandQueue queueType, const char* label)

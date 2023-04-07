@@ -114,7 +114,8 @@ typedef struct VGPUCommandBuffer_T {
     void (*setVertexBuffer)(VGPUCommandBufferImpl* driverData, uint32_t index, vgpu_buffer* buffer, uint64_t offset);
     void (*setIndexBuffer)(VGPUCommandBufferImpl* driverData, vgpu_buffer* buffer, uint64_t offset, vgpu_index_type type);
 
-    void (*draw)(VGPUCommandBufferImpl* driverData, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t baseInstance);
+    void (*draw)(VGPUCommandBufferImpl* driverData, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t firstInstance);
+    void (*drawIndexed)(VGPUCommandBufferImpl* driverData, uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t baseVertex, uint32_t firstInstance);
 
     /* Opaque pointer for the Driver */
     VGPUCommandBufferImpl* driverData;
@@ -179,7 +180,8 @@ ASSIGN_COMMAND_BUFFER_FUNC(setViewport, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(setScissorRect, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(setVertexBuffer, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(setIndexBuffer, name) \
-ASSIGN_COMMAND_BUFFER_FUNC(draw, name) 
+ASSIGN_COMMAND_BUFFER_FUNC(draw, name) \
+ASSIGN_COMMAND_BUFFER_FUNC(drawIndexed, name)
 
 #define ASSIGN_DRIVER(name) \
 ASSIGN_DRIVER_FUNC(destroyDevice, name) \

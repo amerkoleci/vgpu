@@ -26,6 +26,7 @@
 VGPUSwapChain* swapChain = nullptr;
 VGPUTexture depthStencilTexture = nullptr;
 vgpu_buffer* vertex_buffer = nullptr;
+vgpu_buffer* index_buffer = nullptr;
 VGPUPipeline* renderPipeline = nullptr;
 
 inline void vgpu_log(vgpu_log_level level, const char* message, void* user_data)
@@ -143,7 +144,7 @@ void init_vgpu(GLFWwindow* window, bool opengl)
     swapChainDesc.presentMode = VGPUPresentMode_Fifo;
     swapChain = vgpuCreateSwapChain(windowHandle, &swapChainDesc);
 
-    depthStencilTexture = vgpuCreateTexture2D(width, height,
+    depthStencilTexture = vgpu_texture_create_2d(width, height,
         VGPUTextureFormat_Depth32Float,
         1,
         VGPUTextureUsage_RenderTarget,
@@ -152,9 +153,10 @@ void init_vgpu(GLFWwindow* window, bool opengl)
     // Create vertex buffer
     const float vertices[] = {
         /* positions            colors */
-         0.0f, 0.5f, 0.5f,      1.0f, 0.0f, 0.0f, 1.0f,
-         0.5f, -0.5f, 0.5f,     0.0f, 1.0f, 0.0f, 1.0f,
-        -0.5f, -0.5f, 0.5f,     0.0f, 0.0f, 1.0f, 1.0f
+        -0.5f,  0.5f, 0.5f,     1.0f, 0.0f, 0.0f, 1.0f,
+         0.5f,  0.5f, 0.5f,     0.0f, 1.0f, 0.0f, 1.0f,
+         0.5f, -0.5f, 0.5f,     0.0f, 0.0f, 1.0f, 1.0f,
+        -0.5f, -0.5f, 0.5f,     1.0f, 1.0f, 0.0f, 1.0f,
     };
 
     vgpu_buffer_desc vertex_buffer_desc{};
@@ -162,7 +164,16 @@ void init_vgpu(GLFWwindow* window, bool opengl)
     vertex_buffer_desc.size = sizeof(vertices);
     vertex_buffer_desc.usage = VGPU_BUFFER_USAGE_VERTEX;
     vertex_buffer = vgpu_buffer_create(&vertex_buffer_desc, vertices);
-    vgpu_buffer_set_label(vertex_buffer, "Vertex 2");
+
+    uint16_t indices[] = {
+        0, 1, 2,    // first triangle
+        0, 2, 3,    // second triangle
+    };
+    vgpu_buffer_desc index_buffer_desc{};
+    index_buffer_desc.label = "Vertex Buffer";
+    index_buffer_desc.size = sizeof(indices);
+    index_buffer_desc.usage = VGPU_BUFFER_USAGE_INDEX;
+    index_buffer = vgpu_buffer_create(&index_buffer_desc, indices);
 
     VGPUShaderModule vertex_shader = LoadShader("triangleVertex");
     VGPUShaderModule fragment_shader = LoadShader("triangleFragment");
@@ -234,16 +245,16 @@ void draw_frame()
     {
         VGPURenderPassColorAttachment colorAttachment = {};
         colorAttachment.texture = swapChainTexture;
-        colorAttachment.loadOp = VGPULoadAction_Clear;
+        colorAttachment.load_action = VGPU_LOAD_ACTION_CLEAR;
         colorAttachment.store_action = VGPU_STORE_ACTION_STORE;
-        colorAttachment.clear_color.r = 0.3f;
-        colorAttachment.clear_color.g = 0.3f;
-        colorAttachment.clear_color.b = 0.3f;
-        colorAttachment.clear_color.a = 1.0f;
+        colorAttachment.clearColor.r = 0.3f;
+        colorAttachment.clearColor.g = 0.3f;
+        colorAttachment.clearColor.b = 0.3f;
+        colorAttachment.clearColor.a = 1.0f;
 
         VGPURenderPassDepthStencilAttachment depthStencilAttachment{};
         depthStencilAttachment.texture = depthStencilTexture;
-        depthStencilAttachment.depthLoadOp = VGPULoadAction_Clear;
+        depthStencilAttachment.depthLoadOp = VGPU_LOAD_ACTION_CLEAR;
         depthStencilAttachment.depthStoreOp = VGPU_STORE_ACTION_STORE;
         depthStencilAttachment.clearDepth = 1.0f;
 
@@ -252,9 +263,10 @@ void draw_frame()
         renderPass.colorAttachments = &colorAttachment;
         renderPass.depthStencilAttachment = &depthStencilAttachment;
         vgpuBeginRenderPass(commandBuffer, &renderPass);
-        vgpu_set_pipeline(commandBuffer, renderPipeline);
-        vgpu_set_vertex_buffer(commandBuffer, 0, vertex_buffer, 0);
-        vgpu_draw(commandBuffer, 0, 3, 1, 0);
+        vgpuSetPipeline(commandBuffer, renderPipeline);
+        vgpuSetVertexBuffer(commandBuffer, 0, vertex_buffer, 0);
+        vgpuSetIndexBuffer(commandBuffer, index_buffer, 0, VGPU_INDEX_TYPE_UINT16);
+        vgpuDrawIndexed(commandBuffer, 6, 1, 0, 0, 0);
         vgpuEndRenderPass(commandBuffer);
     }
 
@@ -307,6 +319,7 @@ int main()
 
     vgpu_wait_idle();
     vgpu_buffer_destroy(vertex_buffer);
+    vgpu_buffer_destroy(index_buffer);
     vgpu_texture_destroy(depthStencilTexture);
     vgpu_pipeline_destroy(renderPipeline);
     vgpuDestroySwapChain(swapChain);
