@@ -23,7 +23,6 @@
 #include <assert.h>
 #include <vgpu.h>
 
-VGPUDevice device = nullptr;
 VGPUSwapChain* swapChain = nullptr;
 VGPUTexture depthStencilTexture = nullptr;
 vgpu_buffer* vertex_buffer = nullptr;
@@ -46,7 +45,7 @@ std::string getShadersPath()
 VGPUShaderModule LoadShader(const char* fileName)
 {
     std::string shaderExt = ".spv";
-    if (vgpuGetBackendType(device) == VGPUBackendType_D3D12)
+    if (vgpu_get_backend() == VGPU_BACKEND_D3D12)
     {
         shaderExt = ".cso";
     }
@@ -63,7 +62,7 @@ VGPUShaderModule LoadShader(const char* fileName)
 
         assert(size > 0);
 
-        VGPUShaderModule shader = vgpuCreateShader(device, shaderCode, size);
+        VGPUShaderModule shader = vgpuCreateShader(shaderCode, size);
 
         delete[] shaderCode;
 
@@ -82,8 +81,7 @@ namespace
     static EM_BOOL _app_emsc_frame(double time, void* userData)
     {
         //emscripten_log(EM_LOG_CONSOLE, "%s", "frame");
-        VGFXDevice device = (VGFXDevice)userData;
-        vgfxFrame(device);
+        vgpu_frame();
         return EM_TRUE;
     }
 }
@@ -97,7 +95,7 @@ void* os_get_gl_proc_address(const char* function) {
 void init_gfx(GLFWwindow* window, bool opengl)
 #endif
 {
-    VGPUDeviceDesc deviceDesc{};
+    vgpu_config deviceDesc{};
     deviceDesc.label = "test device";
 #ifdef _DEBUG
     deviceDesc.validationMode = VGPUValidationMode_Enabled;
@@ -108,23 +106,22 @@ void init_gfx(GLFWwindow* window, bool opengl)
         deviceDesc.gl.gl_get_proc_address = os_get_gl_proc_address;
     }
 
-    if (vgpuIsBackendSupported(VGPUBackendType_Vulkan))
+    if (opengl && vgpu_is_supported(VGPU_BACKEND_OPENGL))
     {
-        deviceDesc.preferredBackend = VGPUBackendType_Vulkan;
+        deviceDesc.preferred_backend = VGPU_BACKEND_OPENGL;
+    }
+    else if (vgpu_is_supported(VGPU_BACKEND_VULKAN))
+    {
+        deviceDesc.preferred_backend = VGPU_BACKEND_VULKAN;
     }
 
-    if (vgpuIsBackendSupported(VGPUBackendType_OpenGL))
-    {
-        deviceDesc.preferredBackend = VGPUBackendType_OpenGL;
-    }
-
-    device = vgpuCreateDevice(&deviceDesc);
+    assert(vgpu_init(&deviceDesc));
 
     VGPUAdapterProperties adapterProps;
-    vgpuGetAdapterProperties(device, &adapterProps);
+    vgpuGetAdapterProperties(&adapterProps);
 
     VGPULimits limits;
-    vgpuGetLimits(device, &limits);
+    vgpuGetLimits(&limits);
 
     int width = 0;
     int height = 0;
@@ -144,10 +141,9 @@ void init_gfx(GLFWwindow* window, bool opengl)
     swapChainDesc.height = height;
     swapChainDesc.format = VGPUTextureFormat_BGRA8UnormSrgb;
     swapChainDesc.presentMode = VGPUPresentMode_Fifo;
-    swapChain = vgpuCreateSwapChain(device, windowHandle, &swapChainDesc);
+    swapChain = vgpuCreateSwapChain(windowHandle, &swapChainDesc);
 
-    depthStencilTexture = vgpuCreateTexture2D(device,
-        width, height,
+    depthStencilTexture = vgpuCreateTexture2D(width, height,
         VGPUTextureFormat_Depth32Float,
         1,
         VGPUTextureUsage_RenderTarget,
@@ -165,18 +161,18 @@ void init_gfx(GLFWwindow* window, bool opengl)
     vertex_buffer_desc.label = "Vertex Buffer";
     vertex_buffer_desc.size = sizeof(vertices);
     vertex_buffer_desc.usage = VGPU_BUFFER_USAGE_VERTEX;
-    vertex_buffer = vgpu_buffer_create(device, &vertex_buffer_desc, vertices);
+    vertex_buffer = vgpu_buffer_create(&vertex_buffer_desc, vertices);
 
-    VGPUShaderModule vertexShader = LoadShader("triangleVertex");
-    VGPUShaderModule fragmentShader = LoadShader("triangleFragment");
+    VGPUShaderModule vertex_shader = LoadShader("triangleVertex");
+    VGPUShaderModule fragment_shader = LoadShader("triangleFragment");
 
     RenderPipelineColorAttachmentDesc colorAttachment{};
-    colorAttachment.format = vgpuSwapChainGetFormat(device, swapChain);
+    colorAttachment.format = vgpuSwapChainGetFormat(swapChain);
 
     VGPURenderPipelineDesc renderPipelineDesc{};
     renderPipelineDesc.label = "Triangle";
-    renderPipelineDesc.vertex = vertexShader;
-    renderPipelineDesc.fragment = fragmentShader;
+    renderPipelineDesc.vertex = vertex_shader;
+    renderPipelineDesc.fragment = fragment_shader;
     renderPipelineDesc.primitiveTopology = VGPUPrimitiveTopology_TriangleList;
     renderPipelineDesc.colorAttachmentCount = 1u;
     renderPipelineDesc.colorAttachments = &colorAttachment;
@@ -184,9 +180,9 @@ void init_gfx(GLFWwindow* window, bool opengl)
     renderPipelineDesc.depthStencilState.depthWriteEnabled = true;
     renderPipelineDesc.depthStencilState.depthCompare = VGPUCompareFunction_Less;
 
-    renderPipeline = vgpuCreateRenderPipeline(device, &renderPipelineDesc);
-    vgpuDestroyShader(device, vertexShader);
-    vgpuDestroyShader(device, fragmentShader);
+    renderPipeline = vgpu_pipeline_create_render(&renderPipelineDesc);
+    vgpu_shader_destroy(vertex_shader);
+    vgpu_shader_destroy(fragment_shader);
 }
 
 #if defined(__EMSCRIPTEN__)
@@ -221,17 +217,17 @@ else {
 KEEP_IN_MODULE void _glue_main_()
 {
     init_gfx();
-    emscripten_request_animation_frame_loop(_app_emsc_frame, device);
+    emscripten_request_animation_frame_loop(_app_emsc_frame);
 }
 #endif
 
 void draw_frame()
 {
-    VGPUTextureFormat format = vgpuSwapChainGetFormat(device, swapChain);
+    VGPUTextureFormat format = vgpuSwapChainGetFormat(swapChain);
     uint32_t width;
     uint32_t height;
 
-    VGPUCommandBuffer commandBuffer = vgpuBeginCommandBuffer(device, VGPUCommandQueue_Graphics, "Frame");
+    VGPUCommandBuffer commandBuffer = vgpuBeginCommandBuffer(VGPUCommandQueue_Graphics, "Frame");
 
     // When window minimized texture is null
     VGPUTexture swapChainTexture = vgpuAcquireSwapchainTexture(commandBuffer, swapChain, &width, &height);
@@ -263,8 +259,8 @@ void draw_frame()
         vgpuEndRenderPass(commandBuffer);
     }
 
-    vgpuSubmit(device, &commandBuffer, 1u);
-    vgpuFrame(device);
+    vgpu_submit(&commandBuffer, 1u);
+    vgpu_frame();
 }
 
 int main()
@@ -280,7 +276,7 @@ int main()
 
     //vgpu_set_log_callback(vgpu_log);
 
-    bool opengl = true;
+    bool opengl = false;
     if (opengl)
     {
         glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
@@ -312,12 +308,12 @@ int main()
         glfwPollEvents();
     }
 
-    vgpuWaitIdle(device);
-    vgpu_buffer_destroy(device, vertex_buffer);
-    vgpuDestroyTexture(device, depthStencilTexture);
-    vgpuDestroyPipeline(device, renderPipeline);
-    vgpuDestroySwapChain(device, swapChain);
-    vgpuDestroyDevice(device);
+    vgpu_wait_idle();
+    vgpu_buffer_destroy(vertex_buffer);
+    vgpu_texture_destroy(depthStencilTexture);
+    vgpu_pipeline_destroy(renderPipeline);
+    vgpuDestroySwapChain(swapChain);
+    vgpu_shutdown();
     glfwDestroyWindow(window);
     glfwTerminate();
 #endif

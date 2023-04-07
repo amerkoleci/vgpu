@@ -1411,7 +1411,7 @@ static void vulkan_ProcessDeletionQueue(VulkanRenderer* renderer)
     renderer->destroyMutex.unlock();
 }
 
-static void vulkan_destroyDevice(VGPUDevice device)
+static void vulkan_destroyDevice(VGPUDevice* device)
 {
     VulkanRenderer* renderer = (VulkanRenderer*)device->driverData;
     VK_CHECK(vkDeviceWaitIdle(renderer->device));
@@ -1587,9 +1587,9 @@ static void vulkan_waitIdle(VGPURenderer* driverData)
     VK_CHECK(vkDeviceWaitIdle(renderer->device));
 }
 
-static VGPUBackendType vulkan_getBackendType(void)
+static vgpu_backend vulkan_getBackendType(void)
 {
-    return VGPUBackendType_Vulkan;
+    return VGPU_BACKEND_VULKAN;
 }
 
 static VGPUBool32 vulkan_queryFeature(VGPURenderer* driverData, VGPUFeature feature, void* pInfo, uint32_t infoSize)
@@ -2104,7 +2104,7 @@ static VGPUTexture vulkan_createTexture(VGPURenderer* driverData, const VGPUText
 
     if (desc->usage & VGPUTextureUsage_RenderTarget)
     {
-        if (vgpuIsDepthStencilFormat(desc->format))
+        if (vgpu_is_depth_stencil_format(desc->format))
         {
             imageInfo.usage |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
         }
@@ -3494,7 +3494,7 @@ static VGPUBool32 vulkan_isSupported(void)
     return true;
 }
 
-static VGPUDevice vulkan_createDevice(const VGPUDeviceDesc* info)
+static VGPUDevice* vulkan_createDevice(const vgpu_config* info)
 {
     VulkanRenderer* renderer = new VulkanRenderer();
 
@@ -3683,7 +3683,7 @@ static VGPUDevice vulkan_createDevice(const VGPUDeviceDesc* info)
         }
 
 #ifdef _DEBUG
-        vgpuLogInfo("Created VkInstance with version: %d.%d.%d",
+        vgpu_log_info("Created VkInstance with version: %d.%d.%d",
             VK_VERSION_MAJOR(appInfo.apiVersion),
             VK_VERSION_MINOR(appInfo.apiVersion),
             VK_VERSION_PATCH(appInfo.apiVersion)
@@ -3691,18 +3691,18 @@ static VGPUDevice vulkan_createDevice(const VGPUDeviceDesc* info)
 
         if (createInfo.enabledLayerCount)
         {
-            vgpuLogInfo("Enabled %d Validation Layers:", createInfo.enabledLayerCount);
+            vgpu_log_info("Enabled %d Validation Layers:", createInfo.enabledLayerCount);
 
             for (uint32_t i = 0; i < createInfo.enabledLayerCount; ++i)
             {
-                vgpuLogInfo("	\t%s", createInfo.ppEnabledLayerNames[i]);
+                vgpu_log_info("	\t%s", createInfo.ppEnabledLayerNames[i]);
             }
         }
 
-        vgpuLogInfo("Enabled %d Instance Extensions:", createInfo.enabledExtensionCount);
+        vgpu_log_info("Enabled %d Instance Extensions:", createInfo.enabledExtensionCount);
         for (uint32_t i = 0; i < createInfo.enabledExtensionCount; ++i)
         {
-            vgpuLogInfo("	\t%s", createInfo.ppEnabledExtensionNames[i]);
+            vgpu_log_info("	\t%s", createInfo.ppEnabledExtensionNames[i]);
         }
 #endif
 }
@@ -4077,13 +4077,12 @@ static VGPUDevice vulkan_createDevice(const VGPUDeviceDesc* info)
         vkGetDeviceQueue(renderer->device, renderer->copyQueueFamily, copyQueueIndex, &renderer->copyQueue);
 
 #ifdef _DEBUG
-        vgpuLogInfo("Enabled %d Device Extensions:", createInfo.enabledExtensionCount);
+        vgpu_log_info("Enabled %d Device Extensions:", createInfo.enabledExtensionCount);
         for (uint32_t i = 0; i < createInfo.enabledExtensionCount; ++i)
         {
-            vgpuLogInfo("	\t%s", createInfo.ppEnabledExtensionNames[i]);
+            vgpu_log_info("	\t%s", createInfo.ppEnabledExtensionNames[i]);
         }
 #endif
-
         if (info->label)
         {
             vulkan_SetObjectName(renderer, VK_OBJECT_TYPE_DEVICE, (uint64_t)renderer->device, info->label);
@@ -4420,11 +4419,11 @@ static VGPUDevice vulkan_createDevice(const VGPUDeviceDesc* info)
     renderer->dynamicStateInfo.dynamicStateCount = (uint32_t)renderer->psoDynamicStates.size();
     renderer->dynamicStateInfo.pDynamicStates = renderer->psoDynamicStates.data();
 
+    // Log some info
+    vgpu_log_info("VGPU Driver: Vulkan");
+    vgpu_log_info("Vulkan Adapter: %s", renderer->properties2.properties.deviceName);
 
-    vgpuLogInfo("VGPU Driver: Vulkan");
-    vgpuLogInfo("Vulkan Adapter: %s", renderer->properties2.properties.deviceName);
-
-    VGPUDevice_T* device = VGPU_ALLOC_CLEAR(VGPUDevice_T);
+    VGPUDevice* device = VGPU_ALLOC_CLEAR(VGPUDevice);
     ASSIGN_DRIVER(vulkan);
 
     device->driverData = (VGPURenderer*)renderer;
@@ -4432,7 +4431,7 @@ static VGPUDevice vulkan_createDevice(const VGPUDeviceDesc* info)
 }
 
 VGFXDriver Vulkan_Driver = {
-    VGPUBackendType_Vulkan,
+    VGPU_BACKEND_VULKAN,
     vulkan_isSupported,
     vulkan_createDevice
 };

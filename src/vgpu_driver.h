@@ -56,7 +56,7 @@ _VGPU_EXTERN void _vgpu_free(void* ptr);
 #define VGPU_ENABLE_WARNINGS() __pragma(warning(pop))
 #endif
 
-_VGPU_EXTERN void vgpuLogInfo(const char* format, ...);
+_VGPU_EXTERN void vgpu_log_info(const char* format, ...);
 _VGPU_EXTERN void vgpu_log_warn(const char* format, ...);
 _VGPU_EXTERN void vgpuLogError(const char* format, ...);
 
@@ -110,9 +110,7 @@ typedef struct VGPUCommandBuffer_T {
     void (*endRenderPass)(VGPUCommandBufferImpl* driverData);
 
     void (*setViewport)(VGPUCommandBufferImpl* driverData, const VGPUViewport* viewport);
-    void (*setViewports)(VGPUCommandBufferImpl* driverData, uint32_t count, const VGPUViewport* viewports);
     void (*setScissorRect)(VGPUCommandBufferImpl* driverData, const VGPURect* rects);
-    void (*setScissorRects)(VGPUCommandBufferImpl* driverData, uint32_t count, const VGPURect* rects);
     void (*setVertexBuffer)(VGPUCommandBufferImpl* driverData, uint32_t index, vgpu_buffer* buffer, uint64_t offset);
     void (*setIndexBuffer)(VGPUCommandBufferImpl* driverData, vgpu_buffer* buffer, uint64_t offset, VGPUIndexType type);
 
@@ -122,16 +120,17 @@ typedef struct VGPUCommandBuffer_T {
     VGPUCommandBufferImpl* driverData;
 } VGPUCommandBuffer_T;
 
-typedef struct VGPUDevice_T
+typedef struct VGPUDevice VGPUDevice;
+
+typedef struct VGPUDevice
 {
-    void (*destroyDevice)(VGPUDevice device);
+    void (*destroyDevice)(VGPUDevice* device);
     uint64_t(*frame)(VGPURenderer* driverData);
     void (*waitIdle)(VGPURenderer* driverData);
-    VGPUBackendType(*getBackendType)(void);
+    vgpu_backend(*getBackendType)(void);
     VGPUBool32(*queryFeature)(VGPURenderer* driverData, VGPUFeature feature, void* pInfo, uint32_t infoSize);
     void (*getAdapterProperties)(VGPURenderer* driverData, VGPUAdapterProperties* properties);
     void (*getLimits)(VGPURenderer* driverData, VGPULimits* limits);
-    void (*setLabel)(VGPURenderer* driverData, const char* label);
 
     vgpu_buffer*(*createBuffer)(VGPURenderer* driverData, const vgpu_buffer_desc* desc, const void* pInitialData);
     void(*destroyBuffer)(VGPURenderer* driverData, vgpu_buffer* resource);
@@ -161,7 +160,7 @@ typedef struct VGPUDevice_T
 
     /* Opaque pointer for the Driver */
     VGPURenderer* driverData;
-} VGPUDevice_T;
+} VGPUDevice;
 
 #define ASSIGN_DRIVER_FUNC(func, name) device->func = name##_##func;
 #define ASSIGN_COMMAND_BUFFER_FUNC(func, name) commandBuffer->func = name##_##func;
@@ -177,9 +176,7 @@ ASSIGN_COMMAND_BUFFER_FUNC(acquireSwapchainTexture, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(beginRenderPass, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(endRenderPass, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(setViewport, name) \
-ASSIGN_COMMAND_BUFFER_FUNC(setViewports, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(setScissorRect, name) \
-ASSIGN_COMMAND_BUFFER_FUNC(setScissorRects, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(setVertexBuffer, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(setIndexBuffer, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(draw, name) 
@@ -192,7 +189,6 @@ ASSIGN_DRIVER_FUNC(getBackendType, name) \
 ASSIGN_DRIVER_FUNC(queryFeature, name) \
 ASSIGN_DRIVER_FUNC(getAdapterProperties, name) \
 ASSIGN_DRIVER_FUNC(getLimits, name) \
-ASSIGN_DRIVER_FUNC(setLabel, name) \
 ASSIGN_DRIVER_FUNC(createBuffer, name) \
 ASSIGN_DRIVER_FUNC(destroyBuffer, name) \
 ASSIGN_DRIVER_FUNC(buffer_get_device_address, name) \
@@ -215,9 +211,9 @@ ASSIGN_DRIVER_FUNC(submit, name) \
 
 typedef struct VGFXDriver
 {
-    VGPUBackendType backend;
+    vgpu_backend backend;
     VGPUBool32(*is_supported)(void);
-    VGPUDevice(*createDevice)(const VGPUDeviceDesc* desc);
+    VGPUDevice*(*createDevice)(const vgpu_config* config);
 } VGFXDriver;
 
 _VGPU_EXTERN VGFXDriver Vulkan_Driver;

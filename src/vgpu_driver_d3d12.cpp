@@ -334,7 +334,7 @@ namespace
             return DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS;
 
         default:
-            VGPU_ASSERT(vgpuIsDepthFormat(format) == false);
+            VGPU_ASSERT(vgpu_is_depth_stencil_format(format) == false);
             return ToDXGIFormat(format);
         }
     }
@@ -1092,10 +1092,10 @@ static void d3d12_UploadSubmit(D3D12_Renderer* renderer, D3D12_UploadContext con
     renderer->uploadLocker.unlock();
 }
 
-static void d3d12_destroyDevice(VGPUDevice device)
+static void d3d12_destroyDevice(VGPUDevice* device)
 {
     // Wait idle
-    vgpuWaitIdle(device);
+    vgpu_wait_idle();
 
     D3D12_Renderer* renderer = (D3D12_Renderer*)device->driverData;
 
@@ -1298,9 +1298,9 @@ static void d3d12_waitIdle(VGPURenderer* driverData)
     d3d12_ProcessDeletionQueue(renderer);
 }
 
-static VGPUBackendType d3d12_getBackendType(void)
+static vgpu_backend d3d12_getBackendType(void)
 {
-    return VGPUBackendType_D3D12;
+    return VGPU_BACKEND_D3D12;
 }
 
 static VGPUBool32 d3d12_queryFeature(VGPURenderer* driverData, VGPUFeature feature, void* pInfo, uint32_t infoSize)
@@ -1652,7 +1652,7 @@ static VGPUTexture d3d12_createTexture(VGPURenderer* driverData, const VGPUTextu
     {
         if (desc->usage & VGPUTextureUsage_RenderTarget)
         {
-            if (vgpuIsDepthStencilFormat(desc->format))
+            if (vgpu_is_depth_stencil_format(desc->format))
             {
                 resourceState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
             }
@@ -1679,7 +1679,7 @@ static VGPUTexture d3d12_createTexture(VGPURenderer* driverData, const VGPUTextu
 
     if (desc->usage & VGPUTextureUsage_RenderTarget)
     {
-        if (vgpuIsDepthStencilFormat(desc->format))
+        if (vgpu_is_depth_stencil_format(desc->format))
         {
             resourceDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
 
@@ -1700,7 +1700,7 @@ static VGPUTexture d3d12_createTexture(VGPURenderer* driverData, const VGPUTextu
     if (desc->usage & VGPUTextureUsage_RenderTarget)
     {
         clearValue.Format = resourceDesc.Format;
-        if (vgpuIsDepthStencilFormat(desc->format))
+        if (vgpu_is_depth_stencil_format(desc->format))
         {
             clearValue.DepthStencil.Depth = 1.0f;
         }
@@ -1708,7 +1708,7 @@ static VGPUTexture d3d12_createTexture(VGPURenderer* driverData, const VGPUTextu
     }
 
     // If shader read/write and depth format, set to typeless
-    if (vgpuIsDepthFormat(desc->format) && desc->usage & (VGPUTextureUsage_ShaderRead | VGPUTextureUsage_ShaderWrite))
+    if (vgpu_is_depth_format(desc->format) && desc->usage & (VGPUTextureUsage_ShaderRead | VGPUTextureUsage_ShaderWrite))
     {
         resourceDesc.Format = GetTypelessFormatFromDepthFormat(desc->format);
         pClearValue = nullptr;
@@ -2492,11 +2492,11 @@ static void d3d12_endRenderPass(VGPUCommandBufferImpl* driverData)
     commandBuffer->insideRenderPass = false;
 }
 
-static void d3d12_setViewport(VGPUCommandBufferImpl* driverData, const VGPUViewport* viewports)
+static void d3d12_setViewport(VGPUCommandBufferImpl* driverData, const VGPUViewport* viewport)
 {
     D3D12CommandBuffer* commandBuffer = (D3D12CommandBuffer*)driverData;
 
-    commandBuffer->commandList->RSSetViewports(1, (const D3D12_VIEWPORT*)viewports);
+    commandBuffer->commandList->RSSetViewports(1, (const D3D12_VIEWPORT*)viewport);
 }
 
 static void d3d12_setViewports(VGPUCommandBufferImpl* driverData, uint32_t count, const VGPUViewport* viewports)
@@ -2835,7 +2835,7 @@ static VGPUBool32 d3d12_isSupported(void)
     return false;
 }
 
-static VGPUDevice d3d12_createDevice(const VGPUDeviceDesc* info)
+static VGPUDevice* d3d12_createDevice(const vgpu_config* info)
 {
     VGPU_ASSERT(info);
 
@@ -3093,8 +3093,9 @@ static VGPUDevice d3d12_createDevice(const VGPUDeviceDesc* info)
 
         renderer->featureLevel = renderer->d3dFeatures.MaxSupportedFeatureLevel();
 
-        vgpuLogInfo("VGPU Driver: D3D12");
-        vgpuLogInfo("D3D12 Adapter: %S", adapterDesc.Description);
+        // Log some info
+        vgpu_log_info("VGPU Driver: D3D12");
+        vgpu_log_info("D3D12 Adapter: %S", adapterDesc.Description);
     }
 
     // Create command queues
@@ -3215,14 +3216,14 @@ static VGPUDevice d3d12_createDevice(const VGPUDeviceDesc* info)
         d3d12_CreateRootSignature(renderer->device, &renderer->globalRootSignature, rootSignatureDesc);
     }
 
-    VGPUDevice_T* device = VGPU_ALLOC_CLEAR(VGPUDevice_T);
+    VGPUDevice* device = VGPU_ALLOC_CLEAR(VGPUDevice);
     ASSIGN_DRIVER(d3d12);
     device->driverData = (VGPURenderer*)renderer;
     return device;
 }
 
 VGFXDriver D3D12_Driver = {
-    VGPUBackendType_D3D12,
+    VGPU_BACKEND_D3D12,
     d3d12_isSupported,
     d3d12_createDevice
 };

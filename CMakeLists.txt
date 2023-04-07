@@ -213,7 +213,7 @@ endif ()
 
 if (VGPU_OPENGL_DRIVER)
     target_sources(${PROJECT_NAME} PRIVATE
-        src/vgpu_driver_opengl.cpp
+        src/vgpu_driver_opengl.c
     )
 
     target_compile_definitions(${PROJECT_NAME} PRIVATE VGPU_OPENGL_DRIVER=1)

@@ -4,6 +4,7 @@
 #if defined(VGPU_OPENGL_DRIVER)
 
 #include "vgpu_driver.h"
+#include <stdbool.h>
 
 #if defined(__EMSCRIPTEN__)
 #   include <emscripten.h>
@@ -42,6 +43,8 @@ typedef double           GLclampd;    /* double precision float in [0,1] */
 typedef char             GLchar;
 
 // OpenGL Constants
+#define GL_FALSE 0
+#define GL_TRUE 1
 #define GL_DONT_CARE 0x1100
 #define GL_ZERO 0x0000
 #define GL_ONE 0x0001
@@ -207,7 +210,24 @@ typedef char             GLchar;
 #define GL_SAMPLER_2D 0x8B5E
 #define GL_FLOAT_MAT3x2 0x8B67
 #define GL_FLOAT_MAT4 0x8B5C
+#define GL_FLOAT_MAT2x3 0x8B65
+#define GL_FLOAT_MAT2x4 0x8B66
+#define GL_FLOAT_MAT3x2 0x8B67
+#define GL_FLOAT_MAT3x4 0x8B68
+#define GL_FLOAT_MAT4x2 0x8B69
+#define GL_FLOAT_MAT4x3 0x8B6A
+#define GL_SRGB 0x8C40
+#define GL_SRGB8 0x8C41
+#define GL_SRGB_ALPHA 0x8C42
+#define GL_SRGB8_ALPHA8 0x8C43
+#define GL_COMPRESSED_SRGB 0x8C48
+#define GL_COMPRESSED_SRGB_ALPHA 0x8C49
+#define GL_COMPARE_REF_TO_TEXTURE 0x884E
 #define GL_NUM_EXTENSIONS 0x821D
+#define GL_COLOR 0x1800
+#define GL_DEPTH 0x1801
+#define GL_STENCIL 0x1802
+#define GL_STENCIL_INDEX 0x1901
 #define GL_DEBUG_SOURCE_API 0x8246
 #define GL_DEBUG_SOURCE_WINDOW_SYSTEM 0x8247
 #define GL_DEBUG_SOURCE_SHADER_COMPILER 0x8248
@@ -229,18 +249,24 @@ typedef char             GLchar;
 #define GL_DEBUG_SEVERITY_NOTIFICATION 0x826B
 #define GL_DEBUG_OUTPUT 0x92E0
 #define GL_DEBUG_OUTPUT_SYNCHRONOUS 0x8242
+#define GL_COPY_READ_BUFFER 0x8F36
+#define GL_COPY_WRITE_BUFFER 0x8F37
+#define GL_UNIFORM_BUFFER 0x8A11
+#define GL_UNIFORM_BUFFER_BINDING 0x8A28
+#define GL_UNIFORM_BUFFER_START 0x8A29
+#define GL_UNIFORM_BUFFER_SIZE 0x8A2A
 
 // OpenGL Functions
 #define GL_FUNCTIONS \
-	GL_FUNC(glDebugMessageCallback, void, DEBUGPROC callback, const void* userParam) \
 	GL_FUNC(glGetString, const GLubyte*, GLenum name) \
+    GL_FUNC(glGetStringi, const GLubyte*, GLenum name, GLuint index) \
 	GL_FUNC(glFlush, void, void) \
 	GL_FUNC(glEnable, void, GLenum mode) \
 	GL_FUNC(glDisable, void, GLenum mode) \
-	GL_FUNC(glClear, void, GLenum mask) \
-	GL_FUNC(glClearColor, void, GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha) \
-	GL_FUNC(glClearDepth, void, GLdouble depth) \
-	GL_FUNC(glClearStencil, void, GLint stencil) \
+	GL_FUNC(glClearBufferiv, void, GLenum buffer, GLint drawbuffer, const GLint *value) \
+    GL_FUNC(glClearBufferuiv, void, GLenum buffer, GLint drawbuffer, const GLuint *value) \
+    GL_FUNC(glClearBufferfv, void, GLenum buffer, GLint drawbuffer, const GLfloat *value) \
+    GL_FUNC(glClearBufferfi, void, GLenum buffer, GLint drawbuffer, GLfloat depth, GLint stencil) \
 	GL_FUNC(glDepthMask, void, GLboolean enabled) \
 	GL_FUNC(glDepthFunc, void, GLenum func) \
 	GL_FUNC(glViewport, void, GLint x, GLint y, GLint width, GLint height) \
@@ -258,9 +284,10 @@ typedef char             GLchar;
 	GL_FUNC(glGenFramebuffers, void, GLint n, void* textures) \
 	GL_FUNC(glActiveTexture, void, GLuint id) \
 	GL_FUNC(glBindTexture, void, GLenum target, GLuint id) \
+	GL_FUNC(glTexStorage2D, void, GLenum target, GLsizei levels, GLenum internalformat, GLsizei width, GLsizei height) \
+    GL_FUNC(glTexStorage3D, void, GLenum target, GLsizei levels, GLenum internalformat, GLsizei width, GLsizei height, GLsizei depth) \
 	GL_FUNC(glBindRenderbuffer, void, GLenum target, GLuint id) \
 	GL_FUNC(glBindFramebuffer, void, GLenum target, GLuint id) \
-	GL_FUNC(glTexImage2D, void, GLenum target, GLint level, GLenum internalFormat, GLint width, GLint height, GLint border, GLenum format, GLenum type, const void* data) \
 	GL_FUNC(glFramebufferRenderbuffer, void, GLenum target, GLenum attachment, GLenum renderbuffertarget, GLuint renderbuffer) \
 	GL_FUNC(glFramebufferTexture2D, void, GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level) \
 	GL_FUNC(glTexParameteri, void, GLenum target, GLenum name, GLint param) \
@@ -334,16 +361,12 @@ typedef char             GLchar;
 	GL_FUNC(glUniformMatrix4x2fv, void, GLint location, GLint count, GLboolean transpose, const GLfloat* value) \
 	GL_FUNC(glUniformMatrix3x4fv, void, GLint location, GLint count, GLboolean transpose, const GLfloat* value) \
 	GL_FUNC(glUniformMatrix4x3fv, void, GLint location, GLint count, GLboolean transpose, const GLfloat* value) \
-	GL_FUNC(glPixelStorei, void, GLenum pname, GLint param)
+	GL_FUNC(glPixelStorei, void, GLenum pname, GLint param) \
+    GL_FUNC(glDebugMessageCallback, void, GLDEBUGPROC callback, const void* userParam) \
+    GL_FUNC(glDebugMessageControl, void, GLenum source, GLenum type, GLenum severity, GLsizei count, const GLuint *ids, GLboolean enabled) 
 
 // Debug Function Delegate
-typedef void (APIENTRY* DEBUGPROC)(GLenum source,
-    GLenum type,
-    GLuint id,
-    GLenum severity,
-    GLsizei length,
-    const GLchar* message,
-    const void* userParam);
+typedef void (APIENTRY* GLDEBUGPROC)(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, const void* userParam);
 
 // GL function pointers
 #define GL_FUNC(name, ret, ...) typedef ret (*name ## Func) (__VA_ARGS__); name ## Func name;
@@ -351,68 +374,60 @@ GL_FUNCTIONS
 #undef GL_FUNC
 #endif
 
-namespace
+typedef struct GL_Buffer
 {
-}
+    GLuint handle;
+} GL_Buffer;
 
-
-
-struct GL_Buffer
+typedef struct GL_Texture
 {
-    GLuint handle = 0;
-};
+    uint32_t width;
+    uint32_t heigth;
+    GLenum target;
+    GLuint handle;
+} GL_Texture;
 
-struct GL_Texture
+typedef struct GL_Sampler
 {
-    uint32_t width = 0;
-    uint32_t height = 0;
-    GLuint handle = 0;
-};
+    GLuint handle;
+} GL_Sampler;
 
-struct GL_Sampler
+typedef struct GL_Shader
 {
-    GLuint handle = 0;
-};
+    GLuint handle;
+} GL_Shader;
 
-struct GL_Shader
-{
-    GLuint handle = 0;
-};
-
-struct GL_Pipeline
+typedef struct GL_Pipeline
 {
     GLuint handle;
     GLenum primitiveTopology;
-};
+} GL_Pipeline;
 
-struct GL_SwapChain
+typedef struct GL_SwapChain
 {
-#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
-    HWND window = nullptr;
-#else
-    IUnknown* window = nullptr;
-#endif
+    uint32_t width;
+    uint32_t height;
     VGPUTextureFormat format;
-    uint32_t backBufferCount;
-    uint32_t syncInterval;
-    GL_Texture* backbufferTexture;
-};
+    void* window;
+    GLuint framebuffer;
+    GL_Texture* texture;
+} GL_SwapChain;
 
-struct GL_CommandBuffer
+typedef struct GL_CommandBuffer
 {
     bool hasLabel;
     bool insideRenderPass;
-};
+} GL_CommandBuffer;
 
-struct GL_Renderer
+typedef struct GL_Renderer
 {
-    uint32_t frameIndex = 0;
-    uint64_t frameCount = 0;
+    uint32_t frameIndex;
+    uint64_t frameCount;
 
     VGPUCommandBuffer_T* mainCommandBuffer;
-};
+} GL_Renderer;
 
-static void gl_destroyDevice(VGPUDevice device)
+static void gl_destroyDevice(VGPUDevice* device)
 {
     // Wait idle
     glFlush();
@@ -423,10 +438,6 @@ static void gl_destroyDevice(VGPUDevice device)
     VGPU_FREE(renderer->mainCommandBuffer);
     VGPU_FREE(renderer);
     VGPU_FREE(device);
-}
-
-static void gl_updateSwapChain(GL_Renderer* renderer, GL_SwapChain* swapChain)
-{
 }
 
 static uint64_t gl_frame(VGPURenderer* driverData)
@@ -443,13 +454,13 @@ static uint64_t gl_frame(VGPURenderer* driverData)
 
 static void gl_waitIdle(VGPURenderer* driverData)
 {
-    GL_Renderer* renderer = (GL_Renderer*)driverData;
+    VGPU_UNUSED(driverData);
     glFlush();
 }
 
-static VGPUBackendType gl_getBackendType(void)
+static vgpu_backend gl_getBackendType(void)
 {
-    return VGPUBackendType_OpenGL;
+    return VGPU_BACKEND_OPENGL;
 }
 
 static VGPUBool32 gl_queryFeature(VGPURenderer* driverData, VGPUFeature feature, void* pInfo, uint32_t infoSize)
@@ -501,6 +512,7 @@ static VGPUBool32 gl_queryFeature(VGPURenderer* driverData, VGPUFeature feature,
 static void gl_getAdapterProperties(VGPURenderer* driverData, VGPUAdapterProperties* properties)
 {
     GL_Renderer* renderer = (GL_Renderer*)driverData;
+    memset(properties, 0, sizeof(VGPUAdapterProperties));
 
     //properties->vendorID = renderer->vendorID;
     //properties->deviceID = renderer->deviceID;
@@ -512,12 +524,7 @@ static void gl_getAdapterProperties(VGPURenderer* driverData, VGPUAdapterPropert
 static void gl_getLimits(VGPURenderer* driverData, VGPULimits* limits)
 {
     GL_Renderer* renderer = (GL_Renderer*)driverData;
-}
-
-static void gl_setLabel(VGPURenderer* driverData, const char* label)
-{
-    GL_Renderer* renderer = (GL_Renderer*)driverData;
-    //D3D12SetName(renderer->device, label);
+    memset(limits, 0, sizeof(VGPULimits));
 }
 
 /* Buffer */
@@ -525,15 +532,24 @@ static vgpu_buffer* gl_createBuffer(VGPURenderer* driverData, const vgpu_buffer_
 {
     GL_Renderer* renderer = (GL_Renderer*)driverData;
 
+    GL_Buffer* buffer = VGPU_ALLOC(GL_Buffer);
     if (desc->handle)
     {
-        GL_Buffer* buffer = new GL_Buffer();
         buffer->handle = (GLuint)(intptr_t)desc->handle;
 
         return (vgpu_buffer*)buffer;
     }
 
-    GL_Buffer* buffer = new GL_Buffer();
+    glGenBuffers(1, &buffer->handle);
+    glBindBuffer(GL_COPY_READ_BUFFER, buffer->handle);
+
+    GLenum usage = GL_STATIC_DRAW;
+    if (desc->access == VGPU_CPU_ACCESS_WRITE) {
+        usage = GL_DYNAMIC_DRAW;
+    }
+
+    glBufferData(GL_COPY_READ_BUFFER, (GLsizeiptr)desc->size, pInitialData, usage);
+
     return (vgpu_buffer*)buffer;
 }
 
@@ -541,8 +557,12 @@ static void gl_destroyBuffer(VGPURenderer* driverData, vgpu_buffer* resource)
 {
     VGPU_UNUSED(driverData);
     GL_Buffer* glBuffer = (GL_Buffer*)resource;
+    if (glBuffer->handle)
+    {
+        glDeleteBuffers(1, &glBuffer->handle);
+    }
 
-    delete glBuffer;
+    VGPU_FREE(glBuffer);
 }
 
 static VGPUDeviceAddress gl_buffer_get_device_address(vgpu_buffer* resource)
@@ -564,7 +584,7 @@ static VGPUTexture gl_createTexture(VGPURenderer* driverData, const VGPUTextureD
 {
     VGPU_UNUSED(driverData);
 
-    GL_Texture* texture = new GL_Texture();
+    GL_Texture* texture = VGPU_ALLOC(GL_Texture);
     return (VGPUTexture)texture;
 }
 
@@ -572,8 +592,12 @@ static void gl_destroyTexture(VGPURenderer* driverData, VGPUTexture texture)
 {
     VGPU_UNUSED(driverData);
     GL_Texture* glTexture = (GL_Texture*)texture;
+    if (glTexture->handle)
+    {
+        glDeleteTextures(1, &glTexture->handle);
+    }
 
-    delete glTexture;
+    VGPU_FREE(glTexture);
 }
 
 /* Sampler */
@@ -581,7 +605,7 @@ static VGPUSampler* gl_createSampler(VGPURenderer* driverData, const VGPUSampler
 {
     VGPU_UNUSED(driverData);
 
-    GL_Sampler* sampler = new GL_Sampler();
+    GL_Sampler* sampler = VGPU_ALLOC(GL_Sampler);
 
     return (VGPUSampler*)sampler;
 }
@@ -591,7 +615,7 @@ static void gl_destroySampler(VGPURenderer* driverData, VGPUSampler* resource)
     VGPU_UNUSED(driverData);
 
     GL_Sampler* sampler = (GL_Sampler*)resource;
-    delete sampler;
+    VGPU_FREE(sampler);
 }
 
 /* ShaderModule */
@@ -626,7 +650,7 @@ static VGPUPipeline* gl_createComputePipeline(VGPURenderer* driverData, const VG
 {
     VGPU_UNUSED(driverData);
 
-    GL_Pipeline* pipeline = new GL_Pipeline();
+    GL_Pipeline* pipeline = VGPU_ALLOC(GL_Pipeline);
     pipeline->handle = 0;
     return (VGPUPipeline*)pipeline;
 }
@@ -635,7 +659,7 @@ static VGPUPipeline* gl_createRayTracingPipeline(VGPURenderer* driverData, const
 {
     VGPU_UNUSED(driverData);
 
-    GL_Pipeline* pipeline = new GL_Pipeline();
+    GL_Pipeline* pipeline = VGPU_ALLOC(GL_Pipeline);
     return (VGPUPipeline*)pipeline;
 }
 
@@ -648,18 +672,46 @@ static void gl_destroyPipeline(VGPURenderer* driverData, VGPUPipeline* resource)
 }
 
 /* SwapChain */
-static VGPUSwapChain* gl_createSwapChain(VGPURenderer* driverData, void* windowHandle, const VGPUSwapChainDesc* desc)
+static void gl_updateSwapChain(VGPURenderer* driver_data, GL_SwapChain* swapchain)
 {
-    GL_Renderer* renderer = (GL_Renderer*)driverData;
+    if (swapchain->framebuffer)
+    {
+        glDeleteFramebuffers(1, &swapchain->framebuffer);
+    }
 
-    GL_SwapChain* swapChain = new GL_SwapChain();
-#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
-    swapChain->window = static_cast<HWND>(windowHandle);
-#else
-    swapChain->window = windowHandle;
-#endif
+    if (swapchain->texture)
+    {
+        gl_destroyTexture(driver_data, (VGPUTexture)swapchain->texture);
+    }
+
+    swapchain->texture = VGPU_ALLOC_CLEAR(GL_Texture);
+    swapchain->texture->width = swapchain->width;
+    swapchain->texture->heigth = swapchain->height;
+    swapchain->texture->target = GL_TEXTURE_2D;
+
+    glGenTextures(1, &swapchain->texture->handle);
+    glBindTexture(swapchain->texture->target, swapchain->texture->handle);
+    glTexParameteri(swapchain->texture->target, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(swapchain->texture->target, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    //glTexParameteri(swapchain->texture->target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    //glTexParameteri(swapchain->texture->target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexStorage2D(swapchain->texture->target, 1, GL_SRGB8_ALPHA8, swapchain->width, swapchain->height);
+
+    // Create FBO now
+    glGenFramebuffers(1, &swapchain->framebuffer);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, swapchain->framebuffer);
+    glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, swapchain->texture->target, swapchain->texture->handle, 0);
+    glBindTexture(swapchain->texture->target, 0);
+}
+
+static VGPUSwapChain* gl_createSwapChain(VGPURenderer* driver_data, void* window, const VGPUSwapChainDesc* desc)
+{
+    GL_SwapChain* swapChain = VGPU_ALLOC_CLEAR(GL_SwapChain);
+    swapChain->width = desc->width;
+    swapChain->height = desc->height;
+    swapChain->window = window;
     swapChain->format = desc->format;
-    gl_updateSwapChain(renderer, swapChain);
+    gl_updateSwapChain(driver_data, swapChain);
 
     return (VGPUSwapChain*)swapChain;
 }
@@ -668,13 +720,15 @@ static void gl_destroySwapChain(VGPURenderer* driverData, VGPUSwapChain* swapCha
 {
     GL_SwapChain* glSwapChain = (GL_SwapChain*)swapChain;
 
-    gl_destroyTexture(driverData, (VGPUTexture)glSwapChain->backbufferTexture);
+    gl_destroyTexture(driverData, (VGPUTexture)glSwapChain->texture);
 
-    delete glSwapChain;
+    VGPU_FREE(glSwapChain);
 }
 
-static VGPUTextureFormat gl_getSwapChainFormat(VGPURenderer*, VGPUSwapChain* swapChain)
+static VGPUTextureFormat gl_getSwapChainFormat(VGPURenderer* driverData, VGPUSwapChain* swapChain)
 {
+    VGPU_UNUSED(driverData);
+
     GL_SwapChain* d3dSwapChain = (GL_SwapChain*)swapChain;
     return d3dSwapChain->format;
 }
@@ -716,16 +770,14 @@ static VGPUTexture gl_acquireSwapchainTexture(VGPUCommandBufferImpl* driverData,
     GL_CommandBuffer* commandBuffer = (GL_CommandBuffer*)driverData;
     GL_SwapChain* glSwapChain = (GL_SwapChain*)swapChain;
 
-    GL_Texture* swapChainTexture = glSwapChain->backbufferTexture;
+    GL_Texture* swapChainTexture = glSwapChain->texture;
 
     if (pWidth) {
-        *pWidth = 0;
-        //*pWidth = swapChainTexture->width;
+        *pWidth = swapChainTexture->width;
     }
 
     if (pHeight) {
-        *pHeight = 0;
-        //*pHeight = swapChainTexture->height;
+        *pHeight = swapChainTexture->heigth;
     }
 
     //commandBuffer->swapChains.push_back(d3d12SwapChain);
@@ -735,6 +787,10 @@ static VGPUTexture gl_acquireSwapchainTexture(VGPUCommandBufferImpl* driverData,
 static void gl_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGPURenderPassDesc* desc)
 {
     GL_CommandBuffer* commandBuffer = (GL_CommandBuffer*)driverData;
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glClearBufferfv(GL_COLOR, 0, &desc->colorAttachments[0].clearColor.r);
+
     commandBuffer->insideRenderPass = true;
 }
 
@@ -744,24 +800,16 @@ static void gl_endRenderPass(VGPUCommandBufferImpl* driverData)
     commandBuffer->insideRenderPass = false;
 }
 
-static void gl_setViewport(VGPUCommandBufferImpl* driverData, const VGPUViewport* viewports)
+static void gl_setViewport(VGPUCommandBufferImpl* driverData, const VGPUViewport* viewport)
 {
     GL_CommandBuffer* commandBuffer = (GL_CommandBuffer*)driverData;
-}
-
-static void gl_setViewports(VGPUCommandBufferImpl* driverData, uint32_t count, const VGPUViewport* viewports)
-{
-    GL_CommandBuffer* commandBuffer = (GL_CommandBuffer*)driverData;
+    glViewport((GLint)viewport->x, (GLint)viewport->y, (GLint)viewport->width, (GLint)viewport->height);
 }
 
 static void gl_setScissorRect(VGPUCommandBufferImpl* driverData, const VGPURect* rect)
 {
     GL_CommandBuffer* commandBuffer = (GL_CommandBuffer*)driverData;
-}
-
-static void gl_setScissorRects(VGPUCommandBufferImpl* driverData, uint32_t count, const VGPURect* rects)
-{
-    GL_CommandBuffer* commandBuffer = (GL_CommandBuffer*)driverData;
+    glScissor(rect->x, rect->y, rect->width, rect->height);
 }
 
 static void gl_setVertexBuffer(VGPUCommandBufferImpl* driverData, uint32_t index, vgpu_buffer* buffer, uint64_t offset)
@@ -875,7 +923,7 @@ static void gl_submit(VGPURenderer* driverData, VGPUCommandBuffer* commandBuffer
     GL_Renderer* renderer = (GL_Renderer*)driverData;
 }
 
-static void gl_load_functions(const VGPUDeviceDesc* info)
+static void gl_load_functions(const vgpu_config* info)
 {
 #if !defined(__EMSCRIPTEN__)
 #define GL_FUNC(name, ...) name = (name ## Func)(info->gl.gl_get_proc_address(#name));
@@ -884,12 +932,59 @@ static void gl_load_functions(const VGPUDeviceDesc* info)
 #endif
 }
 
+#if !defined(__APPLE__) && !defined(__EMSCRIPTEN__)
+static void APIENTRY gl_message_callback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, const void* userParam)
+{
+    // these are basically never useful
+    if (severity == GL_DEBUG_SEVERITY_NOTIFICATION &&
+        type == GL_DEBUG_TYPE_OTHER)
+        return;
+
+    const char* typeName = "";
+    const char* severityName = "";
+
+    switch (type)
+    {
+    case GL_DEBUG_TYPE_ERROR: typeName = "ERROR"; break;
+    case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR: typeName = "DEPRECATED BEHAVIOR"; break;
+    case GL_DEBUG_TYPE_MARKER: typeName = "MARKER"; break;
+    case GL_DEBUG_TYPE_OTHER: typeName = "OTHER"; break;
+    case GL_DEBUG_TYPE_PERFORMANCE: typeName = "PEROFRMANCE"; break;
+    case GL_DEBUG_TYPE_POP_GROUP: typeName = "POP GROUP"; break;
+    case GL_DEBUG_TYPE_PORTABILITY: typeName = "PORTABILITY"; break;
+    case GL_DEBUG_TYPE_PUSH_GROUP: typeName = "PUSH GROUP"; break;
+    case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR: typeName = "UNDEFINED BEHAVIOR"; break;
+    }
+
+    switch (severity)
+    {
+    case GL_DEBUG_SEVERITY_HIGH: severityName = "HIGH"; break;
+    case GL_DEBUG_SEVERITY_MEDIUM: severityName = "MEDIUM"; break;
+    case GL_DEBUG_SEVERITY_LOW: severityName = "LOW"; break;
+    case GL_DEBUG_SEVERITY_NOTIFICATION: severityName = "NOTIFICATION"; break;
+    }
+
+    if (type == GL_DEBUG_TYPE_ERROR)
+    {
+        vgpuLogError("GL (%s:%s) %s", typeName, severityName, message);
+    }
+    else if (severity != GL_DEBUG_SEVERITY_NOTIFICATION)
+    {
+        vgpu_log_warn("GL (%s:%s) %s", typeName, severityName, message);
+    }
+    else
+    {
+        vgpu_log_info("GL (%s) %s", typeName, message);
+    }
+}
+#endif
+
 static VGPUBool32 gl_isSupported(void)
 {
     return true;
 }
 
-static VGPUDevice gl_createDevice(const VGPUDeviceDesc* info)
+static VGPUDevice* gl_createDevice(const vgpu_config* info)
 {
     VGPU_ASSERT(info);
     VGPU_ASSERT(info->gl.gl_get_proc_address);
@@ -901,7 +996,28 @@ static VGPUDevice gl_createDevice(const VGPUDeviceDesc* info)
 
     if (info->validationMode != VGPUValidationMode_Disabled)
     {
-        
+#if !defined(__APPLE__) && !defined(__EMSCRIPTEN__)
+        // bind debug message callback
+        if (glDebugMessageCallback)
+        {
+            glEnable(GL_DEBUG_OUTPUT);
+            glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+            glDebugMessageCallback(gl_message_callback, NULL);
+            //glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, nullptr, GL_TRUE);
+
+            glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DEBUG_SEVERITY_HIGH, 0, NULL, GL_TRUE);
+            glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DEBUG_SEVERITY_MEDIUM, 0, NULL, GL_TRUE);
+            if (info->validationMode != VGPUValidationMode_Verbose)
+            {
+                glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DEBUG_SEVERITY_LOW, 0, NULL, GL_FALSE);
+                glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DEBUG_SEVERITY_NOTIFICATION, 0, NULL, GL_FALSE);
+            }
+            else
+            {
+                glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DEBUG_SEVERITY_NOTIFICATION, 0, NULL, GL_TRUE);
+            }
+        }
+#endif
     }
 
     GL_CommandBuffer* glCommandBuffer = VGPU_ALLOC(GL_CommandBuffer);
@@ -911,14 +1027,14 @@ static VGPUDevice gl_createDevice(const VGPUDeviceDesc* info)
     commandBuffer->driverData = (VGPUCommandBufferImpl*)glCommandBuffer;
     renderer->mainCommandBuffer = commandBuffer;
 
-    VGPUDevice_T* device = VGPU_ALLOC_CLEAR(VGPUDevice_T);
+    VGPUDevice* device = VGPU_ALLOC_CLEAR(VGPUDevice);
     ASSIGN_DRIVER(gl);
     device->driverData = (VGPURenderer*)renderer;
     return device;
 }
 
 VGFXDriver OpenGL_Driver = {
-    VGPUBackendType_OpenGL,
+    VGPU_BACKEND_OPENGL,
     gl_isSupported,
     gl_createDevice
 };
