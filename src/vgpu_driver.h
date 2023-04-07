@@ -58,7 +58,7 @@ _VGPU_EXTERN void _vgpu_free(void* ptr);
 
 _VGPU_EXTERN void vgpu_log_info(const char* format, ...);
 _VGPU_EXTERN void vgpu_log_warn(const char* format, ...);
-_VGPU_EXTERN void vgpuLogError(const char* format, ...);
+_VGPU_EXTERN void vgpu_log_error(const char* format, ...);
 
 #ifdef __cplusplus
 #include <vector>
@@ -112,7 +112,7 @@ typedef struct VGPUCommandBuffer_T {
     void (*setViewport)(VGPUCommandBufferImpl* driverData, const VGPUViewport* viewport);
     void (*setScissorRect)(VGPUCommandBufferImpl* driverData, const VGPURect* rects);
     void (*setVertexBuffer)(VGPUCommandBufferImpl* driverData, uint32_t index, vgpu_buffer* buffer, uint64_t offset);
-    void (*setIndexBuffer)(VGPUCommandBufferImpl* driverData, vgpu_buffer* buffer, uint64_t offset, VGPUIndexType type);
+    void (*setIndexBuffer)(VGPUCommandBufferImpl* driverData, vgpu_buffer* buffer, uint64_t offset, vgpu_index_type type);
 
     void (*draw)(VGPUCommandBufferImpl* driverData, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t baseInstance);
 
@@ -153,7 +153,7 @@ typedef struct VGPUDevice
 
     VGPUSwapChain*(*createSwapChain)(VGPURenderer* driverData, void* windowHandle, const VGPUSwapChainDesc* desc);
     void(*destroySwapChain)(VGPURenderer* driverData, VGPUSwapChain* swapChain);
-    VGPUTextureFormat(*getSwapChainFormat)(VGPURenderer* driverData, VGPUSwapChain* swapChain);
+    vgpu_pixel_format(*getSwapChainFormat)(VGPURenderer* driverData, VGPUSwapChain* swapChain);
 
     VGPUCommandBuffer(*beginCommandBuffer)(VGPURenderer* driverData, VGPUCommandQueue queueType, const char* label);
     void (*submit)(VGPURenderer* driverData, VGPUCommandBuffer* commandBuffers, uint32_t count);

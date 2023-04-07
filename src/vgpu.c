@@ -15,9 +15,9 @@
 
 #define MAX_MESSAGE_SIZE 1024
 
-static void VGPU_DefaultLogCallback(VGPULogLevel level, const char* message, void* userData)
+static void VGPU_DefaultLogCallback(vgpu_log_level level, const char* message, void* user_data)
 {
-    VGPU_UNUSED(userData);
+    VGPU_UNUSED(user_data);
 
 #if defined(__EMSCRIPTEN__)
     switch (level)
@@ -42,7 +42,7 @@ static void VGPU_DefaultLogCallback(VGPULogLevel level, const char* message, voi
 #endif
 }
 
-static VGPULogCallback s_LogFunc = VGPU_DefaultLogCallback;
+static vgpu_log_callback s_LogFunc = VGPU_DefaultLogCallback;
 static void* s_userData = NULL;
 
 void vgpu_log_info(const char* format, ...) {
@@ -51,7 +51,7 @@ void vgpu_log_info(const char* format, ...) {
     va_start(args, format);
     vsnprintf(msg, MAX_MESSAGE_SIZE, format, args);
     va_end(args);
-    s_LogFunc(VGPULogLevel_Info, msg, s_userData);
+    s_LogFunc(VGPU_LOG_LEVEL_INFO, msg, s_userData);
 }
 
 void vgpu_log_warn(const char* format, ...) {
@@ -60,21 +60,20 @@ void vgpu_log_warn(const char* format, ...) {
     va_start(args, format);
     vsnprintf(msg, MAX_MESSAGE_SIZE, format, args);
     va_end(args);
-    s_LogFunc(VGPULogLevel_Warn, msg, s_userData);
+    s_LogFunc(VGPU_LOG_LEVEL_WARN, msg, s_userData);
 }
 
-void vgpuLogError(const char* format, ...)
+void vgpu_log_error(const char* format, ...)
 {
     char msg[MAX_MESSAGE_SIZE];
     va_list args;
     va_start(args, format);
     vsnprintf(msg, MAX_MESSAGE_SIZE, format, args);
     va_end(args);
-    s_LogFunc(VGPULogLevel_Error, msg, s_userData);
+    s_LogFunc(VGPU_LOG_LEVEL_ERROR, msg, s_userData);
 }
 
-void vgpuSetLogCallback(VGPULogCallback func, void* userData)
-{
+void vgpu_set_log_callback(vgpu_log_callback func, void* userData) {
     s_LogFunc = func;
     s_userData = userData;
 }
@@ -267,7 +266,7 @@ void vgpuGetAdapterProperties(VGPUAdapterProperties* properties)
     s_renderer->getAdapterProperties(s_renderer->driverData, properties);
 }
 
-void vgpuGetLimits(VGPULimits* limits)
+void vgpu_get_limits(VGPULimits* limits)
 {
     VGPU_ASSERT(s_renderer);
     NULL_RETURN(limits);
@@ -325,7 +324,7 @@ static VGPUTextureDesc _vgpuTextureDescDef(const VGPUTextureDesc* desc)
     //def.usage = _VGPU_DEF(def.type, VGFXTextureUsage_ShaderRead);
     def.size.width = _VGPU_DEF(def.size.width, 1);
     def.size.height = _VGPU_DEF(def.size.height, 1);
-    def.size.depthOrArrayLayers = _VGPU_DEF(def.size.depthOrArrayLayers, 1);
+    def.size.depth_or_array_layers = _VGPU_DEF(def.size.depth_or_array_layers, 1);
     def.mipLevelCount = _VGPU_DEF(def.mipLevelCount, 1);
     def.sampleCount = _VGPU_DEF(def.sampleCount, 1);
     return def;
@@ -346,7 +345,7 @@ VGPUTexture vgpuCreateTexture(const VGPUTextureDesc* desc, const void* pInitialD
 
     if (desc_def.type == VGPUTexture_Type2D &&
         desc_def.size.width == desc_def.size.height &&
-        desc_def.size.depthOrArrayLayers >= 6)
+        desc_def.size.depth_or_array_layers >= 6)
     {
         isCube = true;
     }
@@ -356,11 +355,11 @@ VGPUTexture vgpuCreateTexture(const VGPUTextureDesc* desc, const void* pInitialD
     {
         if (is3D)
         {
-            mipLevels = vgpuNumMipLevels(desc_def.size.width, desc_def.size.height, desc_def.size.depthOrArrayLayers);
+            mipLevels = vgpu_num_mip_levels_3d(desc_def.size.width, desc_def.size.height, desc_def.size.depth_or_array_layers);
         }
         else
         {
-            mipLevels = vgpuNumMipLevels(desc_def.size.width, desc_def.size.height, 1);
+            mipLevels = vgpu_num_mip_levels_2d(desc_def.size.width, desc_def.size.height);
         }
     }
 
@@ -414,7 +413,7 @@ VGPUTexture vgpuCreateTexture(const VGPUTextureDesc* desc, const void* pInitialD
     return s_renderer->createTexture(s_renderer->driverData, &desc_def, pInitialData);
 }
 
-VGPUTexture vgpuCreateTexture2D(uint32_t width, uint32_t height, VGPUTextureFormat format, uint32_t mipLevelCount, VGPUTextureUsage usage, const void* pInitialData)
+VGPUTexture vgpuCreateTexture2D(uint32_t width, uint32_t height, vgpu_pixel_format format, uint32_t mipLevelCount, VGPUTextureUsage usage, const void* pInitialData)
 {
     VGPUTextureDesc desc = {
         .size = {width, height, 1u},
@@ -428,7 +427,7 @@ VGPUTexture vgpuCreateTexture2D(uint32_t width, uint32_t height, VGPUTextureForm
     return vgpuCreateTexture(&desc, pInitialData);
 }
 
-VGPUTexture vgpuCreateTextureCube(uint32_t size, VGPUTextureFormat format, uint32_t mipLevelCount, const void* pInitialData)
+VGPUTexture vgpuCreateTextureCube(uint32_t size, vgpu_pixel_format format, uint32_t mipLevelCount, const void* pInitialData)
 {
     VGPUTextureDesc desc = {
          .size = {size, size, 6u},
@@ -565,7 +564,7 @@ void vgpuDestroySwapChain(VGPUSwapChain* swapChain)
     s_renderer->destroySwapChain(s_renderer->driverData, swapChain);
 }
 
-VGPUTextureFormat vgpuSwapChainGetFormat(VGPUSwapChain* swapChain)
+vgpu_pixel_format vgpuSwapChainGetFormat(VGPUSwapChain* swapChain)
 {
     VGPU_ASSERT(s_renderer);
 
@@ -599,7 +598,7 @@ void vgpuInsertDebugMarker(VGPUCommandBuffer commandBuffer, const char* debugLab
     commandBuffer->insertDebugMarker(commandBuffer->driverData, debugLabel);
 }
 
-void vgpuSetPipeline(VGPUCommandBuffer commandBuffer, VGPUPipeline* pipeline)
+void vgpu_set_pipeline(VGPUCommandBuffer commandBuffer, VGPUPipeline* pipeline)
 {
     VGPU_ASSERT(pipeline);
 
@@ -648,17 +647,17 @@ void vgpuSetScissorRect(VGPUCommandBuffer commandBuffer, const VGPURect* rect)
     commandBuffer->setScissorRect(commandBuffer->driverData, rect);
 }
 
-void vgpuSetVertexBuffer(VGPUCommandBuffer commandBuffer, uint32_t index, vgpu_buffer* buffer, uint64_t offset)
+void vgpu_set_vertex_buffer(VGPUCommandBuffer commandBuffer, uint32_t index, vgpu_buffer* buffer, uint64_t offset)
 {
     commandBuffer->setVertexBuffer(commandBuffer->driverData, index, buffer, offset);
 }
 
-void vgpuSetIndexBuffer(VGPUCommandBuffer commandBuffer, vgpu_buffer* buffer, uint64_t offset, VGPUIndexType type)
+void vgpu_set_index_buffer(VGPUCommandBuffer commandBuffer, vgpu_buffer* buffer, uint64_t offset, vgpu_index_type type)
 {
     commandBuffer->setIndexBuffer(commandBuffer->driverData, buffer, offset, type);
 }
 
-void vgpuDraw(VGPUCommandBuffer commandBuffer, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t baseInstance)
+void vgpu_draw(VGPUCommandBuffer commandBuffer, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t baseInstance)
 {
     commandBuffer->draw(commandBuffer->driverData, vertexStart, vertexCount, instanceCount, baseInstance);
 }
@@ -796,7 +795,7 @@ static const vgpu_pixel_format_info c_FormatInfo[] = {
     { VGPUTextureFormat_Astc12x12UnormSrgb,  "ASTC12x12UnormSrgb",   16,   12, 12, VGPUTextureFormatKind_UnormSrgb },
 };
 
-VGPUBool32 vgpu_is_depth_format(VGPUTextureFormat format)
+VGPUBool32 vgpu_is_depth_format(vgpu_pixel_format format)
 {
     switch (format)
     {
@@ -810,7 +809,7 @@ VGPUBool32 vgpu_is_depth_format(VGPUTextureFormat format)
     }
 }
 
-VGPUBool32 vgpu_is_stencil_format(VGPUTextureFormat format)
+VGPUBool32 vgpu_is_stencil_format(vgpu_pixel_format format)
 {
     switch (format)
     {
@@ -823,7 +822,7 @@ VGPUBool32 vgpu_is_stencil_format(VGPUTextureFormat format)
     }
 }
 
-VGPUBool32 vgpu_is_depth_stencil_format(VGPUTextureFormat format)
+VGPUBool32 vgpu_is_depth_stencil_format(vgpu_pixel_format format)
 {
     switch (format)
     {
@@ -838,14 +837,27 @@ VGPUBool32 vgpu_is_depth_stencil_format(VGPUTextureFormat format)
     }
 }
 
-VGPUTextureFormatKind vgpuGetPixelFormatKind(VGPUTextureFormat format)
+VGPUTextureFormatKind vgpuGetPixelFormatKind(vgpu_pixel_format format)
 {
     VGPU_ASSERT(c_FormatInfo[(uint32_t)format].format == format);
     return c_FormatInfo[(uint32_t)format].kind;
 }
 
-uint32_t vgpuNumMipLevels(uint32_t width, uint32_t height, uint32_t depth)
-{
+uint32_t vgpu_num_mip_levels_2d(uint32_t width, uint32_t height) {
+    uint32_t mipLevels = 0;
+    uint32_t size = _VGPU_MAX(width, height);
+    while (1u << mipLevels <= size)
+    {
+        ++mipLevels;
+    }
+
+    if (1u << mipLevels < size)
+        ++mipLevels;
+
+    return mipLevels;
+}
+
+uint32_t vgpu_num_mip_levels_3d(uint32_t width, uint32_t height, uint32_t depth) {
     uint32_t mipLevels = 0;
     uint32_t size = _VGPU_MAX(_VGPU_MAX(width, height), depth);
     while (1u << mipLevels <= size)

@@ -75,6 +75,7 @@ typedef char             GLchar;
 #define GL_FILL 0x1B02
 #define GL_CW 0x0900
 #define GL_CCW 0x0901
+#define GL_NONE 0
 #define GL_FRONT 0x0404
 #define GL_BACK 0x0405
 #define GL_FRONT_AND_BACK 0x0408
@@ -136,6 +137,7 @@ typedef char             GLchar;
 #define GL_STENCIL_ATTACHMENT 0x8D20
 #define GL_DEPTH_STENCIL_ATTACHMENT 0x821A
 #define GL_RED 0x1903
+#define GL_RED_INTEGER 0x8D94
 #define GL_RGB 0x1907
 #define GL_RGBA 0x1908
 #define GL_LUMINANCE 0x1909
@@ -158,6 +160,30 @@ typedef char             GLchar;
 #define GL_RGBA32F 0x8814
 #define GL_RGBA16F 0x881A
 #define GL_DEPTH24_STENCIL8 0x88F0
+#define GL_R8 0x8229
+#define GL_R16 0x822A
+#define GL_RG8 0x822B
+#define GL_RG16 0x822C
+#define GL_R16F 0x822D
+#define GL_R32F 0x822E
+#define GL_RG16F 0x822F
+#define GL_RG32F 0x8230
+#define GL_R8I 0x8231
+#define GL_R8UI 0x8232
+#define GL_R16I 0x8233
+#define GL_R16UI 0x8234
+#define GL_R32I 0x8235
+#define GL_R32UI 0x8236
+#define GL_RG8I 0x8237
+#define GL_RG8UI 0x8238
+#define GL_RG16I 0x8239
+#define GL_RG16UI 0x823A
+#define GL_RG32I 0x823B
+#define GL_RG32UI 0x823C
+#define GL_R8_SNORM 0x8F94
+#define GL_RG8_SNORM 0x8F95
+#define GL_RGB8_SNORM 0x8F96
+#define GL_RGBA8_SNORM 0x8F9
 #define GL_COMPRESSED_TEXTURE_FORMATS 0x86A3
 #define GL_COMPRESSED_RGBA_S3TC_DXT1_EXT 0x83F1
 #define GL_COMPRESSED_RGBA_S3TC_DXT3_EXT 0x83F2
@@ -228,6 +254,14 @@ typedef char             GLchar;
 #define GL_DEPTH 0x1801
 #define GL_STENCIL 0x1802
 #define GL_STENCIL_INDEX 0x1901
+#define GL_COPY_READ_BUFFER 0x8F36
+#define GL_COPY_WRITE_BUFFER 0x8F37
+#define GL_UNIFORM_BUFFER 0x8A11
+#define GL_UNIFORM_BUFFER_BINDING 0x8A28
+#define GL_UNIFORM_BUFFER_START 0x8A29
+#define GL_UNIFORM_BUFFER_SIZE 0x8A2A
+
+
 #define GL_DEBUG_SOURCE_API 0x8246
 #define GL_DEBUG_SOURCE_WINDOW_SYSTEM 0x8247
 #define GL_DEBUG_SOURCE_SHADER_COMPILER 0x8248
@@ -249,12 +283,14 @@ typedef char             GLchar;
 #define GL_DEBUG_SEVERITY_NOTIFICATION 0x826B
 #define GL_DEBUG_OUTPUT 0x92E0
 #define GL_DEBUG_OUTPUT_SYNCHRONOUS 0x8242
-#define GL_COPY_READ_BUFFER 0x8F36
-#define GL_COPY_WRITE_BUFFER 0x8F37
-#define GL_UNIFORM_BUFFER 0x8A11
-#define GL_UNIFORM_BUFFER_BINDING 0x8A28
-#define GL_UNIFORM_BUFFER_START 0x8A29
-#define GL_UNIFORM_BUFFER_SIZE 0x8A2A
+#define GL_BUFFER 0x82E0
+#define GL_SHADER 0x82E1
+#define GL_PROGRAM 0x82E2
+#define GL_VERTEX_ARRAY 0x8074
+#define GL_QUERY 0x82E3
+#define GL_PROGRAM_PIPELINE 0x82E4
+#define GL_SAMPLER 0x82E6
+#define GL_MAX_LABEL_LENGTH 0x82E8
 
 // OpenGL Functions
 #define GL_FUNCTIONS \
@@ -271,6 +307,7 @@ typedef char             GLchar;
 	GL_FUNC(glDepthFunc, void, GLenum func) \
 	GL_FUNC(glViewport, void, GLint x, GLint y, GLint width, GLint height) \
 	GL_FUNC(glScissor, void, GLint x, GLint y, GLint width, GLint height) \
+    GL_FUNC(glDepthRangef, void, GLfloat n, GLfloat f) \
 	GL_FUNC(glCullFace, void, GLenum mode) \
 	GL_FUNC(glBlendEquation, void, GLenum eq) \
 	GL_FUNC(glBlendEquationSeparate, void, GLenum modeRGB, GLenum modeAlpha) \
@@ -363,7 +400,8 @@ typedef char             GLchar;
 	GL_FUNC(glUniformMatrix4x3fv, void, GLint location, GLint count, GLboolean transpose, const GLfloat* value) \
 	GL_FUNC(glPixelStorei, void, GLenum pname, GLint param) \
     GL_FUNC(glDebugMessageCallback, void, GLDEBUGPROC callback, const void* userParam) \
-    GL_FUNC(glDebugMessageControl, void, GLenum source, GLenum type, GLenum severity, GLsizei count, const GLuint *ids, GLboolean enabled) 
+    GL_FUNC(glDebugMessageControl, void, GLenum source, GLenum type, GLenum severity, GLsizei count, const GLuint *ids, GLboolean enabled) \
+    GL_FUNC(glObjectLabel, void, GLenum identifier, GLuint name, GLsizei length, const GLchar *label) 
 
 // Debug Function Delegate
 typedef void (APIENTRY* GLDEBUGPROC)(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, const void* userParam);
@@ -382,7 +420,7 @@ typedef struct GL_Buffer
 typedef struct GL_Texture
 {
     uint32_t width;
-    uint32_t heigth;
+    uint32_t height;
     GLenum target;
     GLuint handle;
 } GL_Texture;
@@ -407,7 +445,7 @@ typedef struct GL_SwapChain
 {
     uint32_t width;
     uint32_t height;
-    VGPUTextureFormat format;
+    vgpu_pixel_format format;
     void* window;
     GLuint framebuffer;
     GL_Texture* texture;
@@ -426,6 +464,27 @@ typedef struct GL_Renderer
 
     VGPUCommandBuffer_T* mainCommandBuffer;
 } GL_Renderer;
+
+typedef struct gl_pixel_format_info
+{
+    GLenum internal;
+    GLenum external;
+    GLenum data_type;
+} gl_pixel_format_info;
+
+static const gl_pixel_format_info c_gl_format_info[] = {
+    { GL_NONE,      GL_NONE,            GL_NONE },
+    { GL_R8,        GL_RED,             GL_UNSIGNED_BYTE },   // R8Unorm
+    { GL_R8_SNORM,  GL_RED,             GL_BYTE },   // R8Snorm
+    { GL_R8UI,      GL_RED_INTEGER,     GL_UNSIGNED_BYTE },    // R8Uint
+    { GL_R8I,       GL_RED_INTEGER,     GL_BYTE },    // R8Sint
+};
+
+const gl_pixel_format_info* _gl_get_format_info(vgpu_pixel_format format)
+{
+    //VGPU_ASSERT(c_gl_format_info[(uint32_t)format].format == format);
+    return &c_gl_format_info[format];
+}
 
 static void gl_destroyDevice(VGPUDevice* device)
 {
@@ -471,41 +530,41 @@ static VGPUBool32 gl_queryFeature(VGPURenderer* driverData, VGPUFeature feature,
     GL_Renderer* renderer = (GL_Renderer*)driverData;
     switch (feature)
     {
-    case VGPUFeature_TextureCompressionBC:
-    case VGPUFeature_ShaderFloat16:
-    case VGPUFeature_PipelineStatisticsQuery:
-    case VGPUFeature_TimestampQuery:
-    case VGPUFeature_DepthClamping:
-    case VGPUFeature_Depth24UNormStencil8:
-    case VGPUFeature_Depth32FloatStencil8:
-    case VGPUFeature_IndependentBlend:
-    case VGPUFeature_TextureCubeArray:
-    case VGPUFeature_Tessellation:
-    case VGPUFeature_DescriptorIndexing:
-    case VGPUFeature_ConditionalRendering:
-    case VGPUFeature_DrawIndirectFirstInstance:
-        return true;
+        case VGPUFeature_TextureCompressionBC:
+        case VGPUFeature_ShaderFloat16:
+        case VGPUFeature_PipelineStatisticsQuery:
+        case VGPUFeature_TimestampQuery:
+        case VGPUFeature_DepthClamping:
+        case VGPUFeature_Depth24UNormStencil8:
+        case VGPUFeature_Depth32FloatStencil8:
+        case VGPUFeature_IndependentBlend:
+        case VGPUFeature_TextureCubeArray:
+        case VGPUFeature_Tessellation:
+        case VGPUFeature_DescriptorIndexing:
+        case VGPUFeature_ConditionalRendering:
+        case VGPUFeature_DrawIndirectFirstInstance:
+            return true;
 
-    case VGPUFeature_TextureCompressionETC2:
-    case VGPUFeature_TextureCompressionASTC:
-        return false;
+        case VGPUFeature_TextureCompressionETC2:
+        case VGPUFeature_TextureCompressionASTC:
+            return false;
 
-    case VGPUFeature_ShaderOutputViewportIndex:
-        return false;
+        case VGPUFeature_ShaderOutputViewportIndex:
+            return false;
 
-        // https://docs.microsoft.com/en-us/windows/win32/direct3d11/tiled-resources-texture-sampling-features
-    case VGPUFeature_SamplerMinMax:
-        return false;
+            // https://docs.microsoft.com/en-us/windows/win32/direct3d11/tiled-resources-texture-sampling-features
+        case VGPUFeature_SamplerMinMax:
+            return false;
 
-    case VGPUFeature_MeshShader:
-        return false;
+        case VGPUFeature_MeshShader:
+            return false;
 
-    case VGPUFeature_RayTracing:
-        return false;
+        case VGPUFeature_RayTracing:
+            return false;
 
 
-    default:
-        return false;
+        default:
+            return false;
     }
 }
 
@@ -550,6 +609,12 @@ static vgpu_buffer* gl_createBuffer(VGPURenderer* driverData, const vgpu_buffer_
 
     glBufferData(GL_COPY_READ_BUFFER, (GLsizeiptr)desc->size, pInitialData, usage);
 
+#if !defined(__APPLE__) && !defined(__EMSCRIPTEN__)
+    if (desc->label) {
+        glObjectLabel(GL_BUFFER, buffer->handle, (GLsizei)strlen(desc->label), desc->label);
+    }
+#endif
+
     return (vgpu_buffer*)buffer;
 }
 
@@ -574,9 +639,13 @@ static VGPUDeviceAddress gl_buffer_get_device_address(vgpu_buffer* resource)
 static void gl_buffer_set_label(VGPURenderer* driverData, vgpu_buffer* resource, const char* label)
 {
     VGPU_UNUSED(driverData);
+    VGPU_UNUSED(resource);
+    VGPU_UNUSED(label);
 
+#if !defined(__APPLE__) && !defined(__EMSCRIPTEN__)
     GL_Buffer* buffer = (GL_Buffer*)resource;
-    //D3D12SetName(buffer->handle, label);
+    glObjectLabel(GL_BUFFER, buffer->handle, (GLsizei)strlen(label), label);
+#endif
 }
 
 /* Texture */
@@ -584,7 +653,19 @@ static VGPUTexture gl_createTexture(VGPURenderer* driverData, const VGPUTextureD
 {
     VGPU_UNUSED(driverData);
 
-    GL_Texture* texture = VGPU_ALLOC(GL_Texture);
+    GL_Texture* texture = VGPU_ALLOC_CLEAR(GL_Texture);
+    texture->width = desc->size.width;
+    texture->height = desc->size.height;
+    texture->target = GL_TEXTURE_2D;
+
+    glGenTextures(1, &texture->handle);
+    glBindTexture(texture->target, texture->handle);
+    glTexParameteri(texture->target, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(texture->target, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(texture->target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(texture->target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexStorage2D(texture->target, 1, GL_SRGB8_ALPHA8, texture->width, texture->height);
+
     return (VGPUTexture)texture;
 }
 
@@ -686,7 +767,7 @@ static void gl_updateSwapChain(VGPURenderer* driver_data, GL_SwapChain* swapchai
 
     swapchain->texture = VGPU_ALLOC_CLEAR(GL_Texture);
     swapchain->texture->width = swapchain->width;
-    swapchain->texture->heigth = swapchain->height;
+    swapchain->texture->height = swapchain->height;
     swapchain->texture->target = GL_TEXTURE_2D;
 
     glGenTextures(1, &swapchain->texture->handle);
@@ -725,7 +806,7 @@ static void gl_destroySwapChain(VGPURenderer* driverData, VGPUSwapChain* swapCha
     VGPU_FREE(glSwapChain);
 }
 
-static VGPUTextureFormat gl_getSwapChainFormat(VGPURenderer* driverData, VGPUSwapChain* swapChain)
+static vgpu_pixel_format gl_getSwapChainFormat(VGPURenderer* driverData, VGPUSwapChain* swapChain)
 {
     VGPU_UNUSED(driverData);
 
@@ -777,7 +858,7 @@ static VGPUTexture gl_acquireSwapchainTexture(VGPUCommandBufferImpl* driverData,
     }
 
     if (pHeight) {
-        *pHeight = swapChainTexture->heigth;
+        *pHeight = swapChainTexture->height;
     }
 
     //commandBuffer->swapChains.push_back(d3d12SwapChain);
@@ -789,7 +870,7 @@ static void gl_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGPURend
     GL_CommandBuffer* commandBuffer = (GL_CommandBuffer*)driverData;
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    glClearBufferfv(GL_COLOR, 0, &desc->colorAttachments[0].clearColor.r);
+    glClearBufferfv(GL_COLOR, 0, &desc->colorAttachments[0].clear_color.r);
 
     commandBuffer->insideRenderPass = true;
 }
@@ -804,6 +885,7 @@ static void gl_setViewport(VGPUCommandBufferImpl* driverData, const VGPUViewport
 {
     GL_CommandBuffer* commandBuffer = (GL_CommandBuffer*)driverData;
     glViewport((GLint)viewport->x, (GLint)viewport->y, (GLint)viewport->width, (GLint)viewport->height);
+    glDepthRangef(viewport->minDepth, viewport->maxDepth);
 }
 
 static void gl_setScissorRect(VGPUCommandBufferImpl* driverData, const VGPURect* rect)
@@ -818,7 +900,7 @@ static void gl_setVertexBuffer(VGPUCommandBufferImpl* driverData, uint32_t index
     GL_Buffer* glBuffer = (GL_Buffer*)buffer;
 }
 
-static void gl_setIndexBuffer(VGPUCommandBufferImpl* driverData, vgpu_buffer* buffer, uint64_t offset, VGPUIndexType type)
+static void gl_setIndexBuffer(VGPUCommandBufferImpl* driverData, vgpu_buffer* buffer, uint64_t offset, vgpu_index_type type)
 {
     GL_CommandBuffer* commandBuffer = (GL_CommandBuffer*)driverData;
     GL_Buffer* glBuffer = (GL_Buffer*)buffer;
@@ -945,28 +1027,28 @@ static void APIENTRY gl_message_callback(GLenum source, GLenum type, GLuint id, 
 
     switch (type)
     {
-    case GL_DEBUG_TYPE_ERROR: typeName = "ERROR"; break;
-    case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR: typeName = "DEPRECATED BEHAVIOR"; break;
-    case GL_DEBUG_TYPE_MARKER: typeName = "MARKER"; break;
-    case GL_DEBUG_TYPE_OTHER: typeName = "OTHER"; break;
-    case GL_DEBUG_TYPE_PERFORMANCE: typeName = "PEROFRMANCE"; break;
-    case GL_DEBUG_TYPE_POP_GROUP: typeName = "POP GROUP"; break;
-    case GL_DEBUG_TYPE_PORTABILITY: typeName = "PORTABILITY"; break;
-    case GL_DEBUG_TYPE_PUSH_GROUP: typeName = "PUSH GROUP"; break;
-    case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR: typeName = "UNDEFINED BEHAVIOR"; break;
+        case GL_DEBUG_TYPE_ERROR: typeName = "ERROR"; break;
+        case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR: typeName = "DEPRECATED BEHAVIOR"; break;
+        case GL_DEBUG_TYPE_MARKER: typeName = "MARKER"; break;
+        case GL_DEBUG_TYPE_OTHER: typeName = "OTHER"; break;
+        case GL_DEBUG_TYPE_PERFORMANCE: typeName = "PEROFRMANCE"; break;
+        case GL_DEBUG_TYPE_POP_GROUP: typeName = "POP GROUP"; break;
+        case GL_DEBUG_TYPE_PORTABILITY: typeName = "PORTABILITY"; break;
+        case GL_DEBUG_TYPE_PUSH_GROUP: typeName = "PUSH GROUP"; break;
+        case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR: typeName = "UNDEFINED BEHAVIOR"; break;
     }
 
     switch (severity)
     {
-    case GL_DEBUG_SEVERITY_HIGH: severityName = "HIGH"; break;
-    case GL_DEBUG_SEVERITY_MEDIUM: severityName = "MEDIUM"; break;
-    case GL_DEBUG_SEVERITY_LOW: severityName = "LOW"; break;
-    case GL_DEBUG_SEVERITY_NOTIFICATION: severityName = "NOTIFICATION"; break;
+        case GL_DEBUG_SEVERITY_HIGH: severityName = "HIGH"; break;
+        case GL_DEBUG_SEVERITY_MEDIUM: severityName = "MEDIUM"; break;
+        case GL_DEBUG_SEVERITY_LOW: severityName = "LOW"; break;
+        case GL_DEBUG_SEVERITY_NOTIFICATION: severityName = "NOTIFICATION"; break;
     }
 
     if (type == GL_DEBUG_TYPE_ERROR)
     {
-        vgpuLogError("GL (%s:%s) %s", typeName, severityName, message);
+        vgpu_log_error("GL (%s:%s) %s", typeName, severityName, message);
     }
     else if (severity != GL_DEBUG_SEVERITY_NOTIFICATION)
     {

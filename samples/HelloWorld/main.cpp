@@ -28,7 +28,7 @@ VGPUTexture depthStencilTexture = nullptr;
 vgpu_buffer* vertex_buffer = nullptr;
 VGPUPipeline* renderPipeline = nullptr;
 
-inline void vgpu_log(VGPULogLevel level, const char* message)
+inline void vgpu_log(vgpu_log_level level, const char* message, void* user_data)
 {
 }
 
@@ -86,13 +86,13 @@ namespace
     }
 }
 
-void init_gfx()
+void init_vgpu()
 #else
 void* os_get_gl_proc_address(const char* function) {
     return (void*)glfwGetProcAddress(function);
 }
 
-void init_gfx(GLFWwindow* window, bool opengl)
+void init_vgpu(GLFWwindow* window, bool opengl)
 #endif
 {
     vgpu_config deviceDesc{};
@@ -121,7 +121,7 @@ void init_gfx(GLFWwindow* window, bool opengl)
     vgpuGetAdapterProperties(&adapterProps);
 
     VGPULimits limits;
-    vgpuGetLimits(&limits);
+    vgpu_get_limits(&limits);
 
     int width = 0;
     int height = 0;
@@ -162,6 +162,7 @@ void init_gfx(GLFWwindow* window, bool opengl)
     vertex_buffer_desc.size = sizeof(vertices);
     vertex_buffer_desc.usage = VGPU_BUFFER_USAGE_VERTEX;
     vertex_buffer = vgpu_buffer_create(&vertex_buffer_desc, vertices);
+    vgpu_buffer_set_label(vertex_buffer, "Vertex 2");
 
     VGPUShaderModule vertex_shader = LoadShader("triangleVertex");
     VGPUShaderModule fragment_shader = LoadShader("triangleFragment");
@@ -223,29 +224,27 @@ KEEP_IN_MODULE void _glue_main_()
 
 void draw_frame()
 {
-    VGPUTextureFormat format = vgpuSwapChainGetFormat(swapChain);
-    uint32_t width;
-    uint32_t height;
-
     VGPUCommandBuffer commandBuffer = vgpuBeginCommandBuffer(VGPUCommandQueue_Graphics, "Frame");
 
     // When window minimized texture is null
+    uint32_t width;
+    uint32_t height;
     VGPUTexture swapChainTexture = vgpuAcquireSwapchainTexture(commandBuffer, swapChain, &width, &height);
     if (swapChainTexture != nullptr)
     {
         VGPURenderPassColorAttachment colorAttachment = {};
         colorAttachment.texture = swapChainTexture;
         colorAttachment.loadOp = VGPULoadAction_Clear;
-        colorAttachment.storeOp = VGPUStoreOp_Store;
-        colorAttachment.clearColor.r = 0.3f;
-        colorAttachment.clearColor.g = 0.3f;
-        colorAttachment.clearColor.b = 0.3f;
-        colorAttachment.clearColor.a = 1.0f;
+        colorAttachment.store_action = VGPU_STORE_ACTION_STORE;
+        colorAttachment.clear_color.r = 0.3f;
+        colorAttachment.clear_color.g = 0.3f;
+        colorAttachment.clear_color.b = 0.3f;
+        colorAttachment.clear_color.a = 1.0f;
 
         VGPURenderPassDepthStencilAttachment depthStencilAttachment{};
         depthStencilAttachment.texture = depthStencilTexture;
         depthStencilAttachment.depthLoadOp = VGPULoadAction_Clear;
-        depthStencilAttachment.depthStoreOp = VGPUStoreOp_Store;
+        depthStencilAttachment.depthStoreOp = VGPU_STORE_ACTION_STORE;
         depthStencilAttachment.clearDepth = 1.0f;
 
         VGPURenderPassDesc renderPass{};
@@ -253,9 +252,9 @@ void draw_frame()
         renderPass.colorAttachments = &colorAttachment;
         renderPass.depthStencilAttachment = &depthStencilAttachment;
         vgpuBeginRenderPass(commandBuffer, &renderPass);
-        vgpuSetPipeline(commandBuffer, renderPipeline);
-        vgpuSetVertexBuffer(commandBuffer, 0, vertex_buffer, 0);
-        vgpuDraw(commandBuffer, 0, 3, 1, 0);
+        vgpu_set_pipeline(commandBuffer, renderPipeline);
+        vgpu_set_vertex_buffer(commandBuffer, 0, vertex_buffer, 0);
+        vgpu_draw(commandBuffer, 0, 3, 1, 0);
         vgpuEndRenderPass(commandBuffer);
     }
 
@@ -267,14 +266,13 @@ int main()
 {
 #if defined(__EMSCRIPTEN__)
     glue_preint();
-
 #else
     if (!glfwInit())
     {
         return EXIT_FAILURE;
     }
 
-    //vgpu_set_log_callback(vgpu_log);
+    //vgpu_set_log_callback(vgpu_log, nullptr);
 
     bool opengl = false;
     if (opengl)
@@ -295,14 +293,13 @@ int main()
         glfwMakeContextCurrent(window);
         glfwSwapInterval(1);
     }
-    init_gfx(window, opengl);
+    init_vgpu(window, opengl);
 
     glfwShowWindow(window);
     while (!glfwWindowShouldClose(window))
     {
         draw_frame();
-        if (opengl)
-        {
+        if (opengl) {
             glfwSwapBuffers(window);
         }
         glfwPollEvents();
