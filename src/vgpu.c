@@ -394,7 +394,7 @@ static VGPUSamplerDesc _vgpuSamplerDescDef(const VGPUSamplerDesc* desc)
     return def;
 }
 
-VGPUSampler* vgpuCreateSampler(VGPUDevice device, const VGPUSamplerDesc* desc)
+VGPUSampler vgpuCreateSampler(VGPUDevice device, const VGPUSamplerDesc* desc)
 {
     VGPU_ASSERT(device);
     NULL_RETURN_NULL(desc);
@@ -403,7 +403,7 @@ VGPUSampler* vgpuCreateSampler(VGPUDevice device, const VGPUSamplerDesc* desc)
     return device->createSampler(device->driverData, &desc_def);
 }
 
-void vgpuDestroySampler(VGPUDevice device, VGPUSampler* sampler)
+void vgpuDestroySampler(VGPUDevice device, VGPUSampler sampler)
 {
     VGPU_ASSERT(device);
     NULL_RETURN(sampler);
@@ -438,7 +438,8 @@ static VGPURenderPipelineDesc _vgpuRenderPipelineDescDef(const VGPURenderPipelin
     return def;
 }
 
-VGPUPipeline* vgpuCreateRenderPipeline(VGPUDevice device, const VGPURenderPipelineDesc* desc) {
+VGPUPipeline vgpuCreateRenderPipeline(VGPUDevice device, const VGPURenderPipelineDesc* desc)
+{
     VGPU_ASSERT(device);
     NULL_RETURN_NULL(desc);
     VGPU_ASSERT(desc->vertex);
@@ -447,7 +448,7 @@ VGPUPipeline* vgpuCreateRenderPipeline(VGPUDevice device, const VGPURenderPipeli
     return device->createRenderPipeline(device->driverData, &desc_def);
 }
 
-VGPUPipeline* vgpuCreateComputePipeline(VGPUDevice device, const VGPUComputePipelineDescriptor* descriptor)
+VGPUPipeline vgpuCreateComputePipeline(VGPUDevice device, const VGPUComputePipelineDescriptor* descriptor)
 {
     VGPU_ASSERT(device);
 
@@ -457,7 +458,7 @@ VGPUPipeline* vgpuCreateComputePipeline(VGPUDevice device, const VGPUComputePipe
     return device->createComputePipeline(device->driverData, descriptor);
 }
 
-VGPUPipeline* vgpuCreateRayTracingPipeline(VGPUDevice device, const VGPURayTracingPipelineDesc* desc)
+VGPUPipeline vgpuCreateRayTracingPipeline(VGPUDevice device, const VGPURayTracingPipelineDesc* desc)
 {
     VGPU_ASSERT(device);
     NULL_RETURN_NULL(desc);
@@ -465,7 +466,7 @@ VGPUPipeline* vgpuCreateRayTracingPipeline(VGPUDevice device, const VGPURayTraci
     return device->createRayTracingPipeline(device->driverData, desc);
 }
 
-void vgpuDestroyPipeline(VGPUDevice device, VGPUPipeline* pipeline)
+void vgpuDestroyPipeline(VGPUDevice device, VGPUPipeline pipeline)
 {
     VGPU_ASSERT(device);
     NULL_RETURN(pipeline);
@@ -534,7 +535,7 @@ void vgpuInsertDebugMarker(VGPUCommandBuffer commandBuffer, const char* debugLab
     commandBuffer->insertDebugMarker(commandBuffer->driverData, debugLabel);
 }
 
-void vgpuSetPipeline(VGPUCommandBuffer commandBuffer, VGPUPipeline* pipeline)
+void vgpuSetPipeline(VGPUCommandBuffer commandBuffer, VGPUPipeline pipeline)
 {
     VGPU_ASSERT(pipeline);
 
@@ -601,6 +602,11 @@ void vgpuSetIndexBuffer(VGPUCommandBuffer commandBuffer, vgpu_buffer* buffer, ui
     commandBuffer->setIndexBuffer(commandBuffer->driverData, buffer, offset, type);
 }
 
+void vgpuSetStencilReference(VGPUCommandBuffer commandBuffer, uint32_t reference)
+{
+    commandBuffer->setStencilReference(commandBuffer->driverData, reference);
+}
+
 void vgpuDraw(VGPUCommandBuffer commandBuffer, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t firstInstance)
 {
     commandBuffer->draw(commandBuffer->driverData, vertexStart, vertexCount, instanceCount, firstInstance);
@@ -612,127 +618,127 @@ void vgpuDrawIndexed(VGPUCommandBuffer commandBuffer, uint32_t indexCount, uint3
 }
 
 // Format mapping table. The rows must be in the exactly same order as Format enum members are defined.
-static const vgpu_pixel_format_info c_FormatInfo[] = {
+static const VGPUPixelFormatInfo c_FormatInfo[] = {
     //        format                   name             bytes blk         kind               red   green   blue  alpha  depth  stencl signed  srgb
     { VGPUTextureFormat_Undefined,      "Undefined",            0,   0, 0,  _VGPUTextureFormatKind_Force32 },
-    { VGPUTextureFormat_R8Unorm,        "R8Unorm",              1,   1, 1, VGPUTextureFormatKind_Unorm },
-    { VGPUTextureFormat_R8Snorm,        "R8Snorm",              1,   1, 1, VGPUTextureFormatKind_Snorm },
-    { VGPUTextureFormat_R8Uint,         "R8Uint",               1,   1, 1, VGPUTextureFormatKind_Uint },
-    { VGPUTextureFormat_R8Sint,         "R8USnt",               1,   1, 1, VGPUTextureFormatKind_Sint },
+    { VGPUTextureFormat_R8Unorm,        "R8Unorm",              1,   1, 1, VGPUPixelFormatKind_Unorm },
+    { VGPUTextureFormat_R8Snorm,        "R8Snorm",              1,   1, 1, VGPUPixelFormatKind_Snorm },
+    { VGPUTextureFormat_R8Uint,         "R8Uint",               1,   1, 1, VGPUPixelFormatKind_Uint },
+    { VGPUTextureFormat_R8Sint,         "R8USnt",               1,   1, 1, VGPUPixelFormatKind_Sint },
 
-    { VGPUTextureFormat_R16Unorm,         "R16Unorm",           2,   1, 1, VGPUTextureFormatKind_Unorm },
-    { VGPUTextureFormat_R16Snorm,         "R16Snorm",           2,   1, 1, VGPUTextureFormatKind_Snorm },
-    { VGPUTextureFormat_R16Uint,          "R16Uint",            2,   1, 1, VGPUTextureFormatKind_Uint },
-    { VGPUTextureFormat_R16Sint,          "R16Sint",            2,   1, 1, VGPUTextureFormatKind_Sint },
-    { VGPUTextureFormat_R16Float,         "R16Float",           2,   1, 1, VGPUTextureFormatKind_Float },
-    { VGPUTextureFormat_RG8Unorm,         "RG8Unorm",           2,   1, 1, VGPUTextureFormatKind_Unorm },
-    { VGPUTextureFormat_RG8Snorm,         "RG8Snorm",           2,   1, 1, VGPUTextureFormatKind_Snorm },
-    { VGPUTextureFormat_RG8Uint,          "RG8Uint",            2,   1, 1, VGPUTextureFormatKind_Uint },
-    { VGPUTextureFormat_RG8Sint,          "RG8Sint",            2,   1, 1, VGPUTextureFormatKind_Sint },
+    { VGPUTextureFormat_R16Unorm,         "R16Unorm",           2,   1, 1, VGPUPixelFormatKind_Unorm },
+    { VGPUTextureFormat_R16Snorm,         "R16Snorm",           2,   1, 1, VGPUPixelFormatKind_Snorm },
+    { VGPUTextureFormat_R16Uint,          "R16Uint",            2,   1, 1, VGPUPixelFormatKind_Uint },
+    { VGPUTextureFormat_R16Sint,          "R16Sint",            2,   1, 1, VGPUPixelFormatKind_Sint },
+    { VGPUTextureFormat_R16Float,         "R16Float",           2,   1, 1, VGPUPixelFormatKind_Float },
+    { VGPUTextureFormat_RG8Unorm,         "RG8Unorm",           2,   1, 1, VGPUPixelFormatKind_Unorm },
+    { VGPUTextureFormat_RG8Snorm,         "RG8Snorm",           2,   1, 1, VGPUPixelFormatKind_Snorm },
+    { VGPUTextureFormat_RG8Uint,          "RG8Uint",            2,   1, 1, VGPUPixelFormatKind_Uint },
+    { VGPUTextureFormat_RG8Sint,          "RG8Sint",            2,   1, 1, VGPUPixelFormatKind_Sint },
 
-    { VGPUTextureFormat_BGRA4Unorm,       "BGRA4Unorm",         2,   1, 1, VGPUTextureFormatKind_Unorm },
-    { VGPUTextureFormat_B5G6R5Unorm,      "B5G6R5Unorm",        2,   1, 1, VGPUTextureFormatKind_Unorm },
-    { VGPUTextureFormat_B5G5R5A1Unorm,    "B5G5R5A1Unorm",      2,   1, 1, VGPUTextureFormatKind_Unorm },
+    { VGPUTextureFormat_BGRA4Unorm,       "BGRA4Unorm",         2,   1, 1, VGPUPixelFormatKind_Unorm },
+    { VGPUTextureFormat_B5G6R5Unorm,      "B5G6R5Unorm",        2,   1, 1, VGPUPixelFormatKind_Unorm },
+    { VGPUTextureFormat_B5G5R5A1Unorm,    "B5G5R5A1Unorm",      2,   1, 1, VGPUPixelFormatKind_Unorm },
 
-    { VGPUTextureFormat_R32Uint,          "R32Uint",            4,   1, 1, VGPUTextureFormatKind_Uint },
-    { VGPUTextureFormat_R32Sint,          "R32Sint",            4,   1, 1, VGPUTextureFormatKind_Sint },
-    { VGPUTextureFormat_R32Float,         "R32Float",           4,   1, 1, VGPUTextureFormatKind_Float },
-    { VGPUTextureFormat_RG16Unorm,        "RG16Unorm",          4,   1, 1, VGPUTextureFormatKind_Unorm },
-    { VGPUTextureFormat_RG16Snorm,        "RG16Snorm",          4,   1, 1, VGPUTextureFormatKind_Snorm },
-    { VGPUTextureFormat_RG16Uint,         "RG16Uint",           4,   1, 1, VGPUTextureFormatKind_Uint },
-    { VGPUTextureFormat_RG16Sint,         "RG16Sint",           4,   1, 1, VGPUTextureFormatKind_Sint },
-    { VGPUTextureFormat_RG16Float,        "RG16Float",          4,   1, 1, VGPUTextureFormatKind_Float },
+    { VGPUTextureFormat_R32Uint,          "R32Uint",            4,   1, 1, VGPUPixelFormatKind_Uint },
+    { VGPUTextureFormat_R32Sint,          "R32Sint",            4,   1, 1, VGPUPixelFormatKind_Sint },
+    { VGPUTextureFormat_R32Float,         "R32Float",           4,   1, 1, VGPUPixelFormatKind_Float },
+    { VGPUTextureFormat_RG16Unorm,        "RG16Unorm",          4,   1, 1, VGPUPixelFormatKind_Unorm },
+    { VGPUTextureFormat_RG16Snorm,        "RG16Snorm",          4,   1, 1, VGPUPixelFormatKind_Snorm },
+    { VGPUTextureFormat_RG16Uint,         "RG16Uint",           4,   1, 1, VGPUPixelFormatKind_Uint },
+    { VGPUTextureFormat_RG16Sint,         "RG16Sint",           4,   1, 1, VGPUPixelFormatKind_Sint },
+    { VGPUTextureFormat_RG16Float,        "RG16Float",          4,   1, 1, VGPUPixelFormatKind_Float },
 
-    { VGPUTextureFormat_RGBA8Uint,        "RGBA8Uint",          4,   1, 1, VGPUTextureFormatKind_Uint },
-    { VGPUTextureFormat_RGBA8Sint,        "RGBA8Sint",          4,   1, 1, VGPUTextureFormatKind_Sint },
-    { VGPUTextureFormat_RGBA8Unorm,       "RGBA8Unorm",         4,   1, 1, VGPUTextureFormatKind_Unorm },
-    { VGPUTextureFormat_RGBA8UnormSrgb,   "RGBA8UnormSrgb",     4,   1, 1, VGPUTextureFormatKind_UnormSrgb  },
-    { VGPUTextureFormat_RGBA8Snorm,       "RGBA8Snorm",         4,   1, 1, VGPUTextureFormatKind_Snorm },
-    { VGPUTextureFormat_BGRA8Unorm,       "BGRA8Unorm",         4,   1, 1, VGPUTextureFormatKind_Unorm },
-    { VGPUTextureFormat_BGRA8UnormSrgb,   "BGRA8UnormSrgb",     4,   1, 1, VGPUTextureFormatKind_UnormSrgb },
+    { VGPUTextureFormat_RGBA8Uint,        "RGBA8Uint",          4,   1, 1, VGPUPixelFormatKind_Uint },
+    { VGPUTextureFormat_RGBA8Sint,        "RGBA8Sint",          4,   1, 1, VGPUPixelFormatKind_Sint },
+    { VGPUTextureFormat_RGBA8Unorm,       "RGBA8Unorm",         4,   1, 1, VGPUPixelFormatKind_Unorm },
+    { VGPUTextureFormat_RGBA8UnormSrgb,   "RGBA8UnormSrgb",     4,   1, 1, VGPUPixelFormatKind_UnormSrgb  },
+    { VGPUTextureFormat_RGBA8Snorm,       "RGBA8Snorm",         4,   1, 1, VGPUPixelFormatKind_Snorm },
+    { VGPUTextureFormat_BGRA8Unorm,       "BGRA8Unorm",         4,   1, 1, VGPUPixelFormatKind_Unorm },
+    { VGPUTextureFormat_BGRA8UnormSrgb,   "BGRA8UnormSrgb",     4,   1, 1, VGPUPixelFormatKind_UnormSrgb },
 
-    { VGPUTextureFormat_RGB9E5Ufloat,    "RGB9E5Ufloat",        4,   1, 1, VGPUTextureFormatKind_Float },
-    { VGPUTextureFormat_RGB10A2Unorm,    "RGB10A2Unorm",        4,   1, 1, VGPUTextureFormatKind_Unorm },
-    { VGPUTextureFormat_RGB10A2Uint,     "RGB10A2Uint",         4,   1, 1, VGPUTextureFormatKind_Uint },
-    { VGPUTextureFormat_RG11B10Float,    "RG11B10Float",        4,   1, 1, VGPUTextureFormatKind_Float },
+    { VGPUTextureFormat_RGB9E5Ufloat,    "RGB9E5Ufloat",        4,   1, 1, VGPUPixelFormatKind_Float },
+    { VGPUTextureFormat_RGB10A2Unorm,    "RGB10A2Unorm",        4,   1, 1, VGPUPixelFormatKind_Unorm },
+    { VGPUTextureFormat_RGB10A2Uint,     "RGB10A2Uint",         4,   1, 1, VGPUPixelFormatKind_Uint },
+    { VGPUTextureFormat_RG11B10Float,    "RG11B10Float",        4,   1, 1, VGPUPixelFormatKind_Float },
 
-    { VGPUTextureFormat_RG32Uint,         "RG32Uint",           8,   1, 1, VGPUTextureFormatKind_Uint },
-    { VGPUTextureFormat_RG32Sint,         "RG32Sint",           8,   1, 1, VGPUTextureFormatKind_Sint },
-    { VGPUTextureFormat_RG32Float,        "RG32Float",          8,   1, 1, VGPUTextureFormatKind_Float },
-    { VGPUTextureFormat_RGBA16Unorm,      "RGBA16Unorm",        8,   1, 1, VGPUTextureFormatKind_Unorm },
-    { VGPUTextureFormat_RGBA16Snorm,      "RGBA16Snorm",        8,   1, 1, VGPUTextureFormatKind_Snorm },
-    { VGPUTextureFormat_RGBA16Uint,       "RGBA16Uint",         8,   1, 1, VGPUTextureFormatKind_Uint },
-    { VGPUTextureFormat_RGBA16Sint,       "RGBA16Sint",         8,   1, 1, VGPUTextureFormatKind_Sint },
-    { VGPUTextureFormat_RGBA16Float,      "RGBA16Float",        8,   1, 1, VGPUTextureFormatKind_Float },
+    { VGPUTextureFormat_RG32Uint,         "RG32Uint",           8,   1, 1, VGPUPixelFormatKind_Uint },
+    { VGPUTextureFormat_RG32Sint,         "RG32Sint",           8,   1, 1, VGPUPixelFormatKind_Sint },
+    { VGPUTextureFormat_RG32Float,        "RG32Float",          8,   1, 1, VGPUPixelFormatKind_Float },
+    { VGPUTextureFormat_RGBA16Unorm,      "RGBA16Unorm",        8,   1, 1, VGPUPixelFormatKind_Unorm },
+    { VGPUTextureFormat_RGBA16Snorm,      "RGBA16Snorm",        8,   1, 1, VGPUPixelFormatKind_Snorm },
+    { VGPUTextureFormat_RGBA16Uint,       "RGBA16Uint",         8,   1, 1, VGPUPixelFormatKind_Uint },
+    { VGPUTextureFormat_RGBA16Sint,       "RGBA16Sint",         8,   1, 1, VGPUPixelFormatKind_Sint },
+    { VGPUTextureFormat_RGBA16Float,      "RGBA16Float",        8,   1, 1, VGPUPixelFormatKind_Float },
 
-    { VGPUTextureFormat_RGBA32Uint,       "RGBA32Uint",        16,  1, 1, VGPUTextureFormatKind_Uint },
-    { VGPUTextureFormat_RGBA32Sint,       "RGBA32Sint",        16,  1, 1, VGPUTextureFormatKind_Sint },
-    { VGPUTextureFormat_RGBA32Float,      "RGBA32Float",       16,  1, 1, VGPUTextureFormatKind_Float },
+    { VGPUTextureFormat_RGBA32Uint,       "RGBA32Uint",        16,  1, 1, VGPUPixelFormatKind_Uint },
+    { VGPUTextureFormat_RGBA32Sint,       "RGBA32Sint",        16,  1, 1, VGPUPixelFormatKind_Sint },
+    { VGPUTextureFormat_RGBA32Float,      "RGBA32Float",       16,  1, 1, VGPUPixelFormatKind_Float },
 
     // Depth-stencil formats
-    { VGPUTextureFormat_Stencil8,               "Stencil8",                 4,   1, 1, VGPUTextureFormatKind_Float },
-    { VGPUTextureFormat_Depth16Unorm,           "Depth16Unorm",             2,   1, 1, VGPUTextureFormatKind_Unorm },
-    { VGPUTextureFormat_Depth32Float,           "Depth32Float",             4,   1, 1, VGPUTextureFormatKind_Float },
-    { VGPUTextureFormat_Depth24UnormStencil8,   "Depth24UnormStencil8",     4,   1, 1, VGPUTextureFormatKind_Unorm },
-    { VGPUTextureFormat_Depth32FloatStencil8,   "Depth32FloatStencil8",     8,   1, 1, VGPUTextureFormatKind_Float },
+    { VGPUTextureFormat_Stencil8,               "Stencil8",                 4,   1, 1, VGPUPixelFormatKind_Float },
+    { VGPUTextureFormat_Depth16Unorm,           "Depth16Unorm",             2,   1, 1, VGPUPixelFormatKind_Unorm },
+    { VGPUTextureFormat_Depth32Float,           "Depth32Float",             4,   1, 1, VGPUPixelFormatKind_Float },
+    { VGPUTextureFormat_Depth24UnormStencil8,   "Depth24UnormStencil8",     4,   1, 1, VGPUPixelFormatKind_Unorm },
+    { VGPUTextureFormat_Depth32FloatStencil8,   "Depth32FloatStencil8",     8,   1, 1, VGPUPixelFormatKind_Float },
 
     // BC compressed formats
-    { VGPUTextureFormat_Bc1RgbaUnorm,       "BC1RgbaUnorm",         8,   4, 4, VGPUTextureFormatKind_Unorm },
-    { VGPUTextureFormat_Bc1RgbaUnormSrgb,   "BC1RgbaUnormSrgb",     8,   4, 4, VGPUTextureFormatKind_UnormSrgb  },
-    { VGPUTextureFormat_Bc2RgbaUnorm,       "BC2RgbaUnorm",         16,  4, 4, VGPUTextureFormatKind_Unorm },
-    { VGPUTextureFormat_Bc2RgbaUnormSrgb,   "BC2RgbaUnormSrgb",     16,  4, 4, VGPUTextureFormatKind_UnormSrgb  },
-    { VGPUTextureFormat_Bc3RgbaUnorm,       "BC3RgbaUnorm",         16,  4, 4, VGPUTextureFormatKind_Unorm },
-    { VGPUTextureFormat_Bc3RgbaUnormSrgb,   "BC3RgbaUnormSrgb",     16,  4, 4, VGPUTextureFormatKind_UnormSrgb  },
-    { VGPUTextureFormat_Bc4RUnorm,          "BC4RUnorm",            8,   4, 4, VGPUTextureFormatKind_Unorm },
-    { VGPUTextureFormat_Bc4RSnorm,          "BC4RSnorm",            8,   4, 4, VGPUTextureFormatKind_Snorm },
-    { VGPUTextureFormat_Bc5RgUnorm,         "BC5Unorm",             16,  4, 4, VGPUTextureFormatKind_Unorm },
-    { VGPUTextureFormat_Bc5RgSnorm,         "BC5Snorm",             16,  4, 4, VGPUTextureFormatKind_Snorm },
-    { VGPUTextureFormat_Bc6hRgbUfloat,      "Bc6hRgbUfloat",        16,  4, 4, VGPUTextureFormatKind_Float },
-    { VGPUTextureFormat_Bc6hRgbSfloat,      "Bc6hRgbSfloat",         16,  4, 4, VGPUTextureFormatKind_Float },
-    { VGPUTextureFormat_Bc7RgbaUnorm,       "Bc7RgbaUnorm",         16,  4, 4, VGPUTextureFormatKind_Unorm },
-    { VGPUTextureFormat_Bc7RgbaUnormSrgb,   "Bc7RgbaUnormSrgb",     16,  4, 4, VGPUTextureFormatKind_UnormSrgb },
+    { VGPUTextureFormat_Bc1RgbaUnorm,       "BC1RgbaUnorm",         8,   4, 4, VGPUPixelFormatKind_Unorm },
+    { VGPUTextureFormat_Bc1RgbaUnormSrgb,   "BC1RgbaUnormSrgb",     8,   4, 4, VGPUPixelFormatKind_UnormSrgb  },
+    { VGPUTextureFormat_Bc2RgbaUnorm,       "BC2RgbaUnorm",         16,  4, 4, VGPUPixelFormatKind_Unorm },
+    { VGPUTextureFormat_Bc2RgbaUnormSrgb,   "BC2RgbaUnormSrgb",     16,  4, 4, VGPUPixelFormatKind_UnormSrgb  },
+    { VGPUTextureFormat_Bc3RgbaUnorm,       "BC3RgbaUnorm",         16,  4, 4, VGPUPixelFormatKind_Unorm },
+    { VGPUTextureFormat_Bc3RgbaUnormSrgb,   "BC3RgbaUnormSrgb",     16,  4, 4, VGPUPixelFormatKind_UnormSrgb  },
+    { VGPUTextureFormat_Bc4RUnorm,          "BC4RUnorm",            8,   4, 4, VGPUPixelFormatKind_Unorm },
+    { VGPUTextureFormat_Bc4RSnorm,          "BC4RSnorm",            8,   4, 4, VGPUPixelFormatKind_Snorm },
+    { VGPUTextureFormat_Bc5RgUnorm,         "BC5Unorm",             16,  4, 4, VGPUPixelFormatKind_Unorm },
+    { VGPUTextureFormat_Bc5RgSnorm,         "BC5Snorm",             16,  4, 4, VGPUPixelFormatKind_Snorm },
+    { VGPUTextureFormat_Bc6hRgbUfloat,      "Bc6hRgbUfloat",        16,  4, 4, VGPUPixelFormatKind_Float },
+    { VGPUTextureFormat_Bc6hRgbSfloat,      "Bc6hRgbSfloat",        16,  4, 4, VGPUPixelFormatKind_Float },
+    { VGPUTextureFormat_Bc7RgbaUnorm,       "Bc7RgbaUnorm",         16,  4, 4, VGPUPixelFormatKind_Unorm },
+    { VGPUTextureFormat_Bc7RgbaUnormSrgb,   "Bc7RgbaUnormSrgb",     16,  4, 4, VGPUPixelFormatKind_UnormSrgb },
 
     // ETC2/EAC compressed formats
-    { VGPUTextureFormat_Etc2Rgb8Unorm,       "Etc2Rgb8Unorm",         8,   4, 4, VGPUTextureFormatKind_Unorm },
-    { VGPUTextureFormat_Etc2Rgb8UnormSrgb,   "Etc2Rgb8UnormSrgb",     8,   4, 4, VGPUTextureFormatKind_UnormSrgb },
-    { VGPUTextureFormat_Etc2Rgb8A1Unorm,     "Etc2Rgb8A1Unorm,",     16,   4, 4, VGPUTextureFormatKind_Unorm },
-    { VGPUTextureFormat_Etc2Rgb8A1UnormSrgb, "Etc2Rgb8A1UnormSrgb",  16,   4, 4, VGPUTextureFormatKind_UnormSrgb },
-    { VGPUTextureFormat_Etc2Rgba8Unorm,      "Etc2Rgba8Unorm",       16,   4, 4, VGPUTextureFormatKind_Unorm },
-    { VGPUTextureFormat_Etc2Rgba8UnormSrgb,  "Etc2Rgba8UnormSrgb",   16,   4, 4, VGPUTextureFormatKind_UnormSrgb },
-    { VGPUTextureFormat_EacR11Unorm,         "EacR11Unorm",          8,    4, 4, VGPUTextureFormatKind_Unorm },
-    { VGPUTextureFormat_EacR11Snorm,         "EacR11Snorm",          8,    4, 4, VGPUTextureFormatKind_Snorm },
-    { VGPUTextureFormat_EacRg11Unorm,        "EacRg11Unorm",         16,   4, 4, VGPUTextureFormatKind_Unorm },
-    { VGPUTextureFormat_EacRg11Snorm,        "EacRg11Snorm",         16,   4, 4, VGPUTextureFormatKind_Snorm },
+    { VGPUTextureFormat_Etc2Rgb8Unorm,       "Etc2Rgb8Unorm",         8,   4, 4, VGPUPixelFormatKind_Unorm },
+    { VGPUTextureFormat_Etc2Rgb8UnormSrgb,   "Etc2Rgb8UnormSrgb",     8,   4, 4, VGPUPixelFormatKind_UnormSrgb },
+    { VGPUTextureFormat_Etc2Rgb8A1Unorm,     "Etc2Rgb8A1Unorm,",     16,   4, 4, VGPUPixelFormatKind_Unorm },
+    { VGPUTextureFormat_Etc2Rgb8A1UnormSrgb, "Etc2Rgb8A1UnormSrgb",  16,   4, 4, VGPUPixelFormatKind_UnormSrgb },
+    { VGPUTextureFormat_Etc2Rgba8Unorm,      "Etc2Rgba8Unorm",       16,   4, 4, VGPUPixelFormatKind_Unorm },
+    { VGPUTextureFormat_Etc2Rgba8UnormSrgb,  "Etc2Rgba8UnormSrgb",   16,   4, 4, VGPUPixelFormatKind_UnormSrgb },
+    { VGPUTextureFormat_EacR11Unorm,         "EacR11Unorm",          8,    4, 4, VGPUPixelFormatKind_Unorm },
+    { VGPUTextureFormat_EacR11Snorm,         "EacR11Snorm",          8,    4, 4, VGPUPixelFormatKind_Snorm },
+    { VGPUTextureFormat_EacRg11Unorm,        "EacRg11Unorm",         16,   4, 4, VGPUPixelFormatKind_Unorm },
+    { VGPUTextureFormat_EacRg11Snorm,        "EacRg11Snorm",         16,   4, 4, VGPUPixelFormatKind_Snorm },
 
     // ASTC compressed formats
-    { VGPUTextureFormat_Astc4x4Unorm,        "ASTC4x4Unorm",         16,   4, 4, VGPUTextureFormatKind_Unorm },
-    { VGPUTextureFormat_Astc4x4UnormSrgb,    "ASTC4x4UnormSrgb",     16,   4, 4, VGPUTextureFormatKind_UnormSrgb },
-    { VGPUTextureFormat_Astc5x4Unorm,        "ASTC5x4Unorm",         16,   5, 4, VGPUTextureFormatKind_Unorm },
-    { VGPUTextureFormat_Astc5x4UnormSrgb,    "ASTC5x4UnormSrgb",     16,   5, 4, VGPUTextureFormatKind_UnormSrgb },
-    { VGPUTextureFormat_Astc5x5Unorm,        "ASTC5x5UnormSrgb",     16,   5, 5, VGPUTextureFormatKind_Unorm },
-    { VGPUTextureFormat_Astc5x5UnormSrgb,    "ASTC5x5UnormSrgb",     16,   5, 5, VGPUTextureFormatKind_UnormSrgb },
-    { VGPUTextureFormat_Astc6x5Unorm,        "ASTC6x5Unorm",         16,   6, 5, VGPUTextureFormatKind_Unorm },
-    { VGPUTextureFormat_Astc6x5UnormSrgb,    "ASTC6x5UnormSrgb",     16,   6, 5, VGPUTextureFormatKind_UnormSrgb },
-    { VGPUTextureFormat_Astc6x6Unorm,        "ASTC6x6Unorm",         16,   6, 6, VGPUTextureFormatKind_Unorm },
-    { VGPUTextureFormat_Astc6x6UnormSrgb,    "ASTC6x6UnormSrgb",     16,   6, 6, VGPUTextureFormatKind_UnormSrgb },
-    { VGPUTextureFormat_Astc8x5Unorm,        "ASTC8x5Unorm",         16,   8, 5, VGPUTextureFormatKind_Unorm },
-    { VGPUTextureFormat_Astc8x5UnormSrgb,    "ASTC8x5UnormSrgb",     16,   8, 5, VGPUTextureFormatKind_UnormSrgb },
-    { VGPUTextureFormat_Astc8x6Unorm,        "ASTC8x6Unorm",         16,   8, 6, VGPUTextureFormatKind_Unorm },
-    { VGPUTextureFormat_Astc8x6UnormSrgb,    "ASTC8x6UnormSrgb",     16,   8, 6, VGPUTextureFormatKind_UnormSrgb },
-    { VGPUTextureFormat_Astc8x8Unorm,        "ASTC8x8Unorm",         16,   8, 8, VGPUTextureFormatKind_Unorm },
-    { VGPUTextureFormat_Astc8x8UnormSrgb,    "ASTC8x8UnormSrgb",     16,   8, 8, VGPUTextureFormatKind_UnormSrgb },
-    { VGPUTextureFormat_Astc10x5Unorm,       "ASTC10x5Unorm",        16,   10, 5, VGPUTextureFormatKind_Unorm },
-    { VGPUTextureFormat_Astc10x5UnormSrgb,   "ASTC10x5UnormSrgb",    16,   10, 5, VGPUTextureFormatKind_UnormSrgb },
-    { VGPUTextureFormat_Astc10x6Unorm,       "ASTC10x6Unorm",        16,   10, 6, VGPUTextureFormatKind_Unorm },
-    { VGPUTextureFormat_Astc10x6UnormSrgb,   "ASTC10x6UnormSrgb",    16,   10, 6, VGPUTextureFormatKind_UnormSrgb },
-    { VGPUTextureFormat_Astc10x8Unorm,       "ASTC10x8Unorm",        16,   10, 8, VGPUTextureFormatKind_Unorm },
-    { VGPUTextureFormat_Astc10x8UnormSrgb,   "ASTC10x8UnormSrgb",    16,   10, 8, VGPUTextureFormatKind_UnormSrgb },
-    { VGPUTextureFormat_Astc10x10Unorm,      "ASTC10x10Unorm",       16,   10, 10, VGPUTextureFormatKind_Unorm  },
-    { VGPUTextureFormat_Astc10x10UnormSrgb,  "ASTC10x10UnormSrgb",   16,   10, 10, VGPUTextureFormatKind_UnormSrgb },
-    { VGPUTextureFormat_Astc12x10Unorm,      "ASTC12x10Unorm",       16,   12, 10, VGPUTextureFormatKind_Unorm  },
-    { VGPUTextureFormat_Astc12x10UnormSrgb,  "ASTC12x10UnormSrgb",   16,   12, 10, VGPUTextureFormatKind_UnormSrgb },
-    { VGPUTextureFormat_Astc12x12Unorm,      "ASTC12x12Unorm",       16,   12, 12, VGPUTextureFormatKind_Unorm  },
-    { VGPUTextureFormat_Astc12x12UnormSrgb,  "ASTC12x12UnormSrgb",   16,   12, 12, VGPUTextureFormatKind_UnormSrgb },
+    { VGPUTextureFormat_Astc4x4Unorm,        "ASTC4x4Unorm",         16,   4,   4, VGPUPixelFormatKind_Unorm },
+    { VGPUTextureFormat_Astc4x4UnormSrgb,    "ASTC4x4UnormSrgb",     16,   4,   4, VGPUPixelFormatKind_UnormSrgb },
+    { VGPUTextureFormat_Astc5x4Unorm,        "ASTC5x4Unorm",         16,   5,   4, VGPUPixelFormatKind_Unorm },
+    { VGPUTextureFormat_Astc5x4UnormSrgb,    "ASTC5x4UnormSrgb",     16,   5,   4, VGPUPixelFormatKind_UnormSrgb },
+    { VGPUTextureFormat_Astc5x5Unorm,        "ASTC5x5UnormSrgb",     16,   5,   5, VGPUPixelFormatKind_Unorm },
+    { VGPUTextureFormat_Astc5x5UnormSrgb,    "ASTC5x5UnormSrgb",     16,   5,   5, VGPUPixelFormatKind_UnormSrgb },
+    { VGPUTextureFormat_Astc6x5Unorm,        "ASTC6x5Unorm",         16,   6,   5, VGPUPixelFormatKind_Unorm },
+    { VGPUTextureFormat_Astc6x5UnormSrgb,    "ASTC6x5UnormSrgb",     16,   6,   5, VGPUPixelFormatKind_UnormSrgb },
+    { VGPUTextureFormat_Astc6x6Unorm,        "ASTC6x6Unorm",         16,   6,   6, VGPUPixelFormatKind_Unorm },
+    { VGPUTextureFormat_Astc6x6UnormSrgb,    "ASTC6x6UnormSrgb",     16,   6,   6, VGPUPixelFormatKind_UnormSrgb },
+    { VGPUTextureFormat_Astc8x5Unorm,        "ASTC8x5Unorm",         16,   8,   5, VGPUPixelFormatKind_Unorm },
+    { VGPUTextureFormat_Astc8x5UnormSrgb,    "ASTC8x5UnormSrgb",     16,   8,   5, VGPUPixelFormatKind_UnormSrgb },
+    { VGPUTextureFormat_Astc8x6Unorm,        "ASTC8x6Unorm",         16,   8,   6, VGPUPixelFormatKind_Unorm },
+    { VGPUTextureFormat_Astc8x6UnormSrgb,    "ASTC8x6UnormSrgb",     16,   8,   6, VGPUPixelFormatKind_UnormSrgb },
+    { VGPUTextureFormat_Astc8x8Unorm,        "ASTC8x8Unorm",         16,   8,   8, VGPUPixelFormatKind_Unorm },
+    { VGPUTextureFormat_Astc8x8UnormSrgb,    "ASTC8x8UnormSrgb",     16,   8,   8, VGPUPixelFormatKind_UnormSrgb },
+    { VGPUTextureFormat_Astc10x5Unorm,       "ASTC10x5Unorm",        16,   10,  5, VGPUPixelFormatKind_Unorm },
+    { VGPUTextureFormat_Astc10x5UnormSrgb,   "ASTC10x5UnormSrgb",    16,   10,  5, VGPUPixelFormatKind_UnormSrgb },
+    { VGPUTextureFormat_Astc10x6Unorm,       "ASTC10x6Unorm",        16,   10,  6, VGPUPixelFormatKind_Unorm },
+    { VGPUTextureFormat_Astc10x6UnormSrgb,   "ASTC10x6UnormSrgb",    16,   10,  6, VGPUPixelFormatKind_UnormSrgb },
+    { VGPUTextureFormat_Astc10x8Unorm,       "ASTC10x8Unorm",        16,   10,  8, VGPUPixelFormatKind_Unorm },
+    { VGPUTextureFormat_Astc10x8UnormSrgb,   "ASTC10x8UnormSrgb",    16,   10,  8, VGPUPixelFormatKind_UnormSrgb },
+    { VGPUTextureFormat_Astc10x10Unorm,      "ASTC10x10Unorm",       16,   10,  10, VGPUPixelFormatKind_Unorm  },
+    { VGPUTextureFormat_Astc10x10UnormSrgb,  "ASTC10x10UnormSrgb",   16,   10,  10, VGPUPixelFormatKind_UnormSrgb },
+    { VGPUTextureFormat_Astc12x10Unorm,      "ASTC12x10Unorm",       16,   12,  10, VGPUPixelFormatKind_Unorm  },
+    { VGPUTextureFormat_Astc12x10UnormSrgb,  "ASTC12x10UnormSrgb",   16,   12,  10, VGPUPixelFormatKind_UnormSrgb },
+    { VGPUTextureFormat_Astc12x12Unorm,      "ASTC12x12Unorm",       16,   12,  12, VGPUPixelFormatKind_Unorm  },
+    { VGPUTextureFormat_Astc12x12UnormSrgb,  "ASTC12x12UnormSrgb",   16,   12,  12, VGPUPixelFormatKind_UnormSrgb },
 };
 
 VGPUBool32 vgpuIsDepthFormat(VGPUPixelFormat format)
@@ -807,7 +813,7 @@ VGPUBool32 vgpuIsCompressedFormat(VGPUPixelFormat format)
     return c_FormatInfo[(uint32_t)format].blockWidth > 1 || c_FormatInfo[(uint32_t)format].blockHeight > 1;
 }
 
-VGPUTextureFormatKind vgpuGetPixelFormatKind(VGPUPixelFormat format)
+VGPUPixelFormatKind vgpuGetPixelFormatKind(VGPUPixelFormat format)
 {
     VGPU_ASSERT(c_FormatInfo[(uint32_t)format].format == format);
     return c_FormatInfo[(uint32_t)format].kind;

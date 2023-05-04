@@ -385,6 +385,35 @@ namespace
         }
     }
 
+    constexpr D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE ToD3D12(VGPULoadAction action)
+    {
+        switch (action)
+        {
+            default:
+            case VGPULoadAction_Load:
+                return D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_PRESERVE;
+
+            case VGPULoadAction_Clear:
+                return D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR;
+
+            case VGPULoadAction_DontCare:
+                return D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_DISCARD;
+        }
+    }
+
+    constexpr D3D12_RENDER_PASS_ENDING_ACCESS_TYPE ToD3D12(VGPUStoreAction action)
+    {
+        switch (action)
+        {
+            case VGPU_STORE_ACTION_DONT_CARE:
+                return D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_DISCARD;
+
+            default:
+            case VGPU_STORE_ACTION_STORE:
+                return D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_PRESERVE;
+        }
+    }
+
     constexpr D3D12_FILTER_TYPE ToD3D12FilterType(VGPUSamplerFilter value)
     {
         switch (value)
@@ -1769,7 +1798,7 @@ static void d3d12_destroyTexture(VGPURenderer* driverData, VGPUTexture texture)
 }
 
 /* Sampler */
-static VGPUSampler* d3d12_createSampler(VGPURenderer* driverData, const VGPUSamplerDesc* desc)
+static VGPUSampler d3d12_createSampler(VGPURenderer* driverData, const VGPUSamplerDesc* desc)
 {
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
 
@@ -1827,10 +1856,10 @@ static VGPUSampler* d3d12_createSampler(VGPURenderer* driverData, const VGPUSamp
     renderer->device->CreateSampler(&samplerDesc, sampler->descriptor);
     //sampler->bindlessIndex = AllocateBindlessSampler(sampler->descriptor);
 
-    return (VGPUSampler*)sampler;
+    return (VGPUSampler)sampler;
 }
 
-static void d3d12_destroySampler(VGPURenderer* driverData, VGPUSampler* resource)
+static void d3d12_destroySampler(VGPURenderer* driverData, VGPUSampler resource)
 {
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
     D3D12Sampler* sampler = (D3D12Sampler*)resource;
@@ -1861,7 +1890,7 @@ static void d3d12_destroyShaderModule(VGPURenderer* driverData, VGPUShaderModule
 }
 
 /* Pipeline */
-static VGPUPipeline* d3d12_createRenderPipeline(VGPURenderer* driverData, const VGPURenderPipelineDesc* desc)
+static VGPUPipeline d3d12_createRenderPipeline(VGPURenderer* driverData, const VGPURenderPipelineDesc* desc)
 {
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
     D3D12Shader* vertexShader = (D3D12Shader*)desc->vertex;
@@ -1966,10 +1995,10 @@ static VGPUPipeline* d3d12_createRenderPipeline(VGPURenderer* driverData, const 
     D3D12Pipeline* pipeline = new D3D12Pipeline();
     pipeline->handle = pipelineState;
     pipeline->primitiveTopology = ToD3DPrimitiveTopology(desc->primitiveTopology, desc->patchControlPoints);
-    return (VGPUPipeline*)pipeline;
+    return (VGPUPipeline)pipeline;
 }
 
-static VGPUPipeline* d3d12_createComputePipeline(VGPURenderer* driverData, const VGPUComputePipelineDescriptor* desc)
+static VGPUPipeline d3d12_createComputePipeline(VGPURenderer* driverData, const VGPUComputePipelineDescriptor* desc)
 {
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
     D3D12Shader* shader = (D3D12Shader*)desc->shader;
@@ -1990,20 +2019,20 @@ static VGPUPipeline* d3d12_createComputePipeline(VGPURenderer* driverData, const
 
     D3D12Pipeline* pipeline = VGPU_ALLOC(D3D12Pipeline);
     pipeline->handle = pipelineState;
-    return (VGPUPipeline*)pipeline;
+    return (VGPUPipeline)pipeline;
 }
 
-static VGPUPipeline* d3d12_createRayTracingPipeline(VGPURenderer* driverData, const VGPURayTracingPipelineDesc* desc)
+static VGPUPipeline d3d12_createRayTracingPipeline(VGPURenderer* driverData, const VGPURayTracingPipelineDesc* desc)
 {
     VGPU_UNUSED(desc);
     VGPU_UNUSED(driverData);
 
     //D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
     D3D12Pipeline* pipeline = new D3D12Pipeline();
-    return (VGPUPipeline*)pipeline;
+    return (VGPUPipeline)pipeline;
 }
 
-static void d3d12_destroyPipeline(VGPURenderer* driverData, VGPUPipeline* resource)
+static void d3d12_destroyPipeline(VGPURenderer* driverData, VGPUPipeline resource)
 {
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
     D3D12Pipeline* pipeline = (D3D12Pipeline*)resource;
@@ -2218,7 +2247,7 @@ static void d3d12_TransitionResource(D3D12CommandBuffer* commandBuffer, D3D12Res
     }
 }
 
-static void d3d12_setPipeline(VGPUCommandBufferImpl* driverData, VGPUPipeline* pipeline)
+static void d3d12_setPipeline(VGPUCommandBufferImpl* driverData, VGPUPipeline pipeline)
 {
     D3D12CommandBuffer* commandBuffer = (D3D12CommandBuffer*)driverData;
     D3D12Pipeline* d3dPipeline = (D3D12Pipeline*)pipeline;
@@ -2367,43 +2396,18 @@ static void d3d12_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGPUR
         // Transition to RenderTarget
         d3d12_TransitionResource(commandBuffer, texture, D3D12_RESOURCE_STATE_RENDER_TARGET, true);
 
-        switch (attachment->load_action)
+        commandBuffer->RTVs[numRTVS].BeginningAccess.Type = ToD3D12(attachment->loadAction);
+        if (attachment->loadAction == VGPULoadAction_Clear)
         {
-            default:
-            case VGPU_LOAD_ACTION_LOAD:
-                commandBuffer->RTVs[numRTVS].BeginningAccess.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_PRESERVE;
-                break;
-
-            case VGPU_LOAD_ACTION_CLEAR:
-                commandBuffer->RTVs[numRTVS].BeginningAccess.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR;
-                commandBuffer->RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Format = texture->dxgiFormat;
-                commandBuffer->RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Color[0] = attachment->clearColor.r;
-                commandBuffer->RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Color[1] = attachment->clearColor.g;
-                commandBuffer->RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Color[2] = attachment->clearColor.b;
-                commandBuffer->RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Color[3] = attachment->clearColor.a;
-                break;
-
-            case VGPU_LOAD_ACTION_DONT_CARE:
-                commandBuffer->RTVs[numRTVS].BeginningAccess.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_DISCARD;
-                break;
+            commandBuffer->RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Format = texture->dxgiFormat;
+            commandBuffer->RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Color[0] = attachment->clearColor.r;
+            commandBuffer->RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Color[1] = attachment->clearColor.g;
+            commandBuffer->RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Color[2] = attachment->clearColor.b;
+            commandBuffer->RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Color[3] = attachment->clearColor.a;
         }
 
-        switch (attachment->store_action)
-        {
-            default:
-            case VGPU_STORE_ACTION_DONT_CARE:
-                commandBuffer->RTVs[numRTVS].EndingAccess.Type = D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_DISCARD;
-                break;
-
-            case VGPU_STORE_ACTION_STORE:
-                commandBuffer->RTVs[numRTVS].EndingAccess.Type = D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_PRESERVE;
-                break;
-
-            //case VGPU_STORE_ACTION_RESOLVE:
-            //case VGPU_STORE_ACTION_RESOLVE_AND_RESOLVE:
-            //    commandBuffer->RTVs[numRTVS].EndingAccess.Type = D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_RESOLVE;
-            //    break;
-        }
+        // TODO: Resolve
+        commandBuffer->RTVs[numRTVS].EndingAccess.Type = ToD3D12(attachment->storeAction);
 
         width = _VGPU_MIN(width, _VGPU_MAX(1U, texture->width >> level));
         height = _VGPU_MIN(height, _VGPU_MAX(1U, texture->height >> level));
@@ -2419,69 +2423,26 @@ static void d3d12_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGPUR
         const uint32_t level = attachment->level;
         const uint32_t slice = attachment->slice;
 
-        DSV.cpuDescriptor = d3d12_GetDSV(commandBuffer->renderer, texture, level, slice);
-        DSV.StencilBeginningAccess.Clear.ClearValue.Format = texture->dxgiFormat;
-
-        switch (attachment->depthLoadOp)
-        {
-            default:
-            case VGPU_LOAD_ACTION_LOAD:
-                DSV.DepthBeginningAccess.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_PRESERVE;
-                break;
-
-            case VGPU_LOAD_ACTION_CLEAR:
-                DSV.DepthBeginningAccess.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR;
-                DSV.DepthBeginningAccess.Clear.ClearValue.DepthStencil.Depth = attachment->clearDepth;
-                break;
-
-            case VGPU_LOAD_ACTION_DONT_CARE:
-                DSV.DepthBeginningAccess.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_DISCARD;
-                break;
-        }
-
-        switch (attachment->depthStoreOp)
-        {
-            default:
-            case VGPU_STORE_ACTION_DONT_CARE:
-                DSV.DepthEndingAccess.Type = D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_DISCARD;
-                break;
-
-            case VGPU_STORE_ACTION_STORE:
-                DSV.DepthEndingAccess.Type = D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_PRESERVE;
-                break;
-        }
-
-        switch (attachment->stencilLoadOp)
-        {
-            default:
-            case VGPU_LOAD_ACTION_LOAD:
-                DSV.StencilBeginningAccess.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_PRESERVE;
-                break;
-
-            case VGPU_LOAD_ACTION_CLEAR:
-                DSV.StencilBeginningAccess.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR;
-                DSV.StencilBeginningAccess.Clear.ClearValue.DepthStencil.Stencil = attachment->clearStencil;
-                break;
-
-            case VGPU_LOAD_ACTION_DONT_CARE:
-                DSV.StencilBeginningAccess.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_DISCARD;
-                break;
-        }
-
-        switch (attachment->stencilStoreOp)
-        {
-            default:
-            case VGPU_STORE_ACTION_DONT_CARE:
-                DSV.DepthEndingAccess.Type = D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_DISCARD;
-                break;
-
-            case VGPU_STORE_ACTION_STORE:
-                DSV.DepthEndingAccess.Type = D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_PRESERVE;
-                break;
-        }
-
         width = _VGPU_MIN(width, _VGPU_MAX(1U, texture->width >> level));
         height = _VGPU_MIN(height, _VGPU_MAX(1U, texture->height >> level));
+
+        DSV.cpuDescriptor = d3d12_GetDSV(commandBuffer->renderer, texture, level, slice);
+
+        DSV.DepthBeginningAccess.Type = ToD3D12(attachment->depthLoadOp);
+        if (attachment->depthLoadOp == VGPULoadAction_Clear)
+        {
+            DSV.DepthBeginningAccess.Clear.ClearValue.Format = texture->dxgiFormat;
+            DSV.DepthBeginningAccess.Clear.ClearValue.DepthStencil.Depth = attachment->clearDepth;
+        }
+        DSV.DepthEndingAccess.Type = ToD3D12(attachment->depthStoreOp);
+
+        DSV.StencilBeginningAccess.Type = ToD3D12(attachment->stencilLoadOp);
+        if (attachment->stencilLoadOp == VGPULoadAction_Clear)
+        {
+            DSV.StencilBeginningAccess.Clear.ClearValue.Format = texture->dxgiFormat;
+            DSV.StencilBeginningAccess.Clear.ClearValue.DepthStencil.Stencil = attachment->clearStencil;
+        }
+        DSV.StencilEndingAccess.Type = ToD3D12(attachment->stencilStoreOp);
     }
 
     commandBuffer->commandList->BeginRenderPass(numRTVS,
@@ -2490,13 +2451,10 @@ static void d3d12_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGPUR
         renderPassFlags);
 
     // Set the viewport.
-    static constexpr float defaultBlendFactor[4] = { 0, 0, 0, 0 };
     D3D12_VIEWPORT viewport = { 0.0f, 0.0f, float(width), float(height), 0.0f, 1.0f };
     D3D12_RECT scissorRect = { 0, 0, LONG(width), LONG(height) };
     commandBuffer->commandList->RSSetViewports(1, &viewport);
     commandBuffer->commandList->RSSetScissorRects(1, &scissorRect);
-    commandBuffer->commandList->OMSetBlendFactor(defaultBlendFactor);
-    commandBuffer->commandList->OMSetStencilRef(0);
     commandBuffer->insideRenderPass = true;
 }
 
@@ -2574,6 +2532,13 @@ static void d3d12_setIndexBuffer(VGPUCommandBufferImpl* driverData, vgpu_buffer*
     view.SizeInBytes = (UINT)(d3d12Buffer->size - offset);
     view.Format = (type == VGPU_INDEX_TYPE_UINT16 ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT);
     commandBuffer->commandList->IASetIndexBuffer(&view);
+}
+
+static void d3d12_setStencilReference(VGPUCommandBufferImpl* driverData, uint32_t reference)
+{
+    D3D12CommandBuffer* commandBuffer = (D3D12CommandBuffer*)driverData;
+
+    commandBuffer->commandList->OMSetStencilRef(reference);
 }
 
 static void d3d12_prepareDraw(D3D12CommandBuffer* commandBuffer)

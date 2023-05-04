@@ -107,7 +107,7 @@ typedef struct VGPUCommandBuffer_T {
     void (*popDebugGroup)(VGPUCommandBufferImpl* driverData);
     void (*insertDebugMarker)(VGPUCommandBufferImpl* driverData, const char* debugLabel);
 
-    void (*setPipeline)(VGPUCommandBufferImpl* driverData, VGPUPipeline* pipeline);
+    void (*setPipeline)(VGPUCommandBufferImpl* driverData, VGPUPipeline pipeline);
     void (*dispatch)(VGPUCommandBufferImpl* driverData, uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ);
     void (*dispatchIndirect)(VGPUCommandBufferImpl* driverData, vgpu_buffer* buffer, uint64_t offset);
 
@@ -120,6 +120,7 @@ typedef struct VGPUCommandBuffer_T {
     void (*setScissorRect)(VGPUCommandBufferImpl* driverData, const VGPURect* rects);
     void (*setVertexBuffer)(VGPUCommandBufferImpl* driverData, uint32_t index, vgpu_buffer* buffer, uint64_t offset);
     void (*setIndexBuffer)(VGPUCommandBufferImpl* driverData, vgpu_buffer* buffer, uint64_t offset, vgpu_index_type type);
+    void (*setStencilReference)(VGPUCommandBufferImpl* driverData, uint32_t reference);
 
     void (*draw)(VGPUCommandBufferImpl* driverData, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t firstInstance);
     void (*drawIndexed)(VGPUCommandBufferImpl* driverData, uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t baseVertex, uint32_t firstInstance);
@@ -146,16 +147,16 @@ typedef struct VGPUDeviceImpl
     VGPUTexture(*createTexture)(VGPURenderer* driverData, const VGPUTextureDesc* desc, const void* pInitialData);
     void(*destroyTexture)(VGPURenderer* driverData, VGPUTexture resource);
 
-    VGPUSampler*(*createSampler)(VGPURenderer* driverData, const VGPUSamplerDesc* desc);
-    void(*destroySampler)(VGPURenderer* driverData, VGPUSampler* resource);
+    VGPUSampler(*createSampler)(VGPURenderer* driverData, const VGPUSamplerDesc* desc);
+    void(*destroySampler)(VGPURenderer* driverData, VGPUSampler resource);
 
     VGPUShaderModule(*createShaderModule)(VGPURenderer* driverData, const void* pCode, size_t codeSize);
     void(*destroyShaderModule)(VGPURenderer* driverData, VGPUShaderModule resource);
 
-    VGPUPipeline*(*createRenderPipeline)(VGPURenderer* driverData, const VGPURenderPipelineDesc* desc);
-    VGPUPipeline*(*createComputePipeline)(VGPURenderer* driverData, const VGPUComputePipelineDescriptor* desc);
-    VGPUPipeline*(*createRayTracingPipeline)(VGPURenderer* driverData, const VGPURayTracingPipelineDesc* desc);
-    void(*destroyPipeline)(VGPURenderer* driverData, VGPUPipeline* resource);
+    VGPUPipeline(*createRenderPipeline)(VGPURenderer* driverData, const VGPURenderPipelineDesc* desc);
+    VGPUPipeline(*createComputePipeline)(VGPURenderer* driverData, const VGPUComputePipelineDescriptor* desc);
+    VGPUPipeline(*createRayTracingPipeline)(VGPURenderer* driverData, const VGPURayTracingPipelineDesc* desc);
+    void(*destroyPipeline)(VGPURenderer* driverData, VGPUPipeline resource);
 
     VGPUSwapChain*(*createSwapChain)(VGPURenderer* driverData, void* windowHandle, const VGPUSwapChainDesc* desc);
     void(*destroySwapChain)(VGPURenderer* driverData, VGPUSwapChain* swapChain);
@@ -186,6 +187,7 @@ ASSIGN_COMMAND_BUFFER_FUNC(setViewports, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(setScissorRect, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(setVertexBuffer, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(setIndexBuffer, name) \
+ASSIGN_COMMAND_BUFFER_FUNC(setStencilReference, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(draw, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(drawIndexed, name)
 

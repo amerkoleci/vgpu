@@ -430,23 +430,23 @@ namespace
         }
     }
 
-    constexpr VkAttachmentLoadOp ToVkAttachmentLoadOp(vgpu_load_action op)
+    constexpr VkAttachmentLoadOp ToVkAttachmentLoadOp(VGPULoadAction op)
     {
         switch (op)
         {
             default:
-            case VGPU_LOAD_ACTION_LOAD:
+            case VGPULoadAction_Load:
                 return VK_ATTACHMENT_LOAD_OP_LOAD;
 
-            case VGPU_LOAD_ACTION_CLEAR:
+            case VGPULoadAction_Clear:
                 return VK_ATTACHMENT_LOAD_OP_CLEAR;
 
-            case VGPU_LOAD_ACTION_DONT_CARE:
+            case VGPULoadAction_DontCare:
                 return VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         }
     }
 
-    constexpr VkAttachmentStoreOp ToVkAttachmentStoreOp(vgpu_store_action op)
+    constexpr VkAttachmentStoreOp ToVkAttachmentStoreOp(VGPUStoreAction op)
     {
         switch (op)
         {
@@ -1999,7 +1999,7 @@ static void vulkan_destroyTexture(VGPURenderer* driverData, VGPUTexture texture)
 }
 
 /* Sampler */
-static VGPUSampler* vulkan_createSampler(VGPURenderer* driverData, const VGPUSamplerDesc* desc)
+static VGPUSampler vulkan_createSampler(VGPURenderer* driverData, const VGPUSamplerDesc* desc)
 {
     VulkanRenderer* renderer = (VulkanRenderer*)driverData;
     VulkanSampler* sampler = new VulkanSampler();
@@ -2055,10 +2055,10 @@ static VGPUSampler* vulkan_createSampler(VGPURenderer* driverData, const VGPUSam
         vulkan_SetObjectName(renderer, VK_OBJECT_TYPE_SAMPLER, (uint64_t)sampler->handle, desc->label);
     }
 
-    return (VGPUSampler*)sampler;
+    return (VGPUSampler)sampler;
 }
 
-static void vulkan_destroySampler(VGPURenderer* driverData, VGPUSampler* resource)
+static void vulkan_destroySampler(VGPURenderer* driverData, VGPUSampler resource)
 {
     VulkanRenderer* renderer = (VulkanRenderer*)driverData;
     VulkanSampler* sampler = (VulkanSampler*)resource;
@@ -2104,7 +2104,7 @@ static void vulkan_destroyShaderModule(VGPURenderer* driverData, VGPUShaderModul
 }
 
 /* Pipeline */
-static VGPUPipeline* vulkan_createRenderPipeline(VGPURenderer* driverData, const VGPURenderPipelineDesc* desc)
+static VGPUPipeline vulkan_createRenderPipeline(VGPURenderer* driverData, const VGPURenderPipelineDesc* desc)
 {
     VulkanRenderer* renderer = (VulkanRenderer*)driverData;
 
@@ -2258,10 +2258,10 @@ static VGPUPipeline* vulkan_createRenderPipeline(VGPURenderer* driverData, const
     VulkanPipeline* pipeline = VGPU_ALLOC_CLEAR(VulkanPipeline);
     pipeline->pipelineLayout = createInfo.layout;
     pipeline->handle = handle;
-    return (VGPUPipeline*)pipeline;
+    return (VGPUPipeline)pipeline;
 }
 
-static VGPUPipeline* vulkan_createComputePipeline(VGPURenderer* driverData, const VGPUComputePipelineDescriptor* desc)
+static VGPUPipeline vulkan_createComputePipeline(VGPURenderer* driverData, const VGPUComputePipelineDescriptor* desc)
 {
     VulkanRenderer* renderer = (VulkanRenderer*)driverData;
     VulkanShader* shader = (VulkanShader*)desc->shader;
@@ -2287,19 +2287,19 @@ static VGPUPipeline* vulkan_createComputePipeline(VGPURenderer* driverData, cons
 
     VulkanPipeline* pipeline = VGPU_ALLOC_CLEAR(VulkanPipeline);
     pipeline->handle = handle;
-    return (VGPUPipeline*)pipeline;
+    return (VGPUPipeline)pipeline;
 }
 
-static VGPUPipeline* vulkan_createRayTracingPipeline(VGPURenderer* driverData, const VGPURayTracingPipelineDesc* desc)
+static VGPUPipeline vulkan_createRayTracingPipeline(VGPURenderer* driverData, const VGPURayTracingPipelineDesc* desc)
 {
     VGPU_UNUSED(driverData);
     VGPU_UNUSED(desc);
 
     VulkanPipeline* pipeline = VGPU_ALLOC_CLEAR(VulkanPipeline);
-    return (VGPUPipeline*)pipeline;
+    return (VGPUPipeline)pipeline;
 }
 
-static void vulkan_destroyPipeline(VGPURenderer* driverData, VGPUPipeline* resource)
+static void vulkan_destroyPipeline(VGPURenderer* driverData, VGPUPipeline resource)
 {
     VulkanRenderer* renderer = (VulkanRenderer*)driverData;
     VulkanPipeline* pipeline = (VulkanPipeline*)resource;
@@ -2621,7 +2621,7 @@ static void vulkan_insertDebugMarker(VGPUCommandBufferImpl* driverData, const ch
     vkCmdInsertDebugUtilsLabelEXT(commandBuffer->handle, &label);
 }
 
-static void vulkan_setPipeline(VGPUCommandBufferImpl* driverData, VGPUPipeline* pipeline)
+static void vulkan_setPipeline(VGPUCommandBufferImpl* driverData, VGPUPipeline pipeline)
 {
     VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
     VulkanPipeline* vulkanPipeline = (VulkanPipeline*)pipeline;
@@ -2763,8 +2763,8 @@ static void vulkan_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGPU
         attachmentInfo.imageView = vulkan_GetRTV(commandBuffer->renderer, texture, level, slice);
         attachmentInfo.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         attachmentInfo.resolveMode = VK_RESOLVE_MODE_NONE;
-        attachmentInfo.loadOp = ToVkAttachmentLoadOp(attachment->load_action);
-        attachmentInfo.storeOp = ToVkAttachmentStoreOp(attachment->store_action);
+        attachmentInfo.loadOp = ToVkAttachmentLoadOp(attachment->loadAction);
+        attachmentInfo.storeOp = ToVkAttachmentStoreOp(attachment->storeAction);
 
         attachmentInfo.clearValue.color.float32[0] = attachment->clearColor.r;
         attachmentInfo.clearValue.color.float32[1] = attachment->clearColor.g;
@@ -2864,6 +2864,12 @@ static void vulkan_setIndexBuffer(VGPUCommandBufferImpl* driverData, vgpu_buffer
     VulkanBuffer* vulkanBuffer = (VulkanBuffer*)buffer;
     const VkIndexType vkIndexType = (type == VGPU_INDEX_TYPE_UINT16) ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32;
     vkCmdBindIndexBuffer(commandBuffer->handle, vulkanBuffer->handle, offset, vkIndexType);
+}
+
+static void vulkan_setStencilReference(VGPUCommandBufferImpl* driverData, uint32_t reference)
+{
+    VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
+    vkCmdSetStencilReference(commandBuffer->handle, VK_STENCIL_FRONT_AND_BACK, reference);
 }
 
 static void vulkan_prepareDraw(VulkanCommandBuffer* commandBuffer)

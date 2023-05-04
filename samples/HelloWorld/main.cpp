@@ -28,7 +28,7 @@ VGPUSwapChain* swapChain = nullptr;
 VGPUTexture depthStencilTexture = nullptr;
 vgpu_buffer* vertex_buffer = nullptr;
 vgpu_buffer* index_buffer = nullptr;
-VGPUPipeline* renderPipeline = nullptr;
+VGPUPipeline renderPipeline = nullptr;
 
 inline void vgpu_log(VGPULogLevel level, const char* message, void* user_data)
 {
@@ -244,8 +244,8 @@ void draw_frame()
     {
         VGPURenderPassColorAttachment colorAttachment = {};
         colorAttachment.texture = swapChainTexture;
-        colorAttachment.load_action = VGPU_LOAD_ACTION_CLEAR;
-        colorAttachment.store_action = VGPU_STORE_ACTION_STORE;
+        colorAttachment.loadAction = VGPULoadAction_Clear;
+        colorAttachment.storeAction = VGPU_STORE_ACTION_STORE;
         colorAttachment.clearColor.r = 0.3f;
         colorAttachment.clearColor.g = 0.3f;
         colorAttachment.clearColor.b = 0.3f;
@@ -253,7 +253,7 @@ void draw_frame()
 
         VGPURenderPassDepthStencilAttachment depthStencilAttachment{};
         depthStencilAttachment.texture = depthStencilTexture;
-        depthStencilAttachment.depthLoadOp = VGPU_LOAD_ACTION_CLEAR;
+        depthStencilAttachment.depthLoadOp = VGPULoadAction_Clear;
         depthStencilAttachment.depthStoreOp = VGPU_STORE_ACTION_STORE;
         depthStencilAttachment.clearDepth = 1.0f;
 
