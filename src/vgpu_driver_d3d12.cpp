@@ -574,7 +574,9 @@ struct D3D12DescriptorAllocator
     {
         heaps.emplace_back();
         HRESULT hr = device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&heaps.back()));
+        VGPU_UNUSED(hr);
         VGPU_ASSERT(SUCCEEDED(hr));
+
         D3D12_CPU_DESCRIPTOR_HANDLE heap_start = heaps.back()->GetCPUDescriptorHandleForHeapStart();
         for (UINT i = 0; i < desc.NumDescriptors; ++i)
         {
@@ -966,7 +968,7 @@ static D3D12_CPU_DESCRIPTOR_HANDLE d3d12_GetRTV(D3D12_Renderer* renderer, D3D12R
                 viewDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE3D;
                 viewDesc.Texture3D.MipSlice = mipLevel;
                 viewDesc.Texture3D.FirstWSlice = slice;
-                viewDesc.Texture3D.WSize = -1;
+                viewDesc.Texture3D.WSize = static_cast<UINT>(-1);
                 break;
             }
             break;
@@ -1092,7 +1094,7 @@ static void d3d12_UploadSubmit(D3D12_Renderer* renderer, D3D12_UploadContext con
     renderer->uploadLocker.unlock();
 }
 
-static void d3d12_destroyDevice(VGPUDevice* device)
+static void d3d12_destroyDevice(VGPUDevice device)
 {
     // Wait idle
     vgpu_wait_idle();
@@ -1151,9 +1153,9 @@ static void d3d12_destroyDevice(VGPUDevice* device)
     for (size_t i = 0; i < renderer->commandBuffers.size(); ++i)
     {
         D3D12CommandBuffer* commandBuffer = (D3D12CommandBuffer*)renderer->commandBuffers[i]->driverData;
-        for (uint32_t i = 0; i < VGPU_MAX_INFLIGHT_FRAMES; ++i)
+        for (uint32_t frameIndex = 0; frameIndex < VGPU_MAX_INFLIGHT_FRAMES; ++frameIndex)
         {
-            SAFE_RELEASE(commandBuffer->commandAllocators[i]);
+            SAFE_RELEASE(commandBuffer->commandAllocators[frameIndex]);
         }
         SAFE_RELEASE(commandBuffer->commandList);
     }
@@ -1214,6 +1216,8 @@ static void d3d12_destroyDevice(VGPUDevice* device)
 
 static void d3d12_updateSwapChain(D3D12_Renderer* renderer, D3D12_SwapChain* swapChain)
 {
+    VGPU_UNUSED(renderer);
+
     HRESULT hr = S_OK;
 
     DXGI_SWAP_CHAIN_DESC1 swapChainDesc;
@@ -1837,6 +1841,8 @@ static void d3d12_destroySampler(VGPURenderer* driverData, VGPUSampler* resource
 /* ShaderModule */
 static VGPUShaderModule d3d12_createShaderModule(VGPURenderer* driverData, const void* pCode, size_t codeSize)
 {
+    VGPU_UNUSED(driverData);
+
     D3D12Shader* shader = VGPU_ALLOC(D3D12Shader);
     shader->byteCode = _vgpu_alloc(codeSize);
     shader->byteCodeSize = codeSize;
@@ -1847,6 +1853,8 @@ static VGPUShaderModule d3d12_createShaderModule(VGPURenderer* driverData, const
 
 static void d3d12_destroyShaderModule(VGPURenderer* driverData, VGPUShaderModule resource)
 {
+    VGPU_UNUSED(driverData);
+
     D3D12Shader* shader = (D3D12Shader*)resource;
     VGPU_FREE(shader->byteCode);
     VGPU_FREE(shader);
@@ -1988,7 +1996,10 @@ static VGPUPipeline* d3d12_createComputePipeline(VGPURenderer* driverData, const
 
 static VGPUPipeline* d3d12_createRayTracingPipeline(VGPURenderer* driverData, const VGPURayTracingPipelineDesc* desc)
 {
-    D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
+    VGPU_UNUSED(desc);
+    VGPU_UNUSED(driverData);
+
+    //D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
     D3D12Pipeline* pipeline = new D3D12Pipeline();
     return (VGPUPipeline*)pipeline;
 }
@@ -2218,7 +2229,7 @@ static void d3d12_setPipeline(VGPUCommandBufferImpl* driverData, VGPUPipeline* p
 
 static void d3d12_prepareDispatch(D3D12CommandBuffer* commandBuffer)
 {
-    VGPU_ASSERT(commandBuffer->insideRenderPass);
+    VGPU_VERIFY(commandBuffer->insideRenderPass);
 }
 
 static void d3d12_dispatch(VGPUCommandBufferImpl* driverData, uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)
@@ -2282,7 +2293,7 @@ static VGPUTexture d3d12_acquireSwapchainTexture(VGPUCommandBufferImpl* driverDa
         }
         d3d12SwapChain->backbufferTextures.clear();
 
-        HRESULT hr = d3d12SwapChain->handle->ResizeBuffers(
+        hr = d3d12SwapChain->handle->ResizeBuffers(
             d3d12SwapChain->backBufferCount,
             width,
             height,
@@ -2568,6 +2579,8 @@ static void d3d12_setIndexBuffer(VGPUCommandBufferImpl* driverData, vgpu_buffer*
 
 static void d3d12_prepareDraw(D3D12CommandBuffer* commandBuffer)
 {
+    VGPU_UNUSED(commandBuffer);
+
     VGPU_ASSERT(commandBuffer->insideRenderPass);
 }
 
@@ -2676,9 +2689,9 @@ static void d3d12_submit(VGPURenderer* driverData, VGPUCommandBuffer* commandBuf
         D3D12CommandBuffer* commandBuffer = (D3D12CommandBuffer*)commandBuffers[i]->driverData;
 
         // Present acquired SwapChains
-        for (size_t i = 0, count = commandBuffer->swapChains.size(); i < count && SUCCEEDED(hr); ++i)
+        for (size_t swapChainIndex = 0; swapChainIndex < commandBuffer->swapChains.size(); ++swapChainIndex)
         {
-            D3D12_SwapChain* swapChain = commandBuffer->swapChains[i];
+            D3D12_SwapChain* swapChain = commandBuffer->swapChains[swapChainIndex];
 
             /* Transition SwapChain textures to present */
             D3D12Resource* texture = (D3D12Resource*)swapChain->backbufferTextures[swapChain->handle->GetCurrentBackBufferIndex()];
@@ -2715,7 +2728,7 @@ static void d3d12_submit(VGPURenderer* driverData, VGPUCommandBuffer* commandBuf
     renderer->cmdBuffersCount = 0;
 
     // Present acquired SwapChains
-    for (size_t i = 0, count = presentSwapChains.size(); i < count && SUCCEEDED(hr); ++i)
+    for (size_t i = 0; i < presentSwapChains.size() && SUCCEEDED(hr); ++i)
     {
         D3D12_SwapChain* swapChain = presentSwapChains[i];
 
@@ -2847,7 +2860,7 @@ static VGPUBool32 d3d12_isSupported(void)
     return false;
 }
 
-static VGPUDevice* d3d12_createDevice(const vgpu_config* info)
+static VGPUDeviceImpl* d3d12_createDevice(const VGPUDeviceDescriptor* info)
 {
     VGPU_ASSERT(info);
 
@@ -3228,7 +3241,7 @@ static VGPUDevice* d3d12_createDevice(const vgpu_config* info)
         d3d12_CreateRootSignature(renderer->device, &renderer->globalRootSignature, rootSignatureDesc);
     }
 
-    VGPUDevice* device = VGPU_ALLOC_CLEAR(VGPUDevice);
+    VGPUDeviceImpl* device = VGPU_ALLOC_CLEAR(VGPUDeviceImpl);
     ASSIGN_DRIVER(d3d12);
     device->driverData = (VGPURenderer*)renderer;
     return device;

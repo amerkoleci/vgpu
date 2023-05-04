@@ -164,21 +164,16 @@ VGPUBool32 vgpu_is_supported(vgpu_backend backend)
     return false;
 }
 
-static VGPUDevice* s_renderer = NULL;
+static VGPUDevice s_renderer = NULL;
 
-VGPUBool32 vgpu_init(const vgpu_config* desc)
+VGPUDevice vgpuCreateDevice(const VGPUDeviceDescriptor* desc)
 {
     if (!desc) {
         vgpu_log_warn("vgpu_init: Invalid config");
         return false;
     }
 
-    if (s_renderer)
-    {
-        vgpu_log_warn("vgpu_init: Already initialized");
-        return true;
-    }
-
+    VGPUDevice device = NULL;
     vgpu_backend backend = desc->preferred_backend;
 
 retry:
@@ -191,7 +186,7 @@ retry:
 
             if (drivers[i]->is_supported())
             {
-                s_renderer = drivers[i]->createDevice(desc);
+                device = drivers[i]->createDevice(desc);
                 break;
             }
         }
@@ -207,7 +202,7 @@ retry:
             {
                 if (drivers[i]->is_supported())
                 {
-                    s_renderer = drivers[i]->createDevice(desc);
+                    device = drivers[i]->createDevice(desc);
                     break;
                 }
                 else
@@ -220,12 +215,15 @@ retry:
         }
     }
 
-    return s_renderer != NULL;
+    s_renderer = device;
+    return device;
 }
 
-void vgpu_shutdown(void) {
-    NULL_RETURN(s_renderer);
-    s_renderer->destroyDevice(s_renderer);
+void vgpuDeviceDestroy(VGPUDevice device) {
+    NULL_RETURN(device);
+
+    device->destroyDevice(device);
+    s_renderer = NULL;
 }
 
 uint64_t vgpu_frame(void) {
@@ -664,7 +662,7 @@ void vgpuDraw(VGPUCommandBuffer commandBuffer, uint32_t vertexStart, uint32_t ve
 
 void vgpuDrawIndexed(VGPUCommandBuffer commandBuffer, uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t baseVertex, uint32_t firstInstance)
 {
-    commandBuffer->drawIndexed(commandBuffer->driverData, indexCount, instanceCount, firstIndex, firstIndex, firstInstance);
+    commandBuffer->drawIndexed(commandBuffer->driverData, indexCount, instanceCount, firstIndex, baseVertex, firstInstance);
 }
 
 void vgpu_submit(VGPUCommandBuffer* commandBuffers, uint32_t count)

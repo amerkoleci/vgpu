@@ -23,6 +23,7 @@
 #include <assert.h>
 #include <vgpu.h>
 
+VGPUDevice device = nullptr;
 VGPUSwapChain* swapChain = nullptr;
 VGPUTexture depthStencilTexture = nullptr;
 vgpu_buffer* vertex_buffer = nullptr;
@@ -89,34 +90,22 @@ namespace
 
 void init_vgpu()
 #else
-void* os_get_gl_proc_address(const char* function) {
-    return (void*)glfwGetProcAddress(function);
-}
-
-void init_vgpu(GLFWwindow* window, bool opengl)
+void init_vgpu(GLFWwindow* window)
 #endif
 {
-    vgpu_config deviceDesc{};
+    VGPUDeviceDescriptor deviceDesc{};
     deviceDesc.label = "test device";
 #ifdef _DEBUG
     deviceDesc.validationMode = VGPUValidationMode_Enabled;
 #endif
 
-    if (opengl)
-    {
-        deviceDesc.gl.gl_get_proc_address = os_get_gl_proc_address;
-    }
-
-    if (opengl && vgpu_is_supported(VGPU_BACKEND_OPENGL))
-    {
-        deviceDesc.preferred_backend = VGPU_BACKEND_OPENGL;
-    }
-    else if (vgpu_is_supported(VGPU_BACKEND_VULKAN))
+    if (vgpu_is_supported(VGPU_BACKEND_VULKAN))
     {
         deviceDesc.preferred_backend = VGPU_BACKEND_VULKAN;
     }
 
-    assert(vgpu_init(&deviceDesc));
+    device = vgpuCreateDevice(&deviceDesc);
+    assert(device != nullptr);
 
     VGPUAdapterProperties adapterProps;
     vgpuGetAdapterProperties(&adapterProps);
@@ -286,34 +275,15 @@ int main()
 
     //vgpu_set_log_callback(vgpu_log, nullptr);
 
-    bool opengl = false;
-    if (opengl)
-    {
-        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-        glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    }
-    else
-    {
-        glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    }
-
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
     GLFWwindow* window = glfwCreateWindow(1280, 720, "Hello World", NULL, NULL);
-    if (opengl)
-    {
-        glfwMakeContextCurrent(window);
-        glfwSwapInterval(1);
-    }
-    init_vgpu(window, opengl);
+    init_vgpu(window);
 
     glfwShowWindow(window);
     while (!glfwWindowShouldClose(window))
     {
         draw_frame();
-        if (opengl) {
-            glfwSwapBuffers(window);
-        }
         glfwPollEvents();
     }
 
@@ -323,7 +293,7 @@ int main()
     vgpu_texture_destroy(depthStencilTexture);
     vgpu_pipeline_destroy(renderPipeline);
     vgpuDestroySwapChain(swapChain);
-    vgpu_shutdown();
+    vgpuDeviceDestroy(device);
     glfwDestroyWindow(window);
     glfwTerminate();
 #endif

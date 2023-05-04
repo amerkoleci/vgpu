@@ -47,6 +47,7 @@ typedef uint32_t VGPUBool32;
 typedef uint32_t VGPUFlags;
 typedef uint64_t VGPUDeviceAddress;
 
+typedef struct VGPUDeviceImpl* VGPUDevice;
 typedef struct vgpu_buffer vgpu_buffer;
 typedef struct VGPUTexture_T* VGPUTexture;
 typedef struct vgpu_texture_view vgpu_texture_view;
@@ -70,7 +71,6 @@ typedef enum vgpu_backend {
     VGPU_BACKEND_VULKAN,
     VGPU_BACKEND_D3D12,
     VGPU_BACKEND_D3D11,
-    VGPU_BACKEND_OPENGL,
 
     _VGPU_BACKEND_COUNT,
     _VGPU_BACKEND_FORCE_U32 = 0x7FFFFFFF
@@ -89,6 +89,7 @@ typedef enum VGPUValidationMode {
 typedef enum VGPUCommandQueue {
     VGPUCommandQueue_Graphics,
     VGPUCommandQueue_Compute,
+    VGPUCommandQueue_Copy,
 
     _VGPUCommandQueue_Count,
     _VGPUCommandQueue_Force32 = 0x7FFFFFFF
@@ -641,15 +642,11 @@ typedef struct VGPUSwapChainDesc
     VGPUBool32 isFullscreen;
 } VGPUSwapChainDesc;
 
-typedef struct vgpu_config {
+typedef struct VGPUDeviceDescriptor {
     const char* label;
     vgpu_backend preferred_backend;
     VGPUValidationMode validationMode;
-
-    struct {
-        void*(*gl_get_proc_address)(const char* name);
-    } gl;
-} vgpu_config;
+} VGPUDeviceDescriptor;
 
 typedef struct VGPUAdapterProperties {
     uint32_t vendorID;
@@ -695,8 +692,8 @@ typedef struct vgpu_allocation_callbacks {
 VGPU_API void vgpuSetAllocationCallbacks(const vgpu_allocation_callbacks* callback);
 
 VGPU_API VGPUBool32 vgpu_is_supported(vgpu_backend backend);
-VGPU_API VGPUBool32 vgpu_init(const vgpu_config* desc);
-VGPU_API void vgpu_shutdown(void);
+VGPU_API VGPUDevice vgpuCreateDevice(const VGPUDeviceDescriptor* descriptor);
+VGPU_API void vgpuDeviceDestroy(VGPUDevice device);
 VGPU_API uint64_t vgpu_frame(void);
 VGPU_API void vgpu_wait_idle(void);
 VGPU_API vgpu_backend vgpu_get_backend(void);

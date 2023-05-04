@@ -26,6 +26,12 @@ _VGPU_EXTERN void _vgpu_free(void* ptr);
 #   define VGPU_ASSERT(c) assert(c)
 #endif
 
+#if (defined(_DEBUG) || defined(PROFILE))
+#   define VGPU_VERIFY(cond) VGPU_ASSERT(cond)
+#else
+#   define VGPU_VERIFY(cond) (void)(cond)
+#endif
+
 #define VGPU_UNUSED(x) (void)(x)
 
 #define _VGPU_COUNT_OF(arr) (sizeof(arr) / sizeof((arr)[0]))
@@ -121,11 +127,9 @@ typedef struct VGPUCommandBuffer_T {
     VGPUCommandBufferImpl* driverData;
 } VGPUCommandBuffer_T;
 
-typedef struct VGPUDevice VGPUDevice;
-
-typedef struct VGPUDevice
+typedef struct VGPUDeviceImpl
 {
-    void (*destroyDevice)(VGPUDevice* device);
+    void (*destroyDevice)(VGPUDevice device);
     uint64_t(*frame)(VGPURenderer* driverData);
     void (*waitIdle)(VGPURenderer* driverData);
     vgpu_backend(*getBackendType)(void);
@@ -161,7 +165,7 @@ typedef struct VGPUDevice
 
     /* Opaque pointer for the Driver */
     VGPURenderer* driverData;
-} VGPUDevice;
+} VGPUDeviceImpl;
 
 #define ASSIGN_DRIVER_FUNC(func, name) device->func = name##_##func;
 #define ASSIGN_COMMAND_BUFFER_FUNC(func, name) commandBuffer->func = name##_##func;
@@ -215,13 +219,12 @@ typedef struct VGFXDriver
 {
     vgpu_backend backend;
     VGPUBool32(*is_supported)(void);
-    VGPUDevice*(*createDevice)(const vgpu_config* config);
+    VGPUDeviceImpl*(*createDevice)(const VGPUDeviceDescriptor* descriptor);
 } VGFXDriver;
 
 _VGPU_EXTERN VGFXDriver Vulkan_Driver;
 _VGPU_EXTERN VGFXDriver D3D11_Driver;
 _VGPU_EXTERN VGFXDriver D3D12_Driver;
-_VGPU_EXTERN VGFXDriver OpenGL_Driver;
 //_VGPU_EXTERN VGFXDriver WebGPU_driver;
 
 #endif /* VGPU_DRIVER_H_ */
