@@ -51,7 +51,7 @@ std::string getShadersPath()
 VGPUShaderModule LoadShader(const char* fileName)
 {
     std::string shaderExt = ".spv";
-    if (vgpuDeviceGetBackend(device) == VGPU_BACKEND_D3D12)
+    if (vgpuGetBackend(device) == VGPU_BACKEND_D3D12)
     {
         shaderExt = ".cso";
     }
@@ -68,7 +68,7 @@ VGPUShaderModule LoadShader(const char* fileName)
 
         assert(size > 0);
 
-        VGPUShaderModule shader = vgpuCreateShaderModule(shaderCode, size);
+        VGPUShaderModule shader = vgpuCreateShaderModule(device, shaderCode, size);
 
         delete[] shaderCode;
 
@@ -112,10 +112,10 @@ void init_vgpu(GLFWwindow* window)
     assert(device != nullptr);
 
     VGPUAdapterProperties adapterProps;
-    vgpuDeviceGetAdapterProperties(device, &adapterProps);
+    vgpuGetAdapterProperties(device, &adapterProps);
 
     VGPULimits limits;
-    vgpuDeviceGetLimits(device, &limits);
+    vgpuGetLimits(device, &limits);
 
     int width = 0;
     int height = 0;
@@ -137,11 +137,17 @@ void init_vgpu(GLFWwindow* window)
     swapChainDesc.presentMode = VGPUPresentMode_Fifo;
     swapChain = vgpuCreateSwapChain(device, windowHandle, &swapChainDesc);
 
-    depthStencilTexture = vgpu_texture_create_2d(width, height,
-        VGPUTextureFormat_Depth32Float,
-        1,
-        VGPUTextureUsage_RenderTarget,
-        nullptr);
+    VGPUTextureDesc textureDesc = {};
+    textureDesc.type = VGPUTexture_Type2D;
+    textureDesc.width = width;
+    textureDesc.height = height;
+    //textureDesc.depthOrArrayLayers = 1u;
+    textureDesc.format = VGPUTextureFormat_Depth32Float;
+    textureDesc.usage = VGPUTextureUsage_RenderTarget;
+    textureDesc.mipLevelCount = 1u;
+    textureDesc.sampleCount = 1u;
+
+    depthStencilTexture = vgpuCreateTexture(device, &textureDesc, nullptr);
 
     // Create vertex buffer
     const float vertices[] = {
@@ -156,7 +162,7 @@ void init_vgpu(GLFWwindow* window)
     vertex_buffer_desc.label = "Vertex Buffer";
     vertex_buffer_desc.size = sizeof(vertices);
     vertex_buffer_desc.usage = VGPU_BUFFER_USAGE_VERTEX;
-    vertex_buffer = vgpu_buffer_create(&vertex_buffer_desc, vertices);
+    vertex_buffer = vgpuCreateBuffer(device, &vertex_buffer_desc, vertices);
 
     uint16_t indices[] = {
         0, 1, 2,    // first triangle
@@ -166,7 +172,7 @@ void init_vgpu(GLFWwindow* window)
     index_buffer_desc.label = "Vertex Buffer";
     index_buffer_desc.size = sizeof(indices);
     index_buffer_desc.usage = VGPU_BUFFER_USAGE_INDEX;
-    index_buffer = vgpu_buffer_create(&index_buffer_desc, indices);
+    index_buffer = vgpuCreateBuffer(device, &index_buffer_desc, indices);
 
     VGPUShaderModule vertex_shader = LoadShader("triangleVertex");
     VGPUShaderModule fragment_shader = LoadShader("triangleFragment");
@@ -185,9 +191,9 @@ void init_vgpu(GLFWwindow* window)
     renderPipelineDesc.depthStencilState.depthWriteEnabled = true;
     renderPipelineDesc.depthStencilState.depthCompare = VGPUCompareFunction_Less;
 
-    renderPipeline = vgpuCreateRenderPipeline(&renderPipelineDesc);
-    vgpuDestroyShaderModule(vertex_shader);
-    vgpuDestroyShaderModule(fragment_shader);
+    renderPipeline = vgpuCreateRenderPipeline(device, &renderPipelineDesc);
+    vgpuDestroyShaderModule(device, vertex_shader);
+    vgpuDestroyShaderModule(device, fragment_shader);
 }
 
 #if defined(__EMSCRIPTEN__)
@@ -228,7 +234,7 @@ KEEP_IN_MODULE void _glue_main_()
 
 void draw_frame()
 {
-    VGPUCommandBuffer commandBuffer = vgpuBeginCommandBuffer(VGPUCommandQueue_Graphics, "Frame");
+    VGPUCommandBuffer commandBuffer = vgpuBeginCommandBuffer(device, VGPUCommandQueue_Graphics, "Frame");
 
     // When window minimized texture is null
     uint32_t width;
@@ -263,8 +269,8 @@ void draw_frame()
         vgpuEndRenderPass(commandBuffer);
     }
 
-    vgpu_submit(&commandBuffer, 1u);
-    vgpu_frame();
+    vgpuSubmit(device, &commandBuffer, 1u);
+    vgpuFrame(device);
 }
 
 int main()
@@ -292,12 +298,12 @@ int main()
     }
 
     vgpuWaitIdle(device);
-    vgpu_buffer_destroy(vertex_buffer);
-    vgpu_buffer_destroy(index_buffer);
-    vgpu_texture_destroy(depthStencilTexture);
+    vgpuDestroyBuffer(device, vertex_buffer);
+    vgpuDestroyBuffer(device, index_buffer);
+    vgpuDestroyTexture(device, depthStencilTexture);
     vgpuDestroyPipeline(device, renderPipeline);
     vgpuDestroySwapChain(device, swapChain);
-    vgpuDeviceDestroy(device);
+    vgpuDestroyDevice(device);
     glfwDestroyWindow(window);
     glfwTerminate();
 #endif

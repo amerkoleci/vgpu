@@ -126,7 +126,7 @@ namespace
     static_assert(offsetof(VGPUDrawIndexedIndirectCommand, baseVertex) == offsetof(D3D12_DRAW_INDEXED_ARGUMENTS, BaseVertexLocation), "Layout mismatch");
     static_assert(offsetof(VGPUDrawIndexedIndirectCommand, firstInstance) == offsetof(D3D12_DRAW_INDEXED_ARGUMENTS, StartInstanceLocation), "Layout mismatch");
 
-    constexpr DXGI_FORMAT ToDXGIFormat(vgpu_pixel_format format)
+    constexpr DXGI_FORMAT ToDXGIFormat(VGPUPixelFormat format)
     {
         switch (format)
         {
@@ -210,7 +210,7 @@ namespace
         }
     }
 
-    constexpr vgpu_pixel_format FromDxgiFormat(DXGI_FORMAT format)
+    constexpr VGPUPixelFormat FromDxgiFormat(DXGI_FORMAT format)
     {
         switch (format)
         {
@@ -296,7 +296,7 @@ namespace
         }
     }
 
-    constexpr vgpu_pixel_format ToDXGISwapChainFormat(vgpu_pixel_format format)
+    constexpr VGPUPixelFormat ToDXGISwapChainFormat(VGPUPixelFormat format)
     {
         switch (format)
         {
@@ -318,23 +318,23 @@ namespace
         return VGPUTextureFormat_BGRA8Unorm;
     }
 
-    constexpr DXGI_FORMAT GetTypelessFormatFromDepthFormat(vgpu_pixel_format format)
+    constexpr DXGI_FORMAT GetTypelessFormatFromDepthFormat(VGPUPixelFormat format)
     {
         switch (format)
         {
+            case VGPUTextureFormat_Stencil8:
+                return DXGI_FORMAT_R24G8_TYPELESS;
             case VGPUTextureFormat_Depth16Unorm:
                 return DXGI_FORMAT_R16_TYPELESS;
             case VGPUTextureFormat_Depth32Float:
                 return DXGI_FORMAT_R32_TYPELESS;
-            case VGPUTextureFormat_Stencil8:
-                return DXGI_FORMAT_R24G8_TYPELESS;
             case VGPUTextureFormat_Depth24UnormStencil8:
                 return DXGI_FORMAT_R24G8_TYPELESS;
             case VGPUTextureFormat_Depth32FloatStencil8:
                 return DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS;
 
             default:
-                VGPU_ASSERT(vgpu_is_depth_stencil_format(format) == false);
+                VGPU_ASSERT(vgpuIsDepthStencilFormat(format) == false);
                 return ToDXGIFormat(format);
         }
     }
@@ -654,7 +654,7 @@ struct D3D12_SwapChain
     IUnknown* window = nullptr;
 #endif
     IDXGISwapChain3* handle = nullptr;
-    vgpu_pixel_format format;
+    VGPUPixelFormat format;
     uint32_t backBufferCount;
     uint32_t syncInterval;
     std::vector<D3D12Resource*> backbufferTextures;
@@ -1640,9 +1640,9 @@ static VGPUTexture d3d12_createTexture(VGPURenderer* driverData, const VGPUTextu
         resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
     }
     resourceDesc.Alignment = 0;
-    resourceDesc.Width = desc->size.width;
-    resourceDesc.Height = desc->size.height;
-    resourceDesc.DepthOrArraySize = (UINT16)desc->size.depth_or_array_layers;
+    resourceDesc.Width = desc->width;
+    resourceDesc.Height = desc->height;
+    resourceDesc.DepthOrArraySize = (UINT16)desc->depthOrArrayLayers;
     resourceDesc.MipLevels = (UINT16)desc->mipLevelCount;
     resourceDesc.Format = ToDXGIFormat(desc->format);
     resourceDesc.SampleDesc.Count = desc->sampleCount;
@@ -1656,7 +1656,7 @@ static VGPUTexture d3d12_createTexture(VGPURenderer* driverData, const VGPUTextu
     {
         if (desc->usage & VGPUTextureUsage_RenderTarget)
         {
-            if (vgpu_is_depth_stencil_format(desc->format))
+            if (vgpuIsDepthStencilFormat(desc->format))
             {
                 resourceState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
             }
@@ -1683,7 +1683,7 @@ static VGPUTexture d3d12_createTexture(VGPURenderer* driverData, const VGPUTextu
 
     if (desc->usage & VGPUTextureUsage_RenderTarget)
     {
-        if (vgpu_is_depth_stencil_format(desc->format))
+        if (vgpuIsDepthStencilFormat(desc->format))
         {
             resourceDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
 
@@ -1704,7 +1704,7 @@ static VGPUTexture d3d12_createTexture(VGPURenderer* driverData, const VGPUTextu
     if (desc->usage & VGPUTextureUsage_RenderTarget)
     {
         clearValue.Format = resourceDesc.Format;
-        if (vgpu_is_depth_stencil_format(desc->format))
+        if (vgpuIsDepthStencilFormat(desc->format))
         {
             clearValue.DepthStencil.Depth = 1.0f;
         }
@@ -1712,7 +1712,7 @@ static VGPUTexture d3d12_createTexture(VGPURenderer* driverData, const VGPUTextu
     }
 
     // If shader read/write and depth format, set to typeless
-    if (vgpu_is_depth_format(desc->format) && desc->usage & (VGPUTextureUsage_ShaderRead | VGPUTextureUsage_ShaderWrite))
+    if (vgpuIsDepthFormat(desc->format) && desc->usage & (VGPUTextureUsage_ShaderRead | VGPUTextureUsage_ShaderWrite))
     {
         resourceDesc.Format = GetTypelessFormatFromDepthFormat(desc->format);
         pClearValue = nullptr;
@@ -1721,8 +1721,8 @@ static VGPUTexture d3d12_createTexture(VGPURenderer* driverData, const VGPUTextu
     // TODO: TextureLayout/State
     D3D12Resource* texture = new D3D12Resource();
     texture->state = resourceState;
-    texture->width = desc->size.width;
-    texture->height = desc->size.height;
+    texture->width = desc->width;
+    texture->height = desc->height;
     texture->dxgiFormat = resourceDesc.Format;
 
     HRESULT hr = renderer->allocator->CreateResource(
@@ -2132,7 +2132,7 @@ static void d3d12_destroySwapChain(VGPURenderer* driverData, VGPUSwapChain* swap
     delete d3d12SwapChain;
 }
 
-static vgpu_pixel_format d3d12_getSwapChainFormat(VGPURenderer*, VGPUSwapChain* swapChain)
+static VGPUPixelFormat d3d12_getSwapChainFormat(VGPURenderer*, VGPUSwapChain* swapChain)
 {
     D3D12_SwapChain* d3dSwapChain = (D3D12_SwapChain*)swapChain;
     return d3dSwapChain->format;
@@ -3255,26 +3255,26 @@ VGFXDriver D3D12_Driver = {
 #undef VHR
 #undef SAFE_RELEASE
 
-uint32_t vgpuToDxgiFormat(vgpu_pixel_format format)
+uint32_t vgpuToDxgiFormat(VGPUPixelFormat format)
 {
     return (uint32_t)ToDXGIFormat(format);
 }
 
-vgpu_pixel_format vgpuFromDxgiFormat(uint32_t dxgiFormat)
+VGPUPixelFormat vgpuFromDxgiFormat(uint32_t dxgiFormat)
 {
     return FromDxgiFormat(static_cast<DXGI_FORMAT>(dxgiFormat));
 }
 
 #else
 
-uint32_t vgpuToDxgiFormat(VGPUTextureFormat format)
+uint32_t vgpuToDxgiFormat(VGPUPixelFormat format)
 {
     _VGPU_UNUSED(format);
     return 0;
 }
 
 
-VGPUTextureFormat vgpuFromDxgiFormat(uint32_t dxgiFormat)
+VGPUPixelFormat vgpuFromDxgiFormat(uint32_t dxgiFormat)
 {
     _VGPU_UNUSED(dxgiFormat);
     return VGPUTextureFormat_Undefined;

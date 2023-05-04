@@ -74,11 +74,11 @@ void vgpu_default_free(void* ptr, void* user_data)
     free(ptr);
 }
 
-const vgpu_allocation_callbacks VGPU_DEFAULT_ALLOC_CB = { vgpu_default_alloc, vgpu_default_free, NULL };
+const VGPUAllocationCallbacks VGPU_DEFAULT_ALLOC_CB = { vgpu_default_alloc, vgpu_default_free, NULL };
 
-const vgpu_allocation_callbacks* VGPU_ALLOC_CB = &VGPU_DEFAULT_ALLOC_CB;
+const VGPUAllocationCallbacks* VGPU_ALLOC_CB = &VGPU_DEFAULT_ALLOC_CB;
 
-void vgpuSetAllocationCallbacks(const vgpu_allocation_callbacks* callback)
+void vgpuSetAllocationCallbacks(const VGPUAllocationCallbacks* callback)
 {
     if (callback == NULL) {
         VGPU_ALLOC_CB = &VGPU_DEFAULT_ALLOC_CB;
@@ -142,8 +142,6 @@ VGPUBool32 vgpuIsBackendSupported(VGPUBackend backend)
     return false;
 }
 
-static VGPUDevice s_renderer = NULL;
-
 VGPUDevice vgpuCreateDevice(const VGPUDeviceDescriptor* desc)
 {
     if (!desc) {
@@ -193,32 +191,34 @@ retry:
         }
     }
 
-    s_renderer = device;
     return device;
 }
 
-void vgpuDeviceDestroy(VGPUDevice device) {
+void vgpuDestroyDevice(VGPUDevice device)
+{
     NULL_RETURN(device);
 
     device->destroyDevice(device);
-    s_renderer = NULL;
 }
 
-uint64_t vgpu_frame(void) {
-    VGPU_ASSERT(s_renderer);
+uint64_t vgpuFrame(VGPUDevice device)
+{
+    VGPU_ASSERT(device);
 
-    return s_renderer->frame(s_renderer->driverData);
+    return device->frame(device->driverData);
 }
 
-void vgpuWaitIdle(VGPUDevice device) {
+void vgpuWaitIdle(VGPUDevice device)
+{
     device->waitIdle(device->driverData);
 }
 
-VGPUBackend vgpuDeviceGetBackend(VGPUDevice device) {
+VGPUBackend vgpuGetBackend(VGPUDevice device)
+{
     return device->getBackendType();
 }
 
-VGPUBool32 vgpuDeviceQueryFeature(VGPUDevice device, VGPUFeature feature, void* pInfo, uint32_t infoSize)
+VGPUBool32 vgpuQueryFeature(VGPUDevice device, VGPUFeature feature, void* pInfo, uint32_t infoSize)
 {
     if (device == NULL) {
         return false;
@@ -227,7 +227,7 @@ VGPUBool32 vgpuDeviceQueryFeature(VGPUDevice device, VGPUFeature feature, void* 
     return device->queryFeature(device->driverData, feature, pInfo, infoSize);
 }
 
-void vgpuDeviceGetAdapterProperties(VGPUDevice device, VGPUAdapterProperties* properties)
+void vgpuGetAdapterProperties(VGPUDevice device, VGPUAdapterProperties* properties)
 {
     VGPU_ASSERT(device);
     NULL_RETURN(properties);
@@ -235,11 +235,21 @@ void vgpuDeviceGetAdapterProperties(VGPUDevice device, VGPUAdapterProperties* pr
     device->getAdapterProperties(device->driverData, properties);
 }
 
-void vgpuDeviceGetLimits(VGPUDevice device, VGPULimits* limits) {
+void vgpuGetLimits(VGPUDevice device, VGPULimits* limits)
+{
     VGPU_ASSERT(device);
     NULL_RETURN(limits);
 
     device->getLimits(device->driverData, limits);
+}
+
+void vgpuSubmit(VGPUDevice device, VGPUCommandBuffer* commandBuffers, uint32_t count)
+{
+    VGPU_ASSERT(device);
+    VGPU_ASSERT(commandBuffers);
+    VGPU_ASSERT(count);
+
+    device->submit(device->driverData, commandBuffers, count);
 }
 
 /* Buffer */
@@ -250,37 +260,37 @@ static vgpu_buffer_desc _vgpu_buffer_desc_def(const vgpu_buffer_desc* desc)
     return def;
 }
 
-vgpu_buffer* vgpu_buffer_create(const vgpu_buffer_desc* desc, const void* init_data)
+vgpu_buffer* vgpuCreateBuffer(VGPUDevice device, const vgpu_buffer_desc* desc, const void* init_data)
 {
-    VGPU_ASSERT(s_renderer);
+    VGPU_ASSERT(device);
     NULL_RETURN_NULL(desc);
 
     vgpu_buffer_desc desc_def = _vgpu_buffer_desc_def(desc);
-    return s_renderer->createBuffer(s_renderer->driverData, &desc_def, init_data);
+    return device->createBuffer(device->driverData, &desc_def, init_data);
 }
 
-void vgpu_buffer_destroy(vgpu_buffer* buffer)
+void vgpuDestroyBuffer(VGPUDevice device, vgpu_buffer* buffer)
 {
-    VGPU_ASSERT(s_renderer);
+    VGPU_ASSERT(device);
     NULL_RETURN(buffer);
 
-    s_renderer->destroyBuffer(s_renderer->driverData, buffer);
+    device->destroyBuffer(device->driverData, buffer);
 }
 
-VGPUDeviceAddress vgpu_buffer_get_device_address(vgpu_buffer* buffer)
+VGPUDeviceAddress vgpuGetBufferDeviceAddress(VGPUDevice device, vgpu_buffer* buffer)
 {
-    VGPU_ASSERT(s_renderer);
+    VGPU_ASSERT(device);
     VGPU_ASSERT(buffer);
 
-    return s_renderer->buffer_get_device_address(buffer);
+    return device->buffer_get_device_address(buffer);
 }
 
-void vgpu_buffer_set_label(vgpu_buffer* buffer, const char* label)
+void vgpuSetBufferLabel(VGPUDevice device, vgpu_buffer* buffer, const char* label)
 {
-    VGPU_ASSERT(s_renderer);
+    VGPU_ASSERT(device);
     NULL_RETURN(buffer);
 
-    s_renderer->buffer_set_label(s_renderer->driverData, buffer, label);
+    device->buffer_set_label(device->driverData, buffer, label);
 }
 
 /* Texture */
@@ -290,45 +300,32 @@ static VGPUTextureDesc _vgpuTextureDescDef(const VGPUTextureDesc* desc)
     def.type = _VGPU_DEF(def.type, VGPUTexture_Type2D);
     def.format = _VGPU_DEF(def.format, VGPUTextureFormat_RGBA8Unorm);
     //def.usage = _VGPU_DEF(def.type, VGFXTextureUsage_ShaderRead);
-    def.size.width = _VGPU_DEF(def.size.width, 1);
-    def.size.height = _VGPU_DEF(def.size.height, 1);
-    def.size.depth_or_array_layers = _VGPU_DEF(def.size.depth_or_array_layers, 1);
+    def.width = _VGPU_DEF(def.width, 1);
+    def.height = _VGPU_DEF(def.height, 1);
+    def.depthOrArrayLayers = _VGPU_DEF(def.depthOrArrayLayers, 1);
     def.mipLevelCount = _VGPU_DEF(def.mipLevelCount, 1);
     def.sampleCount = _VGPU_DEF(def.sampleCount, 1);
     return def;
 }
 
-VGPUTexture vgpu_texture_create(const VGPUTextureDesc* desc, const void* init_data)
+VGPUTexture vgpuCreateTexture(VGPUDevice device, const VGPUTextureDesc* desc, const void* init_data)
 {
-    VGPU_ASSERT(s_renderer);
+    VGPU_ASSERT(device);
     NULL_RETURN_NULL(desc);
 
     VGPUTextureDesc desc_def = _vgpuTextureDescDef(desc);
 
-    VGPU_ASSERT(desc_def.size.width > 0 && desc_def.size.height > 0 && desc_def.mipLevelCount >= 0);
+    VGPU_ASSERT(desc_def.width > 0 && desc_def.height > 0 && desc_def.mipLevelCount >= 0);
 
     const bool is3D = desc_def.type == VGPUTexture_Type3D;
-    const bool isDepthStencil = vgpu_is_depth_stencil_format(desc_def.format);
+    const bool isDepthStencil = vgpuIsDepthStencilFormat(desc_def.format);
     bool isCube = false;
 
     if (desc_def.type == VGPUTexture_Type2D &&
-        desc_def.size.width == desc_def.size.height &&
-        desc_def.size.depth_or_array_layers >= 6)
+        desc_def.width == desc_def.height &&
+        desc_def.depthOrArrayLayers >= 6)
     {
         isCube = true;
-    }
-
-    uint32_t mipLevels = desc_def.mipLevelCount;
-    if (mipLevels == 0)
-    {
-        if (is3D)
-        {
-            mipLevels = vgpu_num_mip_levels_3d(desc_def.size.width, desc_def.size.height, desc_def.size.depth_or_array_layers);
-        }
-        else
-        {
-            mipLevels = vgpu_num_mip_levels_2d(desc_def.size.width, desc_def.size.height);
-        }
     }
 
     if (desc_def.sampleCount > 1u)
@@ -345,14 +342,14 @@ VGPUTexture vgpu_texture_create(const VGPUTextureDesc* desc, const void* init_da
             return NULL;
         }
 
-        if (mipLevels > 1)
+        if (desc_def.mipLevelCount > 1)
         {
             vgpu_log_warn("Multisample texture cannot have mipmaps");
             return NULL;
         }
     }
 
-    if (isDepthStencil && mipLevels > 1)
+    if (isDepthStencil && desc_def.mipLevelCount > 1)
     {
         vgpu_log_warn("Depth texture cannot have mipmaps");
         return NULL;
@@ -378,43 +375,15 @@ VGPUTexture vgpu_texture_create(const VGPUTextureDesc* desc, const void* init_da
         return NULL;
     }
 
-    return s_renderer->createTexture(s_renderer->driverData, &desc_def, init_data);
+    return device->createTexture(device->driverData, &desc_def, init_data);
 }
 
-VGPUTexture vgpu_texture_create_2d(uint32_t width, uint32_t height, vgpu_pixel_format format, uint32_t mipLevelCount, VGPUTextureUsage usage, const void* init_data)
+void vgpuDestroyTexture(VGPUDevice device, VGPUTexture texture)
 {
-    VGPUTextureDesc desc = {
-        .size = {width, height, 1u},
-        .type = VGPUTexture_Type2D,
-        .format = format,
-        .usage = usage,
-        .mipLevelCount = mipLevelCount,
-        .sampleCount = 1u
-    };
-
-    return vgpu_texture_create(&desc, init_data);
-}
-
-VGPUTexture vgpu_texture_create_cube(uint32_t size, vgpu_pixel_format format, uint32_t mipLevelCount, const void* init_data)
-{
-    VGPUTextureDesc desc = {
-         .size = {size, size, 6u},
-        .type = VGPUTexture_Type2D,
-        .format = format,
-        .usage = VGPUTextureUsage_ShaderRead,
-        .mipLevelCount = mipLevelCount,
-        .sampleCount = 1u
-    };
-
-    return vgpu_texture_create(&desc, init_data);
-}
-
-void vgpu_texture_destroy(VGPUTexture texture)
-{
-    VGPU_ASSERT(s_renderer);
+    VGPU_ASSERT(device);
     NULL_RETURN(texture);
 
-    s_renderer->destroyTexture(s_renderer->driverData, texture);
+    device->destroyTexture(device->driverData, texture);
 }
 
 /* Sampler*/
@@ -443,18 +412,20 @@ void vgpuDestroySampler(VGPUDevice device, VGPUSampler* sampler)
 }
 
 /* Shader Module */
-VGPUShaderModule vgpuCreateShaderModule(const void* pCode, size_t codeSize) {
-    VGPU_ASSERT(s_renderer);
+VGPUShaderModule vgpuCreateShaderModule(VGPUDevice device, const void* pCode, size_t codeSize)
+{
+    VGPU_ASSERT(device);
     NULL_RETURN_NULL(pCode);
 
-    return s_renderer->createShaderModule(s_renderer->driverData, pCode, codeSize);
+    return device->createShaderModule(device->driverData, pCode, codeSize);
 }
 
-void vgpuDestroyShaderModule(VGPUShaderModule module) {
-    VGPU_ASSERT(s_renderer);
+void vgpuDestroyShaderModule(VGPUDevice device, VGPUShaderModule module)
+{
+    VGPU_ASSERT(device);
     NULL_RETURN(module);
 
-    s_renderer->destroyShaderModule(s_renderer->driverData, module);
+    device->destroyShaderModule(device->driverData, module);
 }
 
 /* Pipeline */
@@ -467,30 +438,31 @@ static VGPURenderPipelineDesc _vgpuRenderPipelineDescDef(const VGPURenderPipelin
     return def;
 }
 
-VGPUPipeline* vgpuCreateRenderPipeline(const VGPURenderPipelineDesc* desc) {
-    VGPU_ASSERT(s_renderer);
+VGPUPipeline* vgpuCreateRenderPipeline(VGPUDevice device, const VGPURenderPipelineDesc* desc) {
+    VGPU_ASSERT(device);
     NULL_RETURN_NULL(desc);
     VGPU_ASSERT(desc->vertex);
 
     VGPURenderPipelineDesc desc_def = _vgpuRenderPipelineDescDef(desc);
-    return s_renderer->createRenderPipeline(s_renderer->driverData, &desc_def);
+    return device->createRenderPipeline(device->driverData, &desc_def);
 }
 
-VGPUPipeline* vgpuCreateComputePipeline(const VGPUComputePipelineDescriptor* descriptor)
+VGPUPipeline* vgpuCreateComputePipeline(VGPUDevice device, const VGPUComputePipelineDescriptor* descriptor)
 {
-    VGPU_ASSERT(s_renderer);
+    VGPU_ASSERT(device);
 
     NULL_RETURN_NULL(descriptor);
     VGPU_ASSERT(descriptor->shader);
 
-    return s_renderer->createComputePipeline(s_renderer->driverData, descriptor);
+    return device->createComputePipeline(device->driverData, descriptor);
 }
 
-VGPUPipeline* vgpuCreateRayTracingPipeline(const VGPURayTracingPipelineDesc* desc) {
-    VGPU_ASSERT(s_renderer);
+VGPUPipeline* vgpuCreateRayTracingPipeline(VGPUDevice device, const VGPURayTracingPipelineDesc* desc)
+{
+    VGPU_ASSERT(device);
     NULL_RETURN_NULL(desc);
 
-    return s_renderer->createRayTracingPipeline(s_renderer->driverData, desc);
+    return device->createRayTracingPipeline(device->driverData, desc);
 }
 
 void vgpuDestroyPipeline(VGPUDevice device, VGPUPipeline* pipeline)
@@ -517,7 +489,7 @@ VGPUSwapChain* vgpuCreateSwapChain(VGPUDevice device, void* window, const VGPUSw
     NULL_RETURN_NULL(desc);
 
     VGPUSwapChainDesc def = _vgpuSwapChainDescDef(desc);
-    return device->createSwapChain(s_renderer->driverData, window, &def);
+    return device->createSwapChain(device->driverData, window, &def);
 }
 
 void vgpuDestroySwapChain(VGPUDevice device, VGPUSwapChain* swapChain)
@@ -528,7 +500,7 @@ void vgpuDestroySwapChain(VGPUDevice device, VGPUSwapChain* swapChain)
     device->destroySwapChain(device->driverData, swapChain);
 }
 
-vgpu_pixel_format vgpuGetSwapChainFormat(VGPUDevice device, VGPUSwapChain* swapChain)
+VGPUPixelFormat vgpuGetSwapChainFormat(VGPUDevice device, VGPUSwapChain* swapChain)
 {
     VGPU_ASSERT(device);
 
@@ -536,11 +508,11 @@ vgpu_pixel_format vgpuGetSwapChainFormat(VGPUDevice device, VGPUSwapChain* swapC
 }
 
 /* Commands */
-VGPUCommandBuffer vgpuBeginCommandBuffer(VGPUCommandQueue queueType, const char* label)
+VGPUCommandBuffer vgpuBeginCommandBuffer(VGPUDevice device, VGPUCommandQueue queueType, const char* label)
 {
-    VGPU_ASSERT(s_renderer);
+    VGPU_ASSERT(device);
 
-    return s_renderer->beginCommandBuffer(s_renderer->driverData, queueType, label);
+    return device->beginCommandBuffer(device->driverData, queueType, label);
 }
 
 void vgpuPushDebugGroup(VGPUCommandBuffer commandBuffer, const char* groupLabel)
@@ -605,6 +577,14 @@ void vgpuSetViewport(VGPUCommandBuffer commandBuffer, const VGPUViewport* viewpo
     commandBuffer->setViewport(commandBuffer->driverData, viewport);
 }
 
+void vgpuSetViewports(VGPUCommandBuffer commandBuffer, uint32_t count, const VGPUViewport* viewports)
+{
+    VGPU_ASSERT(count > 0);
+    VGPU_ASSERT(viewports);
+
+    commandBuffer->setViewports(commandBuffer->driverData, count, viewports);
+}
+
 void vgpuSetScissorRect(VGPUCommandBuffer commandBuffer, const VGPURect* rect)
 {
     VGPU_ASSERT(rect);
@@ -629,15 +609,6 @@ void vgpuDraw(VGPUCommandBuffer commandBuffer, uint32_t vertexStart, uint32_t ve
 void vgpuDrawIndexed(VGPUCommandBuffer commandBuffer, uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t baseVertex, uint32_t firstInstance)
 {
     commandBuffer->drawIndexed(commandBuffer->driverData, indexCount, instanceCount, firstIndex, baseVertex, firstInstance);
-}
-
-void vgpu_submit(VGPUCommandBuffer* commandBuffers, uint32_t count)
-{
-    VGPU_ASSERT(s_renderer);
-    VGPU_ASSERT(commandBuffers);
-    VGPU_ASSERT(count);
-
-    s_renderer->submit(s_renderer->driverData, commandBuffers, count);
 }
 
 // Format mapping table. The rows must be in the exactly same order as Format enum members are defined.
@@ -764,7 +735,7 @@ static const vgpu_pixel_format_info c_FormatInfo[] = {
     { VGPUTextureFormat_Astc12x12UnormSrgb,  "ASTC12x12UnormSrgb",   16,   12, 12, VGPUTextureFormatKind_UnormSrgb },
 };
 
-VGPUBool32 vgpu_is_depth_format(vgpu_pixel_format format)
+VGPUBool32 vgpuIsDepthFormat(VGPUPixelFormat format)
 {
     switch (format)
     {
@@ -778,7 +749,7 @@ VGPUBool32 vgpu_is_depth_format(vgpu_pixel_format format)
     }
 }
 
-VGPUBool32 vgpuIsDepthOnlyFormat(vgpu_pixel_format format)
+VGPUBool32 vgpuIsDepthOnlyFormat(VGPUPixelFormat format)
 {
     switch (format)
     {
@@ -790,7 +761,7 @@ VGPUBool32 vgpuIsDepthOnlyFormat(vgpu_pixel_format format)
     }
 }
 
-VGPUBool32 vgpuIsStencilOnlyFormat(vgpu_pixel_format format)
+VGPUBool32 vgpuIsStencilOnlyFormat(VGPUPixelFormat format)
 {
     switch (format)
     {
@@ -801,7 +772,7 @@ VGPUBool32 vgpuIsStencilOnlyFormat(vgpu_pixel_format format)
     }
 }
 
-VGPUBool32 vgpu_is_stencil_format(vgpu_pixel_format format)
+VGPUBool32 vgpuIsStencilFormat(VGPUPixelFormat format)
 {
     switch (format)
     {
@@ -814,7 +785,7 @@ VGPUBool32 vgpu_is_stencil_format(vgpu_pixel_format format)
     }
 }
 
-VGPUBool32 vgpu_is_depth_stencil_format(vgpu_pixel_format format)
+VGPUBool32 vgpuIsDepthStencilFormat(VGPUPixelFormat format)
 {
     switch (format)
     {
@@ -829,38 +800,17 @@ VGPUBool32 vgpu_is_depth_stencil_format(vgpu_pixel_format format)
     }
 }
 
-VGPUTextureFormatKind vgpuGetPixelFormatKind(vgpu_pixel_format format)
+VGPUBool32 vgpuIsCompressedFormat(VGPUPixelFormat format)
+{
+    VGPU_ASSERT(c_FormatInfo[(uint32_t)format].format == format);
+
+    return c_FormatInfo[(uint32_t)format].blockWidth > 1 || c_FormatInfo[(uint32_t)format].blockHeight > 1;
+}
+
+VGPUTextureFormatKind vgpuGetPixelFormatKind(VGPUPixelFormat format)
 {
     VGPU_ASSERT(c_FormatInfo[(uint32_t)format].format == format);
     return c_FormatInfo[(uint32_t)format].kind;
-}
-
-uint32_t vgpu_num_mip_levels_2d(uint32_t width, uint32_t height) {
-    uint32_t mipLevels = 0;
-    uint32_t size = _VGPU_MAX(width, height);
-    while (1u << mipLevels <= size)
-    {
-        ++mipLevels;
-    }
-
-    if (1u << mipLevels < size)
-        ++mipLevels;
-
-    return mipLevels;
-}
-
-uint32_t vgpu_num_mip_levels_3d(uint32_t width, uint32_t height, uint32_t depth) {
-    uint32_t mipLevels = 0;
-    uint32_t size = _VGPU_MAX(_VGPU_MAX(width, height), depth);
-    while (1u << mipLevels <= size)
-    {
-        ++mipLevels;
-    }
-
-    if (1u << mipLevels < size)
-        ++mipLevels;
-
-    return mipLevels;
 }
 
 

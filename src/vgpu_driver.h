@@ -11,7 +11,7 @@
 #include <assert.h>
 
 // Custom allocation callbacks.
-_VGPU_EXTERN const vgpu_allocation_callbacks* VGPU_ALLOC_CB;
+_VGPU_EXTERN const VGPUAllocationCallbacks* VGPU_ALLOC_CB;
 
 #define VGPU_ALLOC(type)        ((type*)_vgpu_alloc(sizeof(type)))
 #define VGPU_ALLOC_CLEAR(type)  ((type*)_vgpu_alloc_clear(sizeof(type)))
@@ -116,6 +116,7 @@ typedef struct VGPUCommandBuffer_T {
     void (*endRenderPass)(VGPUCommandBufferImpl* driverData);
 
     void (*setViewport)(VGPUCommandBufferImpl* driverData, const VGPUViewport* viewport);
+    void (*setViewports)(VGPUCommandBufferImpl* driverData, uint32_t count, const VGPUViewport* viewports);
     void (*setScissorRect)(VGPUCommandBufferImpl* driverData, const VGPURect* rects);
     void (*setVertexBuffer)(VGPUCommandBufferImpl* driverData, uint32_t index, vgpu_buffer* buffer, uint64_t offset);
     void (*setIndexBuffer)(VGPUCommandBufferImpl* driverData, vgpu_buffer* buffer, uint64_t offset, vgpu_index_type type);
@@ -158,7 +159,7 @@ typedef struct VGPUDeviceImpl
 
     VGPUSwapChain*(*createSwapChain)(VGPURenderer* driverData, void* windowHandle, const VGPUSwapChainDesc* desc);
     void(*destroySwapChain)(VGPURenderer* driverData, VGPUSwapChain* swapChain);
-    vgpu_pixel_format(*getSwapChainFormat)(VGPURenderer* driverData, VGPUSwapChain* swapChain);
+    VGPUPixelFormat(*getSwapChainFormat)(VGPURenderer* driverData, VGPUSwapChain* swapChain);
 
     VGPUCommandBuffer(*beginCommandBuffer)(VGPURenderer* driverData, VGPUCommandQueue queueType, const char* label);
     void (*submit)(VGPURenderer* driverData, VGPUCommandBuffer* commandBuffers, uint32_t count);
@@ -181,6 +182,7 @@ ASSIGN_COMMAND_BUFFER_FUNC(acquireSwapchainTexture, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(beginRenderPass, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(endRenderPass, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(setViewport, name) \
+ASSIGN_COMMAND_BUFFER_FUNC(setViewports, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(setScissorRect, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(setVertexBuffer, name) \
 ASSIGN_COMMAND_BUFFER_FUNC(setIndexBuffer, name) \

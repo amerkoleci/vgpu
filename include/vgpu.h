@@ -145,13 +145,14 @@ typedef enum VGPUTextureUsage {
     VGPUTextureUsage_ShaderRead = (1 << 0),
     VGPUTextureUsage_ShaderWrite = (1 << 1),
     VGPUTextureUsage_RenderTarget = (1 << 2),
-    VGPUTextureUsage_ShadingRate = (1 << 3),
+    VGPUTextureUsage_Transient = (1 << 3),
+    VGPUTextureUsage_ShadingRate = (1 << 4),
 
-    _VGPU_TEXTURE_USAGE_FORCE_U32 = 0x7FFFFFFF
+    _VGPUTextureUsage_Force32 = 0x7FFFFFFF
 } VGPUTextureUsage;
 typedef VGPUFlags VGPUTextureUsageFlags;
 
-typedef enum vgpu_pixel_format {
+typedef enum VGPUPixelFormat {
     VGPUTextureFormat_Undefined,
     /* 8-bit formats */
     VGPUTextureFormat_R8Unorm,
@@ -270,7 +271,7 @@ typedef enum vgpu_pixel_format {
 
     _VGPU_PIXEL_FORMAT_COUNT,
     _VGPU_PIXEL_FORMAT_FORCE_U32 = 0x7FFFFFFF
-} vgpu_pixel_format;
+} VGPUPixelFormat;
 
 typedef enum VGPUTextureFormatKind {
     VGPUTextureFormatKind_Unorm,
@@ -472,14 +473,13 @@ typedef struct VGPUExtent2D {
     uint32_t height;
 } VGPUExtent2D;
 
-typedef struct vgpu_extent3d {
+typedef struct VGPUExtent3D {
     uint32_t width;
     uint32_t height;
-    uint32_t depth_or_array_layers;
-} vgpu_extent3d;
+    uint32_t depth;
+} VGPUExtent3D;
 
-typedef struct VGPURect
-{
+typedef struct VGPURect {
     int32_t x;
     int32_t y;
     int32_t width;
@@ -557,13 +557,15 @@ typedef struct vgpu_buffer_desc
 
 typedef struct VGPUTextureDesc
 {
-    VGPUTextureUsageFlags usage;
+    const char* label;
     vgpu_texture_type type;
-    vgpu_extent3d size;
-    vgpu_pixel_format format;
+    VGPUPixelFormat format;
+    VGPUTextureUsageFlags usage;
+    uint32_t width;
+    uint32_t height;
+    uint32_t depthOrArrayLayers;
     uint32_t mipLevelCount;
     uint32_t sampleCount;
-    const char* label;
 } VGPUTextureDesc;
 
 typedef struct VGPUSamplerDesc {
@@ -594,7 +596,7 @@ typedef struct VGPUDepthStencilState
 
 typedef struct RenderPipelineColorAttachmentDesc
 {
-    vgpu_pixel_format       format;
+    VGPUPixelFormat       format;
     VGPUBool32              blendEnabled;
     VGPUBlendFactor         srcColorBlendFactor;
     VGPUBlendFactor         dstColorBlendFactor;
@@ -617,7 +619,7 @@ typedef struct VGPURenderPipelineDesc {
 
     uint32_t colorAttachmentCount;
     const RenderPipelineColorAttachmentDesc* colorAttachments;
-    vgpu_pixel_format depthStencilFormat;
+    VGPUPixelFormat depthStencilFormat;
     uint32_t sampleCount;
     VGPUBool32 alphaToCoverageEnabled;
 } VGPURenderPipelineDesc;
@@ -635,7 +637,7 @@ typedef struct VGPUSwapChainDesc
 {
     uint32_t width;
     uint32_t height;
-    vgpu_pixel_format format;
+    VGPUPixelFormat format;
     VGPUPresentMode presentMode;
     VGPUBool32 isFullscreen;
 } VGPUSwapChainDesc;
@@ -682,56 +684,55 @@ typedef struct VGPULimits {
 typedef void (*VGPULogCallback)(VGPULogLevel level, const char* message, void* user_data);
 VGPU_API void vgpuSetLogCallback(VGPULogCallback func, void* userData);
 
-typedef struct vgpu_allocation_callbacks {
+typedef struct VGPUAllocationCallbacks {
     void* (*allocate)(size_t size, void* user_data);
     void (*free)(void* ptr, void* user_data);
     void* user_data;
-} vgpu_allocation_callbacks;
-VGPU_API void vgpuSetAllocationCallbacks(const vgpu_allocation_callbacks* callback);
+} VGPUAllocationCallbacks;
+VGPU_API void vgpuSetAllocationCallbacks(const VGPUAllocationCallbacks* callback);
 
 VGPU_API VGPUBool32 vgpuIsBackendSupported(VGPUBackend backend);
 VGPU_API VGPUDevice vgpuCreateDevice(const VGPUDeviceDescriptor* descriptor);
-VGPU_API void vgpuDeviceDestroy(VGPUDevice device);
-VGPU_API uint64_t vgpu_frame(void);
+VGPU_API void vgpuDestroyDevice(VGPUDevice device);
+VGPU_API uint64_t vgpuFrame(VGPUDevice device);
 VGPU_API void vgpuWaitIdle(VGPUDevice device);
-VGPU_API VGPUBackend vgpuDeviceGetBackend(VGPUDevice device);
-VGPU_API VGPUBool32 vgpuDeviceQueryFeature(VGPUDevice device, VGPUFeature feature, void* pInfo, uint32_t infoSize);
-VGPU_API void vgpuDeviceGetAdapterProperties(VGPUDevice device, VGPUAdapterProperties* properties);
-VGPU_API void vgpuDeviceGetLimits(VGPUDevice device, VGPULimits* limits);
+VGPU_API VGPUBackend vgpuGetBackend(VGPUDevice device);
+VGPU_API VGPUBool32 vgpuQueryFeature(VGPUDevice device, VGPUFeature feature, void* pInfo, uint32_t infoSize);
+VGPU_API void vgpuGetAdapterProperties(VGPUDevice device, VGPUAdapterProperties* properties);
+VGPU_API void vgpuGetLimits(VGPUDevice device, VGPULimits* limits);
+VGPU_API void vgpuSubmit(VGPUDevice device, VGPUCommandBuffer* commandBuffers, uint32_t count);
 
 /* Buffer */
-VGPU_API vgpu_buffer* vgpu_buffer_create(const vgpu_buffer_desc* desc, const void* init_data);
-VGPU_API void vgpu_buffer_destroy(vgpu_buffer* buffer);
-VGPU_API VGPUDeviceAddress vgpu_buffer_get_device_address(vgpu_buffer* buffer);
-VGPU_API void vgpu_buffer_set_label(vgpu_buffer* buffer, const char* label);
+VGPU_API vgpu_buffer* vgpuCreateBuffer(VGPUDevice device, const vgpu_buffer_desc* desc, const void* init_data);
+VGPU_API void vgpuDestroyBuffer(VGPUDevice device, vgpu_buffer* buffer);
+VGPU_API VGPUDeviceAddress vgpuGetBufferDeviceAddress(VGPUDevice device, vgpu_buffer* buffer);
+VGPU_API void vgpuSetBufferLabel(VGPUDevice device, vgpu_buffer* buffer, const char* label);
 
 /* Texture */
-VGPU_API VGPUTexture vgpu_texture_create(const VGPUTextureDesc* desc, const void* init_data);
-VGPU_API VGPUTexture vgpu_texture_create_2d(uint32_t width, uint32_t height, vgpu_pixel_format format, uint32_t mipLevelCount, VGPUTextureUsage usage, const void* init_data);
-VGPU_API VGPUTexture vgpu_texture_create_cube(uint32_t size, vgpu_pixel_format format, uint32_t mipLevelCount, const void* init_data);
-VGPU_API void vgpu_texture_destroy(VGPUTexture texture);
+VGPU_API VGPUTexture vgpuCreateTexture(VGPUDevice device, const VGPUTextureDesc* desc, const void* init_data);
+VGPU_API void vgpuDestroyTexture(VGPUDevice device, VGPUTexture texture);
 
 /* Sampler */
 VGPU_API VGPUSampler* vgpuCreateSampler(VGPUDevice device, const VGPUSamplerDesc* desc);
 VGPU_API void vgpuDestroySampler(VGPUDevice device, VGPUSampler* sampler);
 
 /* ShaderModule */
-VGPU_API VGPUShaderModule vgpuCreateShaderModule(const void* pCode, size_t codeSize);
-VGPU_API void vgpuDestroyShaderModule(VGPUShaderModule module);
+VGPU_API VGPUShaderModule vgpuCreateShaderModule(VGPUDevice device, const void* pCode, size_t codeSize);
+VGPU_API void vgpuDestroyShaderModule(VGPUDevice device, VGPUShaderModule module);
 
 /* Pipeline */
-VGPU_API VGPUPipeline* vgpuCreateRenderPipeline(const VGPURenderPipelineDesc* descriptor);
-VGPU_API VGPUPipeline* vgpuCreateComputePipeline(const VGPUComputePipelineDescriptor* descriptor);
-VGPU_API VGPUPipeline* vgpuCreateRayTracingPipeline(const VGPURayTracingPipelineDesc* descriptor);
+VGPU_API VGPUPipeline* vgpuCreateRenderPipeline(VGPUDevice device, const VGPURenderPipelineDesc* descriptor);
+VGPU_API VGPUPipeline* vgpuCreateComputePipeline(VGPUDevice device, const VGPUComputePipelineDescriptor* descriptor);
+VGPU_API VGPUPipeline* vgpuCreateRayTracingPipeline(VGPUDevice device, const VGPURayTracingPipelineDesc* descriptor);
 VGPU_API void vgpuDestroyPipeline(VGPUDevice device, VGPUPipeline* pipeline);
 
 /* SwapChain */
 VGPU_API VGPUSwapChain* vgpuCreateSwapChain(VGPUDevice device, void* window, const VGPUSwapChainDesc* desc);
 VGPU_API void vgpuDestroySwapChain(VGPUDevice device, VGPUSwapChain* swapChain);
-VGPU_API vgpu_pixel_format vgpuGetSwapChainFormat(VGPUDevice device, VGPUSwapChain* swapChain);
+VGPU_API VGPUPixelFormat vgpuGetSwapChainFormat(VGPUDevice device, VGPUSwapChain* swapChain);
 
 /* Commands */
-VGPU_API VGPUCommandBuffer vgpuBeginCommandBuffer(VGPUCommandQueue queueType, const char* label);
+VGPU_API VGPUCommandBuffer vgpuBeginCommandBuffer(VGPUDevice device, VGPUCommandQueue queueType, const char* label);
 VGPU_API void vgpuPushDebugGroup(VGPUCommandBuffer commandBuffer, const char* groupLabel);
 VGPU_API void vgpuPopDebugGroup(VGPUCommandBuffer commandBuffer);
 VGPU_API void vgpuInsertDebugMarker(VGPUCommandBuffer commandBuffer, const char* debugLabel);
@@ -746,6 +747,7 @@ VGPU_API VGPUTexture vgpuAcquireSwapchainTexture(VGPUCommandBuffer commandBuffer
 VGPU_API void vgpuBeginRenderPass(VGPUCommandBuffer commandBuffer, const VGPURenderPassDesc* desc);
 VGPU_API void vgpuEndRenderPass(VGPUCommandBuffer commandBuffer);
 VGPU_API void vgpuSetViewport(VGPUCommandBuffer commandBuffer, const VGPUViewport* viewport);
+VGPU_API void vgpuSetViewports(VGPUCommandBuffer commandBuffer, uint32_t count, const VGPUViewport* viewports);
 VGPU_API void vgpuSetScissorRect(VGPUCommandBuffer commandBuffer, const VGPURect* rect);
 VGPU_API void vgpuSetVertexBuffer(VGPUCommandBuffer commandBuffer, uint32_t index, vgpu_buffer* buffer, uint64_t offset);
 VGPU_API void vgpuSetIndexBuffer(VGPUCommandBuffer commandBuffer, vgpu_buffer* buffer, uint64_t offset, vgpu_index_type type);
@@ -753,12 +755,10 @@ VGPU_API void vgpuSetIndexBuffer(VGPUCommandBuffer commandBuffer, vgpu_buffer* b
 VGPU_API void vgpuDraw(VGPUCommandBuffer commandBuffer, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t firstInstance);
 VGPU_API void vgpuDrawIndexed(VGPUCommandBuffer commandBuffer, uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t baseVertex, uint32_t firstInstance);
 
-VGPU_API void vgpu_submit(VGPUCommandBuffer* commandBuffers, uint32_t count);
-
 /* Helper functions */
 typedef struct vgpu_pixel_format_info
 {
-    vgpu_pixel_format format;
+    VGPUPixelFormat format;
     const char* name;
     uint8_t bytesPerBlock;
     uint8_t blockWidth;
@@ -766,18 +766,18 @@ typedef struct vgpu_pixel_format_info
     VGPUTextureFormatKind kind;
 } vgpu_pixel_format_info;
 
-VGPU_API VGPUBool32 vgpu_is_depth_format(vgpu_pixel_format format);
-VGPU_API VGPUBool32 vgpuIsDepthOnlyFormat(vgpu_pixel_format format);
-VGPU_API VGPUBool32 vgpuIsStencilOnlyFormat(vgpu_pixel_format format);
-VGPU_API VGPUBool32 vgpu_is_stencil_format(vgpu_pixel_format format);
-VGPU_API VGPUBool32 vgpu_is_depth_stencil_format(vgpu_pixel_format format);
-VGPU_API VGPUTextureFormatKind vgpuGetPixelFormatKind(vgpu_pixel_format format);
-VGPU_API uint32_t vgpu_num_mip_levels_2d(uint32_t width, uint32_t height);
-VGPU_API uint32_t vgpu_num_mip_levels_3d(uint32_t width, uint32_t height, uint32_t depth);
+VGPU_API VGPUBool32 vgpuIsDepthFormat(VGPUPixelFormat format);
+VGPU_API VGPUBool32 vgpuIsDepthOnlyFormat(VGPUPixelFormat format);
+VGPU_API VGPUBool32 vgpuIsStencilOnlyFormat(VGPUPixelFormat format);
+VGPU_API VGPUBool32 vgpuIsStencilFormat(VGPUPixelFormat format);
+VGPU_API VGPUBool32 vgpuIsDepthStencilFormat(VGPUPixelFormat format);
+VGPU_API VGPUBool32 vgpuIsCompressedFormat(VGPUPixelFormat format);
 
-VGPU_API uint32_t vgpuToDxgiFormat(vgpu_pixel_format format);
+VGPU_API VGPUTextureFormatKind vgpuGetPixelFormatKind(VGPUPixelFormat format);
+
+VGPU_API uint32_t vgpuToDxgiFormat(VGPUPixelFormat format);
 //VGPU_API VGPUTextureFormat vgpuFromDxgiFormat(uint32_t dxgiFormat);
 
-VGPU_API uint32_t vgpuToVkFormat(vgpu_pixel_format format);
+VGPU_API uint32_t vgpuToVkFormat(VGPUPixelFormat format);
 
 #endif /* VGPU_H */
