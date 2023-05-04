@@ -700,6 +700,7 @@ struct VulkanRenderer
     VkPhysicalDeviceProperties2 properties2 = {};
     VkPhysicalDeviceVulkan11Properties properties_1_1 = {};
     VkPhysicalDeviceVulkan12Properties properties_1_2 = {};
+    VkPhysicalDeviceVulkan13Properties properties_1_3 = {};
     VkPhysicalDeviceSamplerFilterMinmaxProperties sampler_minmax_properties = {};
     VkPhysicalDeviceAccelerationStructurePropertiesKHR acceleration_structure_properties = {};
     VkPhysicalDeviceRayTracingPipelinePropertiesKHR raytracing_properties = {};
@@ -709,6 +710,8 @@ struct VulkanRenderer
     VkPhysicalDeviceFeatures2 features2 = {};
     VkPhysicalDeviceVulkan11Features features_1_1 = {};
     VkPhysicalDeviceVulkan12Features features_1_2 = {};
+    VkPhysicalDeviceVulkan13Features features_1_3 = {};
+
     VkPhysicalDeviceAccelerationStructureFeaturesKHR acceleration_structure_features = {};
     VkPhysicalDeviceRayTracingPipelineFeaturesKHR raytracing_features = {};
     VkPhysicalDeviceRayQueryFeaturesKHR raytracing_query_features = {};
@@ -722,7 +725,6 @@ struct VulkanRenderer
     VkPhysicalDeviceExtendedDynamicStateFeaturesEXT extendedDynamicStateFeatures = {};
     VkPhysicalDeviceExtendedDynamicState2FeaturesEXT extendedDynamicState2Features = {};
     VkPhysicalDeviceVertexInputDynamicStateFeaturesEXT vertexInputDynamicStateFeatures = {};
-    VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeatures = {};
     VkDeviceSize minAllocationAlignment{ 0 };
     std::string driverDescription;
 
@@ -787,9 +789,6 @@ struct VulkanRenderer
 
     std::vector<VkDynamicState> psoDynamicStates;
     VkPipelineDynamicStateCreateInfo dynamicStateInfo = {};
-
-    std::unordered_map<size_t, VkRenderPass> renderPassCache;
-    std::unordered_map<size_t, VkFramebuffer> framebufferCache;
 
     // Deletion queue objects
     std::mutex destroyMutex;
@@ -1063,244 +1062,6 @@ static VkImageView vulkan_GetRTV(VulkanRenderer* renderer, VulkanTexture* textur
     return vulkan_GetView(renderer, texture, level, 1, slice, 1);
 }
 
-struct VulkanRenderPassAttachment
-{
-    VkFormat format;
-    vgpu_load_action load_action;
-    vgpu_store_action store_action;
-};
-
-struct VulkanRenderPassKey
-{
-    uint32_t colorAttachmentCount = 0;
-    const VulkanRenderPassAttachment* colorAttachments = nullptr;
-    const VulkanRenderPassAttachment* depthAttachment = nullptr;
-    const VulkanRenderPassAttachment* stencilAttachment = nullptr;
-    VkSampleCountFlagBits sampleCount = VK_SAMPLE_COUNT_1_BIT;
-};
-
-static VkRenderPass vulkan_RequestRenderPass(VulkanRenderer* renderer, const VulkanRenderPassKey* key)
-{
-    size_t hash = 0;
-
-    hash_combine(hash, key->colorAttachmentCount);
-    for (uint32_t i = 0; i < key->colorAttachmentCount; ++i)
-    {
-        hash_combine(hash, (uint32_t)key->colorAttachments[i].format);
-        hash_combine(hash, (uint32_t)key->colorAttachments[i].load_action);
-        hash_combine(hash, (uint32_t)key->colorAttachments[i].store_action);
-    }
-
-    if (key->depthAttachment != nullptr)
-    {
-        hash_combine(hash, (uint32_t)key->depthAttachment->format);
-        hash_combine(hash, (uint32_t)key->depthAttachment->load_action);
-        hash_combine(hash, (uint32_t)key->depthAttachment->store_action);
-    }
-
-    if (key->stencilAttachment != nullptr)
-    {
-        hash_combine(hash, (uint32_t)key->stencilAttachment->format);
-        hash_combine(hash, (uint32_t)key->stencilAttachment->load_action);
-        hash_combine(hash, (uint32_t)key->stencilAttachment->store_action);
-    }
-
-    auto it = renderer->renderPassCache.find(hash);
-    if (it == renderer->renderPassCache.end())
-    {
-        // Not found -> create new
-        VkAttachmentDescription2  attachmentDescriptions[VGPU_MAX_COLOR_ATTACHMENTS * 2 + 1] = {};
-        VkAttachmentReference2 colorAttachmentRefs[VGPU_MAX_COLOR_ATTACHMENTS] = {};
-        VkAttachmentReference2 resolveAttachmentRefs[VGPU_MAX_COLOR_ATTACHMENTS] = {};
-        VkAttachmentReference2 shadingRateAttachmentRef = {};
-        VkAttachmentReference2 depthStencilAttachmentRef = {};
-
-        const VkSampleCountFlagBits sampleCount = key->sampleCount;
-
-        VkSubpassDescription2 subpass = {};
-        subpass.sType = VK_STRUCTURE_TYPE_SUBPASS_DESCRIPTION_2;
-        subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-
-        for (uint32_t i = 0; i < key->colorAttachmentCount; ++i)
-        {
-            const VulkanRenderPassAttachment& attachment = key->colorAttachments[i];
-
-            auto& attachmentRef = colorAttachmentRefs[subpass.colorAttachmentCount];
-            auto& attachmentDesc = attachmentDescriptions[subpass.colorAttachmentCount];
-
-            attachmentRef.sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2;
-            attachmentRef.attachment = subpass.colorAttachmentCount;
-            attachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-            attachmentRef.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-
-            attachmentDesc.sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2;
-            attachmentDesc.flags = 0;
-            attachmentDesc.format = attachment.format;
-            attachmentDesc.samples = sampleCount;
-            attachmentDesc.loadOp = ToVkAttachmentLoadOp(attachment.load_action);
-            attachmentDesc.storeOp = ToVkAttachmentStoreOp(attachment.store_action);
-            attachmentDesc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-            attachmentDesc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-            attachmentDesc.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-            attachmentDesc.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-            subpass.colorAttachmentCount++;
-        }
-
-        uint32_t attachmentCount = subpass.colorAttachmentCount;
-        VkAttachmentReference2* depthStencilAttachment = nullptr;
-        if (key->depthAttachment != nullptr || key->stencilAttachment)
-        {
-            const VulkanRenderPassAttachment* depthAttachment = key->depthAttachment;
-            const VulkanRenderPassAttachment* stencilAttachment = key->stencilAttachment;
-
-            const VkFormat depthFormat = depthAttachment->format;
-
-            auto& attachmentDesc = attachmentDescriptions[subpass.colorAttachmentCount];
-            depthStencilAttachment = &depthStencilAttachmentRef;
-
-            depthStencilAttachmentRef.sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2;
-            depthStencilAttachmentRef.attachment = subpass.colorAttachmentCount;
-            depthStencilAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-            depthStencilAttachmentRef.aspectMask = GetImageAspectFlags(depthFormat);
-
-            attachmentDesc.sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2;
-            attachmentDesc.flags = 0;
-            attachmentDesc.format = depthAttachment->format;
-            attachmentDesc.samples = sampleCount;
-            attachmentDesc.loadOp = ToVkAttachmentLoadOp(depthAttachment->load_action);
-            attachmentDesc.storeOp = ToVkAttachmentStoreOp(depthAttachment->store_action);
-            if (depthStencilAttachmentRef.aspectMask & VK_IMAGE_ASPECT_STENCIL_BIT)
-            {
-                attachmentDesc.stencilLoadOp = ToVkAttachmentLoadOp(stencilAttachment->load_action);
-                attachmentDesc.stencilStoreOp = ToVkAttachmentStoreOp(stencilAttachment->store_action);
-            }
-            else
-            {
-                attachmentDesc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-                attachmentDesc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-            }
-            attachmentDesc.initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-            attachmentDesc.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-            ++attachmentCount;
-        }
-
-        subpass.pColorAttachments = colorAttachmentRefs;
-        //subpassDesc.pResolveAttachments = resolveTargetAttachmentRefs;
-        subpass.pDepthStencilAttachment = depthStencilAttachment;
-
-        // Use subpass dependencies for layout transitions
-        VkSubpassDependency2 dependencies[2] = {};
-        dependencies[0].sType = VK_STRUCTURE_TYPE_SUBPASS_DEPENDENCY_2;
-        dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
-        dependencies[0].dstSubpass = 0;
-        dependencies[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-        dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        dependencies[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-        dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-        dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
-
-        dependencies[1].sType = VK_STRUCTURE_TYPE_SUBPASS_DEPENDENCY_2;
-        dependencies[1].pNext = nullptr;
-        dependencies[1].srcSubpass = 0;
-        dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
-        dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        dependencies[1].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-        dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-        dependencies[1].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-        dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
-
-        if (key->depthAttachment != nullptr || key->stencilAttachment)
-        {
-            dependencies[0].dstStageMask |= VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-            dependencies[0].dstAccessMask |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-
-            dependencies[1].srcStageMask |= VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-            dependencies[1].srcAccessMask |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-        }
-
-        // Finally, create the renderpass.
-        VkRenderPassCreateInfo2 createInfo = {};
-        createInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO_2;
-        createInfo.attachmentCount = attachmentCount;
-        createInfo.pAttachments = attachmentDescriptions;
-        createInfo.subpassCount = 1;
-        createInfo.pSubpasses = &subpass;
-        createInfo.dependencyCount = 2u;
-        createInfo.pDependencies = dependencies;
-
-        VkRenderPass renderPass = VK_NULL_HANDLE;
-        VK_CHECK(vkCreateRenderPass2(renderer->device, &createInfo, nullptr, &renderPass));
-
-        renderer->renderPassCache[hash] = renderPass;
-
-        return renderPass;
-    }
-
-    return it->second;
-}
-
-static VkFramebuffer vulkan_RequestFramebuffer(
-    VulkanRenderer* renderer,
-    VkRenderPass renderPass,
-    const VGPURenderPassDesc* desc,
-    uint32_t width, uint32_t height)
-{
-    size_t hash = 0;
-    hash_combine(hash, renderPass);
-
-    uint32_t attachmentCount = 0;
-    VkImageView attachments[VGPU_MAX_COLOR_ATTACHMENTS + 1];
-
-    for (uint32_t i = 0; i < desc->colorAttachmentCount; ++i)
-    {
-        const VGPURenderPassColorAttachment* attachment = &desc->colorAttachments[i];
-        VulkanTexture* texture = (VulkanTexture*)attachment->texture;
-        const uint32_t level = attachment->level;
-        const uint32_t slice = attachment->slice;
-
-        attachments[attachmentCount] = vulkan_GetRTV(renderer, texture, level, slice);
-        hash_combine(hash, (uint64_t)attachments[attachmentCount]);
-        attachmentCount++;
-    }
-
-    if (desc->depthStencilAttachment != nullptr)
-    {
-        const VGPURenderPassDepthStencilAttachment* attachment = desc->depthStencilAttachment;
-        VulkanTexture* texture = (VulkanTexture*)attachment->texture;
-        const uint32_t level = attachment->level;
-        const uint32_t slice = attachment->slice;
-
-        attachments[attachmentCount] = vulkan_GetRTV(renderer, texture, level, slice);
-        hash_combine(hash, (uint64_t)attachments[attachmentCount]);
-        attachmentCount++;
-    }
-
-    hash_combine(hash, attachmentCount);
-
-    auto it = renderer->framebufferCache.find(hash);
-    if (it == renderer->framebufferCache.end())
-    {
-        VkFramebufferCreateInfo createInfo;
-        createInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-        createInfo.pNext = nullptr;
-        createInfo.flags = 0;
-        createInfo.renderPass = renderPass;
-        createInfo.attachmentCount = attachmentCount;
-        createInfo.pAttachments = attachments;
-        createInfo.width = width;
-        createInfo.height = height;
-        createInfo.layers = 1;
-
-        VkFramebuffer framebuffer;
-        VK_CHECK(vkCreateFramebuffer(renderer->device, &createInfo, nullptr, &framebuffer));
-        renderer->framebufferCache[hash] = framebuffer;
-
-        return framebuffer;
-    }
-
-    return it->second;
-}
-
 static void vulkan_ProcessDeletionQueue(VulkanRenderer* renderer)
 {
     renderer->destroyMutex.lock();
@@ -1465,19 +1226,6 @@ static void vulkan_destroyDevice(VGPUDevice device)
     }
     vkDestroySemaphore(renderer->device, renderer->uploadSemaphore, nullptr);
 
-    // Release caches
-    for (auto& it : renderer->framebufferCache)
-    {
-        vkDestroyFramebuffer(renderer->device, it.second, nullptr);
-    }
-    renderer->framebufferCache.clear();
-
-    for (auto& it : renderer->renderPassCache)
-    {
-        vkDestroyRenderPass(renderer->device, it.second, nullptr);
-    }
-    renderer->renderPassCache.clear();
-
     renderer->frameCount = UINT64_MAX;
     vulkan_ProcessDeletionQueue(renderer);
     renderer->frameCount = 0;
@@ -1609,7 +1357,7 @@ static void vulkan_waitIdle(VGPURenderer* driverData)
     VK_CHECK(vkDeviceWaitIdle(renderer->device));
 }
 
-static vgpu_backend vulkan_getBackendType(void)
+static VGPUBackend vulkan_getBackendType(void)
 {
     return VGPU_BACKEND_VULKAN;
 }
@@ -2375,6 +2123,25 @@ static VGPUPipeline* vulkan_createRenderPipeline(VGPURenderer* driverData, const
     shaderStages[1].module = fragmentShader->handle;
     shaderStages[1].pName = "fragmentMain";
 
+    // RenderingInfo
+    VkFormat colorAttachmentFormats[VGPU_MAX_COLOR_ATTACHMENTS];
+    VkPipelineRenderingCreateInfo renderingInfo = {};
+    renderingInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
+
+    for (uint32_t i = 0; i < desc->colorAttachmentCount; ++i)
+    {
+        VGPU_ASSERT(desc->colorAttachments[i].format != VGPUTextureFormat_Undefined);
+
+        colorAttachmentFormats[renderingInfo.colorAttachmentCount] = ToVkFormat(desc->colorAttachments[i].format);
+        renderingInfo.colorAttachmentCount++;
+    }
+    renderingInfo.pColorAttachmentFormats = colorAttachmentFormats;
+    renderingInfo.depthAttachmentFormat = ToVkFormat(desc->depthStencilFormat);
+    if (!vgpuIsDepthOnlyFormat(desc->depthStencilFormat))
+    {
+        renderingInfo.stencilAttachmentFormat = ToVkFormat(desc->depthStencilFormat);
+    }
+
     // VertexInputState
     VkVertexInputBindingDescription vertexInputBinding = {};
     vertexInputBinding.binding = 0;
@@ -2450,10 +2217,10 @@ static VGPUPipeline* vulkan_createRenderPipeline(VGPURenderer* driverData, const
     colorBlendState.attachmentCount = 1;
     colorBlendState.pAttachments = blendAttachmentState;
 
-    VkPipelineRenderingCreateInfo pipelineRenderingCreateInfo = {};
-
+   
     VkGraphicsPipelineCreateInfo createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    createInfo.pNext = &renderingInfo;
     createInfo.stageCount = 2u;
     createInfo.pStages = shaderStages;
     createInfo.pVertexInputState = &vertexInputState;
@@ -2465,6 +2232,7 @@ static VGPUPipeline* vulkan_createRenderPipeline(VGPURenderer* driverData, const
     createInfo.pDepthStencilState = &depthStencilState;
     createInfo.pColorBlendState = &colorBlendState;
     createInfo.pDynamicState = &renderer->dynamicStateInfo;
+    createInfo.renderPass = VK_NULL_HANDLE;
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -2472,66 +2240,6 @@ static VGPUPipeline* vulkan_createRenderPipeline(VGPURenderer* driverData, const
     pipelineLayoutInfo.pushConstantRangeCount = 0u;
     VkResult result = vkCreatePipelineLayout(renderer->device, &pipelineLayoutInfo, nullptr, &createInfo.layout);
     VK_CHECK(result);
-
-    if (renderer->dynamicRenderingFeatures.dynamicRendering == VK_TRUE)
-    {
-        pipelineRenderingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
-
-        VkFormat colorAttachmentFormats[VGPU_MAX_COLOR_ATTACHMENTS];
-        for (uint32_t i = 0; i < desc->colorAttachmentCount; ++i)
-        {
-            VGPU_ASSERT(desc->colorAttachments[i].format != VGPUTextureFormat_Undefined);
-
-            colorAttachmentFormats[pipelineRenderingCreateInfo.colorAttachmentCount] = ToVkFormat(desc->colorAttachments[i].format);
-            pipelineRenderingCreateInfo.colorAttachmentCount++;
-        }
-        pipelineRenderingCreateInfo.pColorAttachmentFormats = colorAttachmentFormats;
-        pipelineRenderingCreateInfo.depthAttachmentFormat = ToVkFormat(desc->depthAttachmentFormat);
-        pipelineRenderingCreateInfo.stencilAttachmentFormat = ToVkFormat(desc->stencilAttachmentFormat);
-
-        // Chain into the pipeline create info
-        createInfo.pNext = &pipelineRenderingCreateInfo;
-        createInfo.renderPass = VK_NULL_HANDLE;
-    }
-    else
-    {
-        VulkanRenderPassKey renderPassKey{};
-        VulkanRenderPassAttachment colorAttachments[VGPU_MAX_COLOR_ATTACHMENTS] = {};
-        VulkanRenderPassAttachment depthAttachment{};
-        VulkanRenderPassAttachment stencilAttachment{};
-
-        for (uint32_t i = 0; i < desc->colorAttachmentCount; ++i)
-        {
-            VGPU_ASSERT(desc->colorAttachments[i].format != VGPUTextureFormat_Undefined);
-
-            colorAttachments[renderPassKey.colorAttachmentCount].format = ToVkFormat(desc->colorAttachments[i].format);
-            colorAttachments[renderPassKey.colorAttachmentCount].load_action = VGPU_LOAD_ACTION_DONT_CARE;
-            colorAttachments[renderPassKey.colorAttachmentCount].store_action = VGPU_STORE_ACTION_STORE;
-            renderPassKey.colorAttachmentCount++;
-        }
-
-        renderPassKey.colorAttachments = colorAttachments;
-
-        if (desc->depthAttachmentFormat != VGPUTextureFormat_Undefined)
-        {
-            depthAttachment.format = ToVkFormat(desc->depthAttachmentFormat);
-            depthAttachment.load_action = VGPU_LOAD_ACTION_LOAD;
-            depthAttachment.store_action = VGPU_STORE_ACTION_DONT_CARE;
-            renderPassKey.depthAttachment = &depthAttachment;
-
-            //if (IsStencilFormat(desc.depthStencilFormat))
-            //{
-            //    stencilAttachment.format = desc.depthStencilFormat;
-            //    stencilAttachment.loadAction = VGPULoadAction_Load;
-            //    stencilAttachment.storeAction = VGPUStoreOp_DontCare;
-            //
-            //    renderPassKey.stencilAttachment = &stencilAttachment;
-            //}
-        }
-
-        VkRenderPass renderPass = vulkan_RequestRenderPass(renderer, &renderPassKey);
-        createInfo.renderPass = renderPass;
-    }
 
     VkPipeline handle = VK_NULL_HANDLE;
     result = vkCreateGraphicsPipelines(renderer->device, renderer->pipelineCache, 1, &createInfo, nullptr, &handle);
@@ -2546,7 +2254,7 @@ static VGPUPipeline* vulkan_createRenderPipeline(VGPURenderer* driverData, const
     return (VGPUPipeline*)pipeline;
 }
 
-static VGPUPipeline* vulkan_createComputePipeline(VGPURenderer* driverData, const VGPUComputePipelineDesc* desc)
+static VGPUPipeline* vulkan_createComputePipeline(VGPURenderer* driverData, const VGPUComputePipelineDescriptor* desc)
 {
     VulkanRenderer* renderer = (VulkanRenderer*)driverData;
     VulkanShader* shader = (VulkanShader*)desc->shader;
@@ -3014,154 +2722,99 @@ static VGPUTexture vulkan_acquireSwapchainTexture(VGPUCommandBufferImpl* driverD
 static void vulkan_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGPURenderPassDesc* desc)
 {
     VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
-    uint32_t width = UINT32_MAX;
-    uint32_t height = UINT32_MAX;
+    VulkanRenderer* renderer = commandBuffer->renderer;
 
-    if (commandBuffer->renderer->dynamicRenderingFeatures.dynamicRendering == VK_TRUE)
+    uint32_t width = renderer->properties2.properties.limits.maxFramebufferWidth;
+    uint32_t height = renderer->properties2.properties.limits.maxFramebufferHeight;
+
+    VkRenderingInfo renderingInfo = {};
+    renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+    renderingInfo.pNext = VK_NULL_HANDLE;
+    renderingInfo.flags = 0u;
+    renderingInfo.renderArea.extent = { UINT32_MAX, UINT32_MAX };
+    renderingInfo.layerCount = 1;
+    renderingInfo.viewMask = 0;
+
+    VkRenderingAttachmentInfo colorAttachments[VGPU_MAX_COLOR_ATTACHMENTS] = {};
+    VkRenderingAttachmentInfo depthAttachment = {};
+    VkRenderingAttachmentInfo stencilAttachment = {};
+
+    for (uint32_t i = 0; i < desc->colorAttachmentCount; ++i)
     {
-        VkRenderingInfo renderingInfo = {};
-        renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-        renderingInfo.pNext = VK_NULL_HANDLE;
-        renderingInfo.flags = 0u;
-        renderingInfo.renderArea.extent = { UINT32_MAX, UINT32_MAX };
-        renderingInfo.layerCount = 1;
-        renderingInfo.viewMask = 0;
+        const VGPURenderPassColorAttachment* attachment = &desc->colorAttachments[i];
+        VulkanTexture* texture = (VulkanTexture*)attachment->texture;
+        const uint32_t level = attachment->level;
+        const uint32_t slice = attachment->slice;
 
-        VkRenderingAttachmentInfo colorAttachments[VGPU_MAX_COLOR_ATTACHMENTS] = {};
-        VkRenderingAttachmentInfo depthStencilAttachmentInfo{};
+        width = _VGPU_MIN(width, _VGPU_MAX(1U, texture->width >> level));
+        height = _VGPU_MIN(height, _VGPU_MAX(1U, texture->height >> level));
 
-        for (uint32_t i = 0; i < desc->colorAttachmentCount; ++i)
-        {
-            const VGPURenderPassColorAttachment* attachment = &desc->colorAttachments[i];
-            VulkanTexture* texture = (VulkanTexture*)attachment->texture;
-            const uint32_t level = attachment->level;
-            const uint32_t slice = attachment->slice;
+        VkRenderingAttachmentInfo& attachmentInfo = colorAttachments[renderingInfo.colorAttachmentCount++];
+        attachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+        attachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+        attachmentInfo.pNext = nullptr;
+        attachmentInfo.imageView = vulkan_GetRTV(commandBuffer->renderer, texture, level, slice);
+        attachmentInfo.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        attachmentInfo.resolveMode = VK_RESOLVE_MODE_NONE;
+        attachmentInfo.loadOp = ToVkAttachmentLoadOp(attachment->load_action);
+        attachmentInfo.storeOp = ToVkAttachmentStoreOp(attachment->store_action);
 
-            renderingInfo.renderArea.extent.width = _VGPU_MIN(renderingInfo.renderArea.extent.width, _VGPU_MAX(1U, texture->width >> level));
-            renderingInfo.renderArea.extent.height = _VGPU_MIN(renderingInfo.renderArea.extent.height, _VGPU_MAX(1U, texture->height >> level));
-
-            colorAttachments[renderingInfo.colorAttachmentCount].sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-            colorAttachments[renderingInfo.colorAttachmentCount].pNext = nullptr;
-            colorAttachments[renderingInfo.colorAttachmentCount].imageView = vulkan_GetRTV(commandBuffer->renderer, texture, level, slice);
-            colorAttachments[renderingInfo.colorAttachmentCount].imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-            colorAttachments[renderingInfo.colorAttachmentCount].resolveMode = VK_RESOLVE_MODE_NONE;
-            colorAttachments[renderingInfo.colorAttachmentCount].loadOp = ToVkAttachmentLoadOp(attachment->load_action);
-            colorAttachments[renderingInfo.colorAttachmentCount].storeOp = ToVkAttachmentStoreOp(attachment->store_action);
-
-            colorAttachments[renderingInfo.colorAttachmentCount].clearValue.color.float32[0] = attachment->clearColor.r;
-            colorAttachments[renderingInfo.colorAttachmentCount].clearValue.color.float32[1] = attachment->clearColor.g;
-            colorAttachments[renderingInfo.colorAttachmentCount].clearValue.color.float32[2] = attachment->clearColor.b;
-            colorAttachments[renderingInfo.colorAttachmentCount].clearValue.color.float32[3] = attachment->clearColor.a;
-
-            renderingInfo.colorAttachmentCount++;
-        }
-        renderingInfo.pColorAttachments = colorAttachments;
-
-        if (desc->depthStencilAttachment != nullptr)
-        {
-            const VGPURenderPassDepthStencilAttachment* attachment = desc->depthStencilAttachment;
-            VulkanTexture* texture = (VulkanTexture*)attachment->texture;
-            const uint32_t level = attachment->level;
-            const uint32_t slice = attachment->slice;
-
-            depthStencilAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-            depthStencilAttachmentInfo.pNext = VK_NULL_HANDLE;
-            depthStencilAttachmentInfo.imageView = vulkan_GetRTV(commandBuffer->renderer, texture, level, slice);
-            depthStencilAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-            depthStencilAttachmentInfo.resolveMode = VK_RESOLVE_MODE_NONE;
-            depthStencilAttachmentInfo.loadOp = ToVkAttachmentLoadOp(attachment->depthLoadOp);
-            depthStencilAttachmentInfo.storeOp = ToVkAttachmentStoreOp(attachment->depthStoreOp);
-            depthStencilAttachmentInfo.clearValue.depthStencil.depth = attachment->clearDepth;
-
-            // Barrier
-            VkImageSubresourceRange depthTextureRange{};
-            depthTextureRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-            depthTextureRange.baseMipLevel = 0;
-            depthTextureRange.levelCount = VK_REMAINING_MIP_LEVELS;
-            depthTextureRange.baseArrayLayer = 0;
-            depthTextureRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
-
-            vulkan_insertImageMemoryBarrier(
-                commandBuffer->handle,
-                texture->handle,
-                0,
-                VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-                VK_IMAGE_LAYOUT_UNDEFINED,
-                VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
-                VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-                VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-                depthTextureRange
-            );
-
-            renderingInfo.pDepthAttachment = &depthStencilAttachmentInfo;
-            renderingInfo.pStencilAttachment = &depthStencilAttachmentInfo;
-        }
-
-        vkCmdBeginRenderingKHR(commandBuffer->handle, &renderingInfo);
+        attachmentInfo.clearValue.color.float32[0] = attachment->clearColor.r;
+        attachmentInfo.clearValue.color.float32[1] = attachment->clearColor.g;
+        attachmentInfo.clearValue.color.float32[2] = attachment->clearColor.b;
+        attachmentInfo.clearValue.color.float32[3] = attachment->clearColor.a;
     }
-    else
+
+    const bool hasDepthOrStencil = desc->depthStencilAttachment != nullptr && desc->depthStencilAttachment->texture != nullptr;
+    if (hasDepthOrStencil)
     {
-        VulkanRenderPassKey renderPassKey{};
-        VulkanRenderPassAttachment colorAttachments[VGPU_MAX_COLOR_ATTACHMENTS] = {};
-        VulkanRenderPassAttachment depthAttachment{};
-        VulkanRenderPassAttachment stencilAttachment{};
+        const VGPURenderPassDepthStencilAttachment* attachment = desc->depthStencilAttachment;
+        VulkanTexture* texture = (VulkanTexture*)attachment->texture;
+        const uint32_t level = attachment->level;
+        const uint32_t slice = attachment->slice;
 
-        for (uint32_t i = 0; i < desc->colorAttachmentCount; ++i)
-        {
-            const VGPURenderPassColorAttachment* attachment = &desc->colorAttachments[i];
-            VulkanTexture* texture = (VulkanTexture*)attachment->texture;
-            const uint32_t level = attachment->level;
+        width = _VGPU_MIN(width, _VGPU_MAX(1U, texture->width >> level));
+        height = _VGPU_MIN(height, _VGPU_MAX(1U, texture->height >> level));
 
-            commandBuffer->clearValues[commandBuffer->clearValueCount].color.float32[0] = attachment->clearColor.r;
-            commandBuffer->clearValues[commandBuffer->clearValueCount].color.float32[1] = attachment->clearColor.g;
-            commandBuffer->clearValues[commandBuffer->clearValueCount].color.float32[2] = attachment->clearColor.b;
-            commandBuffer->clearValues[commandBuffer->clearValueCount].color.float32[3] = attachment->clearColor.a;
-            commandBuffer->clearValueCount++;
+        depthAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+        depthAttachment.pNext = VK_NULL_HANDLE;
+        depthAttachment.imageView = vulkan_GetRTV(commandBuffer->renderer, texture, level, slice);
+        depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+        depthAttachment.resolveMode = VK_RESOLVE_MODE_NONE;
+        depthAttachment.loadOp = ToVkAttachmentLoadOp(attachment->depthLoadOp);
+        depthAttachment.storeOp = ToVkAttachmentStoreOp(attachment->depthStoreOp);
+        depthAttachment.clearValue.depthStencil.depth = attachment->clearDepth;
 
-            width = _VGPU_MIN(width, _VGPU_MAX(1U, texture->width >> level));
-            height = _VGPU_MIN(height, _VGPU_MAX(1U, texture->height >> level));
+        // Barrier
+        VkImageSubresourceRange depthTextureRange{};
+        depthTextureRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+        depthTextureRange.baseMipLevel = 0;
+        depthTextureRange.levelCount = VK_REMAINING_MIP_LEVELS;
+        depthTextureRange.baseArrayLayer = 0;
+        depthTextureRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
 
-            colorAttachments[renderPassKey.colorAttachmentCount].format = texture->format;
-            colorAttachments[renderPassKey.colorAttachmentCount].load_action = attachment->load_action;
-            colorAttachments[renderPassKey.colorAttachmentCount].store_action = attachment->store_action;
-            renderPassKey.colorAttachmentCount++;
-        }
-        renderPassKey.colorAttachments = colorAttachments;
-
-        if (desc->depthStencilAttachment)
-        {
-            const VGPURenderPassDepthStencilAttachment* attachment = desc->depthStencilAttachment;
-            VulkanTexture* texture = (VulkanTexture*)attachment->texture;
-            const uint32_t level = attachment->level;
-
-            commandBuffer->clearValues[commandBuffer->clearValueCount].depthStencil.depth = attachment->clearDepth;
-            commandBuffer->clearValues[commandBuffer->clearValueCount].depthStencil.stencil = attachment->clearStencil;
-            commandBuffer->clearValueCount++;
-
-            width = _VGPU_MIN(width, _VGPU_MAX(1U, texture->width >> level));
-            height = _VGPU_MIN(height, _VGPU_MAX(1U, texture->height >> level));
-
-            depthAttachment.format = texture->format;
-            depthAttachment.load_action = attachment->depthLoadOp;
-            depthAttachment.store_action = attachment->depthStoreOp;
-            renderPassKey.depthAttachment = &depthAttachment;
-        }
-
-        VkRenderPass renderPass = vulkan_RequestRenderPass(commandBuffer->renderer, &renderPassKey);
-
-        VkRenderPassBeginInfo beginInfo = {};
-        beginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        beginInfo.pNext = nullptr;
-        beginInfo.renderPass = renderPass;
-        beginInfo.framebuffer = vulkan_RequestFramebuffer(commandBuffer->renderer, renderPass, desc, width, height);
-        beginInfo.renderArea.offset.x = 0;
-        beginInfo.renderArea.offset.y = 0;
-        beginInfo.renderArea.extent.width = width;
-        beginInfo.renderArea.extent.height = height;
-        beginInfo.clearValueCount = commandBuffer->clearValueCount;
-        beginInfo.pClearValues = commandBuffer->clearValues;
-        vkCmdBeginRenderPass(commandBuffer->handle, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
+        vulkan_insertImageMemoryBarrier(
+            commandBuffer->handle,
+            texture->handle,
+            0,
+            VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+            VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+            VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+            VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+            depthTextureRange
+        );
     }
+
+    renderingInfo.renderArea.offset.x = 0;
+    renderingInfo.renderArea.offset.y = 0;
+    renderingInfo.renderArea.extent.width = width;
+    renderingInfo.renderArea.extent.height = height;
+    renderingInfo.pColorAttachments = colorAttachments;
+    renderingInfo.pDepthAttachment = hasDepthOrStencil ? &depthAttachment : nullptr;
+    renderingInfo.pStencilAttachment = nullptr;  // !vgpuIsDepthOnlyFormat(depthStencilFormat) ? &depthAttachment : nullptr;
+
+    vkCmdBeginRendering(commandBuffer->handle, &renderingInfo);
 
     // The viewport and scissor default to cover all of the attachments
     VkViewport viewport;
@@ -3186,15 +2839,7 @@ static void vulkan_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGPU
 static void vulkan_endRenderPass(VGPUCommandBufferImpl* driverData)
 {
     VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
-
-    if (commandBuffer->renderer->dynamicRenderingFeatures.dynamicRendering == VK_TRUE)
-    {
-        vkCmdEndRenderingKHR(commandBuffer->handle);
-    }
-    else
-    {
-        vkCmdEndRenderPass(commandBuffer->handle);
-    }
+    vkCmdEndRendering(commandBuffer->handle);
 
     commandBuffer->insideRenderPass = false;
 }
@@ -3419,7 +3064,7 @@ static void vulkan_submit(VGPURenderer* driverData, VGPUCommandBuffer* commandBu
 
         // Sync up with copyallocator before first submit
         uint64_t copySyncValue = vulkan_UploadFlush(renderer);
-        if (copySyncValue > 0) 
+        if (copySyncValue > 0)
         {
             waitStages.push_back(VK_PIPELINE_STAGE_TRANSFER_BIT);
             waitSemaphores.push_back(renderer->uploadSemaphore);
@@ -3546,6 +3191,13 @@ static VGPUBool32 vulkan_isSupported(void)
         return false;
     }
 
+    const uint32_t apiVersion = volkGetInstanceVersion();
+    if (apiVersion < VK_API_VERSION_1_2)
+    {
+        //LOGW("Vulkan 1.2 is required!");
+        return false;
+    }
+
     available = true;
     return true;
 }
@@ -3614,8 +3266,8 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
                 {
                     instanceExtensions.push_back("VK_KHR_external_semaphore_capabilities");
                 }
-            }
         }
+    }
 
         instanceExtensions.push_back(VK_KHR_SURFACE_EXTENSION_NAME);
 
@@ -3645,7 +3297,7 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
             // Determine the optimal validation layers to enable that are necessary for useful debugging
             std::vector<const char*> optimalValidationLyers = GetOptimalValidationLayers(availableInstanceLayers);
             instanceLayers.insert(instanceLayers.end(), optimalValidationLyers.begin(), optimalValidationLyers.end());
-    }
+        }
 
 #if defined(_DEBUG)
         bool validationFeatures = false;
@@ -3761,7 +3413,7 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
             vgpu_log_info("	\t%s", createInfo.ppEnabledExtensionNames[i]);
         }
 #endif
-}
+        }
 
     // Enumerate physical device and create logical device.
     {
@@ -3783,10 +3435,10 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
         {
             bool suitable = true;
 
-            // We require minimum 1.1
+            // We require minimum 1.2
             VkPhysicalDeviceProperties gpuProps;
             vkGetPhysicalDeviceProperties(candidatePhysicalDevice, &gpuProps);
-            if (gpuProps.apiVersion < VK_API_VERSION_1_1)
+            if (gpuProps.apiVersion < VK_API_VERSION_1_2)
             {
                 continue;
             }
@@ -3802,9 +3454,13 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
             renderer->features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
             renderer->features_1_1.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
             renderer->features_1_2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+            renderer->features_1_3.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+
             renderer->features2.pNext = &renderer->features_1_1;
             renderer->features_1_1.pNext = &renderer->features_1_2;
-            void** features_chain = &renderer->features_1_2.pNext;
+            renderer->features_1_2.pNext = &renderer->features_1_3;
+
+            void** features_chain = &renderer->features_1_3.pNext;
             renderer->acceleration_structure_features = {};
             renderer->raytracing_features = {};
             renderer->raytracing_query_features = {};
@@ -3815,9 +3471,12 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
             renderer->properties2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
             renderer->properties_1_1.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_PROPERTIES;
             renderer->properties_1_2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_PROPERTIES;
+            renderer->properties_1_3.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_PROPERTIES;
             renderer->properties2.pNext = &renderer->properties_1_1;
             renderer->properties_1_1.pNext = &renderer->properties_1_2;
-            void** properties_chain = &renderer->properties_1_2.pNext;
+            renderer->properties_1_2.pNext = &renderer->properties_1_3;
+
+            void** properties_chain = &renderer->properties_1_3.pNext;
             renderer->sampler_minmax_properties = {};
             renderer->acceleration_structure_properties = {};
             renderer->raytracing_properties = {};
@@ -3986,16 +3645,6 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
                 features_chain = &renderer->extendedDynamicState2Features.pNext;
             }
 
-            // TODO: Enable
-            //if (physicalDeviceExt.dynamicRendering)
-            //{
-            //    enabledExtensions.push_back(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
-            //
-            //    renderer->dynamicRenderingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES;
-            //    *features_chain = &renderer->dynamicRenderingFeatures;
-            //    features_chain = &renderer->dynamicRenderingFeatures.pNext;
-            //}
-
             vkGetPhysicalDeviceProperties2(candidatePhysicalDevice, &renderer->properties2);
 
             bool discrete = renderer->properties2.properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
@@ -4019,6 +3668,16 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
         }
 
         vkGetPhysicalDeviceFeatures2(renderer->physicalDevice, &renderer->features2);
+
+        VGPU_ASSERT(renderer->features2.features.imageCubeArray == VK_TRUE);
+        VGPU_ASSERT(renderer->features2.features.independentBlend == VK_TRUE);
+        VGPU_ASSERT(renderer->features2.features.geometryShader == VK_TRUE);
+        VGPU_ASSERT(renderer->features2.features.samplerAnisotropy == VK_TRUE);
+        VGPU_ASSERT(renderer->features2.features.shaderClipDistance == VK_TRUE);
+        VGPU_ASSERT(renderer->features2.features.textureCompressionBC == VK_TRUE);
+        VGPU_ASSERT(renderer->features2.features.occlusionQueryPrecise == VK_TRUE);
+        VGPU_ASSERT(renderer->features_1_2.descriptorIndexing == VK_TRUE);
+        VGPU_ASSERT(renderer->features_1_3.dynamicRendering == VK_TRUE);
 
         // Find queue families:
         uint32_t queueFamilyCount = 0;

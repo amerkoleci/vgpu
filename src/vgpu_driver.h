@@ -132,7 +132,7 @@ typedef struct VGPUDeviceImpl
     void (*destroyDevice)(VGPUDevice device);
     uint64_t(*frame)(VGPURenderer* driverData);
     void (*waitIdle)(VGPURenderer* driverData);
-    vgpu_backend(*getBackendType)(void);
+    VGPUBackend(*getBackendType)(void);
     VGPUBool32(*queryFeature)(VGPURenderer* driverData, VGPUFeature feature, void* pInfo, uint32_t infoSize);
     void (*getAdapterProperties)(VGPURenderer* driverData, VGPUAdapterProperties* properties);
     void (*getLimits)(VGPURenderer* driverData, VGPULimits* limits);
@@ -152,7 +152,7 @@ typedef struct VGPUDeviceImpl
     void(*destroyShaderModule)(VGPURenderer* driverData, VGPUShaderModule resource);
 
     VGPUPipeline*(*createRenderPipeline)(VGPURenderer* driverData, const VGPURenderPipelineDesc* desc);
-    VGPUPipeline*(*createComputePipeline)(VGPURenderer* driverData, const VGPUComputePipelineDesc* desc);
+    VGPUPipeline*(*createComputePipeline)(VGPURenderer* driverData, const VGPUComputePipelineDescriptor* desc);
     VGPUPipeline*(*createRayTracingPipeline)(VGPURenderer* driverData, const VGPURayTracingPipelineDesc* desc);
     void(*destroyPipeline)(VGPURenderer* driverData, VGPUPipeline* resource);
 
@@ -217,7 +217,7 @@ ASSIGN_DRIVER_FUNC(submit, name) \
 
 typedef struct VGFXDriver
 {
-    vgpu_backend backend;
+    VGPUBackend backend;
     VGPUBool32(*is_supported)(void);
     VGPUDeviceImpl*(*createDevice)(const VGPUDeviceDescriptor* descriptor);
 } VGFXDriver;

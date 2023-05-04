@@ -30,8 +30,12 @@ vgpu_buffer* vertex_buffer = nullptr;
 vgpu_buffer* index_buffer = nullptr;
 VGPUPipeline* renderPipeline = nullptr;
 
-inline void vgpu_log(vgpu_log_level level, const char* message, void* user_data)
+inline void vgpu_log(VGPULogLevel level, const char* message, void* user_data)
 {
+#if defined(_WIN32)
+    OutputDebugStringA(message);
+    OutputDebugStringA("\n");
+#endif
 }
 
 std::string getAssetPath()
@@ -47,7 +51,7 @@ std::string getShadersPath()
 VGPUShaderModule LoadShader(const char* fileName)
 {
     std::string shaderExt = ".spv";
-    if (vgpu_get_backend() == VGPU_BACKEND_D3D12)
+    if (vgpuDeviceGetBackend(device) == VGPU_BACKEND_D3D12)
     {
         shaderExt = ".cso";
     }
@@ -64,7 +68,7 @@ VGPUShaderModule LoadShader(const char* fileName)
 
         assert(size > 0);
 
-        VGPUShaderModule shader = vgpuCreateShader(shaderCode, size);
+        VGPUShaderModule shader = vgpuCreateShaderModule(shaderCode, size);
 
         delete[] shaderCode;
 
@@ -99,19 +103,19 @@ void init_vgpu(GLFWwindow* window)
     deviceDesc.validationMode = VGPUValidationMode_Enabled;
 #endif
 
-    if (vgpu_is_supported(VGPU_BACKEND_VULKAN))
+    if (vgpuIsBackendSupported(VGPU_BACKEND_VULKAN))
     {
-        deviceDesc.preferred_backend = VGPU_BACKEND_VULKAN;
+        deviceDesc.preferredBackend = VGPU_BACKEND_VULKAN;
     }
 
     device = vgpuCreateDevice(&deviceDesc);
     assert(device != nullptr);
 
     VGPUAdapterProperties adapterProps;
-    vgpuGetAdapterProperties(&adapterProps);
+    vgpuDeviceGetAdapterProperties(device, &adapterProps);
 
     VGPULimits limits;
-    vgpu_get_limits(&limits);
+    vgpuDeviceGetLimits(device, &limits);
 
     int width = 0;
     int height = 0;
@@ -131,7 +135,7 @@ void init_vgpu(GLFWwindow* window)
     swapChainDesc.height = height;
     swapChainDesc.format = VGPUTextureFormat_BGRA8UnormSrgb;
     swapChainDesc.presentMode = VGPUPresentMode_Fifo;
-    swapChain = vgpuCreateSwapChain(windowHandle, &swapChainDesc);
+    swapChain = vgpuCreateSwapChain(device, windowHandle, &swapChainDesc);
 
     depthStencilTexture = vgpu_texture_create_2d(width, height,
         VGPUTextureFormat_Depth32Float,
@@ -168,7 +172,7 @@ void init_vgpu(GLFWwindow* window)
     VGPUShaderModule fragment_shader = LoadShader("triangleFragment");
 
     RenderPipelineColorAttachmentDesc colorAttachment{};
-    colorAttachment.format = vgpuSwapChainGetFormat(swapChain);
+    colorAttachment.format = vgpuGetSwapChainFormat(device, swapChain);
 
     VGPURenderPipelineDesc renderPipelineDesc{};
     renderPipelineDesc.label = "Triangle";
@@ -177,13 +181,13 @@ void init_vgpu(GLFWwindow* window)
     renderPipelineDesc.primitiveTopology = VGPUPrimitiveTopology_TriangleList;
     renderPipelineDesc.colorAttachmentCount = 1u;
     renderPipelineDesc.colorAttachments = &colorAttachment;
-    renderPipelineDesc.depthAttachmentFormat = VGPUTextureFormat_Depth32Float;
+    renderPipelineDesc.depthStencilFormat = VGPUTextureFormat_Depth32Float;
     renderPipelineDesc.depthStencilState.depthWriteEnabled = true;
     renderPipelineDesc.depthStencilState.depthCompare = VGPUCompareFunction_Less;
 
-    renderPipeline = vgpu_pipeline_create_render(&renderPipelineDesc);
-    vgpu_shader_destroy(vertex_shader);
-    vgpu_shader_destroy(fragment_shader);
+    renderPipeline = vgpuCreateRenderPipeline(&renderPipelineDesc);
+    vgpuDestroyShaderModule(vertex_shader);
+    vgpuDestroyShaderModule(fragment_shader);
 }
 
 #if defined(__EMSCRIPTEN__)
@@ -273,7 +277,7 @@ int main()
         return EXIT_FAILURE;
     }
 
-    //vgpu_set_log_callback(vgpu_log, nullptr);
+    vgpuSetLogCallback(vgpu_log, nullptr);
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
@@ -287,12 +291,12 @@ int main()
         glfwPollEvents();
     }
 
-    vgpu_wait_idle();
+    vgpuWaitIdle(device);
     vgpu_buffer_destroy(vertex_buffer);
     vgpu_buffer_destroy(index_buffer);
     vgpu_texture_destroy(depthStencilTexture);
-    vgpu_pipeline_destroy(renderPipeline);
-    vgpuDestroySwapChain(swapChain);
+    vgpuDestroyPipeline(device, renderPipeline);
+    vgpuDestroySwapChain(device, swapChain);
     vgpuDeviceDestroy(device);
     glfwDestroyWindow(window);
     glfwTerminate();

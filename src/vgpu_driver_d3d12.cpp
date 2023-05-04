@@ -1097,7 +1097,7 @@ static void d3d12_UploadSubmit(D3D12_Renderer* renderer, D3D12_UploadContext con
 static void d3d12_destroyDevice(VGPUDevice device)
 {
     // Wait idle
-    vgpu_wait_idle();
+    vgpuWaitIdle(device);
 
     D3D12_Renderer* renderer = (D3D12_Renderer*)device->driverData;
 
@@ -1302,7 +1302,7 @@ static void d3d12_waitIdle(VGPURenderer* driverData)
     d3d12_ProcessDeletionQueue(renderer);
 }
 
-static vgpu_backend d3d12_getBackendType(void)
+static VGPUBackend d3d12_getBackendType(void)
 {
     return VGPU_BACKEND_D3D12;
 }
@@ -1910,8 +1910,7 @@ static VGPUPipeline* d3d12_createRenderPipeline(VGPURenderer* driverData, const 
 
     // DepthStencilState
     const D3D12_DEPTH_STENCILOP_DESC defaultStencilOp = { D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, D3D12_COMPARISON_FUNC_ALWAYS };
-    if (desc->depthAttachmentFormat != VGPUTextureFormat_Undefined ||
-        desc->stencilAttachmentFormat != VGPUTextureFormat_Undefined)
+    if (desc->depthStencilFormat != VGPUTextureFormat_Undefined)
     {
         // Depth
         d3dDesc.DepthStencilState.DepthEnable =
@@ -1953,7 +1952,7 @@ static VGPUPipeline* d3d12_createRenderPipeline(VGPURenderer* driverData, const 
     }
 
     // DSV format
-    d3dDesc.DSVFormat = ToDXGIFormat(desc->depthAttachmentFormat);
+    d3dDesc.DSVFormat = ToDXGIFormat(desc->depthStencilFormat);
     d3dDesc.SampleDesc.Count = desc->sampleCount;
 
     ID3D12PipelineState* pipelineState = nullptr;
@@ -1970,7 +1969,7 @@ static VGPUPipeline* d3d12_createRenderPipeline(VGPURenderer* driverData, const 
     return (VGPUPipeline*)pipeline;
 }
 
-static VGPUPipeline* d3d12_createComputePipeline(VGPURenderer* driverData, const VGPUComputePipelineDesc* desc)
+static VGPUPipeline* d3d12_createComputePipeline(VGPURenderer* driverData, const VGPUComputePipelineDescriptor* desc)
 {
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
     D3D12Shader* shader = (D3D12Shader*)desc->shader;
