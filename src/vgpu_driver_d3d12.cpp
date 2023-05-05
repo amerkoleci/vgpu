@@ -785,9 +785,17 @@ struct D3D12Shader
     size_t byteCodeSize;
 };
 
+struct D3D12PipelineLayout
+{
+    ID3D12RootSignature* handle = nullptr;
+
+    uint32_t pushConstantsBaseIndex = 0;
+};
+
 struct D3D12Pipeline
 {
     VGPUPipelineType type = VGPUPipelineType_Render;
+    D3D12PipelineLayout* pipelineLayout = nullptr;
     ID3D12PipelineState* handle = nullptr;
     uint32_t numVertexBindings = 0;
     uint32_t strides[D3D12_IA_VERTEX_INPUT_STRUCTURE_ELEMENT_COUNT] = {};
@@ -894,8 +902,6 @@ struct D3D12_Renderer
     ID3D12CommandSignature* drawIndirectCommandSignature = nullptr;
     ID3D12CommandSignature* drawIndexedIndirectCommandSignature = nullptr;
     ID3D12CommandSignature* dispatchMeshIndirectCommandSignature = nullptr;
-
-    ID3D12RootSignature* globalRootSignature = nullptr;
 
     bool shuttingDown = false;
     std::mutex destroyMutex;
@@ -1270,7 +1276,6 @@ static void d3d12_destroyDevice(VGPUDevice device)
     SAFE_RELEASE(renderer->drawIndirectCommandSignature);
     SAFE_RELEASE(renderer->drawIndexedIndirectCommandSignature);
     SAFE_RELEASE(renderer->dispatchMeshIndirectCommandSignature);
-    SAFE_RELEASE(renderer->globalRootSignature);
 
     for (size_t i = 0; i < renderer->commandBuffers.size(); ++i)
     {
@@ -1372,37 +1377,6 @@ static void d3d12_updateSwapChain(D3D12_Renderer* renderer, D3D12_SwapChain* swa
         texture->handle->SetName(name);
         swapChain->backbufferTextures[i] = texture;
     }
-}
-
-static uint64_t d3d12_frame(VGPURenderer* driverData)
-{
-    HRESULT hr = S_OK;
-    D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
-
-    renderer->resourceDescriptorHeap.SignalGPU(renderer->queues[VGPUCommandQueue_Graphics].handle);
-    renderer->samplerDescriptorHeap.SignalGPU(renderer->queues[VGPUCommandQueue_Graphics].handle);
-
-    renderer->frameCount++;
-    renderer->frameIndex = renderer->frameCount % VGPU_MAX_INFLIGHT_FRAMES;
-
-    for (uint32_t queue = 0; queue < _VGPUCommandQueue_Count; ++queue)
-    {
-        if (renderer->frameCount >= VGPU_MAX_INFLIGHT_FRAMES &&
-            renderer->queues[queue].frameFences[renderer->frameIndex]->GetCompletedValue() < 1)
-        {
-            // NULL event handle will simply wait immediately:
-            //	https://docs.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12fence-seteventoncompletion#remarks
-            hr = renderer->queues[queue].frameFences[renderer->frameIndex]->SetEventOnCompletion(1, nullptr);
-            VHR(hr);
-        }
-    }
-
-    // Begin new frame
-    // Safe delete deferred destroys
-    d3d12_ProcessDeletionQueue(renderer);
-
-    // Return current frame
-    return renderer->frameCount - 1;
 }
 
 static void d3d12_waitIdle(VGPURenderer* driverData)
@@ -1521,7 +1495,7 @@ static void d3d12_getLimits(VGPURenderer* driverData, VGPULimits* limits)
     limits->maxTextureDimension3D = D3D12_REQ_TEXTURE3D_U_V_OR_W_DIMENSION;
     limits->maxTextureDimensionCube = D3D12_REQ_TEXTURECUBE_DIMENSION;
     limits->maxTextureArrayLayers = D3D12_REQ_TEXTURE2D_ARRAY_AXIS_DIMENSION;
-    limits->maxUniformBufferBindingSize = D3D12_REQ_CONSTANT_BUFFER_ELEMENT_COUNT * 16;
+    limits->maxConstantBufferBindingSize = D3D12_REQ_CONSTANT_BUFFER_ELEMENT_COUNT * 16;
     // D3D12 has no documented limit on the size of a storage buffer binding.
     limits->maxStorageBufferBindingSize = 4294967295;
     limits->minUniformBufferOffsetAlignment = D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT;
@@ -1747,7 +1721,7 @@ static VGPUDeviceAddress d3d12_buffer_get_device_address(VGPUBuffer resource)
     return d3dBuffer->gpuAddress;
 }
 
-static void d3d12_buffer_set_label(VGPURenderer* driverData, VGPUBuffer resource, const char* label)
+static void d3d12_bufferSetLabel(VGPURenderer* driverData, VGPUBuffer resource, const char* label)
 {
     VGPU_UNUSED(driverData);
 
@@ -1997,6 +1971,89 @@ static void d3d12_destroyShaderModule(VGPURenderer* driverData, VGPUShaderModule
     VGPU_FREE(shader);
 }
 
+/* PipelineLayout */
+static HRESULT d3d12_CreateRootSignature(ID3D12Device* device, ID3D12RootSignature** rootSignature, const D3D12_ROOT_SIGNATURE_DESC1& desc)
+{
+    D3D12_VERSIONED_ROOT_SIGNATURE_DESC versionedDesc = { };
+    versionedDesc.Version = D3D_ROOT_SIGNATURE_VERSION_1_1;
+    versionedDesc.Desc_1_1 = desc;
+
+    ComPtr<ID3DBlob> signature;
+    ComPtr<ID3DBlob> error;
+    HRESULT hr = vgpuD3D12SerializeVersionedRootSignature(&versionedDesc, &signature, &error);
+    if (FAILED(hr))
+    {
+        const char* errString = error ? reinterpret_cast<const char*>(error->GetBufferPointer()) : "";
+
+        vgpu_log_error("Failed to create root signature: %S", errString);
+    }
+
+    return device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(rootSignature));
+}
+
+static VGPUPipelineLayout d3d12_createPipelineLayout(VGPURenderer* driverData, const VGPUPipelineLayoutDescriptor* descriptor)
+{
+    D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
+    D3D12PipelineLayout* layout = VGPU_ALLOC_CLEAR(D3D12PipelineLayout);
+
+    uint32_t rangeMax = 0;
+    for (uint32_t i = 0; i < descriptor->descriptorSetCount; i++)
+    {
+        rangeMax += descriptor->descriptorSets[i].rangeCount;
+    }
+
+    uint32_t totalRangeNum = 0;
+    std::vector<D3D12_ROOT_PARAMETER1> rootParameters;
+    std::vector<D3D12_DESCRIPTOR_RANGE1> descriptorRanges(rangeMax);
+    std::vector<D3D12_STATIC_SAMPLER_DESC> staticSamplers;
+
+    if (descriptor->pushConstantCount > 0)
+    {
+        layout->pushConstantsBaseIndex = (uint32_t)rootParameters.size();
+
+        D3D12_ROOT_PARAMETER1 rootParameterLocal = {};
+        rootParameterLocal.ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+        for (uint32_t i = 0; i < descriptor->pushConstantCount; i++)
+        {
+            rootParameterLocal.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL; // GetShaderVisibility(pipelineLayoutDesc.pushConstants[i].visibility);
+            rootParameterLocal.Constants.ShaderRegister = descriptor->pushConstants[i].shaderRegister;
+            rootParameterLocal.Constants.RegisterSpace = 0;
+            rootParameterLocal.Constants.Num32BitValues = descriptor->pushConstants[i].size / 4;
+            rootParameters.push_back(rootParameterLocal);
+        }
+    }
+    VGPU_UNUSED(totalRangeNum);
+
+    D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = { };
+    rootSignatureDesc.NumParameters = (UINT)rootParameters.size();
+    rootSignatureDesc.pParameters = rootParameters.data();
+    rootSignatureDesc.NumStaticSamplers = (UINT)staticSamplers.size();
+    rootSignatureDesc.pStaticSamplers = staticSamplers.data();
+    rootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+
+#ifdef USING_D3D12_AGILITY_SDK
+    rootSignatureDesc.Flags |= D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED;
+#endif
+
+    const HRESULT hr = d3d12_CreateRootSignature(renderer->device, &layout->handle, rootSignatureDesc);
+    if (FAILED(hr))
+    {
+        VGPU_FREE(layout);
+        return nullptr;
+    }
+
+    return (VGPUPipelineLayout)layout;
+}
+
+static void d3d12_destroyPipelineLayout(VGPURenderer* driverData, VGPUPipelineLayout resource)
+{
+    D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
+    D3D12PipelineLayout* pipeline = (D3D12PipelineLayout*)resource;
+
+    d3d12_DeferDestroy(renderer, pipeline->handle, nullptr);
+    VGPU_FREE(pipeline);
+}
+
 /* Pipeline */
 static VGPUPipeline d3d12_createRenderPipeline(VGPURenderer* driverData, const VGPURenderPipelineDesc* desc)
 {
@@ -2004,6 +2061,7 @@ static VGPUPipeline d3d12_createRenderPipeline(VGPURenderer* driverData, const V
 
     D3D12Pipeline* pipeline = new D3D12Pipeline();
     pipeline->type = VGPUPipelineType_Render;
+    pipeline->pipelineLayout = (D3D12PipelineLayout*)desc->layout;
     D3D12Shader* vertexShader = (D3D12Shader*)desc->vertex.module;
     D3D12Shader* fragmentShader = (D3D12Shader*)desc->fragment;
 
@@ -2043,7 +2101,7 @@ static VGPUPipeline d3d12_createRenderPipeline(VGPURenderer* driverData, const V
     }
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC d3dDesc = {};
-    d3dDesc.pRootSignature = renderer->globalRootSignature;
+    d3dDesc.pRootSignature = pipeline->pipelineLayout->handle;
     d3dDesc.VS = { vertexShader->byteCode, vertexShader->byteCodeSize };
     d3dDesc.PS = { fragmentShader->byteCode, fragmentShader->byteCodeSize };
 
@@ -2127,16 +2185,13 @@ static VGPUPipeline d3d12_createRenderPipeline(VGPURenderer* driverData, const V
     d3dDesc.DSVFormat = ToDxgiFormat(desc->depthStencilState.format);
     d3dDesc.SampleDesc.Count = desc->sampleCount;
 
-    ID3D12PipelineState* pipelineState = nullptr;
-    if (FAILED(renderer->device->CreateGraphicsPipelineState(&d3dDesc, IID_PPV_ARGS(&pipelineState))))
+    if (FAILED(renderer->device->CreateGraphicsPipelineState(&d3dDesc, IID_PPV_ARGS(&pipeline->handle))))
     {
         VGPU_FREE(pipeline);
         return nullptr;
     }
 
-    D3D12SetName(pipelineState, desc->label);
-    
-    pipeline->handle = pipelineState;
+    D3D12SetName(pipeline->handle, desc->label);
     pipeline->primitiveTopology = ToD3DPrimitiveTopology(desc->primitive.topology, desc->primitive.patchControlPoints);
     return (VGPUPipeline)pipeline;
 }
@@ -2144,25 +2199,25 @@ static VGPUPipeline d3d12_createRenderPipeline(VGPURenderer* driverData, const V
 static VGPUPipeline d3d12_createComputePipeline(VGPURenderer* driverData, const VGPUComputePipelineDescriptor* desc)
 {
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
+
+    D3D12Pipeline* pipeline = VGPU_ALLOC(D3D12Pipeline);
+    pipeline->type = VGPUPipelineType_Compute;
+    pipeline->pipelineLayout = (D3D12PipelineLayout*)desc->layout;
     D3D12Shader* shader = (D3D12Shader*)desc->shader;
 
     D3D12_SHADER_BYTECODE cs = { shader->byteCode, shader->byteCodeSize };
 
     D3D12_COMPUTE_PIPELINE_STATE_DESC d3dDesc = {};
-    d3dDesc.pRootSignature = renderer->globalRootSignature;
+    d3dDesc.pRootSignature = pipeline->pipelineLayout->handle;
     d3dDesc.CS = cs;
 
-    ID3D12PipelineState* pipelineState = nullptr;
-    if (FAILED(renderer->device->CreateComputePipelineState(&d3dDesc, IID_PPV_ARGS(&pipelineState))))
+    if (FAILED(renderer->device->CreateComputePipelineState(&d3dDesc, IID_PPV_ARGS(&pipeline->handle))))
     {
+        VGPU_FREE(pipeline);
         return nullptr;
     }
 
-    D3D12SetName(pipelineState, desc->label);
-
-    D3D12Pipeline* pipeline = VGPU_ALLOC(D3D12Pipeline);
-    pipeline->type = VGPUPipelineType_Compute;
-    pipeline->handle = pipelineState;
+    D3D12SetName(pipeline->handle, desc->label);
     return (VGPUPipeline)pipeline;
 }
 
@@ -2406,6 +2461,11 @@ static void d3d12_setPipeline(VGPUCommandBufferImpl* driverData, VGPUPipeline pi
     if (newPipeline->type == VGPUPipelineType_Render)
     {
         commandBuffer->commandList->IASetPrimitiveTopology(newPipeline->primitiveTopology);
+        commandBuffer->commandList->SetGraphicsRootSignature(newPipeline->pipelineLayout->handle);
+    }
+    else
+    {
+        commandBuffer->commandList->SetGraphicsRootSignature(newPipeline->pipelineLayout->handle);
     }
 }
 
@@ -2776,13 +2836,6 @@ static VGPUCommandBuffer d3d12_beginCommandBuffer(VGPURenderer* driverData, VGPU
             renderer->samplerDescriptorHeap.handle
         };
         impl->commandList->SetDescriptorHeaps(static_cast<UINT>(std::size(heaps)), heaps);
-
-        impl->commandList->SetComputeRootSignature(renderer->globalRootSignature);
-
-        if (queueType == VGPUCommandQueue_Graphics)
-        {
-            impl->commandList->SetGraphicsRootSignature(renderer->globalRootSignature);
-        }
     }
 
     if (queueType == VGPUCommandQueue_Graphics)
@@ -2816,7 +2869,7 @@ static VGPUCommandBuffer d3d12_beginCommandBuffer(VGPURenderer* driverData, VGPU
     return renderer->commandBuffers.back();
 }
 
-static void d3d12_submit(VGPURenderer* driverData, VGPUCommandBuffer* commandBuffers, uint32_t count)
+static uint64_t d3d12_submit(VGPURenderer* driverData, VGPUCommandBuffer* commandBuffers, uint32_t count)
 {
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
 
@@ -2853,7 +2906,7 @@ static void d3d12_submit(VGPURenderer* driverData, VGPUCommandBuffer* commandBuf
         if (FAILED(hr))
         {
             vgpu_log_error("Failed to close command list");
-            return;
+            return 0;
         }
 
         D3D12Queue& queue = renderer->queues[commandBuffer->queue];
@@ -2904,28 +2957,46 @@ static void d3d12_submit(VGPURenderer* driverData, VGPUCommandBuffer* commandBuf
             OutputDebugStringA(buff);
 #endif
             //HandleDeviceLost();
-            return;
+            return 0;
         }
     }
-}
 
-static void d3d12_CreateRootSignature(ID3D12Device* device, ID3D12RootSignature** rootSignature, const D3D12_ROOT_SIGNATURE_DESC1& desc)
-{
-    D3D12_VERSIONED_ROOT_SIGNATURE_DESC versionedDesc = { };
-    versionedDesc.Version = D3D_ROOT_SIGNATURE_VERSION_1_1;
-    versionedDesc.Desc_1_1 = desc;
+    renderer->resourceDescriptorHeap.SignalGPU(renderer->queues[VGPUCommandQueue_Graphics].handle);
+    renderer->samplerDescriptorHeap.SignalGPU(renderer->queues[VGPUCommandQueue_Graphics].handle);
 
-    ComPtr<ID3DBlob> signature;
-    ComPtr<ID3DBlob> error;
-    HRESULT hr = vgpuD3D12SerializeVersionedRootSignature(&versionedDesc, &signature, &error);
-    if (FAILED(hr))
+    renderer->frameCount++;
+    renderer->frameIndex = renderer->frameCount % VGPU_MAX_INFLIGHT_FRAMES;
+
+    for (uint32_t queue = 0; queue < _VGPUCommandQueue_Count; ++queue)
     {
-        const char* errString = error ? reinterpret_cast<const char*>(error->GetBufferPointer()) : "";
-
-        vgpu_log_error("Failed to create root signature: %S", errString);
+        if (renderer->frameCount >= VGPU_MAX_INFLIGHT_FRAMES &&
+            renderer->queues[queue].frameFences[renderer->frameIndex]->GetCompletedValue() < 1)
+        {
+            // NULL event handle will simply wait immediately:
+            //	https://docs.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12fence-seteventoncompletion#remarks
+            hr = renderer->queues[queue].frameFences[renderer->frameIndex]->SetEventOnCompletion(1, nullptr);
+            VHR(hr);
+        }
     }
 
-    VHR(device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(rootSignature)));
+    // Begin new frame
+    // Safe delete deferred destroys
+    d3d12_ProcessDeletionQueue(renderer);
+
+    // Return current frame
+    return renderer->frameCount - 1;
+}
+
+static uint64_t d3d12_getFrameCount(VGPURenderer* driverData)
+{
+    D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
+    return renderer->frameCount;
+}
+
+static uint32_t d3d12_getFrameIndex(VGPURenderer* driverData)
+{
+    D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
+    return renderer->frameIndex;
 }
 
 static VGPUBool32 d3d12_isSupported(void)
@@ -3421,41 +3492,6 @@ static VGPUDeviceImpl* d3d12_createDevice(const VGPUDeviceDescriptor* info)
             cmdSignatureDesc.pArgumentDescs = &dispatchMeshArg;
             VHR(renderer->device->CreateCommandSignature(&cmdSignatureDesc, nullptr, IID_PPV_ARGS(&renderer->dispatchMeshIndirectCommandSignature)));
         }
-    }
-
-    // Create global root signature
-    {
-        // AMD : Try to stay below 13 DWORDs https://gpuopen.com/performance/
-        // 12 root constants + 4 root CBVs == 13 DWORDs, rest is bindless
-
-        D3D12_ROOT_PARAMETER1 rootParameters[5] = {};
-        rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-        rootParameters[0].Constants.Num32BitValues = 12;
-        rootParameters[0].Constants.ShaderRegister = 999;
-        rootParameters[0].Constants.RegisterSpace = 0;
-        rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-
-        for (uint32_t i = 1; i < 5; i++)
-        {
-            rootParameters[i].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-            rootParameters[i].Descriptor.ShaderRegister = i;
-            rootParameters[i].Descriptor.RegisterSpace = 0;
-            rootParameters[i].Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_NONE;
-            rootParameters[i].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-        }
-
-        D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = { };
-        rootSignatureDesc.NumParameters = _countof(rootParameters);
-        rootSignatureDesc.pParameters = rootParameters;
-        //rootSignatureDesc.NumStaticSamplers = 1;
-        //rootSignatureDesc.pStaticSamplers = staticSamplers;
-        rootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
-
-#ifdef USING_D3D12_AGILITY_SDK
-        rootSignatureDesc.Flags |= D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED;
-#endif
-
-        d3d12_CreateRootSignature(renderer->device, &renderer->globalRootSignature, rootSignatureDesc);
     }
 
     VGPUDeviceImpl* device = VGPU_ALLOC_CLEAR(VGPUDeviceImpl);

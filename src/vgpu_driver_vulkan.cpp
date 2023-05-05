@@ -573,8 +573,6 @@ namespace
         }
     }
 
-
-
     constexpr VkFormat ToVkFormat(VGPUVertexFormat format)
     {
         switch (format)
@@ -633,6 +631,19 @@ namespace
                 return VK_VERTEX_INPUT_RATE_INSTANCE;
         }
     }
+
+    constexpr VkShaderStageFlags ToVkShaderStageFlags(VGPUShaderStage stage)
+    {
+        VkShaderStageFlags flags = 0;
+        if (stage & VGPUShaderStage_Vertex)
+            flags |= VK_SHADER_STAGE_VERTEX_BIT;
+        if (stage & VGPUShaderStage_Fragment)
+            flags |= VK_SHADER_STAGE_FRAGMENT_BIT;
+        if (stage & VGPUShaderStage_Compute)
+            flags |= VK_SHADER_STAGE_COMPUTE_BIT;
+        return flags;
+    }
+
 
     static_assert(sizeof(VGPUViewport) == sizeof(VkViewport), "Viewport mismatch");
     static_assert(offsetof(VGPUViewport, x) == offsetof(VkViewport, x), "Layout mismatch");
@@ -712,10 +723,17 @@ struct VulkanShader
     VkShaderModule handle;
 };
 
+struct VulkanPipelineLayout final
+{
+    std::vector<VkDescriptorSetLayout> descriptorSetLayouts;
+    std::vector<uint32_t> descriptorSetSpaces;
+    VkPipelineLayout handle = VK_NULL_HANDLE;
+};
+
 struct VulkanPipeline
 {
     VkPipelineBindPoint bindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-    VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
+    VulkanPipelineLayout* pipelineLayout = nullptr;
     VkPipeline handle = VK_NULL_HANDLE;
 };
 
@@ -1384,49 +1402,11 @@ static void vulkan_destroyDevice(VGPUDevice device)
     VGPU_FREE(device);
 }
 
-static uint64_t vulkan_frame(VGPURenderer* driverData)
+inline void vulkan_setLabel(VGPURenderer* driverData, const char* label)
 {
-    VkResult result = VK_SUCCESS;
     VulkanRenderer* renderer = (VulkanRenderer*)driverData;
 
-    renderer->initLocker.lock();
-
-    renderer->frameCount++;
-    renderer->frameIndex = renderer->frameCount % VGPU_MAX_INFLIGHT_FRAMES;
-
-    // Begin new frame
-    {
-        auto& frame = renderer->frames[renderer->frameIndex];
-
-        // Initiate stalling CPU when GPU is not yet finished with next frame.
-        if (renderer->frameCount >= VGPU_MAX_INFLIGHT_FRAMES)
-        {
-            result = vkWaitForFences(renderer->device, 1, &frame.fence, VK_TRUE, 0xFFFFFFFFFFFFFFFF);
-            VGPU_ASSERT(result == VK_SUCCESS);
-
-            result = vkResetFences(renderer->device, 1, &frame.fence);
-            VGPU_ASSERT(result == VK_SUCCESS);
-        }
-
-        // Safe delete deferred destroys
-        vulkan_ProcessDeletionQueue(renderer);
-
-        // Restart transition command buffers first.
-        result = vkResetCommandPool(renderer->device, frame.initCommandPool, 0);
-        VGPU_ASSERT(result == VK_SUCCESS);
-
-        VkCommandBufferBeginInfo beginInfo = {};
-        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-        result = vkBeginCommandBuffer(frame.initCommandBuffer, &beginInfo);
-        VGPU_ASSERT(result == VK_SUCCESS);
-    }
-
-    renderer->submitInits = false;
-    renderer->initLocker.unlock();
-
-    // Return current frame
-    return renderer->frameCount - 1;
+    vulkan_SetObjectName(renderer, VK_OBJECT_TYPE_DEVICE, (uint64_t)renderer->device, label);
 }
 
 static void vulkan_waitIdle(VGPURenderer* driverData)
@@ -1572,7 +1552,7 @@ static void vulkan_getLimits(VGPURenderer* driverData, VGPULimits* limits)
     //SET_LIMIT_FROM_VULKAN(maxPerStageDescriptorStorageImages, maxStorageTexturesPerShaderStage);
     //SET_LIMIT_FROM_VULKAN(maxPerStageDescriptorUniformBuffers, maxUniformBuffersPerShaderStage);
 
-    limits->maxUniformBufferBindingSize = renderer->properties2.properties.limits.maxUniformBufferRange;
+    limits->maxConstantBufferBindingSize = renderer->properties2.properties.limits.maxUniformBufferRange;
     limits->maxStorageBufferBindingSize = renderer->properties2.properties.limits.maxStorageBufferRange;
     limits->minUniformBufferOffsetAlignment = (uint32_t)renderer->properties2.properties.limits.minUniformBufferOffsetAlignment;
     limits->minStorageBufferOffsetAlignment = (uint32_t)renderer->properties2.properties.limits.minStorageBufferOffsetAlignment;
@@ -1606,11 +1586,6 @@ static void vulkan_getLimits(VGPURenderer* driverData, VGPULimits* limits)
 #undef SET_LIMIT_FROM_VULKAN
 }
 
-//static void vulkan_setLabel(VGPURenderer* driverData, const char* label)
-//{
-//    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
-//    vulkan_SetObjectName(renderer, VK_OBJECT_TYPE_DEVICE, (uint64_t)renderer->device, label);
-//}
 
 /* Buffer */
 inline VGPUBuffer vulkan_createBuffer(VGPURenderer* driverData, const VGPUBufferDescriptor* desc, const void* pInitialData)
@@ -1886,7 +1861,7 @@ inline VGPUDeviceAddress vulkan_buffer_get_device_address(VGPUBuffer resource)
     return buffer->gpuAddress;
 }
 
-inline void vulkan_buffer_set_label(VGPURenderer* driverData, VGPUBuffer resource, const char* label)
+inline void vulkan_bufferSetLabel(VGPURenderer* driverData, VGPUBuffer resource, const char* label)
 {
     VulkanRenderer* renderer = (VulkanRenderer*)driverData;
     VulkanBuffer* buffer = (VulkanBuffer*)resource;
@@ -2186,20 +2161,78 @@ static void vulkan_destroyShaderModule(VGPURenderer* driverData, VGPUShaderModul
     delete shader;
 }
 
+/* PipelineLayout */
+static VGPUPipelineLayout vulkan_createPipelineLayout(VGPURenderer* driverData, const VGPUPipelineLayoutDescriptor* descriptor)
+{
+    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
+    VulkanPipelineLayout* layout = VGPU_ALLOC_CLEAR(VulkanPipelineLayout);
+    layout->descriptorSetLayouts.resize(descriptor->descriptorSetCount);
+    layout->descriptorSetSpaces.resize(descriptor->descriptorSetCount);
+
+    uint32_t setNum = 0;
+    for (uint32_t i = 0; i < descriptor->descriptorSetCount; i++)
+    {
+        //layout->descriptorSetLayouts[i] = CreateSetLayout(descriptor.descriptorSets[i], bindingOffsets);
+        layout->descriptorSetSpaces[i] = descriptor->descriptorSets[i].registerSpace;
+
+        setNum = _VGPU_MAX(setNum, descriptor->descriptorSets[i].registerSpace);
+    }
+    setNum++;
+
+    // Push constants
+    std::vector<VkPushConstantRange> pushConstantRanges;
+    uint32_t offset = 0;
+
+    for (uint32_t i = 0; i < descriptor->pushConstantCount; i++)
+    {
+        const VGPUPushConstantDesc& pushConstantDesc = descriptor->pushConstants[i];
+
+        VkPushConstantRange& range = pushConstantRanges[i];
+        range = {};
+        range.stageFlags = ToVkShaderStageFlags(pushConstantDesc.visibility);
+        range.offset = offset;
+        range.size = pushConstantDesc.size;
+
+        offset += pushConstantDesc.size;
+    }
+
+    // Create pipeline layout
+    VkPipelineLayoutCreateInfo createInfo = { };
+    createInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    //createInfo.setLayoutCount = setNum;
+    //createInfo.pSetLayouts = descriptorSetLayouts;
+    createInfo.pushConstantRangeCount = descriptor->pushConstantCount;
+    createInfo.pPushConstantRanges = pushConstantRanges.data();
+
+    VkResult result = vkCreatePipelineLayout(renderer->device, &createInfo, nullptr, &layout->handle);
+    if (result != VK_SUCCESS)
+    {
+        VGPU_FREE(layout);
+        return nullptr;
+    }
+
+    return (VGPUPipelineLayout)layout;
+}
+
+static void vulkan_destroyPipelineLayout(VGPURenderer* driverData, VGPUPipelineLayout resource)
+{
+    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
+    VulkanPipelineLayout* pipeline = (VulkanPipelineLayout*)resource;
+
+    renderer->destroyMutex.lock();
+    renderer->destroyedPipelineLayouts.push_back(std::make_pair(pipeline->handle, renderer->frameCount));
+    renderer->destroyMutex.unlock();
+    VGPU_FREE(pipeline);
+}
+
 /* Pipeline */
 static VGPUPipeline vulkan_createRenderPipeline(VGPURenderer* driverData, const VGPURenderPipelineDesc* desc)
 {
     VulkanRenderer* renderer = (VulkanRenderer*)driverData;
 
+    VulkanPipelineLayout* layout = (VulkanPipelineLayout*)desc->layout;
     VulkanShader* vertexShader = (VulkanShader*)desc->vertex.module;
     VulkanShader* fragmentShader = (VulkanShader*)desc->fragment;
-
-    //VkPipelineRenderingCreateInfo{ VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR };
-    //pipeline_create.pNext = VK_NULL_HANDLE;
-    //pipeline_create.colorAttachmentCount = 1;
-    //pipeline_create.pColorAttachmentFormats = &color_rendering_format;
-    //pipeline_create.depthAttachmentFormat = depth_format;
-    //pipeline_create.stencilAttachmentFormat = depth_format;
 
     // Stage info
     VkPipelineShaderStageCreateInfo shaderStages[2] = {};
@@ -2235,15 +2268,15 @@ static VGPUPipeline vulkan_createRenderPipeline(VGPURenderer* driverData, const 
     vertexInputBindings.resize(desc->vertex.layoutCount);
     for (uint32_t binding = 0; binding < desc->vertex.layoutCount; ++binding)
     {
-        const VGPUVertexBufferLayout& layout = desc->vertex.layouts[binding];
+        const VGPUVertexBufferLayout& bufferLayout = desc->vertex.layouts[binding];
 
         vertexInputBindings[binding].binding = binding;
-        vertexInputBindings[binding].stride = layout.stride;
-        vertexInputBindings[binding].inputRate = ToVkVertexInputRate(layout.stepMode);
+        vertexInputBindings[binding].stride = bufferLayout.stride;
+        vertexInputBindings[binding].inputRate = ToVkVertexInputRate(bufferLayout.stepMode);
 
-        for (uint32_t attributeIndex = 0; attributeIndex < layout.attributeCount; ++attributeIndex)
+        for (uint32_t attributeIndex = 0; attributeIndex < bufferLayout.attributeCount; ++attributeIndex)
         {
-            const VGPUVertexAttribute& attribute = layout.attributes[attributeIndex];
+            const VGPUVertexAttribute& attribute = bufferLayout.attributes[attributeIndex];
 
             VkVertexInputAttributeDescription vertexInputAttribute;
             vertexInputAttribute.location = attribute.shaderLocation;
@@ -2371,24 +2404,18 @@ static VGPUPipeline vulkan_createRenderPipeline(VGPURenderer* driverData, const 
     createInfo.pDepthStencilState = &depthStencilState;
     createInfo.pColorBlendState = &colorBlendState;
     createInfo.pDynamicState = &renderer->dynamicStateInfo;
+    createInfo.layout = layout->handle;
     createInfo.renderPass = VK_NULL_HANDLE;
 
-    VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
-    pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipelineLayoutInfo.setLayoutCount = 0;
-    pipelineLayoutInfo.pushConstantRangeCount = 0u;
-    VkResult result = vkCreatePipelineLayout(renderer->device, &pipelineLayoutInfo, nullptr, &createInfo.layout);
-    VK_CHECK(result);
-
     VkPipeline handle = VK_NULL_HANDLE;
-    result = vkCreateGraphicsPipelines(renderer->device, renderer->pipelineCache, 1, &createInfo, nullptr, &handle);
+    const VkResult result = vkCreateGraphicsPipelines(renderer->device, renderer->pipelineCache, 1, &createInfo, nullptr, &handle);
     if (result != VK_SUCCESS)
     {
         return nullptr;
     }
 
     VulkanPipeline* pipeline = VGPU_ALLOC_CLEAR(VulkanPipeline);
-    pipeline->pipelineLayout = createInfo.layout;
+    pipeline->pipelineLayout = layout;
     pipeline->handle = handle;
     return (VGPUPipeline)pipeline;
 }
@@ -2437,7 +2464,6 @@ static void vulkan_destroyPipeline(VGPURenderer* driverData, VGPUPipeline resour
     VulkanPipeline* pipeline = (VulkanPipeline*)resource;
 
     renderer->destroyMutex.lock();
-    renderer->destroyedPipelineLayouts.push_back(std::make_pair(pipeline->pipelineLayout, renderer->frameCount));
     renderer->destroyedPipelines.push_back(std::make_pair(pipeline->handle, renderer->frameCount));
     renderer->destroyMutex.unlock();
 
@@ -3173,7 +3199,7 @@ static VGPUCommandBuffer vulkan_beginCommandBuffer(VGPURenderer* driverData, VGP
     return renderer->commandBuffers.back();
 }
 
-static void vulkan_submit(VGPURenderer* driverData, VGPUCommandBuffer* commandBuffers, uint32_t count)
+static uint64_t vulkan_submit(VGPURenderer* driverData, VGPUCommandBuffer* commandBuffers, uint32_t count)
 {
     VulkanRenderer* renderer = (VulkanRenderer*)driverData;
 
@@ -3312,8 +3338,54 @@ static void vulkan_submit(VGPURenderer* driverData, VGPUCommandBuffer* commandBu
         }
     }
 
+    renderer->frameCount++;
+    renderer->frameIndex = renderer->frameCount % VGPU_MAX_INFLIGHT_FRAMES;
+
+    // Begin new frame
+    {
+        auto& frame = renderer->frames[renderer->frameIndex];
+
+        // Initiate stalling CPU when GPU is not yet finished with next frame.
+        if (renderer->frameCount >= VGPU_MAX_INFLIGHT_FRAMES)
+        {
+            result = vkWaitForFences(renderer->device, 1, &frame.fence, VK_TRUE, 0xFFFFFFFFFFFFFFFF);
+            VGPU_ASSERT(result == VK_SUCCESS);
+
+            result = vkResetFences(renderer->device, 1, &frame.fence);
+            VGPU_ASSERT(result == VK_SUCCESS);
+        }
+
+        // Safe delete deferred destroys
+        vulkan_ProcessDeletionQueue(renderer);
+
+        // Restart transition command buffers first.
+        result = vkResetCommandPool(renderer->device, frame.initCommandPool, 0);
+        VGPU_ASSERT(result == VK_SUCCESS);
+
+        VkCommandBufferBeginInfo beginInfo = {};
+        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        result = vkBeginCommandBuffer(frame.initCommandBuffer, &beginInfo);
+        VGPU_ASSERT(result == VK_SUCCESS);
+    }
+
     renderer->submitInits = false;
     renderer->initLocker.unlock();
+
+    // Return current frame
+    return renderer->frameCount - 1;
+}
+
+static uint64_t vulkan_getFrameCount(VGPURenderer* driverData)
+{
+    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
+    return renderer->frameCount;
+}
+
+static uint32_t vulkan_getFrameIndex(VGPURenderer* driverData)
+{
+    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
+    return renderer->frameIndex;
 }
 
 static VGPUBool32 vulkan_isSupported(void)

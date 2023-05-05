@@ -138,7 +138,8 @@ typedef struct VGPUCommandBuffer_T {
 typedef struct VGPUDeviceImpl
 {
     void (*destroyDevice)(VGPUDevice device);
-    uint64_t(*frame)(VGPURenderer* driverData);
+    void(*setLabel)(VGPURenderer* driverData, const char* label);
+
     void (*waitIdle)(VGPURenderer* driverData);
     VGPUBackend(*getBackendType)(void);
     VGPUBool32(*queryFeature)(VGPURenderer* driverData, VGPUFeature feature, void* pInfo, uint32_t infoSize);
@@ -148,7 +149,7 @@ typedef struct VGPUDeviceImpl
     VGPUBuffer(*createBuffer)(VGPURenderer* driverData, const VGPUBufferDescriptor* desc, const void* pInitialData);
     void(*destroyBuffer)(VGPURenderer* driverData, VGPUBuffer resource);
     VGPUDeviceAddress(*buffer_get_device_address)(VGPUBuffer resource);
-    void(*buffer_set_label)(VGPURenderer* driverData, VGPUBuffer resource, const char* label);
+    void(*bufferSetLabel)(VGPURenderer* driverData, VGPUBuffer resource, const char* label);
 
     VGPUTexture(*createTexture)(VGPURenderer* driverData, const VGPUTextureDesc* desc, const void* pInitialData);
     void(*destroyTexture)(VGPURenderer* driverData, VGPUTexture resource);
@@ -158,6 +159,9 @@ typedef struct VGPUDeviceImpl
 
     VGPUShaderModule(*createShaderModule)(VGPURenderer* driverData, const void* pCode, size_t codeSize);
     void(*destroyShaderModule)(VGPURenderer* driverData, VGPUShaderModule resource);
+
+    VGPUPipelineLayout(*createPipelineLayout)(VGPURenderer* driverData, const VGPUPipelineLayoutDescriptor* desc);
+    void(*destroyPipelineLayout)(VGPURenderer* driverData, VGPUPipelineLayout resource);
 
     VGPUPipeline(*createRenderPipeline)(VGPURenderer* driverData, const VGPURenderPipelineDesc* desc);
     VGPUPipeline(*createComputePipeline)(VGPURenderer* driverData, const VGPUComputePipelineDescriptor* desc);
@@ -169,7 +173,10 @@ typedef struct VGPUDeviceImpl
     VGPUTextureFormat(*getSwapChainFormat)(VGPURenderer* driverData, VGPUSwapChain* swapChain);
 
     VGPUCommandBuffer(*beginCommandBuffer)(VGPURenderer* driverData, VGPUCommandQueue queueType, const char* label);
-    void (*submit)(VGPURenderer* driverData, VGPUCommandBuffer* commandBuffers, uint32_t count);
+    uint64_t(*submit)(VGPURenderer* driverData, VGPUCommandBuffer* commandBuffers, uint32_t count);
+
+    uint64_t(*getFrameCount)(VGPURenderer* driverData);
+    uint32_t(*getFrameIndex)(VGPURenderer* driverData);
 
     /* Opaque pointer for the Driver */
     VGPURenderer* driverData;
@@ -199,7 +206,7 @@ ASSIGN_COMMAND_BUFFER_FUNC(drawIndexed, name)
 
 #define ASSIGN_DRIVER(name) \
 ASSIGN_DRIVER_FUNC(destroyDevice, name) \
-ASSIGN_DRIVER_FUNC(frame, name) \
+ASSIGN_DRIVER_FUNC(setLabel, name) \
 ASSIGN_DRIVER_FUNC(waitIdle, name) \
 ASSIGN_DRIVER_FUNC(getBackendType, name) \
 ASSIGN_DRIVER_FUNC(queryFeature, name) \
@@ -208,13 +215,15 @@ ASSIGN_DRIVER_FUNC(getLimits, name) \
 ASSIGN_DRIVER_FUNC(createBuffer, name) \
 ASSIGN_DRIVER_FUNC(destroyBuffer, name) \
 ASSIGN_DRIVER_FUNC(buffer_get_device_address, name) \
-ASSIGN_DRIVER_FUNC(buffer_set_label, name) \
+ASSIGN_DRIVER_FUNC(bufferSetLabel, name) \
 ASSIGN_DRIVER_FUNC(createTexture, name) \
 ASSIGN_DRIVER_FUNC(destroyTexture, name) \
 ASSIGN_DRIVER_FUNC(createSampler, name) \
 ASSIGN_DRIVER_FUNC(destroySampler, name) \
 ASSIGN_DRIVER_FUNC(createShaderModule, name) \
 ASSIGN_DRIVER_FUNC(destroyShaderModule, name) \
+ASSIGN_DRIVER_FUNC(createPipelineLayout, name) \
+ASSIGN_DRIVER_FUNC(destroyPipelineLayout, name) \
 ASSIGN_DRIVER_FUNC(createRenderPipeline, name) \
 ASSIGN_DRIVER_FUNC(createComputePipeline, name) \
 ASSIGN_DRIVER_FUNC(createRayTracingPipeline, name) \
@@ -224,6 +233,8 @@ ASSIGN_DRIVER_FUNC(destroySwapChain, name) \
 ASSIGN_DRIVER_FUNC(getSwapChainFormat, name) \
 ASSIGN_DRIVER_FUNC(beginCommandBuffer, name) \
 ASSIGN_DRIVER_FUNC(submit, name) \
+ASSIGN_DRIVER_FUNC(getFrameCount, name) \
+ASSIGN_DRIVER_FUNC(getFrameIndex, name) \
 
 typedef struct VGFXDriver
 {

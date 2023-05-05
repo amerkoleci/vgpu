@@ -108,19 +108,19 @@ void _vgpu_free(void* ptr)
 }
 
 static const VGFXDriver* drivers[] = {
-//#if defined(VGPU_D3D11_DRIVER)
-//    &D3D11_Driver,
-//#endif
-#if defined(VGPU_D3D12_DRIVER)
-    &D3D12_Driver,
-#endif
-#if defined(VGPU_VULKAN_DRIVER)
-    &Vulkan_Driver,
-#endif
-#if defined(VGPU_WEBGPU_DRIVER)
-    &WebGPU_driver,
-#endif
-    NULL
+    //#if defined(VGPU_D3D11_DRIVER)
+    //    &D3D11_Driver,
+    //#endif
+    #if defined(VGPU_D3D12_DRIVER)
+        &D3D12_Driver,
+    #endif
+    #if defined(VGPU_VULKAN_DRIVER)
+        &Vulkan_Driver,
+    #endif
+    #if defined(VGPU_WEBGPU_DRIVER)
+        &WebGPU_driver,
+    #endif
+        NULL
 };
 
 #define NULL_RETURN(name) if (name == NULL) { return; }
@@ -201,11 +201,11 @@ void vgpuDestroyDevice(VGPUDevice device)
     device->destroyDevice(device);
 }
 
-uint64_t vgpuFrame(VGPUDevice device)
+void vgpuDeviceSetLabel(VGPUDevice device, const char* label)
 {
-    VGPU_ASSERT(device);
+    NULL_RETURN(device);
 
-    return device->frame(device->driverData);
+    device->setLabel(device->driverData, label);
 }
 
 void vgpuWaitIdle(VGPUDevice device)
@@ -243,13 +243,23 @@ void vgpuGetLimits(VGPUDevice device, VGPULimits* limits)
     device->getLimits(device->driverData, limits);
 }
 
-void vgpuSubmit(VGPUDevice device, VGPUCommandBuffer* commandBuffers, uint32_t count)
+uint64_t vgpuSubmit(VGPUDevice device, VGPUCommandBuffer* commandBuffers, uint32_t count)
 {
     VGPU_ASSERT(device);
     VGPU_ASSERT(commandBuffers);
     VGPU_ASSERT(count);
 
-    device->submit(device->driverData, commandBuffers, count);
+    return device->submit(device->driverData, commandBuffers, count);
+}
+
+uint64_t vgpuGetFrameCount(VGPUDevice device)
+{
+    return device->getFrameCount(device->driverData);
+}
+
+uint32_t vgpuGetFrameIndex(VGPUDevice device)
+{
+    return device->getFrameIndex(device->driverData);
 }
 
 /* Buffer */
@@ -290,7 +300,7 @@ void vgpuSetBufferLabel(VGPUDevice device, VGPUBuffer buffer, const char* label)
     VGPU_ASSERT(device);
     NULL_RETURN(buffer);
 
-    device->buffer_set_label(device->driverData, buffer, label);
+    device->bufferSetLabel(device->driverData, buffer, label);
 }
 
 /* Texture */
@@ -428,6 +438,30 @@ void vgpuDestroyShaderModule(VGPUDevice device, VGPUShaderModule module)
     device->destroyShaderModule(device->driverData, module);
 }
 
+/* PipelineLayout */
+static VGPUPipelineLayoutDescriptor _VGPUPipelineLayoutDescriptor_Def(const VGPUPipelineLayoutDescriptor* desc)
+{
+    VGPUPipelineLayoutDescriptor def = *desc;
+    return def;
+}
+
+VGPUPipelineLayout vgpuCreatePipelineLayout(VGPUDevice device, const VGPUPipelineLayoutDescriptor* descriptor)
+{
+    VGPU_ASSERT(device);
+    NULL_RETURN_NULL(descriptor);
+
+    VGPUPipelineLayoutDescriptor desc_def = _VGPUPipelineLayoutDescriptor_Def(descriptor);
+    return device->createPipelineLayout(device->driverData, &desc_def);
+}
+
+void vgpuDestroyPipelineLayout(VGPUDevice device, VGPUPipelineLayout pipelineLayout)
+{
+    VGPU_ASSERT(device);
+    NULL_RETURN(pipelineLayout);
+
+    device->destroyPipelineLayout(device->driverData, pipelineLayout);
+}
+
 /* Pipeline */
 static VGPURenderPipelineDesc _vgpuRenderPipelineDescDef(const VGPURenderPipelineDesc* desc)
 {
@@ -457,6 +491,7 @@ VGPUPipeline vgpuCreateRenderPipeline(VGPUDevice device, const VGPURenderPipelin
 {
     VGPU_ASSERT(device);
     NULL_RETURN_NULL(desc);
+    VGPU_ASSERT(desc->layout);
     VGPU_ASSERT(desc->vertex.module);
 
     VGPURenderPipelineDesc desc_def = _vgpuRenderPipelineDescDef(desc);
@@ -468,6 +503,7 @@ VGPUPipeline vgpuCreateComputePipeline(VGPUDevice device, const VGPUComputePipel
     VGPU_ASSERT(device);
 
     NULL_RETURN_NULL(descriptor);
+    VGPU_ASSERT(descriptor->layout);
     VGPU_ASSERT(descriptor->shader);
 
     return device->createComputePipeline(device->driverData, descriptor);
@@ -801,13 +837,13 @@ VGPUBool32 vgpuIsDepthFormat(VGPUTextureFormat format)
 {
     switch (format)
     {
-    case VGPUTextureFormat_Depth16Unorm:
-    case VGPUTextureFormat_Depth32Float:
-    case VGPUTextureFormat_Depth24UnormStencil8:
-    case VGPUTextureFormat_Depth32FloatStencil8:
-        return true;
-    default:
-        return false;
+        case VGPUTextureFormat_Depth16Unorm:
+        case VGPUTextureFormat_Depth32Float:
+        case VGPUTextureFormat_Depth24UnormStencil8:
+        case VGPUTextureFormat_Depth32FloatStencil8:
+            return true;
+        default:
+            return false;
     }
 }
 
@@ -838,12 +874,12 @@ VGPUBool32 vgpuIsStencilFormat(VGPUTextureFormat format)
 {
     switch (format)
     {
-    case VGPUTextureFormat_Stencil8:
-    case VGPUTextureFormat_Depth24UnormStencil8:
-    case VGPUTextureFormat_Depth32FloatStencil8:
-        return true;
-    default:
-        return false;
+        case VGPUTextureFormat_Stencil8:
+        case VGPUTextureFormat_Depth24UnormStencil8:
+        case VGPUTextureFormat_Depth32FloatStencil8:
+            return true;
+        default:
+            return false;
     }
 }
 
@@ -851,14 +887,14 @@ VGPUBool32 vgpuIsDepthStencilFormat(VGPUTextureFormat format)
 {
     switch (format)
     {
-    case VGPUTextureFormat_Depth16Unorm:
-    case VGPUTextureFormat_Depth32Float:
-    case VGPUTextureFormat_Stencil8:
-    case VGPUTextureFormat_Depth24UnormStencil8:
-    case VGPUTextureFormat_Depth32FloatStencil8:
-        return true;
-    default:
-        return false;
+        case VGPUTextureFormat_Depth16Unorm:
+        case VGPUTextureFormat_Depth32Float:
+        case VGPUTextureFormat_Stencil8:
+        case VGPUTextureFormat_Depth24UnormStencil8:
+        case VGPUTextureFormat_Depth32FloatStencil8:
+            return true;
+        default:
+            return false;
     }
 }
 
