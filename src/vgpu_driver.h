@@ -40,6 +40,9 @@ _VGPU_EXTERN void _vgpu_free(void* ptr);
 #define _VGPU_MAX(a,b) (((a)>(b))?(a):(b))
 
 #if defined(__clang__)
+#define VGPU_UNREACHABLE() __builtin_unreachable()
+#define VGPU_DEBUG_BREAK() __builtin_trap()
+
 // CLANG ENABLE/DISABLE WARNING DEFINITION
 #define VGPU_DISABLE_WARNINGS() \
     _Pragma("clang diagnostic push")\
@@ -49,6 +52,8 @@ _VGPU_EXTERN void _vgpu_free(void* ptr);
 
 #define VGPU_ENABLE_WARNINGS() _Pragma("clang diagnostic pop")
 #elif defined(__GNUC__) || defined(__GNUG__)
+#define VGPU_UNREACHABLE() __builtin_unreachable()
+#define VGPU_DEBUG_BREAK() __builtin_trap()
 // GCC ENABLE/DISABLE WARNING DEFINITION
 #	define VGPU_DISABLE_WARNINGS() \
 	_Pragma("GCC diagnostic push") \
@@ -58,6 +63,8 @@ _VGPU_EXTERN void _vgpu_free(void* ptr);
 
 #define VGPU_ENABLE_WARNINGS() _Pragma("GCC diagnostic pop")
 #elif defined(_MSC_VER)
+#define VGPU_UNREACHABLE() __assume(false)
+#define VGPU_DEBUG_BREAK() __debugbreak()
 #define VGPU_DISABLE_WARNINGS() __pragma(warning(push, 0))
 #define VGPU_ENABLE_WARNINGS() __pragma(warning(pop))
 #endif
@@ -71,7 +78,6 @@ _VGPU_EXTERN void vgpu_log_error(const char* format, ...);
 #include <deque>
 #include <mutex>
 #include <unordered_map>
-#include <functional>
 
 namespace
 {
@@ -109,7 +115,7 @@ typedef struct VGPUCommandBuffer_T {
 
     void (*setPipeline)(VGPUCommandBufferImpl* driverData, VGPUPipeline pipeline);
     void (*dispatch)(VGPUCommandBufferImpl* driverData, uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ);
-    void (*dispatchIndirect)(VGPUCommandBufferImpl* driverData, vgpu_buffer* buffer, uint64_t offset);
+    void (*dispatchIndirect)(VGPUCommandBufferImpl* driverData, VGPUBuffer buffer, uint64_t offset);
 
     VGPUTexture(*acquireSwapchainTexture)(VGPUCommandBufferImpl* driverData, VGPUSwapChain* swapChain, uint32_t* pWidth, uint32_t* pHeight);
     void (*beginRenderPass)(VGPUCommandBufferImpl* driverData, const VGPURenderPassDesc* desc);
@@ -118,8 +124,8 @@ typedef struct VGPUCommandBuffer_T {
     void (*setViewport)(VGPUCommandBufferImpl* driverData, const VGPUViewport* viewport);
     void (*setViewports)(VGPUCommandBufferImpl* driverData, uint32_t count, const VGPUViewport* viewports);
     void (*setScissorRect)(VGPUCommandBufferImpl* driverData, const VGPURect* rects);
-    void (*setVertexBuffer)(VGPUCommandBufferImpl* driverData, uint32_t index, vgpu_buffer* buffer, uint64_t offset);
-    void (*setIndexBuffer)(VGPUCommandBufferImpl* driverData, vgpu_buffer* buffer, uint64_t offset, vgpu_index_type type);
+    void (*setVertexBuffer)(VGPUCommandBufferImpl* driverData, uint32_t index, VGPUBuffer buffer, uint64_t offset);
+    void (*setIndexBuffer)(VGPUCommandBufferImpl* driverData, VGPUBuffer buffer, uint64_t offset, VGPUIndexType type);
     void (*setStencilReference)(VGPUCommandBufferImpl* driverData, uint32_t reference);
 
     void (*draw)(VGPUCommandBufferImpl* driverData, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t firstInstance);
@@ -139,10 +145,10 @@ typedef struct VGPUDeviceImpl
     void (*getAdapterProperties)(VGPURenderer* driverData, VGPUAdapterProperties* properties);
     void (*getLimits)(VGPURenderer* driverData, VGPULimits* limits);
 
-    vgpu_buffer*(*createBuffer)(VGPURenderer* driverData, const vgpu_buffer_desc* desc, const void* pInitialData);
-    void(*destroyBuffer)(VGPURenderer* driverData, vgpu_buffer* resource);
-    VGPUDeviceAddress(*buffer_get_device_address)(vgpu_buffer* resource);
-    void(*buffer_set_label)(VGPURenderer* driverData, vgpu_buffer* resource, const char* label);
+    VGPUBuffer(*createBuffer)(VGPURenderer* driverData, const VGPUBufferDescriptor* desc, const void* pInitialData);
+    void(*destroyBuffer)(VGPURenderer* driverData, VGPUBuffer resource);
+    VGPUDeviceAddress(*buffer_get_device_address)(VGPUBuffer resource);
+    void(*buffer_set_label)(VGPURenderer* driverData, VGPUBuffer resource, const char* label);
 
     VGPUTexture(*createTexture)(VGPURenderer* driverData, const VGPUTextureDesc* desc, const void* pInitialData);
     void(*destroyTexture)(VGPURenderer* driverData, VGPUTexture resource);

@@ -556,6 +556,67 @@ namespace
         }
     }
 
+
+
+    constexpr VkFormat ToVkFormat(VGPUVertexFormat format)
+    {
+        switch (format)
+        {
+            case VGPUVertexFormat_UByte2:              return VK_FORMAT_R8G8_UINT;
+            case VGPUVertexFormat_UByte4:              return VK_FORMAT_R8G8B8A8_UINT;
+            case VGPUVertexFormat_Byte2:               return VK_FORMAT_R8G8_SINT;
+            case VGPUVertexFormat_Byte4:               return VK_FORMAT_R8G8B8A8_SINT;
+            case VGPUVertexFormat_UByte2Normalized:    return VK_FORMAT_R8G8_UNORM;
+            case VGPUVertexFormat_UByte4Normalized:    return VK_FORMAT_R8G8B8A8_UNORM;
+            case VGPUVertexFormat_Byte2Normalized:     return VK_FORMAT_R8G8_SNORM;
+            case VGPUVertexFormat_Byte4Normalized:     return VK_FORMAT_R8G8B8A8_SNORM;
+
+            case VGPUVertexFormat_UShort2:             return VK_FORMAT_R16G16_UINT;
+            case VGPUVertexFormat_UShort4:             return VK_FORMAT_R16G16B16A16_UINT;
+            case VGPUVertexFormat_Short2:              return VK_FORMAT_R16G16_SINT;
+            case VGPUVertexFormat_Short4:              return VK_FORMAT_R16G16B16A16_SINT;
+            case VGPUVertexFormat_UShort2Normalized:   return VK_FORMAT_R16G16_UNORM;
+            case VGPUVertexFormat_UShort4Normalized:   return VK_FORMAT_R16G16B16A16_UNORM;
+            case VGPUVertexFormat_Short2Normalized:    return VK_FORMAT_R16G16_SNORM;
+            case VGPUVertexFormat_Short4Normalized:    return VK_FORMAT_R16G16B16A16_SNORM;
+            case VGPUVertexFormat_Half2:               return VK_FORMAT_R16G16_SFLOAT;
+            case VGPUVertexFormat_Half4:               return VK_FORMAT_R16G16B16A16_SFLOAT;
+
+            case VGPUVertexFormat_Float:               return VK_FORMAT_R32_SFLOAT;
+            case VGPUVertexFormat_Float2:              return VK_FORMAT_R32G32_SFLOAT;
+            case VGPUVertexFormat_Float3:              return VK_FORMAT_R32G32B32_SFLOAT;
+            case VGPUVertexFormat_Float4:              return VK_FORMAT_R32G32B32A32_SFLOAT;
+
+            case VGPUVertexFormat_UInt:                return VK_FORMAT_R32_UINT;
+            case VGPUVertexFormat_UInt2:               return VK_FORMAT_R32G32_UINT;
+            case VGPUVertexFormat_UInt3:               return VK_FORMAT_R32G32B32_UINT;
+            case VGPUVertexFormat_UInt4:               return VK_FORMAT_R32G32B32A32_UINT;
+
+            case VGPUVertexFormat_Int:                 return VK_FORMAT_R32_SINT;
+            case VGPUVertexFormat_Int2:                return VK_FORMAT_R32G32_SINT;
+            case VGPUVertexFormat_Int3:                return VK_FORMAT_R32G32B32_SINT;
+            case VGPUVertexFormat_Int4:                return VK_FORMAT_R32G32B32A32_SINT;
+
+            case VGPUVertexFormat_Int1010102Normalized:    return VK_FORMAT_A2B10G10R10_SNORM_PACK32;
+            case VGPUVertexFormat_UInt1010102Normalized:   return VK_FORMAT_A2B10G10R10_UNORM_PACK32;
+
+            default:
+                VGPU_UNREACHABLE();
+        }
+    }
+
+    constexpr VkVertexInputRate ToVkVertexInputRate(VGPUVertexStepMode mode)
+    {
+        switch (mode)
+        {
+            default:
+            case VGPUVertexStepMode_Vertex:
+                return VK_VERTEX_INPUT_RATE_VERTEX;
+            case VGPUVertexStepMode_Instance:
+                return VK_VERTEX_INPUT_RATE_INSTANCE;
+        }
+    }
+
     static_assert(sizeof(VGPUViewport) == sizeof(VkViewport), "Viewport mismatch");
     static_assert(offsetof(VGPUViewport, x) == offsetof(VkViewport, x), "Layout mismatch");
     static_assert(offsetof(VGPUViewport, y) == offsetof(VkViewport, y), "Layout mismatch");
@@ -678,7 +739,7 @@ struct Vulkan_UploadContext
     uint64_t target = 0;
 
     uint64_t uploadBufferSize = 0;
-    vgpu_buffer* uploadBuffer = nullptr;
+    VGPUBuffer uploadBuffer = nullptr;
     void* uploadBufferData = nullptr;
 };
 
@@ -875,8 +936,8 @@ static VkSurfaceKHR vulkan_createSurface(VulkanRenderer* renderer, void* windowH
     return vk_surface;
 }
 
-vgpu_buffer* vulkan_createBuffer(VGPURenderer* driverData, const vgpu_buffer_desc* desc, const void* pInitialData);
-void vulkan_destroyBuffer(VGPURenderer* driverData, vgpu_buffer* resource);
+VGPUBuffer vulkan_createBuffer(VGPURenderer* driverData, const VGPUBufferDescriptor* desc, const void* pInitialData);
+void vulkan_destroyBuffer(VGPURenderer* driverData, VGPUBuffer resource);
 
 static Vulkan_UploadContext vulkan_AllocateUpload(VGPURenderer* driverData, uint64_t size)
 {
@@ -930,11 +991,11 @@ static Vulkan_UploadContext vulkan_AllocateUpload(VGPURenderer* driverData, uint
 
         uint64_t newSize = vgpuNextPowerOfTwo(size);
 
-        vgpu_buffer_desc buffer_desc{};
-        buffer_desc.label = "UploadBuffer";
-        buffer_desc.size = newSize;
-        buffer_desc.access = VGPU_CPU_ACCESS_WRITE;
-        context.uploadBuffer = vulkan_createBuffer(driverData, &buffer_desc, nullptr);
+        VGPUBufferDescriptor uploadBufferDesc{};
+        uploadBufferDesc.label = "UploadBuffer";
+        uploadBufferDesc.size = newSize;
+        uploadBufferDesc.access = VGPU_CPU_ACCESS_WRITE;
+        context.uploadBuffer = vulkan_createBuffer(driverData, &uploadBufferDesc, nullptr);
         context.uploadBufferData = ((VulkanBuffer*)context.uploadBuffer)->pMappedData;
     }
 
@@ -1535,7 +1596,7 @@ static void vulkan_getLimits(VGPURenderer* driverData, VGPULimits* limits)
 //}
 
 /* Buffer */
-inline vgpu_buffer* vulkan_createBuffer(VGPURenderer* driverData, const vgpu_buffer_desc* desc, const void* pInitialData)
+inline VGPUBuffer vulkan_createBuffer(VGPURenderer* driverData, const VGPUBufferDescriptor* desc, const void* pInitialData)
 {
     VulkanRenderer* renderer = (VulkanRenderer*)driverData;
 
@@ -1552,7 +1613,7 @@ inline vgpu_buffer* vulkan_createBuffer(VGPURenderer* driverData, const vgpu_buf
             vulkan_SetObjectName(renderer, VK_OBJECT_TYPE_BUFFER, (uint64_t)buffer->handle, desc->label);
         }
 
-        return (vgpu_buffer*)buffer;
+        return (VGPUBuffer)buffer;
     }
 
     VkBufferCreateInfo bufferInfo = {};
@@ -1779,10 +1840,10 @@ inline vgpu_buffer* vulkan_createBuffer(VGPURenderer* driverData, const vgpu_buf
         }
     }
 
-    return (vgpu_buffer*)buffer;
+    return (VGPUBuffer)buffer;
 }
 
-inline void vulkan_destroyBuffer(VGPURenderer* driverData, vgpu_buffer* resource)
+inline void vulkan_destroyBuffer(VGPURenderer* driverData, VGPUBuffer resource)
 {
     VulkanRenderer* renderer = (VulkanRenderer*)driverData;
     VulkanBuffer* buffer = (VulkanBuffer*)resource;
@@ -1797,13 +1858,13 @@ inline void vulkan_destroyBuffer(VGPURenderer* driverData, vgpu_buffer* resource
     delete buffer;
 }
 
-inline VGPUDeviceAddress vulkan_buffer_get_device_address(vgpu_buffer* resource)
+inline VGPUDeviceAddress vulkan_buffer_get_device_address(VGPUBuffer resource)
 {
     VulkanBuffer* buffer = (VulkanBuffer*)resource;
     return buffer->gpuAddress;
 }
 
-inline void vulkan_buffer_set_label(VGPURenderer* driverData, vgpu_buffer* resource, const char* label)
+inline void vulkan_buffer_set_label(VGPURenderer* driverData, VGPUBuffer resource, const char* label)
 {
     VulkanRenderer* renderer = (VulkanRenderer*)driverData;
     VulkanBuffer* buffer = (VulkanBuffer*)resource;
@@ -1828,12 +1889,12 @@ static VGPUTexture vulkan_createTexture(VGPURenderer* driverData, const VGPUText
     createInfo.extent.height = 1;
     createInfo.extent.depth = 1;
 
-    if (desc->type == VGPUTexture_Type1D)
+    if (desc->dimension == VGPUTextureDimension_1D)
     {
         createInfo.imageType = VK_IMAGE_TYPE_1D;
         createInfo.arrayLayers = desc->depthOrArrayLayers;
     }
-    else if (desc->type == VGPUTexture_Type3D)
+    else if (desc->dimension == VGPUTextureDimension_3D)
     {
         createInfo.imageType = VK_IMAGE_TYPE_3D;
         createInfo.flags |= VK_IMAGE_CREATE_2D_ARRAY_COMPATIBLE_BIT;
@@ -2108,7 +2169,7 @@ static VGPUPipeline vulkan_createRenderPipeline(VGPURenderer* driverData, const 
 {
     VulkanRenderer* renderer = (VulkanRenderer*)driverData;
 
-    VulkanShader* vertexShader = (VulkanShader*)desc->vertex;
+    VulkanShader* vertexShader = (VulkanShader*)desc->vertex.module;
     VulkanShader* fragmentShader = (VulkanShader*)desc->fragment;
 
     //VkPipelineRenderingCreateInfo{ VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR };
@@ -2137,7 +2198,7 @@ static VGPUPipeline vulkan_createRenderPipeline(VGPURenderer* driverData, const 
 
     for (uint32_t i = 0; i < desc->colorAttachmentCount; ++i)
     {
-        VGPU_ASSERT(desc->colorAttachments[i].format != VGPUTextureFormat_Undefined);
+        VGPU_ASSERT(desc->colorAttachments[i].format != VGPUPixelFormat_Undefined);
 
         colorAttachmentFormats[renderingInfo.colorAttachmentCount] = ToVkFormat(desc->colorAttachments[i].format);
         renderingInfo.colorAttachmentCount++;
@@ -2150,29 +2211,37 @@ static VGPUPipeline vulkan_createRenderPipeline(VGPURenderer* driverData, const 
     }
 
     // VertexInputState
-    VkVertexInputBindingDescription vertexInputBinding = {};
-    vertexInputBinding.binding = 0;
-    vertexInputBinding.stride = 28;
-    vertexInputBinding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+    std::vector<VkVertexInputBindingDescription> vertexInputBindings;
+    std::vector<VkVertexInputAttributeDescription> vertexInputAttributes;
 
-    VkVertexInputAttributeDescription vertexInputAttributs[2] = {};
-    // Attribute location 0: Position
-    vertexInputAttributs[0].binding = 0;
-    vertexInputAttributs[0].location = 0;
-    vertexInputAttributs[0].format = VK_FORMAT_R32G32B32_SFLOAT;
-    vertexInputAttributs[0].offset = 0;
-    // Attribute location 1: Color
-    vertexInputAttributs[1].binding = 0;
-    vertexInputAttributs[1].location = 1;
-    vertexInputAttributs[1].format = VK_FORMAT_R32G32B32A32_SFLOAT;
-    vertexInputAttributs[1].offset = 12;
+    vertexInputBindings.resize(desc->vertex.layoutCount);
+    for (uint32_t binding = 0; binding < desc->vertex.layoutCount; ++binding)
+    {
+        const VGPUVertexBufferLayout& layout = desc->vertex.layouts[binding];
+
+        vertexInputBindings[binding].binding = binding;
+        vertexInputBindings[binding].stride = layout.stride;
+        vertexInputBindings[binding].inputRate = ToVkVertexInputRate(layout.stepMode);
+
+        for (uint32_t attributeIndex = 0; attributeIndex < layout.attributeCount; ++attributeIndex)
+        {
+            const VGPUVertexAttribute& attribute = layout.attributes[attributeIndex];
+
+            VkVertexInputAttributeDescription vertexInputAttribute;
+            vertexInputAttribute.location = attribute.shaderLocation;
+            vertexInputAttribute.binding = binding;
+            vertexInputAttribute.format = ToVkFormat(attribute.format);
+            vertexInputAttribute.offset = attribute.offset;
+            vertexInputAttributes.push_back(vertexInputAttribute);
+        }
+    }
 
     VkPipelineVertexInputStateCreateInfo vertexInputState = {};
     vertexInputState.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    vertexInputState.vertexBindingDescriptionCount = 1;
-    vertexInputState.pVertexBindingDescriptions = &vertexInputBinding;
-    vertexInputState.vertexAttributeDescriptionCount = 2;
-    vertexInputState.pVertexAttributeDescriptions = vertexInputAttributs;
+    vertexInputState.vertexBindingDescriptionCount = (uint32_t)vertexInputBindings.size();
+    vertexInputState.pVertexBindingDescriptions = vertexInputBindings.data();
+    vertexInputState.vertexAttributeDescriptionCount = (uint32_t)vertexInputAttributes.size();
+    vertexInputState.pVertexAttributeDescriptions = vertexInputAttributes.data();
 
     // InputAssemblyState
     VkPipelineInputAssemblyStateCreateInfo inputAssemblyState = {};
@@ -2223,7 +2292,6 @@ static VGPUPipeline vulkan_createRenderPipeline(VGPURenderer* driverData, const 
     colorBlendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
     colorBlendState.attachmentCount = 1;
     colorBlendState.pAttachments = blendAttachmentState;
-
    
     VkGraphicsPipelineCreateInfo createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -2641,7 +2709,7 @@ static void vulkan_dispatch(VGPUCommandBufferImpl* driverData, uint32_t groupCou
     vkCmdDispatch(commandBuffer->handle, groupCountX, groupCountY, groupCountZ);
 }
 
-static void vulkan_dispatchIndirect(VGPUCommandBufferImpl* driverData, vgpu_buffer* buffer, uint64_t offset)
+static void vulkan_dispatchIndirect(VGPUCommandBufferImpl* driverData, VGPUBuffer buffer, uint64_t offset)
 {
     VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
     vulkan_prepareDispatch(commandBuffer);
@@ -2851,18 +2919,18 @@ static void vulkan_endRenderPass(VGPUCommandBufferImpl* driverData)
     commandBuffer->insideRenderPass = false;
 }
 
-static void vulkan_setVertexBuffer(VGPUCommandBufferImpl* driverData, uint32_t index, vgpu_buffer* buffer, uint64_t offset)
+static void vulkan_setVertexBuffer(VGPUCommandBufferImpl* driverData, uint32_t index, VGPUBuffer buffer, uint64_t offset)
 {
     VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
     VulkanBuffer* vulkanBuffer = (VulkanBuffer*)buffer;
     vkCmdBindVertexBuffers(commandBuffer->handle, index, 1, &vulkanBuffer->handle, &offset);
 }
 
-static void vulkan_setIndexBuffer(VGPUCommandBufferImpl* driverData, vgpu_buffer* buffer, uint64_t offset, vgpu_index_type type)
+static void vulkan_setIndexBuffer(VGPUCommandBufferImpl* driverData, VGPUBuffer buffer, uint64_t offset, VGPUIndexType type)
 {
     VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
     VulkanBuffer* vulkanBuffer = (VulkanBuffer*)buffer;
-    const VkIndexType vkIndexType = (type == VGPU_INDEX_TYPE_UINT16) ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32;
+    const VkIndexType vkIndexType = (type == VGPUIndexType_UInt16) ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32;
     vkCmdBindIndexBuffer(commandBuffer->handle, vulkanBuffer->handle, offset, vkIndexType);
 }
 

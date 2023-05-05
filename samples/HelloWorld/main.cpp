@@ -20,14 +20,15 @@
 #include <stdlib.h>
 #include <iostream>
 #include <fstream>
+#include <array>
 #include <assert.h>
 #include <vgpu.h>
 
 VGPUDevice device = nullptr;
 VGPUSwapChain* swapChain = nullptr;
 VGPUTexture depthStencilTexture = nullptr;
-vgpu_buffer* vertex_buffer = nullptr;
-vgpu_buffer* index_buffer = nullptr;
+VGPUBuffer vertex_buffer = nullptr;
+VGPUBuffer index_buffer = nullptr;
 VGPUPipeline renderPipeline = nullptr;
 
 inline void vgpu_log(VGPULogLevel level, const char* message, void* user_data)
@@ -103,10 +104,10 @@ void init_vgpu(GLFWwindow* window)
     deviceDesc.validationMode = VGPUValidationMode_Enabled;
 #endif
 
-    if (vgpuIsBackendSupported(VGPU_BACKEND_VULKAN))
-    {
-        deviceDesc.preferredBackend = VGPU_BACKEND_VULKAN;
-    }
+    //if (vgpuIsBackendSupported(VGPU_BACKEND_VULKAN))
+    //{
+    //    deviceDesc.preferredBackend = VGPU_BACKEND_VULKAN;
+    //}
 
     device = vgpuCreateDevice(&deviceDesc);
     assert(device != nullptr);
@@ -138,7 +139,7 @@ void init_vgpu(GLFWwindow* window)
     swapChain = vgpuCreateSwapChain(device, windowHandle, &swapChainDesc);
 
     VGPUTextureDesc textureDesc = {};
-    textureDesc.type = VGPUTexture_Type2D;
+    textureDesc.dimension = VGPUTextureDimension_2D;
     textureDesc.width = width;
     textureDesc.height = height;
     //textureDesc.depthOrArrayLayers = 1u;
@@ -158,17 +159,17 @@ void init_vgpu(GLFWwindow* window)
         -0.5f, -0.5f, 0.5f,     1.0f, 1.0f, 0.0f, 1.0f,
     };
 
-    vgpu_buffer_desc vertex_buffer_desc{};
+    VGPUBufferDescriptor vertex_buffer_desc{};
     vertex_buffer_desc.label = "Vertex Buffer";
     vertex_buffer_desc.size = sizeof(vertices);
     vertex_buffer_desc.usage = VGPU_BUFFER_USAGE_VERTEX;
     vertex_buffer = vgpuCreateBuffer(device, &vertex_buffer_desc, vertices);
 
-    uint16_t indices[] = {
+    const uint16_t indices[] = {
         0, 1, 2,    // first triangle
         0, 2, 3,    // second triangle
     };
-    vgpu_buffer_desc index_buffer_desc{};
+    VGPUBufferDescriptor index_buffer_desc{};
     index_buffer_desc.label = "Vertex Buffer";
     index_buffer_desc.size = sizeof(indices);
     index_buffer_desc.usage = VGPU_BUFFER_USAGE_INDEX;
@@ -180,9 +181,27 @@ void init_vgpu(GLFWwindow* window)
     RenderPipelineColorAttachmentDesc colorAttachment{};
     colorAttachment.format = vgpuGetSwapChainFormat(device, swapChain);
 
+    std::array<VGPUVertexAttribute, 2> vertexAttributes = {};
+    // Attribute location 0: Position
+    vertexAttributes[0].format = VGPUVertexFormat_Float3;
+    vertexAttributes[0].offset = 0;
+    vertexAttributes[0].shaderLocation = 0;
+    // Attribute location 1: Color
+    vertexAttributes[1].format = VGPUVertexFormat_Float4;
+    vertexAttributes[1].offset = 12;
+    vertexAttributes[1].shaderLocation = 1;
+
+    VGPUVertexBufferLayout vertexBufferLayout{};
+    vertexBufferLayout.stride = 28;
+    vertexBufferLayout.attributeCount = 2;
+    vertexBufferLayout.attributes = vertexAttributes.data();
+
     VGPURenderPipelineDesc renderPipelineDesc{};
     renderPipelineDesc.label = "Triangle";
-    renderPipelineDesc.vertex = vertex_shader;
+    renderPipelineDesc.vertex.module = vertex_shader;
+    renderPipelineDesc.vertex.layoutCount = 1u;
+    renderPipelineDesc.vertex.layouts = &vertexBufferLayout;
+
     renderPipelineDesc.fragment = fragment_shader;
     renderPipelineDesc.primitiveTopology = VGPUPrimitiveTopology_TriangleList;
     renderPipelineDesc.colorAttachmentCount = 1u;
@@ -264,7 +283,7 @@ void draw_frame()
         vgpuBeginRenderPass(commandBuffer, &renderPass);
         vgpuSetPipeline(commandBuffer, renderPipeline);
         vgpuSetVertexBuffer(commandBuffer, 0, vertex_buffer, 0);
-        vgpuSetIndexBuffer(commandBuffer, index_buffer, 0, VGPU_INDEX_TYPE_UINT16);
+        vgpuSetIndexBuffer(commandBuffer, index_buffer, 0, VGPUIndexType_UInt16);
         vgpuDrawIndexed(commandBuffer, 6, 1, 0, 0, 0);
         vgpuEndRenderPass(commandBuffer);
     }
