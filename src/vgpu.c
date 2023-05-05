@@ -153,7 +153,7 @@ VGPUDevice vgpuCreateDevice(const VGPUDeviceDescriptor* desc)
     VGPUBackend backend = desc->preferredBackend;
 
 retry:
-    if (backend == _VGPU_BACKEND_DEFAULT)
+    if (backend == _VGPUBackend_Default)
     {
         for (uint32_t i = 0; i < _VGPU_COUNT_OF(drivers); ++i)
         {
@@ -184,7 +184,7 @@ retry:
                 else
                 {
                     vgpu_log_warn("Wanted API not supported, fallback to default");
-                    backend = _VGPU_BACKEND_DEFAULT;
+                    backend = _VGPUBackend_Default;
                     goto retry;
                 }
             }
@@ -432,8 +432,23 @@ void vgpuDestroyShaderModule(VGPUDevice device, VGPUShaderModule module)
 static VGPURenderPipelineDesc _vgpuRenderPipelineDescDef(const VGPURenderPipelineDesc* desc)
 {
     VGPURenderPipelineDesc def = *desc;
-    def.depthStencilState.stencilReadMask = _VGPU_DEF(def.depthStencilState.stencilReadMask, 0xFF);
-    def.depthStencilState.stencilWriteMask = _VGPU_DEF(def.depthStencilState.stencilWriteMask, 0xFF);
+
+    def.primitive.topology = _VGPU_DEF(def.primitive.topology, VGPUPrimitiveTopology_TriangleList);
+    def.primitive.patchControlPoints = _VGPU_DEF(def.primitive.patchControlPoints, 1);
+
+    def.depthStencilState.depthCompareFunction = _VGPU_DEF(def.depthStencilState.depthCompareFunction, VGPUCompareFunction_Always);
+    def.depthStencilState.stencilFront.compareFunction = _VGPU_DEF(def.depthStencilState.stencilFront.compareFunction, VGPUCompareFunction_Always);
+    def.depthStencilState.stencilFront.failOperation = _VGPU_DEF(def.depthStencilState.stencilFront.failOperation, VGPUStencilOperation_Keep);
+    def.depthStencilState.stencilFront.depthFailOperation = _VGPU_DEF(def.depthStencilState.stencilFront.depthFailOperation, VGPUStencilOperation_Keep);
+    def.depthStencilState.stencilFront.passOperation = _VGPU_DEF(def.depthStencilState.stencilFront.passOperation, VGPUStencilOperation_Keep);
+
+    def.depthStencilState.stencilBack.compareFunction = _VGPU_DEF(def.depthStencilState.stencilBack.compareFunction, VGPUCompareFunction_Always);
+    def.depthStencilState.stencilBack.failOperation = _VGPU_DEF(def.depthStencilState.stencilBack.failOperation, VGPUStencilOperation_Keep);
+    def.depthStencilState.stencilBack.depthFailOperation = _VGPU_DEF(def.depthStencilState.stencilBack.depthFailOperation, VGPUStencilOperation_Keep);
+    def.depthStencilState.stencilBack.passOperation = _VGPU_DEF(def.depthStencilState.stencilBack.passOperation, VGPUStencilOperation_Keep);
+
+    //def.depthStencilState.stencilReadMask = _VGPU_DEF(def.depthStencilState.stencilReadMask, 0xFF);
+    //def.depthStencilState.stencilWriteMask = _VGPU_DEF(def.depthStencilState.stencilWriteMask, 0xFF);
     def.sampleCount = _VGPU_DEF(def.sampleCount, 1);
     return def;
 }
@@ -501,7 +516,7 @@ void vgpuDestroySwapChain(VGPUDevice device, VGPUSwapChain* swapChain)
     device->destroySwapChain(device->driverData, swapChain);
 }
 
-VGPUPixelFormat vgpuGetSwapChainFormat(VGPUDevice device, VGPUSwapChain* swapChain)
+VGPUTextureFormat vgpuGetSwapChainFormat(VGPUDevice device, VGPUSwapChain* swapChain)
 {
     VGPU_ASSERT(device);
 
@@ -620,7 +635,7 @@ void vgpuDrawIndexed(VGPUCommandBuffer commandBuffer, uint32_t indexCount, uint3
 // Format mapping table. The rows must be in the exactly same order as Format enum members are defined.
 static const VGPUPixelFormatInfo c_FormatInfo[] = {
     //        format                   name             bytes blk         kind               red   green   blue  alpha  depth  stencl signed  srgb
-    { VGPUPixelFormat_Undefined,      "Undefined",              0,   0, 0,  _VGPUFormatKind_Force32 },
+    { VGPUTextureFormat_Undefined,      "Undefined",              0,   0, 0,  _VGPUFormatKind_Force32 },
     { VGPUTextureFormat_R8Unorm,        "R8Unorm",              1,   1, 1, VGPUFormatKind_Unorm },
     { VGPUTextureFormat_R8Snorm,        "R8Snorm",              1,   1, 1, VGPUFormatKind_Snorm },
     { VGPUTextureFormat_R8Uint,         "R8Uint",               1,   1, 1, VGPUFormatKind_Uint },
@@ -782,7 +797,7 @@ static const VGPUVertexFormatInfo s_VertexFormatTable[] = {
     {VGPUVertexFormat_UInt1010102Normalized,   32, 4, 4, VGPUFormatKind_Uint},
 };
 
-VGPUBool32 vgpuIsDepthFormat(VGPUPixelFormat format)
+VGPUBool32 vgpuIsDepthFormat(VGPUTextureFormat format)
 {
     switch (format)
     {
@@ -796,7 +811,7 @@ VGPUBool32 vgpuIsDepthFormat(VGPUPixelFormat format)
     }
 }
 
-VGPUBool32 vgpuIsDepthOnlyFormat(VGPUPixelFormat format)
+VGPUBool32 vgpuIsDepthOnlyFormat(VGPUTextureFormat format)
 {
     switch (format)
     {
@@ -808,7 +823,7 @@ VGPUBool32 vgpuIsDepthOnlyFormat(VGPUPixelFormat format)
     }
 }
 
-VGPUBool32 vgpuIsStencilOnlyFormat(VGPUPixelFormat format)
+VGPUBool32 vgpuIsStencilOnlyFormat(VGPUTextureFormat format)
 {
     switch (format)
     {
@@ -819,7 +834,7 @@ VGPUBool32 vgpuIsStencilOnlyFormat(VGPUPixelFormat format)
     }
 }
 
-VGPUBool32 vgpuIsStencilFormat(VGPUPixelFormat format)
+VGPUBool32 vgpuIsStencilFormat(VGPUTextureFormat format)
 {
     switch (format)
     {
@@ -832,7 +847,7 @@ VGPUBool32 vgpuIsStencilFormat(VGPUPixelFormat format)
     }
 }
 
-VGPUBool32 vgpuIsDepthStencilFormat(VGPUPixelFormat format)
+VGPUBool32 vgpuIsDepthStencilFormat(VGPUTextureFormat format)
 {
     switch (format)
     {
@@ -847,17 +862,31 @@ VGPUBool32 vgpuIsDepthStencilFormat(VGPUPixelFormat format)
     }
 }
 
-VGPUBool32 vgpuIsCompressedFormat(VGPUPixelFormat format)
+VGPUBool32 vgpuIsCompressedFormat(VGPUTextureFormat format)
 {
     VGPU_ASSERT(c_FormatInfo[(uint32_t)format].format == format);
 
     return c_FormatInfo[(uint32_t)format].blockWidth > 1 || c_FormatInfo[(uint32_t)format].blockHeight > 1;
 }
 
-VGPUFormatKind vgpuGetPixelFormatKind(VGPUPixelFormat format)
+VGPUFormatKind vgpuGetPixelFormatKind(VGPUTextureFormat format)
 {
     VGPU_ASSERT(c_FormatInfo[(uint32_t)format].format == format);
     return c_FormatInfo[(uint32_t)format].kind;
 }
 
+VGPUBool32 vgpuStencilTestEnabled(const VGPUDepthStencilState* depthStencil)
+{
+    VGPU_ASSERT(depthStencil);
+
+    return
+        depthStencil->stencilBack.compareFunction != VGPUCompareFunction_Always ||
+        depthStencil->stencilBack.failOperation != VGPUStencilOperation_Keep ||
+        depthStencil->stencilBack.depthFailOperation != VGPUStencilOperation_Keep ||
+        depthStencil->stencilBack.passOperation != VGPUStencilOperation_Keep ||
+        depthStencil->stencilFront.compareFunction != VGPUCompareFunction_Always ||
+        depthStencil->stencilFront.failOperation != VGPUStencilOperation_Keep ||
+        depthStencil->stencilFront.depthFailOperation != VGPUStencilOperation_Keep ||
+        depthStencil->stencilFront.passOperation != VGPUStencilOperation_Keep;
+}
 

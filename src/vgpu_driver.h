@@ -166,7 +166,7 @@ typedef struct VGPUDeviceImpl
 
     VGPUSwapChain*(*createSwapChain)(VGPURenderer* driverData, void* windowHandle, const VGPUSwapChainDesc* desc);
     void(*destroySwapChain)(VGPURenderer* driverData, VGPUSwapChain* swapChain);
-    VGPUPixelFormat(*getSwapChainFormat)(VGPURenderer* driverData, VGPUSwapChain* swapChain);
+    VGPUTextureFormat(*getSwapChainFormat)(VGPURenderer* driverData, VGPUSwapChain* swapChain);
 
     VGPUCommandBuffer(*beginCommandBuffer)(VGPURenderer* driverData, VGPUCommandQueue queueType, const char* label);
     void (*submit)(VGPURenderer* driverData, VGPUCommandBuffer* commandBuffers, uint32_t count);

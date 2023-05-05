@@ -126,7 +126,7 @@ namespace
     static_assert(offsetof(VGPUDrawIndexedIndirectCommand, baseVertex) == offsetof(D3D12_DRAW_INDEXED_ARGUMENTS, BaseVertexLocation), "Layout mismatch");
     static_assert(offsetof(VGPUDrawIndexedIndirectCommand, firstInstance) == offsetof(D3D12_DRAW_INDEXED_ARGUMENTS, StartInstanceLocation), "Layout mismatch");
 
-    constexpr DXGI_FORMAT ToDxgiFormat(VGPUPixelFormat format)
+    constexpr DXGI_FORMAT ToDxgiFormat(VGPUTextureFormat format)
     {
         switch (format)
         {
@@ -257,7 +257,7 @@ namespace
         }
     }
 
-    constexpr VGPUPixelFormat FromDxgiFormat(DXGI_FORMAT format)
+    constexpr VGPUTextureFormat FromDxgiFormat(DXGI_FORMAT format)
     {
         switch (format)
         {
@@ -339,11 +339,11 @@ namespace
 
 
             default:
-                return VGPUPixelFormat_Undefined;
+                return VGPUTextureFormat_Undefined;
         }
     }
 
-    constexpr VGPUPixelFormat ToDXGISwapChainFormat(VGPUPixelFormat format)
+    constexpr VGPUTextureFormat ToDXGISwapChainFormat(VGPUTextureFormat format)
     {
         switch (format)
         {
@@ -365,7 +365,7 @@ namespace
         return VGPUTextureFormat_BGRA8Unorm;
     }
 
-    constexpr DXGI_FORMAT GetTypelessFormatFromDepthFormat(VGPUPixelFormat format)
+    constexpr DXGI_FORMAT GetTypelessFormatFromDepthFormat(VGPUTextureFormat format)
     {
         switch (format)
         {
@@ -450,6 +450,23 @@ namespace
         }
     }
 
+    constexpr D3D12_STENCIL_OP ToD3D12(VGPUStencilOperation op)
+    {
+        switch (op)
+        {
+            case VGPUStencilOperation_Keep:            return D3D12_STENCIL_OP_KEEP;
+            case VGPUStencilOperation_Zero:            return D3D12_STENCIL_OP_ZERO;
+            case VGPUStencilOperation_Replace:         return D3D12_STENCIL_OP_REPLACE;
+            case VGPUStencilOperation_IncrementClamp:  return D3D12_STENCIL_OP_INCR_SAT;
+            case VGPUStencilOperation_DecrementClamp:  return D3D12_STENCIL_OP_DECR_SAT;
+            case VGPUStencilOperation_Invert:          return D3D12_STENCIL_OP_INVERT;
+            case VGPUStencilOperation_IncrementWrap:   return D3D12_STENCIL_OP_INCR;
+            case VGPUStencilOperation_DecrementWrap:   return D3D12_STENCIL_OP_DECR;
+            default:
+                return D3D12_STENCIL_OP_KEEP;
+        }
+    }
+
     constexpr D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE ToD3D12(VGPULoadAction action)
     {
         switch (action)
@@ -470,12 +487,12 @@ namespace
     {
         switch (action)
         {
-            case VGPU_STORE_ACTION_DONT_CARE:
-                return D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_DISCARD;
-
             default:
-            case VGPU_STORE_ACTION_STORE:
+            case VGPUStoreAction_Store:
                 return D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_PRESERVE;
+
+            case VGPUStoreAction_DontCare:
+                return D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_DISCARD;
         }
     }
 
@@ -628,6 +645,16 @@ namespace
             "ColorWriteMask values must match");
         return static_cast<uint8_t>(writeMask);
     }
+
+    D3D12_DEPTH_STENCILOP_DESC ToD3D12StencilOpDesc(const VGPUStencilFaceState& state)
+    {
+        D3D12_DEPTH_STENCILOP_DESC desc = {};
+        desc.StencilFailOp = ToD3D12(state.failOperation);
+        desc.StencilDepthFailOp = ToD3D12(state.depthFailOperation);
+        desc.StencilPassOp = ToD3D12(state.passOperation);
+        desc.StencilFunc = ToD3D12(state.compareFunction);
+        return desc;
+    }
 }
 
 #if !WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
@@ -775,7 +802,7 @@ struct D3D12_SwapChain
     IUnknown* window = nullptr;
 #endif
     IDXGISwapChain3* handle = nullptr;
-    VGPUPixelFormat format;
+    VGPUTextureFormat format;
     uint32_t backBufferCount;
     uint32_t syncInterval;
     std::vector<D3D12Resource*> backbufferTextures;
@@ -1404,7 +1431,7 @@ static void d3d12_waitIdle(VGPURenderer* driverData)
 
 static VGPUBackend d3d12_getBackendType(void)
 {
-    return VGPU_BACKEND_D3D12;
+    return VGPUBackend_D3D12;
 }
 
 static VGPUBool32 d3d12_queryFeature(VGPURenderer* driverData, VGPUFeature feature, void* pInfo, uint32_t infoSize)
@@ -1426,7 +1453,7 @@ static VGPUBool32 d3d12_queryFeature(VGPURenderer* driverData, VGPUFeature featu
         case VGPUFeature_TextureCubeArray:
         case VGPUFeature_Tessellation:
         case VGPUFeature_DescriptorIndexing:
-        case VGPUFeature_ConditionalRendering:
+        case VGPUFeature_Predication:
         case VGPUFeature_DrawIndirectFirstInstance:
             return true;
 
@@ -1555,7 +1582,7 @@ static VGPUBuffer d3d12_createBuffer(VGPURenderer* driverData, const VGPUBufferD
     }
 
     UINT64 alignedSize = desc->size;
-    if (desc->usage & VGPU_BUFFER_USAGE_UNIFORM)
+    if (desc->usage & VGPUBufferUsage_Constant)
     {
         alignedSize = AlignUp<UINT64>(alignedSize, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
     }
@@ -1572,13 +1599,13 @@ static VGPUBuffer d3d12_createBuffer(VGPURenderer* driverData, const VGPUBufferD
     resourceDesc.SampleDesc.Quality = 0;
     resourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
     resourceDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
-    if (desc->usage & VGPU_BUFFER_USAGE_SHADER_WRITE)
+    if (desc->usage & VGPUBufferUsage_ShaderWrite)
     {
         resourceDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     }
 
-    if (!(desc->usage & VGPU_BUFFER_USAGE_SHADER_READ) &&
-        !(desc->usage & VGPU_BUFFER_USAGE_RAY_TRACING))
+    if (!(desc->usage & VGPUBufferUsage_ShaderRead) &&
+        !(desc->usage & VGPUBufferUsage_RayTracing))
     {
         resourceDesc.Flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
     }
@@ -1586,13 +1613,13 @@ static VGPUBuffer d3d12_createBuffer(VGPURenderer* driverData, const VGPUBufferD
     D3D12MA::ALLOCATION_DESC allocationDesc = {};
     D3D12_RESOURCE_STATES resourceState = D3D12_RESOURCE_STATE_COMMON;
     allocationDesc.HeapType = D3D12_HEAP_TYPE_DEFAULT;
-    if (desc->access == VGPU_CPU_ACCESS_READ)
+    if (desc->cpuAccess == VGPUCpuAccessMode_Read)
     {
         allocationDesc.HeapType = D3D12_HEAP_TYPE_READBACK;
         resourceState = D3D12_RESOURCE_STATE_COPY_DEST;
         resourceDesc.Flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
     }
-    else if (desc->access == VGPU_CPU_ACCESS_WRITE)
+    else if (desc->cpuAccess == VGPUCpuAccessMode_Write)
     {
         allocationDesc.HeapType = D3D12_HEAP_TYPE_UPLOAD;
         resourceState = D3D12_RESOURCE_STATE_GENERIC_READ;
@@ -1627,11 +1654,11 @@ static VGPUBuffer d3d12_createBuffer(VGPURenderer* driverData, const VGPUBufferD
 
     buffer->gpuAddress = buffer->handle->GetGPUVirtualAddress();
 
-    if (desc->access == VGPU_CPU_ACCESS_READ)
+    if (desc->cpuAccess == VGPUCpuAccessMode_Read)
     {
         buffer->handle->Map(0, nullptr, &buffer->pMappedData);
     }
-    else if (desc->access == VGPU_CPU_ACCESS_WRITE)
+    else if (desc->cpuAccess == VGPUCpuAccessMode_Write)
     {
         D3D12_RANGE readRange = {};
         buffer->handle->Map(0, &readRange, &buffer->pMappedData);
@@ -1640,7 +1667,7 @@ static VGPUBuffer d3d12_createBuffer(VGPURenderer* driverData, const VGPUBufferD
     // Issue data copy.
     if (pInitialData != nullptr)
     {
-        if (desc->access == VGPU_CPU_ACCESS_WRITE)
+        if (desc->cpuAccess == VGPUCpuAccessMode_Write)
         {
             memcpy(buffer->pMappedData, pInitialData, desc->size);
         }
@@ -1661,7 +1688,7 @@ static VGPUBuffer d3d12_createBuffer(VGPURenderer* driverData, const VGPUBufferD
         }
     }
 
-    if (desc->usage & VGPU_BUFFER_USAGE_SHADER_READ)
+    if (desc->usage & VGPUBufferUsage_ShaderRead)
     {
         // Create Raw Buffer
         const uint64_t offset = 0;
@@ -1682,7 +1709,7 @@ static VGPUBuffer d3d12_createBuffer(VGPURenderer* driverData, const VGPUBufferD
         //buffer->SetBindlessSRV(bindlessSRV);
     }
 
-    if (desc->usage & VGPU_BUFFER_USAGE_SHADER_WRITE)
+    if (desc->usage & VGPUBufferUsage_ShaderWrite)
     {
         // Create Raw Buffer
         const uint64_t offset = 0;
@@ -2026,7 +2053,7 @@ static VGPUPipeline d3d12_createRenderPipeline(VGPURenderer* driverData, const V
     blendState.IndependentBlendEnable = TRUE;
     for (uint32_t i = 0; i < desc->colorAttachmentCount; ++i)
     {
-        VGPU_ASSERT(desc->colorAttachments[i].format != VGPUPixelFormat_Undefined);
+        VGPU_ASSERT(desc->colorAttachments[i].format != VGPUTextureFormat_Undefined);
 
         const RenderPipelineColorAttachmentDesc& attachment = desc->colorAttachments[i];
 
@@ -2052,13 +2079,16 @@ static VGPUPipeline d3d12_createRenderPipeline(VGPURenderer* driverData, const V
 
     // DepthStencilState
     const D3D12_DEPTH_STENCILOP_DESC defaultStencilOp = { D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, D3D12_COMPARISON_FUNC_ALWAYS };
-    if (desc->depthStencilFormat != VGPUPixelFormat_Undefined)
+    if (desc->depthStencilState.format != VGPUTextureFormat_Undefined)
     {
-        // Depth
-        d3dDesc.DepthStencilState.DepthEnable =
-            desc->depthStencilState.depthCompare != VGPUCompareFunction_Always || desc->depthStencilState.depthWriteEnabled;
+        d3dDesc.DepthStencilState.DepthEnable = desc->depthStencilState.depthCompareFunction != VGPUCompareFunction_Always || desc->depthStencilState.depthWriteEnabled;
         d3dDesc.DepthStencilState.DepthWriteMask = desc->depthStencilState.depthWriteEnabled ? D3D12_DEPTH_WRITE_MASK_ALL : D3D12_DEPTH_WRITE_MASK_ZERO;
-        d3dDesc.DepthStencilState.DepthFunc = ToD3D12(desc->depthStencilState.depthCompare);
+        d3dDesc.DepthStencilState.DepthFunc = ToD3D12(desc->depthStencilState.depthCompareFunction);
+        d3dDesc.DepthStencilState.StencilEnable = vgpuStencilTestEnabled(&desc->depthStencilState);
+        d3dDesc.DepthStencilState.StencilReadMask = static_cast<UINT8>(desc->depthStencilState.stencilReadMask);
+        d3dDesc.DepthStencilState.StencilWriteMask = static_cast<UINT8>(desc->depthStencilState.stencilWriteMask);
+        d3dDesc.DepthStencilState.FrontFace = ToD3D12StencilOpDesc(desc->depthStencilState.stencilFront);
+        d3dDesc.DepthStencilState.BackFace = ToD3D12StencilOpDesc(desc->depthStencilState.stencilBack);
     }
     else
     {
@@ -2075,7 +2105,7 @@ static VGPUPipeline d3d12_createRenderPipeline(VGPURenderer* driverData, const V
     d3dDesc.InputLayout = { inputElementDescs.data(), (UINT)inputElementDescs.size()};
     d3dDesc.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
 
-    switch (desc->primitiveTopology)
+    switch (desc->primitive.topology)
     {
         case VGPUPrimitiveTopology_PointList:
             d3dDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT;
@@ -2094,7 +2124,7 @@ static VGPUPipeline d3d12_createRenderPipeline(VGPURenderer* driverData, const V
     }
 
     // DSV format
-    d3dDesc.DSVFormat = ToDxgiFormat(desc->depthStencilFormat);
+    d3dDesc.DSVFormat = ToDxgiFormat(desc->depthStencilState.format);
     d3dDesc.SampleDesc.Count = desc->sampleCount;
 
     ID3D12PipelineState* pipelineState = nullptr;
@@ -2107,7 +2137,7 @@ static VGPUPipeline d3d12_createRenderPipeline(VGPURenderer* driverData, const V
     D3D12SetName(pipelineState, desc->label);
     
     pipeline->handle = pipelineState;
-    pipeline->primitiveTopology = ToD3DPrimitiveTopology(desc->primitiveTopology, desc->patchControlPoints);
+    pipeline->primitiveTopology = ToD3DPrimitiveTopology(desc->primitive.topology, desc->primitive.patchControlPoints);
     return (VGPUPipeline)pipeline;
 }
 
@@ -2276,7 +2306,7 @@ static void d3d12_destroySwapChain(VGPURenderer* driverData, VGPUSwapChain* swap
     delete d3d12SwapChain;
 }
 
-static VGPUPixelFormat d3d12_getSwapChainFormat(VGPURenderer*, VGPUSwapChain* swapChain)
+static VGPUTextureFormat d3d12_getSwapChainFormat(VGPURenderer*, VGPUSwapChain* swapChain)
 {
     D3D12_SwapChain* d3dSwapChain = (D3D12_SwapChain*)swapChain;
     return d3dSwapChain->format;
@@ -3435,7 +3465,7 @@ static VGPUDeviceImpl* d3d12_createDevice(const VGPUDeviceDescriptor* info)
 }
 
 VGFXDriver D3D12_Driver = {
-    VGPU_BACKEND_D3D12,
+    VGPUBackend_D3D12,
     d3d12_isSupported,
     d3d12_createDevice
 };
@@ -3443,26 +3473,26 @@ VGFXDriver D3D12_Driver = {
 #undef VHR
 #undef SAFE_RELEASE
 
-uint32_t vgpuToDxgiFormat(VGPUPixelFormat format)
+uint32_t vgpuToDxgiFormat(VGPUTextureFormat format)
 {
     return (uint32_t)ToDxgiFormat(format);
 }
 
-VGPUPixelFormat vgpuFromDxgiFormat(uint32_t dxgiFormat)
+VGPUTextureFormat vgpuFromDxgiFormat(uint32_t dxgiFormat)
 {
     return FromDxgiFormat((DXGI_FORMAT)dxgiFormat);
 }
 
 #else
 
-uint32_t vgpuToDxgiFormat(VGPUPixelFormat format)
+uint32_t vgpuToDxgiFormat(VGPUTextureFormat format)
 {
     _VGPU_UNUSED(format);
     return 0;
 }
 
 
-VGPUPixelFormat vgpuFromDxgiFormat(uint32_t dxgiFormat)
+VGPUTextureFormat vgpuFromDxgiFormat(uint32_t dxgiFormat)
 {
     _VGPU_UNUSED(dxgiFormat);
     return VGPUTextureFormat_Undefined;

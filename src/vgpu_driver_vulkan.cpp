@@ -306,7 +306,7 @@ namespace
         return properties.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT;
     }
 
-    constexpr VkFormat ToVkFormat(VGPUPixelFormat format)
+    constexpr VkFormat ToVkFormat(VGPUTextureFormat format)
     {
         switch (format)
         {
@@ -451,10 +451,10 @@ namespace
         switch (op)
         {
             default:
-            case VGPU_STORE_ACTION_STORE:
+            case VGPUStoreAction_Store:
                 return VK_ATTACHMENT_STORE_OP_STORE;
 
-            case VGPU_STORE_ACTION_DONT_CARE:
+            case VGPUStoreAction_DontCare:
                 return VK_ATTACHMENT_STORE_OP_DONT_CARE;
         }
     }
@@ -484,7 +484,7 @@ namespace
         }
     }
 
-    constexpr VkCompareOp ToVkCompareOp(VGPUCompareFunction function)
+    constexpr VkCompareOp ToVk(VGPUCompareFunction function)
     {
         switch (function)
         {
@@ -498,6 +498,23 @@ namespace
             case VGPUCompareFunction_Always:       return VK_COMPARE_OP_ALWAYS;
             default:
                 return VK_COMPARE_OP_NEVER;
+        }
+    }
+
+    constexpr VkStencilOp ToVk(VGPUStencilOperation op)
+    {
+        switch (op)
+        {
+            case VGPUStencilOperation_Keep:            return VK_STENCIL_OP_KEEP;
+            case VGPUStencilOperation_Zero:            return VK_STENCIL_OP_ZERO;
+            case VGPUStencilOperation_Replace:         return VK_STENCIL_OP_REPLACE;
+            case VGPUStencilOperation_Invert:          return VK_STENCIL_OP_INVERT;
+            case VGPUStencilOperation_IncrementClamp:  return VK_STENCIL_OP_INCREMENT_AND_CLAMP;
+            case VGPUStencilOperation_DecrementClamp:  return VK_STENCIL_OP_DECREMENT_AND_CLAMP;
+            case VGPUStencilOperation_IncrementWrap:   return VK_STENCIL_OP_INCREMENT_AND_WRAP;
+            case VGPUStencilOperation_DecrementWrap:   return VK_STENCIL_OP_DECREMENT_AND_WRAP;
+            default:
+                return VK_STENCIL_OP_KEEP;
         }
     }
 
@@ -708,7 +725,7 @@ struct VulkanSwapChain
     VkSwapchainKHR handle = VK_NULL_HANDLE;
     VkExtent2D extent;
     bool vsync = false;
-    VGPUPixelFormat colorFormat;
+    VGPUTextureFormat colorFormat;
     bool allowHDR = true;
     uint32_t imageIndex;
     std::vector<VulkanTexture*> backbufferTextures;
@@ -994,7 +1011,7 @@ static Vulkan_UploadContext vulkan_AllocateUpload(VGPURenderer* driverData, uint
         VGPUBufferDescriptor uploadBufferDesc{};
         uploadBufferDesc.label = "UploadBuffer";
         uploadBufferDesc.size = newSize;
-        uploadBufferDesc.access = VGPU_CPU_ACCESS_WRITE;
+        uploadBufferDesc.cpuAccess = VGPUCpuAccessMode_Write;
         context.uploadBuffer = vulkan_createBuffer(driverData, &uploadBufferDesc, nullptr);
         context.uploadBufferData = ((VulkanBuffer*)context.uploadBuffer)->pMappedData;
     }
@@ -1420,7 +1437,7 @@ static void vulkan_waitIdle(VGPURenderer* driverData)
 
 static VGPUBackend vulkan_getBackendType(void)
 {
-    return VGPU_BACKEND_VULKAN;
+    return VGPUBackend_Vulkan;
 }
 
 static VGPUBool32 vulkan_queryFeature(VGPURenderer* driverData, VGPUFeature feature, void* pInfo, uint32_t infoSize)
@@ -1470,7 +1487,7 @@ static VGPUBool32 vulkan_queryFeature(VGPURenderer* driverData, VGPUFeature feat
         case VGPUFeature_DescriptorIndexing:
             return renderer->features_1_2.descriptorIndexing == VK_TRUE;
 
-        case VGPUFeature_ConditionalRendering:
+        case VGPUFeature_Predication:
             return renderer->conditional_rendering_features.conditionalRendering == VK_TRUE;
 
         case VGPUFeature_DrawIndirectFirstInstance:
@@ -1621,52 +1638,53 @@ inline VGPUBuffer vulkan_createBuffer(VGPURenderer* driverData, const VGPUBuffer
     bufferInfo.size = desc->size;
     bufferInfo.usage = 0;
 
-    if (desc->usage & VGPU_BUFFER_USAGE_VERTEX)
+    if (desc->usage & VGPUBufferUsage_Vertex)
     {
         bufferInfo.usage |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
     }
-    if (desc->usage & VGPU_BUFFER_USAGE_INDEX)
+    if (desc->usage & VGPUBufferUsage_Index)
     {
         bufferInfo.usage |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
     }
 
-    if (desc->usage & VGPU_BUFFER_USAGE_UNIFORM)
+    if (desc->usage & VGPUBufferUsage_Constant)
     {
         bufferInfo.size = VmaAlignUp(bufferInfo.size, renderer->properties2.properties.limits.minUniformBufferOffsetAlignment);
         bufferInfo.usage |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
     }
 
-    if (desc->usage & VGPU_BUFFER_USAGE_SHADER_READ)
+    if (desc->usage & VGPUBufferUsage_ShaderRead)
     {
         bufferInfo.usage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
         bufferInfo.usage |= VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT;
     }
 
-    if (desc->usage & VGPU_BUFFER_USAGE_SHADER_WRITE)
+    if (desc->usage & VGPUBufferUsage_ShaderWrite)
     {
         bufferInfo.usage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
         bufferInfo.usage |= VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT;
     }
 
-    if (desc->usage & VGPU_BUFFER_USAGE_INDIRECT)
+    if (desc->usage & VGPUBufferUsage_Indirect)
     {
         bufferInfo.usage |= VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
     }
 
-    //if (usage & VGFXBufferUsage_Predication)
-    //{
-    //    bufferInfo.usage |= VK_BUFFER_USAGE_CONDITIONAL_RENDERING_BIT_EXT;
-    //}
-    //
-    //if (usage & VGFXBufferUsage_RayTracing))
-    //{
-    //    bufferInfo.usage |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR;
-    //    bufferInfo.usage |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
-    //    bufferInfo.usage |= VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR;
-    //}
+    if (desc->usage & VGPUBufferUsage_Predication &&
+        renderer->conditional_rendering_features.conditionalRendering == VK_TRUE)
+    {
+        bufferInfo.usage |= VK_BUFFER_USAGE_CONDITIONAL_RENDERING_BIT_EXT;
+    }
+
+    if (desc->usage & VGPUBufferUsage_RayTracing)
+    {
+        //bufferInfo.usage |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR;
+        bufferInfo.usage |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
+        bufferInfo.usage |= VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR;
+    }
 
     if (renderer->features_1_2.bufferDeviceAddress == VK_TRUE &&
-        desc->usage & (VGPU_BUFFER_USAGE_VERTEX | VGPU_BUFFER_USAGE_INDEX | VGPU_BUFFER_USAGE_RAY_TRACING))
+        desc->usage & (VGPUBufferUsage_Vertex | VGPUBufferUsage_Index | VGPUBufferUsage_RayTracing))
     {
         bufferInfo.usage |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
     }
@@ -1706,12 +1724,12 @@ inline VGPUBuffer vulkan_createBuffer(VGPURenderer* driverData, const VGPUBuffer
 
     VmaAllocationCreateInfo memoryInfo = {};
     memoryInfo.usage = VMA_MEMORY_USAGE_AUTO;
-    if (desc->access == VGPU_CPU_ACCESS_READ)
+    if (desc->cpuAccess == VGPUCpuAccessMode_Read)
     {
         bufferInfo.usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
         memoryInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
     }
-    else if (desc->access == VGPU_CPU_ACCESS_WRITE)
+    else if (desc->cpuAccess == VGPUCpuAccessMode_Write)
     {
         bufferInfo.usage |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
         memoryInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
@@ -1753,7 +1771,7 @@ inline VGPUBuffer vulkan_createBuffer(VGPURenderer* driverData, const VGPUBuffer
     // Issue data copy.
     if (pInitialData != nullptr)
     {
-        if (buffer->pMappedData != nullptr)
+        if (desc->cpuAccess == VGPUCpuAccessMode_Write)
         {
             memcpy(buffer->pMappedData, pInitialData, desc->size);
         }
@@ -1797,31 +1815,35 @@ inline VGPUBuffer vulkan_createBuffer(VGPURenderer* driverData, const VGPUBuffer
 
             std::swap(barrier.srcAccessMask, barrier.dstAccessMask);
 
-            if (desc->usage & VGPU_BUFFER_USAGE_VERTEX)
+            if (desc->usage & VGPUBufferUsage_Vertex)
             {
                 barrier.dstAccessMask |= VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
             }
-            if (desc->usage & VGPU_BUFFER_USAGE_INDEX)
+            if (desc->usage & VGPUBufferUsage_Index)
             {
                 barrier.dstAccessMask |= VK_ACCESS_INDEX_READ_BIT;
             }
-            if (desc->usage & VGPU_BUFFER_USAGE_UNIFORM)
+            if (desc->usage & VGPUBufferUsage_Constant)
             {
                 barrier.dstAccessMask |= VK_ACCESS_UNIFORM_READ_BIT;
             }
-            if (desc->usage & VGPU_BUFFER_USAGE_SHADER_READ)
+            if (desc->usage & VGPUBufferUsage_ShaderRead)
             {
                 barrier.dstAccessMask |= VK_ACCESS_SHADER_READ_BIT;
             }
-            if (desc->usage & VGPU_BUFFER_USAGE_SHADER_WRITE)
+            if (desc->usage & VGPUBufferUsage_ShaderWrite)
             {
                 barrier.dstAccessMask |= VK_ACCESS_SHADER_WRITE_BIT;
             }
-            if (desc->usage & VGPU_BUFFER_USAGE_INDIRECT)
+            if (desc->usage & VGPUBufferUsage_Indirect)
             {
                 barrier.dstAccessMask |= VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
             }
-            if (desc->usage & VGPU_BUFFER_USAGE_RAY_TRACING)
+            if (desc->usage & VGPUBufferUsage_Predication)
+            {
+                barrier.dstAccessMask |= VK_ACCESS_CONDITIONAL_RENDERING_READ_BIT_EXT;
+            }
+            if (desc->usage & VGPUBufferUsage_RayTracing)
             {
                 barrier.dstAccessMask |= VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
             }
@@ -2088,7 +2110,7 @@ static VGPUSampler vulkan_createSampler(VGPURenderer* driverData, const VGPUSamp
 
     if (desc->compareFunction != VGPUCompareFunction_Never)
     {
-        createInfo.compareOp = ToVkCompareOp(desc->compareFunction);
+        createInfo.compareOp = ToVk(desc->compareFunction);
         createInfo.compareEnable = VK_TRUE;
     }
     else
@@ -2198,17 +2220,13 @@ static VGPUPipeline vulkan_createRenderPipeline(VGPURenderer* driverData, const 
 
     for (uint32_t i = 0; i < desc->colorAttachmentCount; ++i)
     {
-        VGPU_ASSERT(desc->colorAttachments[i].format != VGPUPixelFormat_Undefined);
+        VGPU_ASSERT(desc->colorAttachments[i].format != VGPUTextureFormat_Undefined);
 
         colorAttachmentFormats[renderingInfo.colorAttachmentCount] = ToVkFormat(desc->colorAttachments[i].format);
         renderingInfo.colorAttachmentCount++;
     }
     renderingInfo.pColorAttachmentFormats = colorAttachmentFormats;
-    renderingInfo.depthAttachmentFormat = ToVkFormat(desc->depthStencilFormat);
-    if (!vgpuIsDepthOnlyFormat(desc->depthStencilFormat))
-    {
-        renderingInfo.stencilAttachmentFormat = ToVkFormat(desc->depthStencilFormat);
-    }
+    
 
     // VertexInputState
     std::vector<VkVertexInputBindingDescription> vertexInputBindings;
@@ -2274,15 +2292,61 @@ static VGPUPipeline vulkan_createRenderPipeline(VGPURenderer* driverData, const 
     // DepthStencilState
     VkPipelineDepthStencilStateCreateInfo depthStencilState = {};
     depthStencilState.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-    depthStencilState.depthTestEnable = VK_TRUE;
-    depthStencilState.depthWriteEnable = VK_TRUE;
-    depthStencilState.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+    depthStencilState.depthTestEnable = (desc->depthStencilState.depthCompareFunction != VGPUCompareFunction_Always || desc->depthStencilState.depthWriteEnabled) ? VK_TRUE : VK_FALSE;
+    depthStencilState.depthWriteEnable = desc->depthStencilState.depthWriteEnabled ? VK_TRUE : VK_FALSE;
+    depthStencilState.depthCompareOp = ToVk(desc->depthStencilState.depthCompareFunction);
     depthStencilState.depthBoundsTestEnable = VK_FALSE;
-    depthStencilState.back.failOp = VK_STENCIL_OP_KEEP;
-    depthStencilState.back.passOp = VK_STENCIL_OP_KEEP;
-    depthStencilState.back.compareOp = VK_COMPARE_OP_ALWAYS;
-    depthStencilState.stencilTestEnable = VK_FALSE;
-    depthStencilState.front = depthStencilState.back;
+    depthStencilState.minDepthBounds = 0.0f;
+    depthStencilState.maxDepthBounds = 1.0f;
+
+    depthStencilState.stencilTestEnable = vgpuStencilTestEnabled(&desc->depthStencilState) ? VK_TRUE : VK_FALSE;
+    depthStencilState.front.failOp = ToVk(desc->depthStencilState.stencilFront.failOperation);
+    depthStencilState.front.passOp = ToVk(desc->depthStencilState.stencilFront.passOperation);
+    depthStencilState.front.depthFailOp = ToVk(desc->depthStencilState.stencilFront.depthFailOperation);
+    depthStencilState.front.compareOp = ToVk(desc->depthStencilState.stencilFront.compareFunction);
+    depthStencilState.front.compareMask = desc->depthStencilState.stencilReadMask;
+    depthStencilState.front.writeMask = desc->depthStencilState.stencilWriteMask;
+    depthStencilState.front.reference = 0;
+
+    depthStencilState.back.failOp = ToVk(desc->depthStencilState.stencilBack.failOperation);
+    depthStencilState.back.passOp = ToVk(desc->depthStencilState.stencilBack.passOperation);
+    depthStencilState.back.depthFailOp = ToVk(desc->depthStencilState.stencilBack.depthFailOperation);
+    depthStencilState.back.compareOp = ToVk(desc->depthStencilState.stencilBack.compareFunction);
+    depthStencilState.back.compareMask = desc->depthStencilState.stencilReadMask;
+    depthStencilState.back.writeMask = desc->depthStencilState.stencilWriteMask;
+    depthStencilState.back.reference = 0;
+
+    if (desc->depthStencilState.format != VGPUTextureFormat_Undefined)
+    {
+        renderingInfo.depthAttachmentFormat = ToVkFormat(desc->depthStencilState.format);
+        if (!vgpuIsDepthOnlyFormat(desc->depthStencilState.format))
+        {
+            renderingInfo.stencilAttachmentFormat = ToVkFormat(desc->depthStencilState.format);
+        }
+    }
+    else
+    {
+        depthStencilState.depthTestEnable = VK_FALSE;
+        depthStencilState.depthWriteEnable = VK_FALSE;
+        depthStencilState.depthCompareOp = VK_COMPARE_OP_ALWAYS;
+        depthStencilState.depthBoundsTestEnable = VK_FALSE;
+        depthStencilState.minDepthBounds = 0.0f;
+        depthStencilState.maxDepthBounds = 1.0f;
+
+        depthStencilState.stencilTestEnable = VK_FALSE;
+        depthStencilState.front.failOp = VK_STENCIL_OP_KEEP;
+        depthStencilState.front.passOp = VK_STENCIL_OP_KEEP;
+        depthStencilState.front.depthFailOp = VK_STENCIL_OP_KEEP;
+        depthStencilState.front.compareOp = VK_COMPARE_OP_ALWAYS;
+        depthStencilState.front.compareMask = desc->depthStencilState.stencilReadMask;
+        depthStencilState.front.writeMask = desc->depthStencilState.stencilWriteMask;
+        depthStencilState.front.reference = 0;
+
+        depthStencilState.back = depthStencilState.front;
+
+        renderingInfo.depthAttachmentFormat = VK_FORMAT_UNDEFINED;
+        renderingInfo.stencilAttachmentFormat = VK_FORMAT_UNDEFINED;
+    }
 
     // Color blend state
     VkPipelineColorBlendAttachmentState blendAttachmentState[1] = {};
@@ -2604,7 +2668,7 @@ static void vulkan_destroySwapChain(VGPURenderer* driverData, VGPUSwapChain* swa
     delete vulkanSwapChain;
 }
 
-static VGPUPixelFormat vulkan_getSwapChainFormat(VGPURenderer*, VGPUSwapChain* swapChain)
+static VGPUTextureFormat vulkan_getSwapChainFormat(VGPURenderer*, VGPUSwapChain* swapChain)
 {
     VulkanSwapChain* vulkanSwapChain = (VulkanSwapChain*)swapChain;
     return vulkanSwapChain->colorFormat;
@@ -4209,19 +4273,19 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
 }
 
 VGFXDriver Vulkan_Driver = {
-    VGPU_BACKEND_VULKAN,
+    VGPUBackend_Vulkan,
     vulkan_isSupported,
     vulkan_createDevice
 };
 
-uint32_t vgpuToVkFormat(VGPUPixelFormat format)
+uint32_t vgpuToVkFormat(VGPUTextureFormat format)
 {
     return ToVkFormat(format);
 }
 
 #else
 
-uint32_t vgpuToVkFormat(VGPUPixelFormat format)
+uint32_t vgpuToVkFormat(VGPUTextureFormat format)
 {
     _VGPU_UNUSED(format);
     return 0;

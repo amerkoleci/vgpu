@@ -52,7 +52,7 @@ std::string getShadersPath()
 VGPUShaderModule LoadShader(const char* fileName)
 {
     std::string shaderExt = ".spv";
-    if (vgpuGetBackend(device) == VGPU_BACKEND_D3D12)
+    if (vgpuGetBackend(device) == VGPUBackend_D3D12)
     {
         shaderExt = ".cso";
     }
@@ -104,9 +104,9 @@ void init_vgpu(GLFWwindow* window)
     deviceDesc.validationMode = VGPUValidationMode_Enabled;
 #endif
 
-    //if (vgpuIsBackendSupported(VGPU_BACKEND_VULKAN))
+    //if (vgpuIsBackendSupported(VGPUBackend_Vulkan))
     //{
-    //    deviceDesc.preferredBackend = VGPU_BACKEND_VULKAN;
+    //    deviceDesc.preferredBackend = VGPUBackend_Vulkan;
     //}
 
     device = vgpuCreateDevice(&deviceDesc);
@@ -162,7 +162,7 @@ void init_vgpu(GLFWwindow* window)
     VGPUBufferDescriptor vertex_buffer_desc{};
     vertex_buffer_desc.label = "Vertex Buffer";
     vertex_buffer_desc.size = sizeof(vertices);
-    vertex_buffer_desc.usage = VGPU_BUFFER_USAGE_VERTEX;
+    vertex_buffer_desc.usage = VGPUBufferUsage_Vertex;
     vertex_buffer = vgpuCreateBuffer(device, &vertex_buffer_desc, vertices);
 
     const uint16_t indices[] = {
@@ -172,7 +172,7 @@ void init_vgpu(GLFWwindow* window)
     VGPUBufferDescriptor index_buffer_desc{};
     index_buffer_desc.label = "Vertex Buffer";
     index_buffer_desc.size = sizeof(indices);
-    index_buffer_desc.usage = VGPU_BUFFER_USAGE_INDEX;
+    index_buffer_desc.usage = VGPUBufferUsage_Index;
     index_buffer = vgpuCreateBuffer(device, &index_buffer_desc, indices);
 
     VGPUShaderModule vertex_shader = LoadShader("triangleVertex");
@@ -203,12 +203,11 @@ void init_vgpu(GLFWwindow* window)
     renderPipelineDesc.vertex.layouts = &vertexBufferLayout;
 
     renderPipelineDesc.fragment = fragment_shader;
-    renderPipelineDesc.primitiveTopology = VGPUPrimitiveTopology_TriangleList;
     renderPipelineDesc.colorAttachmentCount = 1u;
     renderPipelineDesc.colorAttachments = &colorAttachment;
-    renderPipelineDesc.depthStencilFormat = VGPUTextureFormat_Depth32Float;
+    renderPipelineDesc.depthStencilState.format = VGPUTextureFormat_Depth32Float;
     renderPipelineDesc.depthStencilState.depthWriteEnabled = true;
-    renderPipelineDesc.depthStencilState.depthCompare = VGPUCompareFunction_Less;
+    renderPipelineDesc.depthStencilState.depthCompareFunction = VGPUCompareFunction_LessEqual;
 
     renderPipeline = vgpuCreateRenderPipeline(device, &renderPipelineDesc);
     vgpuDestroyShaderModule(device, vertex_shader);
@@ -264,7 +263,7 @@ void draw_frame()
         VGPURenderPassColorAttachment colorAttachment = {};
         colorAttachment.texture = swapChainTexture;
         colorAttachment.loadAction = VGPULoadAction_Clear;
-        colorAttachment.storeAction = VGPU_STORE_ACTION_STORE;
+        colorAttachment.storeAction = VGPUStoreAction_Store;
         colorAttachment.clearColor.r = 0.3f;
         colorAttachment.clearColor.g = 0.3f;
         colorAttachment.clearColor.b = 0.3f;
@@ -273,7 +272,7 @@ void draw_frame()
         VGPURenderPassDepthStencilAttachment depthStencilAttachment{};
         depthStencilAttachment.texture = depthStencilTexture;
         depthStencilAttachment.depthLoadOp = VGPULoadAction_Clear;
-        depthStencilAttachment.depthStoreOp = VGPU_STORE_ACTION_STORE;
+        depthStencilAttachment.depthStoreOp = VGPUStoreAction_Store;
         depthStencilAttachment.clearDepth = 1.0f;
 
         VGPURenderPassDesc renderPass{};
