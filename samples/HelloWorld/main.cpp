@@ -150,6 +150,7 @@ void init_vgpu(GLFWwindow* window)
     textureDesc.sampleCount = 1u;
 
     depthStencilTexture = vgpuCreateTexture(device, &textureDesc, nullptr);
+    auto dimension = vgpuTextureGetDimension(depthStencilTexture);
 
     // Create vertex buffer
     const float vertices[] = {
@@ -322,7 +323,7 @@ int main()
     vgpuWaitIdle(device);
     vgpuDestroyBuffer(device, vertex_buffer);
     vgpuDestroyBuffer(device, index_buffer);
-    vgpuDestroyTexture(device, depthStencilTexture);
+    vgpuTextureDestroy(depthStencilTexture);
     vgpuDestroyPipelineLayout(device, pipelineLayout);
     vgpuDestroyPipeline(device, renderPipeline);
     vgpuDestroySwapChain(device, swapChain);

@@ -123,7 +123,7 @@ add_subdirectory(third_party)
 set(SOURCE_FILES
     include/vgpu.h
     src/vgpu_driver.h
-    src/vgpu.c
+    src/vgpu.cpp
 )
 
 add_library(${PROJECT_NAME} ${SOURCE_FILES})
@@ -168,6 +168,12 @@ if (MSVC)
 else()
     target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -pedantic)
 endif ()
+
+if (VGPU_D3D11_DRIVER OR VGPU_D3D12_DRIVER)
+    target_sources(${PROJECT_NAME} PRIVATE
+        src/vgpu_driver_d3d.h
+    )
+endif()
 
 if (VGPU_D3D11_DRIVER)
     target_sources(${PROJECT_NAME} PRIVATE

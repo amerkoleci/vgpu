@@ -146,7 +146,7 @@ VGPUDevice vgpuCreateDevice(const VGPUDeviceDescriptor* desc)
 {
     if (!desc) {
         vgpu_log_warn("vgpu_init: Invalid config");
-        return false;
+        return nullptr;
     }
 
     VGPUDevice device = NULL;
@@ -388,12 +388,37 @@ VGPUTexture vgpuCreateTexture(VGPUDevice device, const VGPUTextureDesc* desc, co
     return device->createTexture(device->driverData, &desc_def, init_data);
 }
 
-void vgpuDestroyTexture(VGPUDevice device, VGPUTexture texture)
+void vgpuTextureDestroy(VGPUTexture texture)
 {
-    VGPU_ASSERT(device);
     NULL_RETURN(texture);
 
-    device->destroyTexture(device->driverData, texture);
+    texture->Release();
+}
+
+VGPUTextureDimension vgpuTextureGetDimension(VGPUTexture texture)
+{
+    return texture->GetDimension();
+}
+
+void vgpuTextureSetLabel(VGPUTexture texture, const char* label)
+{
+    NULL_RETURN(texture);
+
+    texture->SetLabel(label);
+}
+
+uint32_t vgpuTextureAddRef(VGPUTexture texture)
+{
+    assert(texture);
+
+    return texture->AddRef();
+}
+
+uint32_t vgpuTextureRelease(VGPUTexture texture)
+{
+    assert(texture);
+
+    return texture->Release();
 }
 
 /* Sampler*/

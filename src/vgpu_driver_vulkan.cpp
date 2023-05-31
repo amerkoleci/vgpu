@@ -703,14 +703,22 @@ struct VulkanBuffer
     void* pMappedData = nullptr;
 };
 
-struct VulkanTexture
+struct VulkanTexture final : public VGPUTextureImpl
 {
+    VulkanRenderer* renderer = nullptr;
     VkImage handle = VK_NULL_HANDLE;
-    VmaAllocation  allocation = nullptr;
+    VmaAllocation  allocation = VK_NULL_HANDLE;
+
+    VGPUTextureDimension dimension = VGPUTextureDimension_2D;
     uint32_t width = 0;
     uint32_t height = 0;
     VkFormat format = VK_FORMAT_UNDEFINED;
     std::unordered_map<size_t, VkImageView> viewCache;
+
+    ~VulkanTexture() override;
+    void SetLabel(const char* label) override;
+
+    VGPUTextureDimension GetDimension() const override { return dimension; }
 };
 
 struct VulkanSampler
@@ -1288,6 +1296,26 @@ static void vulkan_ProcessDeletionQueue(VulkanRenderer* renderer)
         }
     }
     renderer->destroyMutex.unlock();
+}
+
+VulkanTexture::~VulkanTexture()
+{
+    renderer->destroyMutex.lock();
+    for (auto& it : viewCache)
+    {
+        renderer->destroyedImageViews.push_back(std::make_pair(it.second, renderer->frameCount));
+    }
+    viewCache.clear();
+    if (allocation)
+    {
+        renderer->destroyedImages.push_back(std::make_pair(std::make_pair(handle, allocation), renderer->frameCount));
+    }
+    renderer->destroyMutex.unlock();
+}
+
+void VulkanTexture::SetLabel(const char* label)
+{
+    vulkan_SetObjectName(renderer, VK_OBJECT_TYPE_IMAGE, (uint64_t)handle, label);
 }
 
 static void vulkan_destroyDevice(VGPUDevice device)
@@ -1983,6 +2011,8 @@ static VGPUTexture vulkan_createTexture(VGPURenderer* driverData, const VGPUText
     // TODO: Handle readback texture
 
     VulkanTexture* texture = new VulkanTexture();
+    texture->renderer = renderer;
+    texture->dimension = desc->dimension;
     texture->width = createInfo.extent.width;
     texture->height = createInfo.extent.height;
     texture->format = createInfo.format;
@@ -2033,27 +2063,7 @@ static VGPUTexture vulkan_createTexture(VGPURenderer* driverData, const VGPUText
     renderer->submitInits = true;
     renderer->initLocker.unlock();
 
-    return (VGPUTexture)texture;
-}
-
-static void vulkan_destroyTexture(VGPURenderer* driverData, VGPUTexture texture)
-{
-    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
-    VulkanTexture* vulkanTexture = (VulkanTexture*)texture;
-
-    renderer->destroyMutex.lock();
-    for (auto& it : vulkanTexture->viewCache)
-    {
-        renderer->destroyedImageViews.push_back(std::make_pair(it.second, renderer->frameCount));
-    }
-    vulkanTexture->viewCache.clear();
-    if (vulkanTexture->allocation)
-    {
-        renderer->destroyedImages.push_back(std::make_pair(std::make_pair(vulkanTexture->handle, vulkanTexture->allocation), renderer->frameCount));
-    }
-    renderer->destroyMutex.unlock();
-
-    delete vulkanTexture;
+    return texture;
 }
 
 /* Sampler */
@@ -2580,7 +2590,7 @@ static void vulkan_updateSwapChain(VulkanRenderer* renderer, VulkanSwapChain* sw
     {
         for (size_t i = 0, count = swapChain->backbufferTextures.size(); i < count; ++i)
         {
-            vulkan_destroyTexture((VGPURenderer*)renderer, (VGPUTexture)swapChain->backbufferTextures[i]);
+            delete swapChain->backbufferTextures[i];
         }
         swapChain->backbufferTextures.clear();
 
@@ -2596,6 +2606,8 @@ static void vulkan_updateSwapChain(VulkanRenderer* renderer, VulkanSwapChain* sw
     for (uint32_t i = 0; i < imageCount; ++i)
     {
         VulkanTexture* texture = new VulkanTexture();
+        texture->renderer = renderer;
+        texture->dimension = VGPUTextureDimension_2D;
         texture->handle = swapchainImages[i];
         texture->width = createInfo.imageExtent.width;
         texture->height = createInfo.imageExtent.height;
@@ -2664,7 +2676,7 @@ static void vulkan_destroySwapChain(VGPURenderer* driverData, VGPUSwapChain* swa
 
     for (size_t i = 0, count = vulkanSwapChain->backbufferTextures.size(); i < count; ++i)
     {
-        vulkan_destroyTexture(driverData, (VGPUTexture)vulkanSwapChain->backbufferTextures[i]);
+        delete vulkanSwapChain->backbufferTextures[i];
     }
 
     if (vulkanSwapChain->acquireSemaphore != VK_NULL_HANDLE)

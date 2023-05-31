@@ -446,12 +446,12 @@ typedef enum VGPUBlendFactor {
     VGPUBlendFactor_SourceAlphaSaturated = 10,
     VGPUBlendFactor_BlendColor = 11,
     VGPUBlendFactor_OneMinusBlendColor = 12,
-    VGPUBlendFactor_BlendAlpha = 13,
-    VGPUBlendFactor_OneMinusBlendAlpha = 14,
-    VGPUBlendFactor_Source1Color = 15,
-    VGPUBlendFactor_OneMinusSource1Color = 16,
-    VGPUBlendFactor_Source1Alpha = 17,
-    VGPUBlendFactor_OneMinusSource1Alpha = 18,
+    //VGPUBlendFactor_BlendAlpha = 13,
+    //VGPUBlendFactor_OneMinusBlendAlpha = 14,
+    //VGPUBlendFactor_Source1Color = 15,
+    //VGPUBlendFactor_OneMinusSource1Color = 16,
+    //VGPUBlendFactor_Source1Alpha = 17,
+    //VGPUBlendFactor_OneMinusSource1Alpha = 18,
 
     _VGPUBlendFactor_Force32 = 0x7FFFFFFF
 } VGPUBlendFactor;
@@ -468,11 +468,11 @@ typedef enum VGPUBlendOperation {
 
 typedef enum VGPUColorWriteMask {
     VGPUColorWriteMask_None = 0,
-    VGPUColorWriteMask_Red = 1,
-    VGPUColorWriteMask_Green = 2,
-    VGPUColorWriteMask_Blue = 4,
-    VGPUColorWriteMask_Alpha = 8,
-    VGPUColorWriteMask_All = 15,
+    VGPUColorWriteMask_Red = 0x01,
+    VGPUColorWriteMask_Green = 0x02,
+    VGPUColorWriteMask_Blue = 0x04,
+    VGPUColorWriteMask_Alpha = 0x08,
+    VGPUColorWriteMask_All = 0x0F,
 
     _VGPUColorWriteMask_Force32 = 0x7FFFFFFF
 } VGPUColorWriteMask;
@@ -850,9 +850,13 @@ VGPU_API void vgpuDestroyBuffer(VGPUDevice device, VGPUBuffer buffer);
 VGPU_API VGPUDeviceAddress vgpuGetBufferDeviceAddress(VGPUDevice device, VGPUBuffer buffer);
 VGPU_API void vgpuSetBufferLabel(VGPUDevice device, VGPUBuffer buffer, const char* label);
 
-/* Texture */
+/* Texture methods */
 VGPU_API VGPUTexture vgpuCreateTexture(VGPUDevice device, const VGPUTextureDesc* desc, const void* init_data);
-VGPU_API void vgpuDestroyTexture(VGPUDevice device, VGPUTexture texture);
+VGPU_API void vgpuTextureDestroy(VGPUTexture texture);
+VGPU_API VGPUTextureDimension vgpuTextureGetDimension(VGPUTexture texture);
+VGPU_API void vgpuTextureSetLabel(VGPUTexture texture, const char* label);
+VGPU_API uint32_t vgpuTextureAddRef(VGPUTexture texture);
+VGPU_API uint32_t vgpuTextureRelease(VGPUTexture texture);
 
 /* Sampler */
 VGPU_API VGPUSampler vgpuCreateSampler(VGPUDevice device, const VGPUSamplerDesc* desc);
