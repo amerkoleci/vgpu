@@ -56,6 +56,7 @@ typedef struct VGPUSwapChain VGPUSwapChain;
 typedef struct VGPUShaderModuleImpl* VGPUShaderModule;
 typedef struct VGPUPipelineLayoutImpl* VGPUPipelineLayout;
 typedef struct VGPUPipelineImpl* VGPUPipeline;
+typedef struct VGPUQueryHeapImpl* VGPUQueryHeap;
 typedef struct VGPUCommandBuffer_T* VGPUCommandBuffer;
 
 typedef enum VGPULogLevel {
@@ -531,6 +532,24 @@ typedef enum VGPUPipelineType
     _VGPUPipelineType_Force32 = 0x7FFFFFFF
 } VGPUPipelineType;
 
+typedef enum VGPUQueryType {
+    VGPUQueryType_Occlusion = 0x00000000,
+    VGPUQueryType_PipelineStatistics = 0x00000001,
+    VGPUQueryType_Timestamp = 0x00000002,
+
+    _VGPUQueryType_Force32 = 0x7FFFFFFF
+} VGPUQueryType;
+
+typedef enum VGPUPipelineStatisticName {
+    VGPUPipelineStatisticName_VertexShaderInvocations = 0x00000000,
+    VGPUPipelineStatisticName_ClipperInvocations = 0x00000001,
+    VGPUPipelineStatisticName_ClipperPrimitivesOut = 0x00000002,
+    VGPUPipelineStatisticName_FragmentShaderInvocations = 0x00000003,
+    VGPUPipelineStatisticName_ComputeShaderInvocations = 0x00000004,
+
+    _VGPUPipelineStatisticName_Force32 = 0x7FFFFFFF
+} VGPUPipelineStatisticName;
+
 typedef struct VGPUColor {
     float r;
     float g;
@@ -748,7 +767,7 @@ typedef struct VGPUPrimitiveState {
     uint32_t patchControlPoints;
 } VGPUPrimitiveState;
 
-typedef struct VGPURenderPipelineDesc {
+typedef struct VGPURenderPipelineDescriptor {
     const char* label;
     VGPUPipelineLayout layout;
     VGPUVertexState vertex;
@@ -761,7 +780,7 @@ typedef struct VGPURenderPipelineDesc {
     const RenderPipelineColorAttachmentDesc* colorAttachments;
     uint32_t sampleCount;
     VGPUBool32 alphaToCoverageEnabled;
-} VGPURenderPipelineDesc;
+} VGPURenderPipelineDescriptor;
 
 typedef struct VGPUComputePipelineDescriptor {
     const char* label;
@@ -769,9 +788,17 @@ typedef struct VGPUComputePipelineDescriptor {
     VGPUShaderModule shader;
 } VGPUComputePipelineDescriptor;
 
-typedef struct VGPURayTracingPipelineDesc {
+typedef struct VGPURayTracingPipelineDescriptor {
     const char* label;
-} VGPURayTracingPipelineDesc;
+} VGPURayTracingPipelineDescriptor;
+
+typedef struct VGPUQueryHeapDescriptor {
+    const char* label;
+    VGPUQueryType type;
+    uint32_t count;
+    const VGPUPipelineStatisticName* pipelineStatistics;
+    uint32_t pipelineStatisticsCount;
+} VGPUQueryHeapDescriptor;
 
 typedef struct VGPUSwapChainDesc {
     uint32_t width;
@@ -867,10 +894,19 @@ VGPU_API VGPUPipelineLayout vgpuCreatePipelineLayout(VGPUDevice device, const VG
 VGPU_API void vgpuDestroyPipelineLayout(VGPUDevice device, VGPUPipelineLayout pipelineLayout);
 
 /* Pipeline */
-VGPU_API VGPUPipeline vgpuCreateRenderPipeline(VGPUDevice device, const VGPURenderPipelineDesc* descriptor);
+VGPU_API VGPUPipeline vgpuCreateRenderPipeline(VGPUDevice device, const VGPURenderPipelineDescriptor* descriptor);
 VGPU_API VGPUPipeline vgpuCreateComputePipeline(VGPUDevice device, const VGPUComputePipelineDescriptor* descriptor);
-VGPU_API VGPUPipeline vgpuCreateRayTracingPipeline(VGPUDevice device, const VGPURayTracingPipelineDesc* descriptor);
-VGPU_API void vgpuDestroyPipeline(VGPUDevice device, VGPUPipeline pipeline);
+VGPU_API VGPUPipeline vgpuCreateRayTracingPipeline(VGPUDevice device, const VGPURayTracingPipelineDescriptor* descriptor);
+VGPU_API VGPUPipelineType vgpuPipelineGetType(VGPUPipeline pipeline);
+VGPU_API void vgpuPipelineSetLabel(VGPUPipeline pipeline, const char* label);
+VGPU_API uint32_t vgpuPipelineAddRef(VGPUPipeline pipeline);
+VGPU_API uint32_t vgpuPipelineRelease(VGPUPipeline pipeline);
+
+/* QueryHeap */
+VGPU_API VGPUQueryHeap vgpuCreateQueryHeap(VGPUDevice device, const VGPUQueryHeapDescriptor* descriptor);
+VGPU_API void vgpuQueryHeapSetLabel(VGPUQueryHeap heap, const char* label);
+VGPU_API uint32_t vgpuQueryHeapAddRef(VGPUQueryHeap heap);
+VGPU_API uint32_t vgpuQueryHeapRelease(VGPUQueryHeap heap);
 
 /* SwapChain */
 VGPU_API VGPUSwapChain* vgpuCreateSwapChain(VGPUDevice device, void* window, const VGPUSwapChainDesc* desc);

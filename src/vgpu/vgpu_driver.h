@@ -5,9 +5,6 @@
 #define _VGPU_DRIVER_H_ 1
 
 #include "vgpu.h"
-#include <stdlib.h> // malloc, free
-#include <string.h> // memset
-#include <float.h> // FLT_MAX
 #include <assert.h>
 #include <atomic>
 
@@ -63,12 +60,6 @@ _VGPU_EXTERN void vgpu_log_info(const char* format, ...);
 _VGPU_EXTERN void vgpu_log_warn(const char* format, ...);
 _VGPU_EXTERN void vgpu_log_error(const char* format, ...);
 
-#ifdef __cplusplus
-#include <vector>
-#include <deque>
-#include <mutex>
-#include <unordered_map>
-
 namespace
 {
     /// Round up to next power of two.
@@ -92,8 +83,6 @@ namespace
         seed ^= hasher(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
     }
 }
-
-#endif /* __cplusplus */
 
 typedef struct VGPURenderer VGPURenderer;
 typedef struct VGPUCommandBufferImpl VGPUCommandBufferImpl;
@@ -150,6 +139,17 @@ struct VGPUSamplerImpl : public VGPUObject
 public:
 };
 
+struct VGPUPipelineImpl : public VGPUObject
+{
+public:
+    virtual VGPUPipelineType GetType() const = 0;
+};
+
+struct VGPUQueryHeapImpl : public VGPUObject
+{
+public:
+};
+
 typedef struct VGPUCommandBuffer_T {
     void (*pushDebugGroup)(VGPUCommandBufferImpl* driverData, const char* groupLabel);
     void (*popDebugGroup)(VGPUCommandBufferImpl* driverData);
@@ -200,10 +200,11 @@ typedef struct VGPUDeviceImpl
     VGPUPipelineLayout(*createPipelineLayout)(VGPURenderer* driverData, const VGPUPipelineLayoutDescriptor* desc);
     void(*destroyPipelineLayout)(VGPURenderer* driverData, VGPUPipelineLayout resource);
 
-    VGPUPipeline(*createRenderPipeline)(VGPURenderer* driverData, const VGPURenderPipelineDesc* desc);
+    VGPUPipeline(*createRenderPipeline)(VGPURenderer* driverData, const VGPURenderPipelineDescriptor* desc);
     VGPUPipeline(*createComputePipeline)(VGPURenderer* driverData, const VGPUComputePipelineDescriptor* desc);
-    VGPUPipeline(*createRayTracingPipeline)(VGPURenderer* driverData, const VGPURayTracingPipelineDesc* desc);
-    void(*destroyPipeline)(VGPURenderer* driverData, VGPUPipeline resource);
+    VGPUPipeline(*createRayTracingPipeline)(VGPURenderer* driverData, const VGPURayTracingPipelineDescriptor* desc);
+
+    VGPUQueryHeap(*createQueryHeap)(VGPURenderer* driverData, const VGPUQueryHeapDescriptor* descriptor);
 
     VGPUSwapChain* (*createSwapChain)(VGPURenderer* driverData, void* windowHandle, const VGPUSwapChainDesc* desc);
     void(*destroySwapChain)(VGPURenderer* driverData, VGPUSwapChain* swapChain);
@@ -259,7 +260,7 @@ ASSIGN_DRIVER_FUNC(destroyPipelineLayout, name) \
 ASSIGN_DRIVER_FUNC(createRenderPipeline, name) \
 ASSIGN_DRIVER_FUNC(createComputePipeline, name) \
 ASSIGN_DRIVER_FUNC(createRayTracingPipeline, name) \
-ASSIGN_DRIVER_FUNC(destroyPipeline, name) \
+ASSIGN_DRIVER_FUNC(createQueryHeap, name) \
 ASSIGN_DRIVER_FUNC(createSwapChain, name) \
 ASSIGN_DRIVER_FUNC(destroySwapChain, name) \
 ASSIGN_DRIVER_FUNC(getSwapChainFormat, name) \

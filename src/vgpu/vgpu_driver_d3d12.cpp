@@ -21,7 +21,10 @@
 #   include <dxgidebug.h>
 #endif
 
+#include <deque>
 #include <sstream>
+#include <mutex>
+#include <unordered_map>
 
 #define VALID_COMPUTE_QUEUE_RESOURCE_STATES \
     ( D3D12_RESOURCE_STATE_UNORDERED_ACCESS \
@@ -327,6 +330,46 @@ namespace
         desc.StencilFunc = ToD3D12(state.compareFunction);
         return desc;
     }
+
+    constexpr D3D12_QUERY_HEAP_TYPE ToD3D12(VGPUQueryType type)
+    {
+        switch (type)
+        {
+            case VGPUQueryType_Timestamp:
+                return D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
+
+            case VGPUQueryType_Occlusion:
+            //case VGPUQueryType_BinaryOcclusion:
+                return D3D12_QUERY_HEAP_TYPE_OCCLUSION;
+
+            case VGPUQueryType_PipelineStatistics:
+                return D3D12_QUERY_HEAP_TYPE_PIPELINE_STATISTICS;
+
+            default:
+                VGPU_UNREACHABLE();
+            }
+        }
+
+    constexpr D3D12_QUERY_TYPE ToD3D12QueryType(VGPUQueryType type)
+    {
+        switch (type)
+        {
+            case VGPUQueryType_Timestamp:
+                return D3D12_QUERY_TYPE_TIMESTAMP;
+
+            case VGPUQueryType_Occlusion:
+                return D3D12_QUERY_TYPE_OCCLUSION;
+
+            //case VGPUQueryType_BinaryOcclusion:
+            //    return D3D12_QUERY_TYPE_BINARY_OCCLUSION;
+
+            case VGPUQueryType_PipelineStatistics:
+                return D3D12_QUERY_TYPE_PIPELINE_STATISTICS;
+
+            default:
+                VGPU_UNREACHABLE();
+        }
+    }
 }
 
 #if !WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
@@ -489,14 +532,29 @@ struct D3D12PipelineLayout
     uint32_t pushConstantsBaseIndex = 0;
 };
 
-struct D3D12Pipeline
+struct D3D12Pipeline final : public VGPUPipelineImpl
 {
+    D3D12_Renderer* renderer = nullptr;
     VGPUPipelineType type = VGPUPipelineType_Render;
     D3D12PipelineLayout* pipelineLayout = nullptr;
     ID3D12PipelineState* handle = nullptr;
     uint32_t numVertexBindings = 0;
     uint32_t strides[D3D12_IA_VERTEX_INPUT_STRUCTURE_ELEMENT_COUNT] = {};
     D3D_PRIMITIVE_TOPOLOGY primitiveTopology = D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
+
+    ~D3D12Pipeline() override;
+    void SetLabel(const char* label) override;
+    VGPUPipelineType GetType() const override { return type; }
+};
+
+struct D3D12QueryHeap final : public VGPUQueryHeapImpl
+{
+    D3D12_Renderer* renderer = nullptr;
+    ID3D12QueryHeap* handle = nullptr;
+    D3D12_QUERY_TYPE queryType = D3D12_QUERY_TYPE_OCCLUSION;
+
+    ~D3D12QueryHeap() override;
+    void SetLabel(const char* label) override;
 };
 
 struct D3D12_SwapChain
@@ -1368,7 +1426,7 @@ static VGPUBuffer d3d12_createBuffer(VGPURenderer* driverData, const VGPUBufferD
 
     if (desc->label)
     {
-        D3D12SetName(buffer->handle, desc->label);
+        buffer->SetLabel(desc->label);
     }
 
     buffer->gpuAddress = buffer->handle->GetGPUVirtualAddress();
@@ -1760,11 +1818,22 @@ static void d3d12_destroyPipelineLayout(VGPURenderer* driverData, VGPUPipelineLa
 }
 
 /* Pipeline */
-static VGPUPipeline d3d12_createRenderPipeline(VGPURenderer* driverData, const VGPURenderPipelineDesc* desc)
+D3D12Pipeline::~D3D12Pipeline()
+{
+    d3d12_DeferDestroy(renderer, handle, nullptr);
+}
+
+void D3D12Pipeline::SetLabel(const char* label)
+{
+    D3D12SetName(handle, label);
+}
+
+static VGPUPipeline d3d12_createRenderPipeline(VGPURenderer* driverData, const VGPURenderPipelineDescriptor* desc)
 {
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
 
     D3D12Pipeline* pipeline = new D3D12Pipeline();
+    pipeline->renderer = renderer;
     pipeline->type = VGPUPipelineType_Render;
     pipeline->pipelineLayout = (D3D12PipelineLayout*)desc->layout;
     D3D12Shader* vertexShader = (D3D12Shader*)desc->vertex.module;
@@ -1898,7 +1967,7 @@ static VGPUPipeline d3d12_createRenderPipeline(VGPURenderer* driverData, const V
 
     D3D12SetName(pipeline->handle, desc->label);
     pipeline->primitiveTopology = ToD3DPrimitiveTopology(desc->primitive.topology, desc->primitive.patchControlPoints);
-    return (VGPUPipeline)pipeline;
+    return pipeline;
 }
 
 static VGPUPipeline d3d12_createComputePipeline(VGPURenderer* driverData, const VGPUComputePipelineDescriptor* desc)
@@ -1906,6 +1975,7 @@ static VGPUPipeline d3d12_createComputePipeline(VGPURenderer* driverData, const 
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
 
     D3D12Pipeline* pipeline = new D3D12Pipeline();
+    pipeline->renderer = renderer;
     pipeline->type = VGPUPipelineType_Compute;
     pipeline->pipelineLayout = (D3D12PipelineLayout*)desc->layout;
     D3D12Shader* shader = (D3D12Shader*)desc->shader;
@@ -1923,10 +1993,10 @@ static VGPUPipeline d3d12_createComputePipeline(VGPURenderer* driverData, const 
     }
 
     D3D12SetName(pipeline->handle, desc->label);
-    return (VGPUPipeline)pipeline;
+    return pipeline;
 }
 
-static VGPUPipeline d3d12_createRayTracingPipeline(VGPURenderer* driverData, const VGPURayTracingPipelineDesc* desc)
+static VGPUPipeline d3d12_createRayTracingPipeline(VGPURenderer* driverData, const VGPURayTracingPipelineDescriptor* desc)
 {
     VGPU_UNUSED(desc);
     VGPU_UNUSED(driverData);
@@ -1934,16 +2004,46 @@ static VGPUPipeline d3d12_createRayTracingPipeline(VGPURenderer* driverData, con
     //D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
     D3D12Pipeline* pipeline = new D3D12Pipeline();
     pipeline->type = VGPUPipelineType_RayTracing;
-    return (VGPUPipeline)pipeline;
+    return pipeline;
 }
 
-static void d3d12_destroyPipeline(VGPURenderer* driverData, VGPUPipeline resource)
+
+/*D3D12QueryHeap */
+D3D12QueryHeap::~D3D12QueryHeap()
+{
+    d3d12_DeferDestroy(renderer, handle, nullptr);
+}
+
+void D3D12QueryHeap::SetLabel(const char* label)
+{
+    D3D12SetName(handle, label);
+}
+
+static VGPUQueryHeap d3d12_createQueryHeap(VGPURenderer* driverData, const VGPUQueryHeapDescriptor* descriptor)
 {
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
-    D3D12Pipeline* pipeline = (D3D12Pipeline*)resource;
 
-    d3d12_DeferDestroy(renderer, pipeline->handle, nullptr);
-    delete pipeline;
+    D3D12QueryHeap* heap = new D3D12QueryHeap();
+    heap->renderer = renderer;
+    heap->queryType = ToD3D12QueryType(descriptor->type);
+
+    D3D12_QUERY_HEAP_DESC d3dDesc = {};
+    d3dDesc.Type = ToD3D12(descriptor->type);
+    d3dDesc.Count = descriptor->count;
+    d3dDesc.NodeMask = 0;
+
+    HRESULT hr = renderer->device->CreateQueryHeap(&d3dDesc, IID_PPV_ARGS(&heap->handle));
+    if (FAILED(hr))
+    {
+        return nullptr;
+    }
+
+    if (descriptor->label)
+    {
+        heap->SetLabel(descriptor->label);
+    }
+
+    return heap;
 }
 
 /* SwapChain */

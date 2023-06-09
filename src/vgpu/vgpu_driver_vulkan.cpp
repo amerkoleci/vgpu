@@ -14,7 +14,6 @@ VGPU_DISABLE_WARNINGS()
 #include "volk.h"
 #define VMA_IMPLEMENTATION
 #include "vk_mem_alloc.h"
-#include <spirv_reflect.h>
 VGPU_ENABLE_WARNINGS()
 
 #if defined(VK_USE_PLATFORM_XLIB_KHR) || defined(VK_USE_PLATFORM_XCB_KHR)
@@ -27,6 +26,11 @@ VGPU_ENABLE_WARNINGS()
 #undef Always
 #undef Bool
 #endif
+
+#include <string>
+#include <vector>
+#include <deque>
+#include <unordered_map>
 
 namespace
 {
@@ -573,6 +577,26 @@ namespace
         }
     }
 
+    constexpr VkQueryType ToVk(VGPUQueryType type)
+    {
+        switch (type)
+        {
+            case VGPUQueryType_Timestamp:
+                return VK_QUERY_TYPE_TIMESTAMP;
+
+            case VGPUQueryType_Occlusion:
+            //case VGPUQueryType_BinaryOcclusion:
+                return VK_QUERY_TYPE_OCCLUSION;
+
+            case VGPUQueryType_PipelineStatistics:
+                return VK_QUERY_TYPE_PIPELINE_STATISTICS;
+
+            default:
+                VGPU_UNREACHABLE();
+        }
+    }
+
+
     constexpr VkFormat ToVkFormat(VGPUVertexFormat format)
     {
         switch (format)
@@ -744,20 +768,38 @@ struct VulkanShader
 
 struct VulkanPipelineLayout final
 {
+    VulkanRenderer* renderer = nullptr;
     std::vector<VkDescriptorSetLayout> descriptorSetLayouts;
     std::vector<uint32_t> descriptorSetSpaces;
     VkPipelineLayout handle = VK_NULL_HANDLE;
 };
 
-struct VulkanPipeline
+struct VulkanPipeline final : public VGPUPipelineImpl
 {
+    VulkanRenderer* renderer = nullptr;
+    VGPUPipelineType type = VGPUPipelineType_Render;
     VkPipelineBindPoint bindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
     VulkanPipelineLayout* pipelineLayout = nullptr;
     VkPipeline handle = VK_NULL_HANDLE;
+
+    ~VulkanPipeline() override;
+    void SetLabel(const char* label) override;
+    VGPUPipelineType GetType() const override { return type; }
+};
+
+struct VulkanQueryHeap final : public VGPUQueryHeapImpl
+{
+    VulkanRenderer* renderer = nullptr;
+    VkQueryPool handle = VK_NULL_HANDLE;
+    VGPUQueryType queryType{};
+
+    ~VulkanQueryHeap() override;
+    void SetLabel(const char* label) override;
 };
 
 struct VulkanSwapChain
 {
+    VulkanRenderer* renderer = nullptr;
     VkSurfaceKHR surface = VK_NULL_HANDLE;
     VkSwapchainKHR handle = VK_NULL_HANDLE;
     VkExtent2D extent;
@@ -1358,6 +1400,19 @@ VulkanSampler::~VulkanSampler()
 void VulkanSampler::SetLabel(const char* label)
 {
     vulkan_SetObjectName(renderer, VK_OBJECT_TYPE_SAMPLER, (uint64_t)handle, label);
+}
+
+/* VulkanPipeline */
+VulkanPipeline::~VulkanPipeline()
+{
+    renderer->destroyMutex.lock();
+    renderer->destroyedPipelines.push_back(std::make_pair(handle, renderer->frameCount));
+    renderer->destroyMutex.unlock();
+}
+
+void VulkanPipeline::SetLabel(const char* label)
+{
+    vulkan_SetObjectName(renderer, VK_OBJECT_TYPE_PIPELINE, (uint64_t)handle, label);
 }
 
 static void vulkan_destroyDevice(VGPUDevice device)
@@ -2091,7 +2146,7 @@ static VGPUTexture vulkan_createTexture(VGPURenderer* driverData, const VGPUText
 static VGPUSampler vulkan_createSampler(VGPURenderer* driverData, const VGPUSamplerDesc* desc)
 {
     VulkanRenderer* renderer = (VulkanRenderer*)driverData;
-    
+
     VkSamplerCreateInfo createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
     createInfo.magFilter = ToVkFilter(desc->magFilter);
@@ -2247,7 +2302,7 @@ static void vulkan_destroyPipelineLayout(VGPURenderer* driverData, VGPUPipelineL
 }
 
 /* Pipeline */
-static VGPUPipeline vulkan_createRenderPipeline(VGPURenderer* driverData, const VGPURenderPipelineDesc* desc)
+static VGPUPipeline vulkan_createRenderPipeline(VGPURenderer* driverData, const VGPURenderPipelineDescriptor* desc)
 {
     VulkanRenderer* renderer = (VulkanRenderer*)driverData;
 
@@ -2280,7 +2335,7 @@ static VGPUPipeline vulkan_createRenderPipeline(VGPURenderer* driverData, const 
         renderingInfo.colorAttachmentCount++;
     }
     renderingInfo.pColorAttachmentFormats = colorAttachmentFormats;
-    
+
 
     // VertexInputState
     std::vector<VkVertexInputBindingDescription> vertexInputBindings;
@@ -2410,7 +2465,7 @@ static VGPUPipeline vulkan_createRenderPipeline(VGPURenderer* driverData, const 
     colorBlendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
     colorBlendState.attachmentCount = 1;
     colorBlendState.pAttachments = blendAttachmentState;
-   
+
     VkGraphicsPipelineCreateInfo createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
     createInfo.pNext = &renderingInfo;
@@ -2436,9 +2491,11 @@ static VGPUPipeline vulkan_createRenderPipeline(VGPURenderer* driverData, const 
     }
 
     VulkanPipeline* pipeline = new VulkanPipeline();
+    pipeline->renderer = renderer;
+    pipeline->type = VGPUPipelineType_Render;
     pipeline->pipelineLayout = layout;
     pipeline->handle = handle;
-    return (VGPUPipeline)pipeline;
+    return pipeline;
 }
 
 static VGPUPipeline vulkan_createComputePipeline(VGPURenderer* driverData, const VGPUComputePipelineDescriptor* desc)
@@ -2466,30 +2523,60 @@ static VGPUPipeline vulkan_createComputePipeline(VGPURenderer* driverData, const
     }
 
     VulkanPipeline* pipeline = new VulkanPipeline();
+    pipeline->renderer = renderer;
+    pipeline->type = VGPUPipelineType_Compute;
     pipeline->handle = handle;
-    return (VGPUPipeline)pipeline;
+    return pipeline;
 }
 
-static VGPUPipeline vulkan_createRayTracingPipeline(VGPURenderer* driverData, const VGPURayTracingPipelineDesc* desc)
+static VGPUPipeline vulkan_createRayTracingPipeline(VGPURenderer* driverData, const VGPURayTracingPipelineDescriptor* desc)
 {
-    VGPU_UNUSED(driverData);
+    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
     VGPU_UNUSED(desc);
 
     VulkanPipeline* pipeline = new VulkanPipeline();
-    return (VGPUPipeline)pipeline;
+    pipeline->renderer = renderer;
+    pipeline->type = VGPUPipelineType_RayTracing;
+    return pipeline;
 }
 
-static void vulkan_destroyPipeline(VGPURenderer* driverData, VGPUPipeline resource)
+/* QueryHeap */
+VulkanQueryHeap::~VulkanQueryHeap()
+{
+}
+
+void VulkanQueryHeap::SetLabel(const char* label)
+{
+    vulkan_SetObjectName(renderer, VK_OBJECT_TYPE_QUERY_POOL, (uint64_t)handle, label);
+}
+
+static VGPUQueryHeap vulkan_createQueryHeap(VGPURenderer* driverData, const VGPUQueryHeapDescriptor* descriptor)
 {
     VulkanRenderer* renderer = (VulkanRenderer*)driverData;
-    VulkanPipeline* pipeline = (VulkanPipeline*)resource;
 
-    renderer->destroyMutex.lock();
-    renderer->destroyedPipelines.push_back(std::make_pair(pipeline->handle, renderer->frameCount));
-    renderer->destroyMutex.unlock();
+    VulkanQueryHeap* heap = new VulkanQueryHeap();
+    heap->renderer = renderer;
+    heap->queryType = descriptor->type;
 
-    delete pipeline;
+    VkQueryPoolCreateInfo createInfo = {};
+    createInfo.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
+    createInfo.queryType = ToVk(descriptor->type);
+    createInfo.queryCount = descriptor->count;
+
+    if (descriptor->type == VGPUQueryType_PipelineStatistics)
+    {
+        //createInfo.pipelineStatistics = VulkanQueryPipelineStatisticFlags(GetPipelineStatistics());
+    }
+
+    VkResult result = vkCreateQueryPool(renderer->device, &createInfo, nullptr, &heap->handle);
+    if (result != VK_SUCCESS)
+    {
+        return nullptr;
+    }
+
+    return heap;
 }
+
 
 /* SwapChain */
 static void vulkan_updateSwapChain(VulkanRenderer* renderer, VulkanSwapChain* swapChain)
@@ -3503,8 +3590,8 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
                 {
                     instanceExtensions.push_back("VK_KHR_external_semaphore_capabilities");
                 }
+            }
         }
-    }
 
         instanceExtensions.push_back(VK_KHR_SURFACE_EXTENSION_NAME);
 
@@ -3650,7 +3737,7 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
             vgpu_log_info("	\t%s", createInfo.ppEnabledExtensionNames[i]);
         }
 #endif
-        }
+    }
 
     // Enumerate physical device and create logical device.
     {
@@ -3932,35 +4019,35 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
         const auto FindVacantQueue = [&](uint32_t& family, uint32_t& index,
             VkQueueFlags required, VkQueueFlags ignore_flags,
             float priority) -> bool
-        {
-            for (uint32_t familyIndex = 0; familyIndex < queueFamilyCount; familyIndex++)
             {
-                if ((queueFamilies[familyIndex].queueFlags & ignore_flags) != 0)
-                    continue;
-
-                // A graphics queue candidate must support present for us to select it.
-                if ((required & VK_QUEUE_GRAPHICS_BIT) != 0)
+                for (uint32_t familyIndex = 0; familyIndex < queueFamilyCount; familyIndex++)
                 {
-                    VkBool32 supported = vulkan_queryPresentationSupport(renderer->physicalDevice, familyIndex);
-                    if (!supported)
+                    if ((queueFamilies[familyIndex].queueFlags & ignore_flags) != 0)
                         continue;
-                    //if (vkGetPhysicalDeviceSurfaceSupportKHR(renderer->physicalDevice, familyIndex, vk_surface, &supported) != VK_SUCCESS || !supported)
-                    //    continue;
+
+                    // A graphics queue candidate must support present for us to select it.
+                    if ((required & VK_QUEUE_GRAPHICS_BIT) != 0)
+                    {
+                        VkBool32 supported = vulkan_queryPresentationSupport(renderer->physicalDevice, familyIndex);
+                        if (!supported)
+                            continue;
+                        //if (vkGetPhysicalDeviceSurfaceSupportKHR(renderer->physicalDevice, familyIndex, vk_surface, &supported) != VK_SUCCESS || !supported)
+                        //    continue;
+                    }
+
+                    if (queueFamilies[familyIndex].queueCount &&
+                        (queueFamilies[familyIndex].queueFlags & required) == required)
+                    {
+                        family = familyIndex;
+                        queueFamilies[familyIndex].queueCount--;
+                        index = queueOffsets[familyIndex]++;
+                        queuePriorities[familyIndex].push_back(priority);
+                        return true;
+                    }
                 }
 
-                if (queueFamilies[familyIndex].queueCount &&
-                    (queueFamilies[familyIndex].queueFlags & required) == required)
-                {
-                    family = familyIndex;
-                    queueFamilies[familyIndex].queueCount--;
-                    index = queueOffsets[familyIndex]++;
-                    queuePriorities[familyIndex].push_back(priority);
-                    return true;
-                }
-            }
-
-            return false;
-        };
+                return false;
+            };
 
         if (!FindVacantQueue(renderer->graphicsQueueFamily, graphicsQueueIndex,
             VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT, 0, 0.5f))

@@ -201,7 +201,7 @@ void init_vgpu(GLFWwindow* window)
     vertexBufferLayout.attributeCount = 2;
     vertexBufferLayout.attributes = vertexAttributes.data();
 
-    VGPURenderPipelineDesc renderPipelineDesc{};
+    VGPURenderPipelineDescriptor renderPipelineDesc{};
     renderPipelineDesc.label = "Triangle";
     renderPipelineDesc.layout = pipelineLayout;
     renderPipelineDesc.vertex.module = vertex_shader;
@@ -325,7 +325,7 @@ int main()
     vgpuBufferRelease(index_buffer);
     vgpuTextureRelease(depthStencilTexture);
     vgpuDestroyPipelineLayout(device, pipelineLayout);
-    vgpuDestroyPipeline(device, renderPipeline);
+    vgpuPipelineRelease(renderPipeline);
     vgpuDestroySwapChain(device, swapChain);
     vgpuDestroyDevice(device);
     glfwDestroyWindow(window);

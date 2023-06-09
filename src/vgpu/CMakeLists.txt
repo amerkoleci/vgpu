@@ -74,7 +74,7 @@ if (VGPU_VULKAN_DRIVER)
     )
 
     target_compile_definitions(${TARGET_NAME} PRIVATE VGPU_VULKAN_DRIVER=1)
-    target_link_libraries(${TARGET_NAME} PRIVATE volk vma spirv-reflect)
+    target_link_libraries(${TARGET_NAME} PRIVATE volk vma)
 endif ()
 
 if (VGPU_WEBGPU_DRIVER)

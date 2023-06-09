@@ -457,9 +457,9 @@ void vgpuDestroyPipelineLayout(VGPUDevice device, VGPUPipelineLayout pipelineLay
 }
 
 /* Pipeline */
-static VGPURenderPipelineDesc _vgpuRenderPipelineDescDef(const VGPURenderPipelineDesc* desc)
+static VGPURenderPipelineDescriptor _vgpuRenderPipelineDescDef(const VGPURenderPipelineDescriptor* desc)
 {
-    VGPURenderPipelineDesc def = *desc;
+    VGPURenderPipelineDescriptor def = *desc;
 
     def.primitive.topology = _VGPU_DEF(def.primitive.topology, VGPUPrimitiveTopology_TriangleList);
     def.primitive.patchControlPoints = _VGPU_DEF(def.primitive.patchControlPoints, 1);
@@ -481,14 +481,14 @@ static VGPURenderPipelineDesc _vgpuRenderPipelineDescDef(const VGPURenderPipelin
     return def;
 }
 
-VGPUPipeline vgpuCreateRenderPipeline(VGPUDevice device, const VGPURenderPipelineDesc* desc)
+VGPUPipeline vgpuCreateRenderPipeline(VGPUDevice device, const VGPURenderPipelineDescriptor* desc)
 {
     VGPU_ASSERT(device);
     NULL_RETURN_NULL(desc);
     VGPU_ASSERT(desc->layout);
     VGPU_ASSERT(desc->vertex.module);
 
-    VGPURenderPipelineDesc desc_def = _vgpuRenderPipelineDescDef(desc);
+    VGPURenderPipelineDescriptor desc_def = _vgpuRenderPipelineDescDef(desc);
     return device->createRenderPipeline(device->driverData, &desc_def);
 }
 
@@ -503,20 +503,70 @@ VGPUPipeline vgpuCreateComputePipeline(VGPUDevice device, const VGPUComputePipel
     return device->createComputePipeline(device->driverData, descriptor);
 }
 
-VGPUPipeline vgpuCreateRayTracingPipeline(VGPUDevice device, const VGPURayTracingPipelineDesc* desc)
+VGPUPipeline vgpuCreateRayTracingPipeline(VGPUDevice device, const VGPURayTracingPipelineDescriptor* descriptor)
 {
     VGPU_ASSERT(device);
-    NULL_RETURN_NULL(desc);
+    NULL_RETURN_NULL(descriptor);
 
-    return device->createRayTracingPipeline(device->driverData, desc);
+    return device->createRayTracingPipeline(device->driverData, descriptor);
 }
 
-void vgpuDestroyPipeline(VGPUDevice device, VGPUPipeline pipeline)
+VGPUPipelineType vgpuPipelineGetType(VGPUPipeline pipeline)
 {
-    VGPU_ASSERT(device);
+    VGPU_ASSERT(pipeline);
+
+    return pipeline->GetType();
+}
+
+void vgpuPipelineSetLabel(VGPUPipeline pipeline, const char* label)
+{
     NULL_RETURN(pipeline);
 
-    device->destroyPipeline(device->driverData, pipeline);
+    pipeline->SetLabel(label);
+}
+
+uint32_t vgpuPipelineAddRef(VGPUPipeline pipeline)
+{
+    VGPU_ASSERT(pipeline);
+
+    return pipeline->AddRef();
+}
+
+uint32_t vgpuPipelineRelease(VGPUPipeline pipeline)
+{
+    VGPU_ASSERT(pipeline);
+
+    return pipeline->Release();
+}
+
+/* QueryHeap */
+VGPUQueryHeap vgpuCreateQueryHeap(VGPUDevice device, const VGPUQueryHeapDescriptor* descriptor)
+{
+    VGPU_ASSERT(device);
+    NULL_RETURN_NULL(descriptor);
+
+    return device->createQueryHeap(device->driverData, descriptor);
+}
+
+void vgpuQueryHeapSetLabel(VGPUQueryHeap heap, const char* label)
+{
+    NULL_RETURN(heap);
+
+    heap->SetLabel(label);
+}
+
+uint32_t vgpuQueryHeapAddRef(VGPUQueryHeap heap)
+{
+    VGPU_ASSERT(heap);
+
+    return heap->AddRef();
+}
+
+uint32_t vgpuQueryHeapRelease(VGPUQueryHeap heap)
+{
+    VGPU_ASSERT(heap);
+
+    return heap->Release();
 }
 
 /* SwapChain */
