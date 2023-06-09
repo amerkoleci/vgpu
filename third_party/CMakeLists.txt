@@ -111,7 +111,7 @@ if (VGPU_D3D12_DRIVER)
     set_property(TARGET D3D12MemoryAllocator PROPERTY FOLDER "ThirdParty")
 endif ()
 
-if (VGPU_SAMPLES)
+if (VLIBS_SAMPLES)
     # Windowing
     if(ANDROID)
         # native_app_glue

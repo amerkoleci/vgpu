@@ -1,4 +1,4 @@
-// Copyright © Amer Koleci and Contributors.
+// Copyright © Amer Koleci.
 // Licensed under the MIT License (MIT). See LICENSE in the repository root for more information.
 
 #if defined(VGPU_D3D12_DRIVER)
@@ -436,13 +436,19 @@ struct D3D12Resource
     D3D12_RESOURCE_STATES transitioningState = (D3D12_RESOURCE_STATES)-1;
 };
 
-struct D3D12Buffer : public D3D12Resource
+struct D3D12Buffer : public VGPUBufferImpl, public D3D12Resource
 {
     D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint{};
     uint64_t size = 0;
     uint64_t allocatedSize = 0;
     D3D12_GPU_VIRTUAL_ADDRESS gpuAddress = {};
     void* pMappedData{ nullptr };
+
+    ~D3D12Buffer() override;
+    void SetLabel(const char* label) override;
+
+    uint64_t GetSize() const override { return size; }
+    VGPUDeviceAddress GetGpuAddress() const override { return gpuAddress; }
 };
 
 struct D3D12Texture final : public VGPUTextureImpl, public D3D12Resource
@@ -920,6 +926,18 @@ static void d3d12_UploadSubmit(D3D12_Renderer* renderer, D3D12_UploadContext con
     renderer->uploadLocker.unlock();
 }
 
+/* D3D12Buffer */
+D3D12Buffer::~D3D12Buffer()
+{
+    d3d12_DeferDestroy(renderer, handle, allocation);
+}
+
+void D3D12Buffer::SetLabel(const char* label)
+{
+    D3D12SetName(handle, label);
+}
+
+/* D3D12Texture */
 D3D12Texture::~D3D12Texture()
 {
     d3d12_DeferDestroy(renderer, handle, allocation);
@@ -1249,6 +1267,7 @@ static VGPUBuffer d3d12_createBuffer(VGPURenderer* driverData, const VGPUBufferD
     if (desc->handle)
     {
         D3D12Buffer* buffer = new D3D12Buffer();
+        buffer->renderer = renderer;
         buffer->handle = (ID3D12Resource*)desc->handle;
         buffer->handle->AddRef();
         buffer->allocation = nullptr;
@@ -1311,6 +1330,7 @@ static VGPUBuffer d3d12_createBuffer(VGPURenderer* driverData, const VGPUBufferD
     }
 
     D3D12Buffer* buffer = new D3D12Buffer();
+    buffer->renderer = renderer;
     buffer->state = resourceState;
     buffer->size = desc->size;
 
@@ -1414,30 +1434,13 @@ static VGPUBuffer d3d12_createBuffer(VGPURenderer* driverData, const VGPUBufferD
         //buffer->SetBindlessUAV(bindlessUAV);
     }
 
-    return (VGPUBuffer)buffer;
-}
-
-static void d3d12_destroyBuffer(VGPURenderer* driverData, VGPUBuffer resource)
-{
-    D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
-    D3D12Resource* d3dBuffer = (D3D12Resource*)resource;
-
-    d3d12_DeferDestroy(renderer, d3dBuffer->handle, d3dBuffer->allocation);
-    delete d3dBuffer;
+    return buffer;
 }
 
 static VGPUDeviceAddress d3d12_buffer_get_device_address(VGPUBuffer resource)
 {
     D3D12Buffer* d3dBuffer = (D3D12Buffer*)resource;
     return d3dBuffer->gpuAddress;
-}
-
-static void d3d12_bufferSetLabel(VGPURenderer* driverData, VGPUBuffer resource, const char* label)
-{
-    VGPU_UNUSED(driverData);
-
-    D3D12Resource* buffer = (D3D12Resource*)resource;
-    D3D12SetName(buffer->handle, label);
 }
 
 /* Texture */

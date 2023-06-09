@@ -1,4 +1,4 @@
-// Copyright © Amer Koleci and Contributors.
+// Copyright © Amer Koleci.
 // Licensed under the MIT License (MIT). See LICENSE in the repository root for more information.
 
 #include "vgpu_driver.h"
@@ -231,28 +231,46 @@ VGPUBuffer vgpuCreateBuffer(VGPUDevice device, const VGPUBufferDescriptor* descr
     return device->createBuffer(device->driverData, &desc_def, init_data);
 }
 
-void vgpuDestroyBuffer(VGPUDevice device, VGPUBuffer buffer)
+void vgpuBufferDestroy(VGPUBuffer buffer)
 {
-    VGPU_ASSERT(device);
     NULL_RETURN(buffer);
 
-    device->destroyBuffer(device->driverData, buffer);
+    buffer->Release();
 }
 
-VGPUDeviceAddress vgpuGetBufferDeviceAddress(VGPUDevice device, VGPUBuffer buffer)
+uint64_t vgpuBufferGetSize(VGPUBuffer buffer)
 {
-    VGPU_ASSERT(device);
     VGPU_ASSERT(buffer);
 
-    return device->buffer_get_device_address(buffer);
+    return buffer->GetSize();
 }
 
-void vgpuSetBufferLabel(VGPUDevice device, VGPUBuffer buffer, const char* label)
+VGPUDeviceAddress vgpuBufferGetAddress(VGPUBuffer buffer)
 {
-    VGPU_ASSERT(device);
+    VGPU_ASSERT(buffer);
+
+    return buffer->GetGpuAddress();
+}
+
+void vgpuBufferSetLabel(VGPUBuffer buffer, const char* label)
+{
     NULL_RETURN(buffer);
 
-    device->bufferSetLabel(device->driverData, buffer, label);
+    buffer->SetLabel(label);
+}
+
+uint32_t vgpuBufferAddRef(VGPUBuffer buffer)
+{
+    assert(buffer);
+
+    return buffer->AddRef();
+}
+
+uint32_t vgpuBufferRelease(VGPUBuffer buffer)
+{
+    assert(buffer);
+
+    return buffer->Release();
 }
 
 /* Texture */
@@ -814,13 +832,13 @@ VGPUBool32 vgpuIsDepthFormat(VGPUTextureFormat format)
 {
     switch (format)
     {
-        case VGPUTextureFormat_Depth16Unorm:
-        case VGPUTextureFormat_Depth32Float:
-        case VGPUTextureFormat_Depth24UnormStencil8:
-        case VGPUTextureFormat_Depth32FloatStencil8:
-            return true;
-        default:
-            return false;
+    case VGPUTextureFormat_Depth16Unorm:
+    case VGPUTextureFormat_Depth32Float:
+    case VGPUTextureFormat_Depth24UnormStencil8:
+    case VGPUTextureFormat_Depth32FloatStencil8:
+        return true;
+    default:
+        return false;
     }
 }
 
@@ -828,11 +846,11 @@ VGPUBool32 vgpuIsDepthOnlyFormat(VGPUTextureFormat format)
 {
     switch (format)
     {
-        case VGPUTextureFormat_Depth16Unorm:
-        case VGPUTextureFormat_Depth32Float:
-            return true;
-        default:
-            return false;
+    case VGPUTextureFormat_Depth16Unorm:
+    case VGPUTextureFormat_Depth32Float:
+        return true;
+    default:
+        return false;
     }
 }
 
@@ -840,10 +858,10 @@ VGPUBool32 vgpuIsStencilOnlyFormat(VGPUTextureFormat format)
 {
     switch (format)
     {
-        case VGPUTextureFormat_Stencil8:
-            return true;
-        default:
-            return false;
+    case VGPUTextureFormat_Stencil8:
+        return true;
+    default:
+        return false;
     }
 }
 
@@ -851,12 +869,12 @@ VGPUBool32 vgpuIsStencilFormat(VGPUTextureFormat format)
 {
     switch (format)
     {
-        case VGPUTextureFormat_Stencil8:
-        case VGPUTextureFormat_Depth24UnormStencil8:
-        case VGPUTextureFormat_Depth32FloatStencil8:
-            return true;
-        default:
-            return false;
+    case VGPUTextureFormat_Stencil8:
+    case VGPUTextureFormat_Depth24UnormStencil8:
+    case VGPUTextureFormat_Depth32FloatStencil8:
+        return true;
+    default:
+        return false;
     }
 }
 
@@ -864,14 +882,14 @@ VGPUBool32 vgpuIsDepthStencilFormat(VGPUTextureFormat format)
 {
     switch (format)
     {
-        case VGPUTextureFormat_Depth16Unorm:
-        case VGPUTextureFormat_Depth32Float:
-        case VGPUTextureFormat_Stencil8:
-        case VGPUTextureFormat_Depth24UnormStencil8:
-        case VGPUTextureFormat_Depth32FloatStencil8:
-            return true;
-        default:
-            return false;
+    case VGPUTextureFormat_Depth16Unorm:
+    case VGPUTextureFormat_Depth32Float:
+    case VGPUTextureFormat_Stencil8:
+    case VGPUTextureFormat_Depth24UnormStencil8:
+    case VGPUTextureFormat_Depth32FloatStencil8:
+        return true;
+    default:
+        return false;
     }
 }
 

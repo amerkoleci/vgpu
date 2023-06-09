@@ -1,4 +1,4 @@
-// Copyright © Amer Koleci and Contributors.
+// Copyright © Amer Koleci.
 // Licensed under the MIT License (MIT). See LICENSE in the repository root for more information.
 
 #if defined(VGPU_VULKAN_DRIVER)
@@ -693,14 +693,21 @@ namespace
 
 struct VulkanRenderer;
 
-struct VulkanBuffer
+struct VulkanBuffer : public VGPUBufferImpl
 {
+    VulkanRenderer* renderer = nullptr;
     VkBuffer handle = VK_NULL_HANDLE;
     VmaAllocation  allocation = nullptr;
     uint64_t size = 0;
     uint64_t allocatedSize = 0;
     VkDeviceAddress gpuAddress = 0;
     void* pMappedData = nullptr;
+
+    ~VulkanBuffer() override;
+    void SetLabel(const char* label) override;
+
+    uint64_t GetSize() const override { return size; }
+    VGPUDeviceAddress GetGpuAddress() const override { return gpuAddress; }
 };
 
 struct VulkanTexture final : public VGPUTextureImpl
@@ -980,7 +987,6 @@ static VkSurfaceKHR vulkan_createSurface(VulkanRenderer* renderer, void* windowH
 }
 
 VGPUBuffer vulkan_createBuffer(VGPURenderer* driverData, const VGPUBufferDescriptor* desc, const void* pInitialData);
-void vulkan_destroyBuffer(VGPURenderer* driverData, VGPUBuffer resource);
 
 static Vulkan_UploadContext vulkan_AllocateUpload(VGPURenderer* driverData, uint64_t size)
 {
@@ -1030,7 +1036,9 @@ static Vulkan_UploadContext vulkan_AllocateUpload(VGPURenderer* driverData, uint
     {
         // Release old one first
         if (context.uploadBuffer)
-            vulkan_destroyBuffer(driverData, context.uploadBuffer);
+        {
+            vgpuBufferDestroy(context.uploadBuffer);
+        }
 
         uint64_t newSize = vgpuNextPowerOfTwo(size);
 
@@ -1298,6 +1306,23 @@ static void vulkan_ProcessDeletionQueue(VulkanRenderer* renderer)
     renderer->destroyMutex.unlock();
 }
 
+/* VulkanBuffer */
+VulkanBuffer::~VulkanBuffer()
+{
+    renderer->destroyMutex.lock();
+    if (allocation)
+    {
+        renderer->destroyedBuffers.push_back(std::make_pair(std::make_pair(handle, allocation), renderer->frameCount));
+    }
+    renderer->destroyMutex.unlock();
+}
+
+void VulkanBuffer::SetLabel(const char* label)
+{
+    vulkan_SetObjectName(renderer, VK_OBJECT_TYPE_BUFFER, (uint64_t)handle, label);
+}
+
+/* VulkanTexture */
 VulkanTexture::~VulkanTexture()
 {
     renderer->destroyMutex.lock();
@@ -1345,7 +1370,7 @@ static void vulkan_destroyDevice(VGPUDevice device)
     vkQueueWaitIdle(renderer->copyQueue);
     for (auto& x : renderer->uploadFreeList)
     {
-        vulkan_destroyBuffer(device->driverData, x.uploadBuffer);
+        vgpuBufferDestroy(x.uploadBuffer);
         vkDestroyCommandPool(renderer->device, x.commandPool, nullptr);
     }
     vkDestroySemaphore(renderer->device, renderer->uploadSemaphore, nullptr);
@@ -1623,6 +1648,8 @@ inline VGPUBuffer vulkan_createBuffer(VGPURenderer* driverData, const VGPUBuffer
     if (desc->handle)
     {
         VulkanBuffer* buffer = new VulkanBuffer();
+        buffer->renderer = renderer;
+        buffer->size = desc->size;
         buffer->handle = (VkBuffer)desc->handle;
         buffer->allocation = VK_NULL_HANDLE;
         buffer->allocatedSize = 0u;
@@ -1686,8 +1713,7 @@ inline VGPUBuffer vulkan_createBuffer(VGPURenderer* driverData, const VGPUBuffer
         bufferInfo.usage |= VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR;
     }
 
-    if (renderer->features_1_2.bufferDeviceAddress == VK_TRUE &&
-        desc->usage & (VGPUBufferUsage_Vertex | VGPUBufferUsage_Index | VGPUBufferUsage_RayTracing))
+    if (renderer->features_1_2.bufferDeviceAddress == VK_TRUE)
     {
         bufferInfo.usage |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
     }
@@ -1740,6 +1766,7 @@ inline VGPUBuffer vulkan_createBuffer(VGPURenderer* driverData, const VGPUBuffer
 
     VmaAllocationInfo allocationInfo{};
     VulkanBuffer* buffer = new VulkanBuffer();
+    buffer->renderer = renderer;
     VkResult result = vmaCreateBuffer(renderer->allocator, &bufferInfo, &memoryInfo,
         &buffer->handle,
         &buffer->allocation,
@@ -1865,36 +1892,13 @@ inline VGPUBuffer vulkan_createBuffer(VGPURenderer* driverData, const VGPUBuffer
         }
     }
 
-    return (VGPUBuffer)buffer;
-}
-
-inline void vulkan_destroyBuffer(VGPURenderer* driverData, VGPUBuffer resource)
-{
-    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
-    VulkanBuffer* buffer = (VulkanBuffer*)resource;
-
-    renderer->destroyMutex.lock();
-    if (buffer->allocation)
-    {
-        renderer->destroyedBuffers.push_back(std::make_pair(std::make_pair(buffer->handle, buffer->allocation), renderer->frameCount));
-    }
-    renderer->destroyMutex.unlock();
-
-    delete buffer;
+    return buffer;
 }
 
 inline VGPUDeviceAddress vulkan_buffer_get_device_address(VGPUBuffer resource)
 {
     VulkanBuffer* buffer = (VulkanBuffer*)resource;
     return buffer->gpuAddress;
-}
-
-inline void vulkan_bufferSetLabel(VGPURenderer* driverData, VGPUBuffer resource, const char* label)
-{
-    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
-    VulkanBuffer* buffer = (VulkanBuffer*)resource;
-
-    vulkan_SetObjectName(renderer, VK_OBJECT_TYPE_BUFFER, (uint64_t)buffer->handle, label);
 }
 
 /* Texture */

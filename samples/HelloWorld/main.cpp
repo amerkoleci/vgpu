@@ -27,7 +27,7 @@
 VGPUDevice device = nullptr;
 VGPUSwapChain* swapChain = nullptr;
 VGPUTexture depthStencilTexture = nullptr;
-VGPUBuffer vertex_buffer = nullptr;
+VGPUBuffer vertexBuffer = nullptr;
 VGPUBuffer index_buffer = nullptr;
 VGPUPipelineLayout pipelineLayout = nullptr;
 VGPUPipeline renderPipeline = nullptr;
@@ -165,7 +165,7 @@ void init_vgpu(GLFWwindow* window)
     vertex_buffer_desc.label = "Vertex Buffer";
     vertex_buffer_desc.size = sizeof(vertices);
     vertex_buffer_desc.usage = VGPUBufferUsage_Vertex;
-    vertex_buffer = vgpuCreateBuffer(device, &vertex_buffer_desc, vertices);
+    vertexBuffer = vgpuCreateBuffer(device, &vertex_buffer_desc, vertices);
 
     const uint16_t indices[] = {
         0, 1, 2,    // first triangle
@@ -287,7 +287,7 @@ void draw_frame()
         renderPass.depthStencilAttachment = &depthStencilAttachment;
         vgpuBeginRenderPass(commandBuffer, &renderPass);
         vgpuSetPipeline(commandBuffer, renderPipeline);
-        vgpuSetVertexBuffer(commandBuffer, 0, vertex_buffer, 0);
+        vgpuSetVertexBuffer(commandBuffer, 0, vertexBuffer, 0);
         vgpuSetIndexBuffer(commandBuffer, index_buffer, 0, VGPUIndexType_UInt16);
         vgpuDrawIndexed(commandBuffer, 6, 1, 0, 0, 0);
         vgpuEndRenderPass(commandBuffer);
@@ -321,8 +321,8 @@ int main()
     }
 
     vgpuWaitIdle(device);
-    vgpuDestroyBuffer(device, vertex_buffer);
-    vgpuDestroyBuffer(device, index_buffer);
+    vgpuBufferDestroy(vertexBuffer);
+    vgpuBufferDestroy(index_buffer);
     vgpuTextureDestroy(depthStencilTexture);
     vgpuDestroyPipelineLayout(device, pipelineLayout);
     vgpuDestroyPipeline(device, renderPipeline);

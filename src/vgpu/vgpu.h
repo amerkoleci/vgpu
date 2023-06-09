@@ -1,8 +1,8 @@
-// Copyright © Amer Koleci and Contributors.
+// Copyright © Amer Koleci.
 // Licensed under the MIT License (MIT). See LICENSE in the repository root for more information.
 
-#ifndef VGPU_H
-#define VGPU_H 1
+#ifndef _VGPU_H
+#define _VGPU_H 1
 
 #if defined(VGPU_SHARED_LIBRARY)
 #    if defined(_WIN32)
@@ -839,9 +839,12 @@ VGPU_API uint32_t vgpuGetFrameIndex(VGPUDevice device);
 
 /* Buffer */
 VGPU_API VGPUBuffer vgpuCreateBuffer(VGPUDevice device, const VGPUBufferDescriptor* descriptor, const void* init_data);
-VGPU_API void vgpuDestroyBuffer(VGPUDevice device, VGPUBuffer buffer);
-VGPU_API VGPUDeviceAddress vgpuGetBufferDeviceAddress(VGPUDevice device, VGPUBuffer buffer);
-VGPU_API void vgpuSetBufferLabel(VGPUDevice device, VGPUBuffer buffer, const char* label);
+VGPU_API void vgpuBufferDestroy(VGPUBuffer buffer);
+VGPU_API uint64_t vgpuBufferGetSize(VGPUBuffer buffer);
+VGPU_API VGPUDeviceAddress vgpuBufferGetAddress(VGPUBuffer buffer);
+VGPU_API void vgpuBufferSetLabel(VGPUBuffer buffer, const char* label);
+VGPU_API uint32_t vgpuBufferAddRef(VGPUBuffer buffer);
+VGPU_API uint32_t vgpuBufferRelease(VGPUBuffer buffer);
 
 /* Texture methods */
 VGPU_API VGPUTexture vgpuCreateTexture(VGPUDevice device, const VGPUTextureDesc* desc, const void* init_data);
@@ -935,4 +938,4 @@ VGPU_API uint32_t vgpuToVkFormat(VGPUTextureFormat format);
 
 VGPU_API VGPUBool32 vgpuStencilTestEnabled(const VGPUDepthStencilState* depthStencil);
 
-#endif /* VGPU_H */
+#endif /* _VGPU_H */

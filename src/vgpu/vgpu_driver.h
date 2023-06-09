@@ -1,8 +1,8 @@
-// Copyright © Amer Koleci and Contributors.
+// Copyright © Amer Koleci.
 // Licensed under the MIT License (MIT). See LICENSE in the repository root for more information.
 
-#ifndef VGPU_DRIVER_H_
-#define VGPU_DRIVER_H_ 1
+#ifndef _VGPU_DRIVER_H_
+#define _VGPU_DRIVER_H_ 1
 
 #include "vgpu.h"
 #include <stdlib.h> // malloc, free
@@ -132,6 +132,13 @@ private:
     std::atomic<uint32_t> refCount = 1;
 };
 
+struct VGPUBufferImpl : public VGPUObject
+{
+public:
+    virtual uint64_t GetSize() const = 0;
+    virtual VGPUDeviceAddress GetGpuAddress() const = 0;
+};
+
 struct VGPUTextureImpl : public VGPUObject
 {
 public:
@@ -177,9 +184,6 @@ typedef struct VGPUDeviceImpl
     void (*getLimits)(VGPURenderer* driverData, VGPULimits* limits);
 
     VGPUBuffer(*createBuffer)(VGPURenderer* driverData, const VGPUBufferDescriptor* desc, const void* pInitialData);
-    void(*destroyBuffer)(VGPURenderer* driverData, VGPUBuffer resource);
-    VGPUDeviceAddress(*buffer_get_device_address)(VGPUBuffer resource);
-    void(*bufferSetLabel)(VGPURenderer* driverData, VGPUBuffer resource, const char* label);
 
     VGPUTexture(*createTexture)(VGPURenderer* driverData, const VGPUTextureDesc* desc, const void* pInitialData);
 
@@ -242,9 +246,6 @@ ASSIGN_DRIVER_FUNC(queryFeature, name) \
 ASSIGN_DRIVER_FUNC(getAdapterProperties, name) \
 ASSIGN_DRIVER_FUNC(getLimits, name) \
 ASSIGN_DRIVER_FUNC(createBuffer, name) \
-ASSIGN_DRIVER_FUNC(destroyBuffer, name) \
-ASSIGN_DRIVER_FUNC(buffer_get_device_address, name) \
-ASSIGN_DRIVER_FUNC(bufferSetLabel, name) \
 ASSIGN_DRIVER_FUNC(createTexture, name) \
 ASSIGN_DRIVER_FUNC(createSampler, name) \
 ASSIGN_DRIVER_FUNC(destroySampler, name) \
@@ -276,4 +277,4 @@ _VGPU_EXTERN VGPUDriver D3D11_Driver;
 _VGPU_EXTERN VGPUDriver D3D12_Driver;
 //_VGPU_EXTERN VGPUDriver WebGPU_driver;
 
-#endif /* VGPU_DRIVER_H_ */
+#endif /* _VGPU_DRIVER_H_ */
