@@ -693,7 +693,7 @@ namespace
 
 struct VulkanRenderer;
 
-struct VulkanBuffer : public VGPUBufferImpl
+struct VulkanBuffer final : public VGPUBufferImpl
 {
     VulkanRenderer* renderer = nullptr;
     VkBuffer handle = VK_NULL_HANDLE;
@@ -728,9 +728,13 @@ struct VulkanTexture final : public VGPUTextureImpl
     VGPUTextureDimension GetDimension() const override { return dimension; }
 };
 
-struct VulkanSampler
+struct VulkanSampler final : public VGPUSamplerImpl
 {
+    VulkanRenderer* renderer = nullptr;
     VkSampler handle = VK_NULL_HANDLE;
+
+    ~VulkanSampler() override;
+    void SetLabel(const char* label) override;
 };
 
 struct VulkanShader
@@ -1037,7 +1041,7 @@ static Vulkan_UploadContext vulkan_AllocateUpload(VGPURenderer* driverData, uint
         // Release old one first
         if (context.uploadBuffer)
         {
-            vgpuBufferDestroy(context.uploadBuffer);
+            vgpuBufferRelease(context.uploadBuffer);
         }
 
         uint64_t newSize = vgpuNextPowerOfTwo(size);
@@ -1343,6 +1347,19 @@ void VulkanTexture::SetLabel(const char* label)
     vulkan_SetObjectName(renderer, VK_OBJECT_TYPE_IMAGE, (uint64_t)handle, label);
 }
 
+/* VulkanSampler */
+VulkanSampler::~VulkanSampler()
+{
+    renderer->destroyMutex.lock();
+    renderer->destroyedSamplers.push_back(std::make_pair(handle, renderer->frameCount));
+    renderer->destroyMutex.unlock();
+}
+
+void VulkanSampler::SetLabel(const char* label)
+{
+    vulkan_SetObjectName(renderer, VK_OBJECT_TYPE_SAMPLER, (uint64_t)handle, label);
+}
+
 static void vulkan_destroyDevice(VGPUDevice device)
 {
     VulkanRenderer* renderer = (VulkanRenderer*)device->driverData;
@@ -1370,7 +1387,7 @@ static void vulkan_destroyDevice(VGPUDevice device)
     vkQueueWaitIdle(renderer->copyQueue);
     for (auto& x : renderer->uploadFreeList)
     {
-        vgpuBufferDestroy(x.uploadBuffer);
+        vgpuBufferRelease(x.uploadBuffer);
         vkDestroyCommandPool(renderer->device, x.commandPool, nullptr);
     }
     vkDestroySemaphore(renderer->device, renderer->uploadSemaphore, nullptr);
@@ -2074,8 +2091,7 @@ static VGPUTexture vulkan_createTexture(VGPURenderer* driverData, const VGPUText
 static VGPUSampler vulkan_createSampler(VGPURenderer* driverData, const VGPUSamplerDesc* desc)
 {
     VulkanRenderer* renderer = (VulkanRenderer*)driverData;
-    VulkanSampler* sampler = new VulkanSampler();
-
+    
     VkSamplerCreateInfo createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
     createInfo.magFilter = ToVkFilter(desc->magFilter);
@@ -2113,6 +2129,8 @@ static VGPUSampler vulkan_createSampler(VGPURenderer* driverData, const VGPUSamp
     createInfo.borderColor = ToVkBorderColor(desc->borderColor);
     createInfo.unnormalizedCoordinates = VK_FALSE;
 
+    VulkanSampler* sampler = new VulkanSampler();
+    sampler->renderer = renderer;
     VkResult result = vkCreateSampler(renderer->device, &createInfo, nullptr, &sampler->handle);
 
     if (result != VK_SUCCESS)
@@ -2127,18 +2145,7 @@ static VGPUSampler vulkan_createSampler(VGPURenderer* driverData, const VGPUSamp
         vulkan_SetObjectName(renderer, VK_OBJECT_TYPE_SAMPLER, (uint64_t)sampler->handle, desc->label);
     }
 
-    return (VGPUSampler)sampler;
-}
-
-static void vulkan_destroySampler(VGPURenderer* driverData, VGPUSampler resource)
-{
-    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
-    VulkanSampler* sampler = (VulkanSampler*)resource;
-
-    renderer->destroyMutex.lock();
-    renderer->destroyedSamplers.push_back(std::make_pair(sampler->handle, renderer->frameCount));
-    renderer->destroyMutex.unlock();
-    delete sampler;
+    return sampler;
 }
 
 /* ShaderModule */

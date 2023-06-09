@@ -321,9 +321,9 @@ int main()
     }
 
     vgpuWaitIdle(device);
-    vgpuBufferDestroy(vertexBuffer);
-    vgpuBufferDestroy(index_buffer);
-    vgpuTextureDestroy(depthStencilTexture);
+    vgpuBufferRelease(vertexBuffer);
+    vgpuBufferRelease(index_buffer);
+    vgpuTextureRelease(depthStencilTexture);
     vgpuDestroyPipelineLayout(device, pipelineLayout);
     vgpuDestroyPipeline(device, renderPipeline);
     vgpuDestroySwapChain(device, swapChain);

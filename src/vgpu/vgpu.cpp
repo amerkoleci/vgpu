@@ -231,13 +231,6 @@ VGPUBuffer vgpuCreateBuffer(VGPUDevice device, const VGPUBufferDescriptor* descr
     return device->createBuffer(device->driverData, &desc_def, init_data);
 }
 
-void vgpuBufferDestroy(VGPUBuffer buffer)
-{
-    NULL_RETURN(buffer);
-
-    buffer->Release();
-}
-
 uint64_t vgpuBufferGetSize(VGPUBuffer buffer)
 {
     VGPU_ASSERT(buffer);
@@ -358,13 +351,6 @@ VGPUTexture vgpuCreateTexture(VGPUDevice device, const VGPUTextureDesc* desc, co
     return device->createTexture(device->driverData, &desc_def, init_data);
 }
 
-void vgpuTextureDestroy(VGPUTexture texture)
-{
-    NULL_RETURN(texture);
-
-    texture->Release();
-}
-
 VGPUTextureDimension vgpuTextureGetDimension(VGPUTexture texture)
 {
     return texture->GetDimension();
@@ -408,12 +394,25 @@ VGPUSampler vgpuCreateSampler(VGPUDevice device, const VGPUSamplerDesc* desc)
     return device->createSampler(device->driverData, &desc_def);
 }
 
-void vgpuDestroySampler(VGPUDevice device, VGPUSampler sampler)
+void vgpuSamplerSetLabel(VGPUSampler sampler, const char* label)
 {
-    VGPU_ASSERT(device);
     NULL_RETURN(sampler);
 
-    device->destroySampler(device->driverData, sampler);
+    sampler->SetLabel(label);
+}
+
+uint32_t vgpuSamplerAddRef(VGPUSampler sampler)
+{
+    assert(sampler);
+
+    return sampler->AddRef();
+}
+
+uint32_t vgpuSamplerRelease(VGPUSampler sampler)
+{
+    assert(sampler);
+
+    return sampler->Release();
 }
 
 /* Shader Module */

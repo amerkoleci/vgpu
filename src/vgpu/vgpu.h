@@ -839,7 +839,6 @@ VGPU_API uint32_t vgpuGetFrameIndex(VGPUDevice device);
 
 /* Buffer */
 VGPU_API VGPUBuffer vgpuCreateBuffer(VGPUDevice device, const VGPUBufferDescriptor* descriptor, const void* init_data);
-VGPU_API void vgpuBufferDestroy(VGPUBuffer buffer);
 VGPU_API uint64_t vgpuBufferGetSize(VGPUBuffer buffer);
 VGPU_API VGPUDeviceAddress vgpuBufferGetAddress(VGPUBuffer buffer);
 VGPU_API void vgpuBufferSetLabel(VGPUBuffer buffer, const char* label);
@@ -848,7 +847,6 @@ VGPU_API uint32_t vgpuBufferRelease(VGPUBuffer buffer);
 
 /* Texture methods */
 VGPU_API VGPUTexture vgpuCreateTexture(VGPUDevice device, const VGPUTextureDesc* desc, const void* init_data);
-VGPU_API void vgpuTextureDestroy(VGPUTexture texture);
 VGPU_API VGPUTextureDimension vgpuTextureGetDimension(VGPUTexture texture);
 VGPU_API void vgpuTextureSetLabel(VGPUTexture texture, const char* label);
 VGPU_API uint32_t vgpuTextureAddRef(VGPUTexture texture);
@@ -856,7 +854,9 @@ VGPU_API uint32_t vgpuTextureRelease(VGPUTexture texture);
 
 /* Sampler */
 VGPU_API VGPUSampler vgpuCreateSampler(VGPUDevice device, const VGPUSamplerDesc* desc);
-VGPU_API void vgpuDestroySampler(VGPUDevice device, VGPUSampler sampler);
+VGPU_API void vgpuSamplerSetLabel(VGPUSampler sampler, const char* label);
+VGPU_API uint32_t vgpuSamplerAddRef(VGPUSampler sampler);
+VGPU_API uint32_t vgpuSamplerRelease(VGPUSampler sampler);
 
 /* ShaderModule */
 VGPU_API VGPUShaderModule vgpuCreateShaderModule(VGPUDevice device, const void* pCode, size_t codeSize);

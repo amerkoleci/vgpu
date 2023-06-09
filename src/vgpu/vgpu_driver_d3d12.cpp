@@ -436,7 +436,7 @@ struct D3D12Resource
     D3D12_RESOURCE_STATES transitioningState = (D3D12_RESOURCE_STATES)-1;
 };
 
-struct D3D12Buffer : public VGPUBufferImpl, public D3D12Resource
+struct D3D12Buffer final : public VGPUBufferImpl, public D3D12Resource
 {
     D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint{};
     uint64_t size = 0;
@@ -467,9 +467,13 @@ struct D3D12Texture final : public VGPUTextureImpl, public D3D12Resource
     VGPUTextureDimension GetDimension() const override { return dimension; }
 };
 
-struct D3D12Sampler
+struct D3D12Sampler final : public VGPUSamplerImpl
 {
-    D3D12_CPU_DESCRIPTOR_HANDLE descriptor;
+    D3D12_Renderer* renderer = nullptr;
+    D3D12_CPU_DESCRIPTOR_HANDLE handle{};
+
+    ~D3D12Sampler() override;
+    void SetLabel(const char* label) override;
 };
 
 struct D3D12Shader
@@ -957,6 +961,16 @@ D3D12Texture::~D3D12Texture()
 void D3D12Texture::SetLabel(const char* label)
 {
     D3D12SetName(handle, label);
+}
+
+/* D3D12Sampler */
+D3D12Sampler::~D3D12Sampler()
+{
+    renderer->samplerAllocator.Free(handle);
+}
+
+void D3D12Sampler::SetLabel(const char*/* label*/)
+{
 }
 
 static void d3d12_destroyDevice(VGPUDevice device)
@@ -1632,19 +1646,12 @@ static VGPUSampler d3d12_createSampler(VGPURenderer* driverData, const VGPUSampl
     samplerDesc.MaxLOD = desc->lodMaxClamp;
 
     D3D12Sampler* sampler = new D3D12Sampler();
-    sampler->descriptor = renderer->samplerAllocator.Allocate();
-    renderer->device->CreateSampler(&samplerDesc, sampler->descriptor);
-    //sampler->bindlessIndex = AllocateBindlessSampler(sampler->descriptor);
+    sampler->renderer = renderer;
+    sampler->handle = renderer->samplerAllocator.Allocate();
+    renderer->device->CreateSampler(&samplerDesc, sampler->handle);
+    //sampler->bindlessIndex = AllocateBindlessSampler(sampler->handle);
 
     return (VGPUSampler)sampler;
-}
-
-static void d3d12_destroySampler(VGPURenderer* driverData, VGPUSampler resource)
-{
-    D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
-    D3D12Sampler* sampler = (D3D12Sampler*)resource;
-    renderer->samplerAllocator.Free(sampler->descriptor);
-    delete sampler;
 }
 
 /* ShaderModule */

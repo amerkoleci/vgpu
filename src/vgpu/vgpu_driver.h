@@ -145,6 +145,11 @@ public:
     virtual VGPUTextureDimension GetDimension() const = 0;
 };
 
+struct VGPUSamplerImpl : public VGPUObject
+{
+public:
+};
+
 typedef struct VGPUCommandBuffer_T {
     void (*pushDebugGroup)(VGPUCommandBufferImpl* driverData, const char* groupLabel);
     void (*popDebugGroup)(VGPUCommandBufferImpl* driverData);
@@ -188,7 +193,6 @@ typedef struct VGPUDeviceImpl
     VGPUTexture(*createTexture)(VGPURenderer* driverData, const VGPUTextureDesc* desc, const void* pInitialData);
 
     VGPUSampler(*createSampler)(VGPURenderer* driverData, const VGPUSamplerDesc* desc);
-    void(*destroySampler)(VGPURenderer* driverData, VGPUSampler resource);
 
     VGPUShaderModule(*createShaderModule)(VGPURenderer* driverData, const void* pCode, size_t codeSize);
     void(*destroyShaderModule)(VGPURenderer* driverData, VGPUShaderModule resource);
@@ -248,7 +252,6 @@ ASSIGN_DRIVER_FUNC(getLimits, name) \
 ASSIGN_DRIVER_FUNC(createBuffer, name) \
 ASSIGN_DRIVER_FUNC(createTexture, name) \
 ASSIGN_DRIVER_FUNC(createSampler, name) \
-ASSIGN_DRIVER_FUNC(destroySampler, name) \
 ASSIGN_DRIVER_FUNC(createShaderModule, name) \
 ASSIGN_DRIVER_FUNC(destroyShaderModule, name) \
 ASSIGN_DRIVER_FUNC(createPipelineLayout, name) \
