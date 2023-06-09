@@ -59,55 +59,7 @@ void vgpuSetLogCallback(VGPULogCallback func, void* userData) {
     s_userData = userData;
 }
 
-// Default allocation callbacks.
-void* vgpu_default_alloc(size_t size, void* user_data)
-{
-    VGPU_UNUSED(user_data);
-    void* ptr = malloc(size);
-    VGPU_ASSERT(ptr);
-    return ptr;
-}
-
-void vgpu_default_free(void* ptr, void* user_data)
-{
-    VGPU_UNUSED(user_data);
-    free(ptr);
-}
-
-const VGPUAllocationCallbacks VGPU_DEFAULT_ALLOC_CB = { vgpu_default_alloc, vgpu_default_free, NULL };
-
-const VGPUAllocationCallbacks* VGPU_ALLOC_CB = &VGPU_DEFAULT_ALLOC_CB;
-
-void vgpuSetAllocationCallbacks(const VGPUAllocationCallbacks* callback)
-{
-    if (callback == NULL) {
-        VGPU_ALLOC_CB = &VGPU_DEFAULT_ALLOC_CB;
-    }
-    else {
-        VGPU_ALLOC_CB = callback;
-    }
-}
-
-void* _vgpu_alloc(size_t size)
-{
-    void* ptr = VGPU_ALLOC_CB->allocate(size, VGPU_ALLOC_CB->user_data);
-    VGPU_ASSERT(ptr);
-    return ptr;
-}
-
-void* _vgpu_alloc_clear(size_t size)
-{
-    void* ptr = _vgpu_alloc(size);
-    memset(ptr, 0, size);
-    return ptr;
-}
-
-void _vgpu_free(void* ptr)
-{
-    VGPU_ALLOC_CB->free(ptr, VGPU_ALLOC_CB->user_data);
-}
-
-static const VGFXDriver* drivers[] = {
+static const VGPUDriver* drivers[] = {
     //#if defined(VGPU_D3D11_DRIVER)
     //    &D3D11_Driver,
     //#endif

@@ -823,13 +823,6 @@ typedef struct VGPULimits {
 typedef void (*VGPULogCallback)(VGPULogLevel level, const char* message, void* user_data);
 VGPU_API void vgpuSetLogCallback(VGPULogCallback func, void* userData);
 
-typedef struct VGPUAllocationCallbacks {
-    void* (*allocate)(size_t size, void* user_data);
-    void (*free)(void* ptr, void* user_data);
-    void* user_data;
-} VGPUAllocationCallbacks;
-VGPU_API void vgpuSetAllocationCallbacks(const VGPUAllocationCallbacks* callback);
-
 VGPU_API VGPUBool32 vgpuIsBackendSupported(VGPUBackend backend);
 VGPU_API VGPUDevice vgpuCreateDevice(const VGPUDeviceDescriptor* descriptor);
 VGPU_API void vgpuDestroyDevice(VGPUDevice device);

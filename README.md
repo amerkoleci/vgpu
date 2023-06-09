@@ -1,4 +1,4 @@
-[![Build status](https://github.com/amerkoleci/vgpu/workflows/Build/badge.svg)](https://github.com/amerkoleci/vgpu/actions)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://github.com/amerkoleci/vgpu/blob/main/LICENSE)
+[![Build status](https://github.com/amerkoleci/vlibs/workflows/Build/badge.svg)](https://github.com/amerkoleci/vlibs/actions)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://github.com/amerkoleci/vlibs/blob/main/LICENSE)
 
-**vgpu** is a cross-platform gpu library.
+**vlibs** is a collection of low lever cross-platform C libraries.

@@ -1427,7 +1427,7 @@ static void vulkan_destroyDevice(VGPUDevice device)
 #endif
 
     delete renderer;
-    VGPU_FREE(device);
+    delete device;
 }
 
 inline void vulkan_setLabel(VGPURenderer* driverData, const char* label)
@@ -2154,7 +2154,7 @@ static VGPUShaderModule vulkan_createShaderModule(VGPURenderer* driverData, cons
         return nullptr;
     }
 
-    VulkanShader* shader = VGPU_ALLOC(VulkanShader);
+    VulkanShader* shader = new VulkanShader();
     shader->handle = handle;
     return (VGPUShaderModule)shader;
 }
@@ -2175,7 +2175,7 @@ static void vulkan_destroyShaderModule(VGPURenderer* driverData, VGPUShaderModul
 static VGPUPipelineLayout vulkan_createPipelineLayout(VGPURenderer* driverData, const VGPUPipelineLayoutDescriptor* descriptor)
 {
     VulkanRenderer* renderer = (VulkanRenderer*)driverData;
-    VulkanPipelineLayout* layout = VGPU_ALLOC_CLEAR(VulkanPipelineLayout);
+    VulkanPipelineLayout* layout = new VulkanPipelineLayout();
     layout->descriptorSetLayouts.resize(descriptor->descriptorSetCount);
     layout->descriptorSetSpaces.resize(descriptor->descriptorSetCount);
 
@@ -2217,7 +2217,7 @@ static VGPUPipelineLayout vulkan_createPipelineLayout(VGPURenderer* driverData, 
     VkResult result = vkCreatePipelineLayout(renderer->device, &createInfo, nullptr, &layout->handle);
     if (result != VK_SUCCESS)
     {
-        VGPU_FREE(layout);
+        delete layout;
         return nullptr;
     }
 
@@ -2227,12 +2227,12 @@ static VGPUPipelineLayout vulkan_createPipelineLayout(VGPURenderer* driverData, 
 static void vulkan_destroyPipelineLayout(VGPURenderer* driverData, VGPUPipelineLayout resource)
 {
     VulkanRenderer* renderer = (VulkanRenderer*)driverData;
-    VulkanPipelineLayout* pipeline = (VulkanPipelineLayout*)resource;
+    VulkanPipelineLayout* layout = (VulkanPipelineLayout*)resource;
 
     renderer->destroyMutex.lock();
-    renderer->destroyedPipelineLayouts.push_back(std::make_pair(pipeline->handle, renderer->frameCount));
+    renderer->destroyedPipelineLayouts.push_back(std::make_pair(layout->handle, renderer->frameCount));
     renderer->destroyMutex.unlock();
-    VGPU_FREE(pipeline);
+    delete layout;
 }
 
 /* Pipeline */
@@ -2424,7 +2424,7 @@ static VGPUPipeline vulkan_createRenderPipeline(VGPURenderer* driverData, const 
         return nullptr;
     }
 
-    VulkanPipeline* pipeline = VGPU_ALLOC_CLEAR(VulkanPipeline);
+    VulkanPipeline* pipeline = new VulkanPipeline();
     pipeline->pipelineLayout = layout;
     pipeline->handle = handle;
     return (VGPUPipeline)pipeline;
@@ -2454,7 +2454,7 @@ static VGPUPipeline vulkan_createComputePipeline(VGPURenderer* driverData, const
         return nullptr;
     }
 
-    VulkanPipeline* pipeline = VGPU_ALLOC_CLEAR(VulkanPipeline);
+    VulkanPipeline* pipeline = new VulkanPipeline();
     pipeline->handle = handle;
     return (VGPUPipeline)pipeline;
 }
@@ -2464,7 +2464,7 @@ static VGPUPipeline vulkan_createRayTracingPipeline(VGPURenderer* driverData, co
     VGPU_UNUSED(driverData);
     VGPU_UNUSED(desc);
 
-    VulkanPipeline* pipeline = VGPU_ALLOC_CLEAR(VulkanPipeline);
+    VulkanPipeline* pipeline = new VulkanPipeline();
     return (VGPUPipeline)pipeline;
 }
 
@@ -2477,7 +2477,7 @@ static void vulkan_destroyPipeline(VGPURenderer* driverData, VGPUPipeline resour
     renderer->destroyedPipelines.push_back(std::make_pair(pipeline->handle, renderer->frameCount));
     renderer->destroyMutex.unlock();
 
-    VGPU_FREE(pipeline);
+    delete pipeline;
 }
 
 /* SwapChain */
@@ -3162,7 +3162,7 @@ static VGPUCommandBuffer vulkan_beginCommandBuffer(VGPURenderer* driverData, VGP
             //binderPools[i].Init(device);
         }
 
-        VGPUCommandBuffer_T* commandBuffer = VGPU_ALLOC_CLEAR(VGPUCommandBuffer_T);
+        VGPUCommandBuffer_T* commandBuffer = new VGPUCommandBuffer_T();
         ASSIGN_COMMAND_BUFFER(vulkan);
         commandBuffer->driverData = (VGPUCommandBufferImpl*)impl;
 
@@ -4349,14 +4349,14 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
     vgpu_log_info("VGPU Driver: Vulkan");
     vgpu_log_info("Vulkan Adapter: %s", renderer->properties2.properties.deviceName);
 
-    VGPUDeviceImpl* device = VGPU_ALLOC_CLEAR(VGPUDeviceImpl);
+    VGPUDeviceImpl* device = new VGPUDeviceImpl();
     ASSIGN_DRIVER(vulkan);
 
     device->driverData = (VGPURenderer*)renderer;
     return device;
 }
 
-VGFXDriver Vulkan_Driver = {
+VGPUDriver Vulkan_Driver = {
     VGPUBackend_Vulkan,
     vulkan_isSupported,
     vulkan_createDevice

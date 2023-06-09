@@ -11,17 +11,6 @@
 #include <assert.h>
 #include <atomic>
 
-// Custom allocation callbacks.
-_VGPU_EXTERN const VGPUAllocationCallbacks* VGPU_ALLOC_CB;
-
-#define VGPU_ALLOC(type)        ((type*)_vgpu_alloc(sizeof(type)))
-#define VGPU_ALLOC_CLEAR(type)  ((type*)_vgpu_alloc_clear(sizeof(type)))
-#define VGPU_FREE(ptr)          (VGPU_ALLOC_CB->free(ptr, VGPU_ALLOC_CB->user_data))
-
-_VGPU_EXTERN void* _vgpu_alloc(size_t size);
-_VGPU_EXTERN void* _vgpu_alloc_clear(size_t size);
-_VGPU_EXTERN void _vgpu_free(void* ptr);
-
 #ifndef VGPU_ASSERT
 #   include <assert.h>
 #   define VGPU_ASSERT(c) assert(c)
@@ -275,16 +264,16 @@ ASSIGN_DRIVER_FUNC(submit, name) \
 ASSIGN_DRIVER_FUNC(getFrameCount, name) \
 ASSIGN_DRIVER_FUNC(getFrameIndex, name) \
 
-typedef struct VGFXDriver
+typedef struct VGPUDriver
 {
     VGPUBackend backend;
     VGPUBool32(*is_supported)(void);
     VGPUDeviceImpl* (*createDevice)(const VGPUDeviceDescriptor* descriptor);
-} VGFXDriver;
+} VGPUDriver;
 
-_VGPU_EXTERN VGFXDriver Vulkan_Driver;
-_VGPU_EXTERN VGFXDriver D3D11_Driver;
-_VGPU_EXTERN VGFXDriver D3D12_Driver;
-//_VGPU_EXTERN VGFXDriver WebGPU_driver;
+_VGPU_EXTERN VGPUDriver Vulkan_Driver;
+_VGPU_EXTERN VGPUDriver D3D11_Driver;
+_VGPU_EXTERN VGPUDriver D3D12_Driver;
+//_VGPU_EXTERN VGPUDriver WebGPU_driver;
 
 #endif /* VGPU_DRIVER_H_ */
