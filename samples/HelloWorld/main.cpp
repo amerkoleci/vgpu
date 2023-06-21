@@ -25,7 +25,7 @@
 #include <vgpu.h>
 
 VGPUDevice device = nullptr;
-VGPUSwapChain* swapChain = nullptr;
+VGPUSwapChain swapChain = nullptr;
 VGPUTexture depthStencilTexture = nullptr;
 VGPUBuffer vertexBuffer = nullptr;
 VGPUBuffer index_buffer = nullptr;
@@ -184,7 +184,7 @@ void init_vgpu(GLFWwindow* window)
     pipelineLayout = vgpuCreatePipelineLayout(device, &pipelineLayoutDesc);
 
     RenderPipelineColorAttachmentDesc colorAttachment{};
-    colorAttachment.format = vgpuGetSwapChainFormat(device, swapChain);
+    colorAttachment.format = vgpuSwapChainGetFormat(swapChain);
 
     std::array<VGPUVertexAttribute, 2> vertexAttributes = {};
     // Attribute location 0: Position
@@ -288,7 +288,7 @@ void draw_frame()
         vgpuBeginRenderPass(commandBuffer, &renderPass);
         vgpuSetPipeline(commandBuffer, renderPipeline);
         vgpuSetVertexBuffer(commandBuffer, 0, vertexBuffer, 0);
-        vgpuSetIndexBuffer(commandBuffer, index_buffer, 0, VGPUIndexType_UInt16);
+        vgpuSetIndexBuffer(commandBuffer, index_buffer, VGPUIndexType_Uint16, 0);
         vgpuDrawIndexed(commandBuffer, 6, 1, 0, 0, 0);
         vgpuEndRenderPass(commandBuffer);
     }
@@ -326,7 +326,7 @@ int main()
     vgpuTextureRelease(depthStencilTexture);
     vgpuDestroyPipelineLayout(device, pipelineLayout);
     vgpuPipelineRelease(renderPipeline);
-    vgpuDestroySwapChain(device, swapChain);
+    vgpuSwapChainRelease(swapChain);
     vgpuDestroyDevice(device);
     glfwDestroyWindow(window);
     glfwTerminate();

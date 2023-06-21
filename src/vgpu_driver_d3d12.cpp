@@ -3,6 +3,25 @@
 
 #if defined(VGPU_D3D12_DRIVER)
 
+// Use the C++ standard templated min/max
+#define NOMINMAX
+
+// DirectX apps don't need GDI
+#define NODRAWTEXT
+#define NOGDI
+#define NOBITMAP
+
+// Include <mcx.h> if you need this
+#define NOMCX
+
+// Include <winsvc.h> if you need this
+#define NOSERVICE
+
+// WinHelp is deprecated
+#define NOHELP
+
+#define WIN32_LEAN_AND_MEAN
+#include <Windows.h>
 
 #include <dxgi1_6.h>
 #include <directx/d3d12.h>
@@ -557,18 +576,23 @@ struct D3D12QueryHeap final : public VGPUQueryHeapImpl
     void SetLabel(const char* label) override;
 };
 
-struct D3D12_SwapChain
+struct D3D12_SwapChain final : public VGPUSwapChainImpl
 {
+    D3D12_Renderer* renderer = nullptr;
 #if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
     HWND window = nullptr;
 #else
     IUnknown* window = nullptr;
 #endif
     IDXGISwapChain3* handle = nullptr;
-    VGPUTextureFormat format;
+    VGPUTextureFormat colorFormat;
     uint32_t backBufferCount;
     uint32_t syncInterval;
     std::vector<D3D12Texture*> backbufferTextures;
+
+    ~D3D12_SwapChain() override;
+    void SetLabel(const char* label) override;
+    VGPUTextureFormat GetFormat() const override { return colorFormat; }
 };
 
 struct D3D12_UploadContext
@@ -1169,7 +1193,7 @@ static void d3d12_updateSwapChain(D3D12_Renderer* renderer, D3D12_SwapChain* swa
         texture->state = D3D12_RESOURCE_STATE_PRESENT;
         texture->width = swapChainDesc.Width;
         texture->height = swapChainDesc.Height;
-        texture->dxgiFormat = ToDxgiFormat(swapChain->format);
+        texture->dxgiFormat = ToDxgiFormat(swapChain->colorFormat);
         hr = swapChain->handle->GetBuffer(i, IID_PPV_ARGS(&texture->handle));
         VGPU_ASSERT(SUCCEEDED(hr));
 
@@ -1209,61 +1233,64 @@ static VGPUBackend d3d12_getBackendType(void)
     return VGPUBackend_D3D12;
 }
 
-static VGPUBool32 d3d12_queryFeature(VGPURenderer* driverData, VGPUFeature feature, void* pInfo, uint32_t infoSize)
+static VGPUBool32 d3d12_queryFeature(VGPURenderer* driverData, VGPUFeature feature)
 {
-    (void)pInfo;
-    (void)infoSize;
-
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
     switch (feature)
     {
-        case VGPUFeature_TextureCompressionBC:
-        case VGPUFeature_ShaderFloat16:
-        case VGPUFeature_PipelineStatisticsQuery:
-        case VGPUFeature_TimestampQuery:
-        case VGPUFeature_DepthClamping:
-        case VGPUFeature_Depth24UNormStencil8:
+        case VGPUFeature_DepthClipControl:
         case VGPUFeature_Depth32FloatStencil8:
-        case VGPUFeature_IndependentBlend:
-        case VGPUFeature_TextureCubeArray:
-        case VGPUFeature_Tessellation:
+        case VGPUFeature_TimestampQuery:
+        case VGPUFeature_PipelineStatisticsQuery:
+        case VGPUFeature_TextureCompressionBC:
+        case VGPUFeature_IndirectFirstInstance:
+        case VGPUFeature_GeometryShader:
+        case VGPUFeature_TessellationShader:
         case VGPUFeature_DescriptorIndexing:
         case VGPUFeature_Predication:
-        case VGPUFeature_DrawIndirectFirstInstance:
             return true;
 
         case VGPUFeature_TextureCompressionETC2:
         case VGPUFeature_TextureCompressionASTC:
             return false;
 
-        case VGPUFeature_ShaderOutputViewportIndex:
-            return renderer->d3dFeatures.VPAndRTArrayIndexFromAnyShaderFeedingRasterizerSupportedWithoutGSEmulation() == TRUE;
+        case VGPUFeature_ShaderFloat16:
+            //const bool supportsDP4a = d3dFeatures.HighestShaderModel() >= D3D_SHADER_MODEL_6_4;
+            return renderer->d3dFeatures.HighestShaderModel() >= D3D_SHADER_MODEL_6_2 && renderer->d3dFeatures.Native16BitShaderOpsSupported();
+
+        case VGPUFeature_DepthBoundsTest:
+            return (renderer->d3dFeatures.DepthBoundsTestSupported() == TRUE);
+
+        case VGPUFeature_SamplerAnisotropy:
+            return true;
 
             // https://docs.microsoft.com/en-us/windows/win32/direct3d11/tiled-resources-texture-sampling-features
         case VGPUFeature_SamplerMinMax:
-            return renderer->d3dFeatures.TiledResourcesTier() >= D3D12_TILED_RESOURCES_TIER_2;
-
-        case VGPUFeature_MeshShader:
-            if (renderer->d3dFeatures.MeshShaderTier() >= D3D12_MESH_SHADER_TIER_1)
+            if (renderer->d3dFeatures.TiledResourcesTier() >= D3D12_TILED_RESOURCES_TIER_2)
             {
-                return true;
+                // Tier 2 for tiled resources
+                // https://learn.microsoft.com/en-us/windows/win32/direct3d11/tiled-resources-texture-sampling-features
             }
 
-            return false;
+            return (renderer->d3dFeatures.MaxSupportedFeatureLevel() >= D3D_FEATURE_LEVEL_11_1);
+
+        case VGPUFeature_ShaderOutputViewportIndex:
+            return (renderer->d3dFeatures.VPAndRTArrayIndexFromAnyShaderFeedingRasterizerSupportedWithoutGSEmulation() == TRUE);
+
+        case VGPUFeature_VariableRateShading:
+            return (renderer->d3dFeatures.VariableShadingRateTier() >= D3D12_VARIABLE_SHADING_RATE_TIER_1);
+
+        case VGPUFeature_VariableRateShadingTier2:
+            return (renderer->d3dFeatures.VariableShadingRateTier() >= D3D12_VARIABLE_SHADING_RATE_TIER_2);
 
         case VGPUFeature_RayTracing:
-            if (renderer->d3dFeatures.RaytracingTier() >= D3D12_RAYTRACING_TIER_1_1)
-            {
-                if (infoSize == sizeof(uint32_t))
-                {
-                    auto* pShaderGroupHandleSize = reinterpret_cast<uint32_t*>(pInfo);
-                    *pShaderGroupHandleSize = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
-                }
+            return (renderer->d3dFeatures.RaytracingTier() >= D3D12_RAYTRACING_TIER_1_0);
 
-                return true;
-            }
-            return false;
+        case VGPUFeature_RayTracingTier2:
+            return (renderer->d3dFeatures.RaytracingTier() >= D3D12_RAYTRACING_TIER_1_1);
 
+        case VGPUFeature_MeshShader:
+            return (renderer->d3dFeatures.MeshShaderTier() >= D3D12_MESH_SHADER_TIER_1);;
 
         default:
             return false;
@@ -1323,6 +1350,16 @@ static void d3d12_getLimits(VGPURenderer* driverData, VGPULimits* limits)
     limits->maxViewportDimensions[0] = D3D12_VIEWPORT_BOUNDS_MAX;
     limits->maxViewportDimensions[1] = D3D12_VIEWPORT_BOUNDS_MAX;
     limits->maxColorAttachments = D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT;
+
+    if (renderer->d3dFeatures.RaytracingTier() >= D3D12_RAYTRACING_TIER_1_0)
+    {
+        limits->rayTracingShaderGroupIdentifierSize = D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT;
+        limits->rayTracingShaderTableAligment = D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT;
+        limits->rayTracingShaderTableMaxStride = std::numeric_limits<uint64_t>::max();
+        limits->rayTracingShaderRecursionMaxDepth = D3D12_RAYTRACING_MAX_DECLARABLE_TRACE_RECURSION_DEPTH;
+        limits->rayTracingMaxGeometryCount = (1 << 24) - 1;
+    }
+
 }
 
 static void d3d12_setLabel(VGPURenderer* driverData, const char* label)
@@ -2047,7 +2084,22 @@ static VGPUQueryHeap d3d12_createQueryHeap(VGPURenderer* driverData, const VGPUQ
 }
 
 /* SwapChain */
-static VGPUSwapChain* d3d12_createSwapChain(VGPURenderer* driverData, void* windowHandle, const VGPUSwapChainDesc* desc)
+D3D12_SwapChain::~D3D12_SwapChain()
+{
+    for (size_t i = 0, count = backbufferTextures.size(); i < count; ++i)
+    {
+        backbufferTextures[i]->Release();
+    }
+    backbufferTextures.clear();
+    handle->Release();
+}
+
+void D3D12_SwapChain::SetLabel(const char* label)
+{
+    VGPU_UNUSED(label);
+}
+
+static VGPUSwapChain d3d12_createSwapChain(VGPURenderer* driverData, void* windowHandle, const VGPUSwapChainDesc* desc)
 {
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
 
@@ -2143,35 +2195,16 @@ static VGPUSwapChain* d3d12_createSwapChain(VGPURenderer* driverData, void* wind
     SAFE_RELEASE(tempSwapChain);
 
     D3D12_SwapChain* swapChain = new D3D12_SwapChain();
+    swapChain->renderer = renderer;
     swapChain->window = window;
     swapChain->handle = handle;
-    swapChain->format = desc->format;
+    swapChain->colorFormat = desc->format;
     swapChain->backBufferCount = swapChainDesc.BufferCount;
     swapChain->syncInterval = PresentModeToSwapInterval(desc->presentMode);
     d3d12_updateSwapChain(renderer, swapChain);
-    return (VGPUSwapChain*)swapChain;
+    return swapChain;
 }
 
-static void d3d12_destroySwapChain(VGPURenderer* driverData, VGPUSwapChain* swapChain)
-{
-    VGPU_UNUSED(driverData);
-    D3D12_SwapChain* d3d12SwapChain = (D3D12_SwapChain*)swapChain;
-
-    for (size_t i = 0, count = d3d12SwapChain->backbufferTextures.size(); i < count; ++i)
-    {
-        delete d3d12SwapChain->backbufferTextures[i];
-    }
-    d3d12SwapChain->backbufferTextures.clear();
-    d3d12SwapChain->handle->Release();
-
-    delete d3d12SwapChain;
-}
-
-static VGPUTextureFormat d3d12_getSwapChainFormat(VGPURenderer*, VGPUSwapChain* swapChain)
-{
-    D3D12_SwapChain* d3dSwapChain = (D3D12_SwapChain*)swapChain;
-    return d3dSwapChain->format;
-}
 
 static constexpr UINT PIX_EVENT_UNICODE_VERSION = 0;
 
@@ -2300,7 +2333,7 @@ static void d3d12_dispatchIndirect(VGPUCommandBufferImpl* driverData, VGPUBuffer
         0);
 }
 
-static VGPUTexture d3d12_acquireSwapchainTexture(VGPUCommandBufferImpl* driverData, VGPUSwapChain* swapChain, uint32_t* pWidth, uint32_t* pHeight)
+static VGPUTexture d3d12_acquireSwapchainTexture(VGPUCommandBufferImpl* driverData, VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight)
 {
     D3D12CommandBuffer* commandBuffer = (D3D12CommandBuffer*)driverData;
     D3D12_SwapChain* d3d12SwapChain = (D3D12_SwapChain*)swapChain;
@@ -2540,7 +2573,7 @@ static void d3d12_setVertexBuffer(VGPUCommandBufferImpl* driverData, uint32_t in
     commandBuffer->vboViews[index].StrideInBytes = 0;
 }
 
-static void d3d12_setIndexBuffer(VGPUCommandBufferImpl* driverData, VGPUBuffer buffer, uint64_t offset, VGPUIndexType type)
+static void d3d12_setIndexBuffer(VGPUCommandBufferImpl* driverData, VGPUBuffer buffer, VGPUIndexType type, uint64_t offset)
 {
     D3D12CommandBuffer* commandBuffer = (D3D12CommandBuffer*)driverData;
     D3D12Buffer* d3d12Buffer = (D3D12Buffer*)buffer;
@@ -2548,7 +2581,7 @@ static void d3d12_setIndexBuffer(VGPUCommandBufferImpl* driverData, VGPUBuffer b
     D3D12_INDEX_BUFFER_VIEW view;
     view.BufferLocation = d3d12Buffer->gpuAddress + (D3D12_GPU_VIRTUAL_ADDRESS)offset;
     view.SizeInBytes = (UINT)(d3d12Buffer->size - offset);
-    view.Format = (type == VGPUIndexType_UInt16 ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT);
+    view.Format = (type == VGPUIndexType_Uint16 ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT);
     commandBuffer->commandList->IASetIndexBuffer(&view);
 }
 
@@ -2981,10 +3014,12 @@ static VGPUDeviceImpl* d3d12_createDevice(const VGPUDeviceDescriptor* info)
     {
         ComPtr<IDXGIFactory6> dxgiFactory6;
         const bool queryByPreference = SUCCEEDED(renderer->factory.As(&dxgiFactory6));
+        const DXGI_GPU_PREFERENCE gpuPreference = (info->powerPreference == VGPUPowerPreference_LowPower) ? DXGI_GPU_PREFERENCE_MINIMUM_POWER : DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE;
+
         auto NextAdapter = [&](uint32_t index, IDXGIAdapter1** ppAdapter)
         {
             if (queryByPreference)
-                return dxgiFactory6->EnumAdapterByGpuPreference(index, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, IID_PPV_ARGS(ppAdapter));
+                return dxgiFactory6->EnumAdapterByGpuPreference(index, gpuPreference, IID_PPV_ARGS(ppAdapter));
             else
                 return renderer->factory->EnumAdapters1(index, ppAdapter);
         };

@@ -139,6 +139,12 @@ struct VGPUSamplerImpl : public VGPUObject
 public:
 };
 
+struct VGPUPipelineLayoutImpl : public VGPUObject
+{
+public:
+    virtual VGPUPipelineType GetType() const = 0;
+};
+
 struct VGPUPipelineImpl : public VGPUObject
 {
 public:
@@ -150,6 +156,12 @@ struct VGPUQueryHeapImpl : public VGPUObject
 public:
 };
 
+struct VGPUSwapChainImpl : public VGPUObject
+{
+public:
+    virtual VGPUTextureFormat GetFormat() const = 0;
+};
+
 typedef struct VGPUCommandBuffer_T {
     void (*pushDebugGroup)(VGPUCommandBufferImpl* driverData, const char* groupLabel);
     void (*popDebugGroup)(VGPUCommandBufferImpl* driverData);
@@ -159,7 +171,7 @@ typedef struct VGPUCommandBuffer_T {
     void (*dispatch)(VGPUCommandBufferImpl* driverData, uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ);
     void (*dispatchIndirect)(VGPUCommandBufferImpl* driverData, VGPUBuffer buffer, uint64_t offset);
 
-    VGPUTexture(*acquireSwapchainTexture)(VGPUCommandBufferImpl* driverData, VGPUSwapChain* swapChain, uint32_t* pWidth, uint32_t* pHeight);
+    VGPUTexture(*acquireSwapchainTexture)(VGPUCommandBufferImpl* driverData, VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight);
     void (*beginRenderPass)(VGPUCommandBufferImpl* driverData, const VGPURenderPassDesc* desc);
     void (*endRenderPass)(VGPUCommandBufferImpl* driverData);
 
@@ -167,7 +179,7 @@ typedef struct VGPUCommandBuffer_T {
     void (*setViewports)(VGPUCommandBufferImpl* driverData, uint32_t count, const VGPUViewport* viewports);
     void (*setScissorRect)(VGPUCommandBufferImpl* driverData, const VGPURect* rects);
     void (*setVertexBuffer)(VGPUCommandBufferImpl* driverData, uint32_t index, VGPUBuffer buffer, uint64_t offset);
-    void (*setIndexBuffer)(VGPUCommandBufferImpl* driverData, VGPUBuffer buffer, uint64_t offset, VGPUIndexType type);
+    void (*setIndexBuffer)(VGPUCommandBufferImpl* driverData, VGPUBuffer buffer, VGPUIndexType type, uint64_t offset);
     void (*setStencilReference)(VGPUCommandBufferImpl* driverData, uint32_t reference);
 
     void (*draw)(VGPUCommandBufferImpl* driverData, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t firstInstance);
@@ -184,7 +196,7 @@ typedef struct VGPUDeviceImpl
 
     void (*waitIdle)(VGPURenderer* driverData);
     VGPUBackend(*getBackendType)(void);
-    VGPUBool32(*queryFeature)(VGPURenderer* driverData, VGPUFeature feature, void* pInfo, uint32_t infoSize);
+    VGPUBool32(*queryFeature)(VGPURenderer* driverData, VGPUFeature feature);
     void (*getAdapterProperties)(VGPURenderer* driverData, VGPUAdapterProperties* properties);
     void (*getLimits)(VGPURenderer* driverData, VGPULimits* limits);
 
@@ -206,9 +218,7 @@ typedef struct VGPUDeviceImpl
 
     VGPUQueryHeap(*createQueryHeap)(VGPURenderer* driverData, const VGPUQueryHeapDescriptor* descriptor);
 
-    VGPUSwapChain* (*createSwapChain)(VGPURenderer* driverData, void* windowHandle, const VGPUSwapChainDesc* desc);
-    void(*destroySwapChain)(VGPURenderer* driverData, VGPUSwapChain* swapChain);
-    VGPUTextureFormat(*getSwapChainFormat)(VGPURenderer* driverData, VGPUSwapChain* swapChain);
+    VGPUSwapChain (*createSwapChain)(VGPURenderer* driverData, void* windowHandle, const VGPUSwapChainDesc* desc);
 
     VGPUCommandBuffer(*beginCommandBuffer)(VGPURenderer* driverData, VGPUCommandQueue queueType, const char* label);
     uint64_t(*submit)(VGPURenderer* driverData, VGPUCommandBuffer* commandBuffers, uint32_t count);
@@ -262,8 +272,6 @@ ASSIGN_DRIVER_FUNC(createComputePipeline, name) \
 ASSIGN_DRIVER_FUNC(createRayTracingPipeline, name) \
 ASSIGN_DRIVER_FUNC(createQueryHeap, name) \
 ASSIGN_DRIVER_FUNC(createSwapChain, name) \
-ASSIGN_DRIVER_FUNC(destroySwapChain, name) \
-ASSIGN_DRIVER_FUNC(getSwapChainFormat, name) \
 ASSIGN_DRIVER_FUNC(beginCommandBuffer, name) \
 ASSIGN_DRIVER_FUNC(submit, name) \
 ASSIGN_DRIVER_FUNC(getFrameCount, name) \
@@ -272,7 +280,7 @@ ASSIGN_DRIVER_FUNC(getFrameIndex, name) \
 typedef struct VGPUDriver
 {
     VGPUBackend backend;
-    VGPUBool32(*is_supported)(void);
+    VGPUBool32(*isSupported)(void);
     VGPUDeviceImpl* (*createDevice)(const VGPUDeviceDescriptor* descriptor);
 } VGPUDriver;
 

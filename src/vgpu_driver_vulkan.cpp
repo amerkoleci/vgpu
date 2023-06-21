@@ -180,6 +180,8 @@ namespace
         bool depth_clip_enable;
         bool driver_properties;
         bool memory_budget;
+        bool AMD_device_coherent_memory;
+        bool memory_priority;
         bool performance_query;
         bool host_query_reset;
         bool deferred_host_operations;
@@ -191,9 +193,7 @@ namespace
         bool NV_mesh_shader;
         bool EXT_conditional_rendering;
         bool win32_full_screen_exclusive;
-        bool vertex_attribute_divisor;
         bool extended_dynamic_state;
-        bool vertex_input_dynamic_state;
         bool extended_dynamic_state2;
         bool dynamicRendering;
     };
@@ -218,11 +218,17 @@ namespace
             else if (strcmp(vk_extensions[i].extensionName, VK_EXT_DEPTH_CLIP_ENABLE_EXTENSION_NAME) == 0) {
                 extensions.depth_clip_enable = true;
             }
-            else if (strcmp(vk_extensions[i].extensionName, "VK_KHR_driver_properties") == 0) {
+            else if (strcmp(vk_extensions[i].extensionName, VK_KHR_DRIVER_PROPERTIES_EXTENSION_NAME) == 0) {
                 extensions.driver_properties = true;
             }
             else if (strcmp(vk_extensions[i].extensionName, VK_EXT_MEMORY_BUDGET_EXTENSION_NAME) == 0) {
                 extensions.memory_budget = true;
+            }
+            else if (strcmp(vk_extensions[i].extensionName, VK_AMD_DEVICE_COHERENT_MEMORY_EXTENSION_NAME) == 0) {
+                extensions.AMD_device_coherent_memory = true;
+            }
+            else if (strcmp(vk_extensions[i].extensionName, VK_EXT_MEMORY_PRIORITY_EXTENSION_NAME) == 0) {
+                extensions.memory_priority = true;
             }
             else if (strcmp(vk_extensions[i].extensionName, VK_KHR_PERFORMANCE_QUERY_EXTENSION_NAME) == 0) {
                 extensions.performance_query = true;
@@ -257,14 +263,8 @@ namespace
             else if (strcmp(vk_extensions[i].extensionName, VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME) == 0) {
                 extensions.dynamicRendering = true;
             }
-            else if (strcmp(vk_extensions[i].extensionName, VK_EXT_VERTEX_ATTRIBUTE_DIVISOR_EXTENSION_NAME) == 0) {
-                extensions.vertex_attribute_divisor = true;
-            }
             else if (strcmp(vk_extensions[i].extensionName, VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME) == 0) {
                 extensions.extended_dynamic_state = true;
-            }
-            else if (strcmp(vk_extensions[i].extensionName, VK_EXT_VERTEX_INPUT_DYNAMIC_STATE_EXTENSION_NAME) == 0) {
-                extensions.vertex_input_dynamic_state = true;
             }
             else if (strcmp(vk_extensions[i].extensionName, VK_EXT_EXTENDED_DYNAMIC_STATE_2_EXTENSION_NAME) == 0) {
                 extensions.extended_dynamic_state2 = true;
@@ -797,7 +797,7 @@ struct VulkanQueryHeap final : public VGPUQueryHeapImpl
     void SetLabel(const char* label) override;
 };
 
-struct VulkanSwapChain
+struct VulkanSwapChain final : public VGPUSwapChainImpl
 {
     VulkanRenderer* renderer = nullptr;
     VkSurfaceKHR surface = VK_NULL_HANDLE;
@@ -811,6 +811,10 @@ struct VulkanSwapChain
 
     VkSemaphore acquireSemaphore = VK_NULL_HANDLE;
     VkSemaphore releaseSemaphore = VK_NULL_HANDLE;
+
+    ~VulkanSwapChain() override;
+    void SetLabel(const char* label) override;
+    VGPUTextureFormat GetFormat() const override { return colorFormat; }
 };
 
 struct VulkanCommandBuffer
@@ -853,35 +857,38 @@ struct VulkanRenderer
     VkDebugUtilsMessengerEXT debugUtilsMessenger;
 
     PhysicalDeviceExtensions supportedExtensions;
+
+    // Features
+    VkPhysicalDeviceFeatures2 features2 = {};
+    VkPhysicalDeviceVulkan11Features features1_1 = {};
+    VkPhysicalDeviceVulkan12Features features1_2 = {};
+    VkPhysicalDeviceVulkan13Features features_1_3 = {};
+
+    VkPhysicalDeviceDepthClipEnableFeaturesEXT depthClipEnableFeatures = {};
+    VkPhysicalDevicePerformanceQueryFeaturesKHR perf_counter_features = {};
+    VkPhysicalDeviceHostQueryResetFeatures host_query_reset_features = {};
+    VkPhysicalDeviceAccelerationStructureFeaturesKHR acceleration_structure_features = {};
+    VkPhysicalDeviceRayTracingPipelineFeaturesKHR raytracing_features = {};
+    VkPhysicalDeviceRayQueryFeaturesKHR raytracing_query_features = {};
+    VkPhysicalDeviceFragmentShadingRateFeaturesKHR fragmentShadingRateFeatures = {};
+    VkPhysicalDeviceMeshShaderFeaturesNV mesh_shader_features = {};
+    VkPhysicalDeviceConditionalRenderingFeaturesEXT conditional_rendering_features = {};
+    VkPhysicalDeviceExtendedDynamicStateFeaturesEXT extendedDynamicStateFeatures = {};
+    VkPhysicalDeviceExtendedDynamicState2FeaturesEXT extendedDynamicState2Features = {};
+
+    // Properties
     VkPhysicalDeviceDriverProperties driverProperties;
     VkPhysicalDeviceProperties2 properties2 = {};
     VkPhysicalDeviceVulkan11Properties properties_1_1 = {};
     VkPhysicalDeviceVulkan12Properties properties_1_2 = {};
     VkPhysicalDeviceVulkan13Properties properties_1_3 = {};
     VkPhysicalDeviceSamplerFilterMinmaxProperties sampler_minmax_properties = {};
-    VkPhysicalDeviceAccelerationStructurePropertiesKHR acceleration_structure_properties = {};
-    VkPhysicalDeviceRayTracingPipelinePropertiesKHR raytracing_properties = {};
-    VkPhysicalDeviceFragmentShadingRatePropertiesKHR fragment_shading_rate_properties = {};
+
+    VkPhysicalDeviceAccelerationStructurePropertiesKHR accelerationStructureProperties = {};
+    VkPhysicalDeviceRayTracingPipelinePropertiesKHR rayTracingPipelineProperties = {};
+    VkPhysicalDeviceFragmentShadingRatePropertiesKHR fragmentShadingRateProperties = {};
     VkPhysicalDeviceMeshShaderPropertiesNV mesh_shader_properties = {};
 
-    VkPhysicalDeviceFeatures2 features2 = {};
-    VkPhysicalDeviceVulkan11Features features_1_1 = {};
-    VkPhysicalDeviceVulkan12Features features_1_2 = {};
-    VkPhysicalDeviceVulkan13Features features_1_3 = {};
-
-    VkPhysicalDeviceAccelerationStructureFeaturesKHR acceleration_structure_features = {};
-    VkPhysicalDeviceRayTracingPipelineFeaturesKHR raytracing_features = {};
-    VkPhysicalDeviceRayQueryFeaturesKHR raytracing_query_features = {};
-    VkPhysicalDeviceFragmentShadingRateFeaturesKHR fragment_shading_rate_features = {};
-    VkPhysicalDeviceMeshShaderFeaturesNV mesh_shader_features = {};
-    VkPhysicalDeviceConditionalRenderingFeaturesEXT conditional_rendering_features = {};
-    VkPhysicalDeviceDepthClipEnableFeaturesEXT depthClipEnableFeatures = {};
-    VkPhysicalDevicePerformanceQueryFeaturesKHR perf_counter_features = {};
-    VkPhysicalDeviceHostQueryResetFeatures host_query_reset_features = {};
-    VkPhysicalDeviceVertexAttributeDivisorFeaturesEXT vertexDivisorFeatures = {};
-    VkPhysicalDeviceExtendedDynamicStateFeaturesEXT extendedDynamicStateFeatures = {};
-    VkPhysicalDeviceExtendedDynamicState2FeaturesEXT extendedDynamicState2Features = {};
-    VkPhysicalDeviceVertexInputDynamicStateFeaturesEXT vertexInputDynamicStateFeatures = {};
     VkDeviceSize minAllocationAlignment{ 0 };
     std::string driverDescription;
 
@@ -1545,14 +1552,25 @@ static VGPUBackend vulkan_getBackendType(void)
     return VGPUBackend_Vulkan;
 }
 
-static VGPUBool32 vulkan_queryFeature(VGPURenderer* driverData, VGPUFeature feature, void* pInfo, uint32_t infoSize)
+static VGPUBool32 vulkan_queryFeature(VGPURenderer* driverData, VGPUFeature feature)
 {
-    (void)pInfo;
-    (void)infoSize;
-
     VulkanRenderer* renderer = (VulkanRenderer*)driverData;
     switch (feature)
     {
+        case VGPUFeature_DepthClipControl:
+            return
+                renderer->features2.features.depthClamp == VK_TRUE &&
+                renderer->depthClipEnableFeatures.depthClipEnable == VK_TRUE;
+
+        case VGPUFeature_Depth32FloatStencil8:
+            return IsDepthStencilFormatSupported(renderer->physicalDevice, VK_FORMAT_D32_SFLOAT_S8_UINT);
+
+        case VGPUFeature_TimestampQuery:
+            return renderer->properties2.properties.limits.timestampComputeAndGraphics == VK_TRUE;
+
+        case VGPUFeature_PipelineStatisticsQuery:
+            return renderer->features2.features.pipelineStatisticsQuery == VK_TRUE;
+
         case VGPUFeature_TextureCompressionBC:
             return renderer->features2.features.textureCompressionBC;
 
@@ -1562,67 +1580,67 @@ static VGPUBool32 vulkan_queryFeature(VGPURenderer* driverData, VGPUFeature feat
         case VGPUFeature_TextureCompressionASTC:
             return renderer->features2.features.textureCompressionASTC_LDR;
 
+        case VGPUFeature_IndirectFirstInstance:
+            return renderer->features2.features.drawIndirectFirstInstance == VK_TRUE;
+
         case VGPUFeature_ShaderFloat16:
-            return renderer->features_1_2.shaderFloat16 == VK_TRUE;
+            // VK_KHR_16bit_storage core in 1.1
+            // VK_KHR_shader_float16_int8 core in 1.2
+            return renderer->features1_2.shaderFloat16 == VK_TRUE;
 
-        case VGPUFeature_PipelineStatisticsQuery:
-            return renderer->features2.features.pipelineStatisticsQuery == VK_TRUE;
+        case VGPUFeature_GeometryShader:
+            return renderer->features2.features.geometryShader == VK_TRUE;
 
-        case VGPUFeature_TimestampQuery:
-            return renderer->properties2.properties.limits.timestampComputeAndGraphics == VK_TRUE;
-
-        case VGPUFeature_DepthClamping:
-            return renderer->features2.features.depthClamp == VK_TRUE;
-
-        case VGPUFeature_Depth24UNormStencil8:
-            return IsDepthStencilFormatSupported(renderer->physicalDevice, VK_FORMAT_D24_UNORM_S8_UINT);
-
-        case VGPUFeature_Depth32FloatStencil8:
-            return IsDepthStencilFormatSupported(renderer->physicalDevice, VK_FORMAT_D32_SFLOAT_S8_UINT);
-
-        case VGPUFeature_TextureCubeArray:
-            return renderer->features2.features.imageCubeArray == VK_TRUE;
-
-        case VGPUFeature_IndependentBlend:
-            return renderer->features2.features.independentBlend == VK_TRUE;
-
-        case VGPUFeature_Tessellation:
+        case VGPUFeature_TessellationShader:
             return renderer->features2.features.tessellationShader == VK_TRUE;
 
+        case VGPUFeature_DepthBoundsTest:
+            return renderer->features2.features.depthBounds == VK_TRUE;
+
+        case VGPUFeature_SamplerAnisotropy:
+            return renderer->features2.features.samplerAnisotropy == VK_TRUE;
+
+        case VGPUFeature_SamplerMinMax:
+            return renderer->features1_2.samplerFilterMinmax == VK_TRUE;
+
         case VGPUFeature_DescriptorIndexing:
-            return renderer->features_1_2.descriptorIndexing == VK_TRUE;
+            //VGPU_ASSERT(renderer->features1_2.descriptorIndexing == VK_TRUE);
+            //VGPU_ASSERT(renderer->features1_2.runtimeDescriptorArray == VK_TRUE);
+            //VGPU_ASSERT(renderer->features1_2.descriptorBindingPartiallyBound == VK_TRUE);
+            //VGPU_ASSERT(renderer->features1_2.descriptorBindingVariableDescriptorCount == VK_TRUE);
+            //VGPU_ASSERT(renderer->features1_2.shaderSampledImageArrayNonUniformIndexing == VK_TRUE);
+            return renderer->features1_2.descriptorIndexing == VK_TRUE;
 
         case VGPUFeature_Predication:
             return renderer->conditional_rendering_features.conditionalRendering == VK_TRUE;
 
-        case VGPUFeature_DrawIndirectFirstInstance:
-            return renderer->features2.features.drawIndirectFirstInstance == VK_TRUE;
-
         case VGPUFeature_ShaderOutputViewportIndex:
-            return renderer->features_1_2.shaderOutputLayer == VK_TRUE && renderer->features_1_2.shaderOutputViewportIndex == VK_TRUE;
+            return renderer->features1_2.shaderOutputLayer == VK_TRUE && renderer->features1_2.shaderOutputViewportIndex == VK_TRUE;
 
-        case VGPUFeature_SamplerMinMax:
-            return renderer->features_1_2.samplerFilterMinmax == VK_TRUE;
+        case VGPUFeature_VariableRateShading:
+            return (renderer->fragmentShadingRateFeatures.pipelineFragmentShadingRate == VK_TRUE);
 
-        case VGPUFeature_MeshShader:
-            return renderer->mesh_shader_features.meshShader == VK_TRUE && renderer->mesh_shader_features.taskShader == VK_TRUE;
+        case VGPUFeature_VariableRateShadingTier2:
+            return (renderer->fragmentShadingRateFeatures.attachmentFragmentShadingRate == VK_TRUE);
 
         case VGPUFeature_RayTracing:
-            if (renderer->raytracing_features.rayTracingPipeline == VK_TRUE &&
-                renderer->raytracing_query_features.rayQuery == VK_TRUE &&
+            if (renderer->features1_2.bufferDeviceAddress == VK_TRUE &&
                 renderer->acceleration_structure_features.accelerationStructure == VK_TRUE &&
-                renderer->features_1_2.bufferDeviceAddress == VK_TRUE)
+                renderer->raytracing_features.rayTracingPipeline == VK_TRUE
+                )
             {
-                if (infoSize == sizeof(uint32_t))
-                {
-                    auto* pShaderGroupHandleSize = reinterpret_cast<uint32_t*>(pInfo);
-                    *pShaderGroupHandleSize = renderer->raytracing_properties.shaderGroupHandleSize;
-                }
-
                 return true;
             }
 
             return false;
+
+        case VGPUFeature_RayTracingTier2:
+            return vulkan_queryFeature(driverData, VGPUFeature_RayTracing) & (renderer->raytracing_query_features.rayQuery == VK_TRUE);
+
+
+        case VGPUFeature_MeshShader:
+            return renderer->mesh_shader_features.meshShader == VK_TRUE && renderer->mesh_shader_features.taskShader == VK_TRUE;
+
 
         default:
             return false;
@@ -1708,6 +1726,15 @@ static void vulkan_getLimits(VGPURenderer* driverData, VGPULimits* limits)
     limits->maxViewportDimensions[1] = renderer->properties2.properties.limits.maxViewportDimensions[1];
     limits->maxColorAttachments = renderer->properties2.properties.limits.maxColorAttachments;
 
+    if (vulkan_queryFeature(driverData, VGPUFeature_RayTracing))
+    {
+        limits->rayTracingShaderGroupIdentifierSize = renderer->rayTracingPipelineProperties.shaderGroupHandleSize;
+        limits->rayTracingShaderTableAligment = renderer->rayTracingPipelineProperties.shaderGroupBaseAlignment;
+        limits->rayTracingShaderTableMaxStride = renderer->rayTracingPipelineProperties.maxShaderGroupStride;
+        limits->rayTracingShaderRecursionMaxDepth = renderer->rayTracingPipelineProperties.maxRayRecursionDepth;
+        limits->rayTracingMaxGeometryCount = (uint32_t)renderer->accelerationStructureProperties.maxGeometryCount;
+    }
+
 #undef SET_LIMIT_FROM_VULKAN
 }
 
@@ -1757,6 +1784,7 @@ inline VGPUBuffer vulkan_createBuffer(VGPURenderer* driverData, const VGPUBuffer
 
     if (desc->usage & VGPUBufferUsage_ShaderRead)
     {
+        // ReadOnly ByteAddressBuffer is also storage buffer
         bufferInfo.usage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
         bufferInfo.usage |= VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT;
     }
@@ -1780,12 +1808,12 @@ inline VGPUBuffer vulkan_createBuffer(VGPURenderer* driverData, const VGPUBuffer
 
     if (desc->usage & VGPUBufferUsage_RayTracing)
     {
-        //bufferInfo.usage |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR;
+        bufferInfo.usage |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR;
         bufferInfo.usage |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
         bufferInfo.usage |= VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR;
     }
 
-    if (renderer->features_1_2.bufferDeviceAddress == VK_TRUE)
+    if (renderer->features1_2.bufferDeviceAddress == VK_TRUE)
     {
         bufferInfo.usage |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
     }
@@ -2540,7 +2568,7 @@ static VGPUPipeline vulkan_createRayTracingPipeline(VGPURenderer* driverData, co
     return pipeline;
 }
 
-/* QueryHeap */
+/* VulkanQueryHeap */
 VulkanQueryHeap::~VulkanQueryHeap()
 {
 }
@@ -2548,6 +2576,44 @@ VulkanQueryHeap::~VulkanQueryHeap()
 void VulkanQueryHeap::SetLabel(const char* label)
 {
     vulkan_SetObjectName(renderer, VK_OBJECT_TYPE_QUERY_POOL, (uint64_t)handle, label);
+}
+
+/* VulkanSwapChain */
+VulkanSwapChain::~VulkanSwapChain()
+{
+    for (size_t i = 0, count = backbufferTextures.size(); i < count; ++i)
+    {
+        backbufferTextures[i]->Release();
+    }
+
+    if (acquireSemaphore != VK_NULL_HANDLE)
+    {
+        vkDestroySemaphore(renderer->device, acquireSemaphore, nullptr);
+        acquireSemaphore = VK_NULL_HANDLE;
+    }
+
+    if (releaseSemaphore != VK_NULL_HANDLE)
+    {
+        vkDestroySemaphore(renderer->device, releaseSemaphore, nullptr);
+        releaseSemaphore = VK_NULL_HANDLE;
+    }
+
+    if (handle != VK_NULL_HANDLE)
+    {
+        vkDestroySwapchainKHR(renderer->device, handle, nullptr);
+        handle = VK_NULL_HANDLE;
+    }
+
+    if (surface != VK_NULL_HANDLE)
+    {
+        vkDestroySurfaceKHR(renderer->instance, surface, nullptr);
+        surface = VK_NULL_HANDLE;
+    }
+}
+
+void VulkanSwapChain::SetLabel(const char* label)
+{
+    vulkan_SetObjectName(renderer, VK_OBJECT_TYPE_SWAPCHAIN_KHR, (uint64_t)handle, label);
 }
 
 static VGPUQueryHeap vulkan_createQueryHeap(VGPURenderer* driverData, const VGPUQueryHeapDescriptor* descriptor)
@@ -2739,7 +2805,7 @@ static void vulkan_updateSwapChain(VulkanRenderer* renderer, VulkanSwapChain* sw
     swapChain->extent = createInfo.imageExtent;
 }
 
-static VGPUSwapChain* vulkan_createSwapChain(VGPURenderer* driverData, void* windowHandle, const VGPUSwapChainDesc* desc)
+static VGPUSwapChain vulkan_createSwapChain(VGPURenderer* driverData, void* windowHandle, const VGPUSwapChainDesc* desc)
 {
     VulkanRenderer* renderer = (VulkanRenderer*)driverData;
     VkSurfaceKHR vk_surface = vulkan_createSurface(renderer, windowHandle);
@@ -2756,6 +2822,7 @@ static VGPUSwapChain* vulkan_createSwapChain(VGPURenderer* driverData, void* win
     }
 
     VulkanSwapChain* swapChain = new VulkanSwapChain();
+    swapChain->renderer = renderer;
     swapChain->surface = vk_surface;
     swapChain->extent.width = desc->width;
     swapChain->extent.height = desc->height;
@@ -2763,51 +2830,7 @@ static VGPUSwapChain* vulkan_createSwapChain(VGPURenderer* driverData, void* win
     swapChain->vsync = desc->presentMode == VGPUPresentMode_Fifo;
     vulkan_updateSwapChain(renderer, swapChain);
 
-    return (VGPUSwapChain*)swapChain;
-}
-
-static void vulkan_destroySwapChain(VGPURenderer* driverData, VGPUSwapChain* swapChain)
-{
-    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
-    VulkanSwapChain* vulkanSwapChain = (VulkanSwapChain*)swapChain;
-    //vulkan_destroyTexture(nullptr, d3dSwapChain->backbufferTexture);
-
-    for (size_t i = 0, count = vulkanSwapChain->backbufferTextures.size(); i < count; ++i)
-    {
-        delete vulkanSwapChain->backbufferTextures[i];
-    }
-
-    if (vulkanSwapChain->acquireSemaphore != VK_NULL_HANDLE)
-    {
-        vkDestroySemaphore(renderer->device, vulkanSwapChain->acquireSemaphore, nullptr);
-        vulkanSwapChain->acquireSemaphore = VK_NULL_HANDLE;
-    }
-
-    if (vulkanSwapChain->releaseSemaphore != VK_NULL_HANDLE)
-    {
-        vkDestroySemaphore(renderer->device, vulkanSwapChain->releaseSemaphore, nullptr);
-        vulkanSwapChain->releaseSemaphore = VK_NULL_HANDLE;
-    }
-
-    if (vulkanSwapChain->handle != VK_NULL_HANDLE)
-    {
-        vkDestroySwapchainKHR(renderer->device, vulkanSwapChain->handle, nullptr);
-        vulkanSwapChain->handle = VK_NULL_HANDLE;
-    }
-
-    if (vulkanSwapChain->surface != VK_NULL_HANDLE)
-    {
-        vkDestroySurfaceKHR(renderer->instance, vulkanSwapChain->surface, nullptr);
-        vulkanSwapChain->surface = VK_NULL_HANDLE;
-    }
-
-    delete vulkanSwapChain;
-}
-
-static VGPUTextureFormat vulkan_getSwapChainFormat(VGPURenderer*, VGPUSwapChain* swapChain)
-{
-    VulkanSwapChain* vulkanSwapChain = (VulkanSwapChain*)swapChain;
-    return vulkanSwapChain->colorFormat;
+    return swapChain;
 }
 
 /* Commands */
@@ -2918,7 +2941,7 @@ static void vulkan_dispatchIndirect(VGPUCommandBufferImpl* driverData, VGPUBuffe
     vkCmdDispatchIndirect(commandBuffer->handle, vulkanBuffer->handle, offset);
 }
 
-static VGPUTexture vulkan_acquireSwapchainTexture(VGPUCommandBufferImpl* driverData, VGPUSwapChain* swapChain, uint32_t* pWidth, uint32_t* pHeight)
+static VGPUTexture vulkan_acquireSwapchainTexture(VGPUCommandBufferImpl* driverData, VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight)
 {
     VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
     VulkanSwapChain* vulkanSwapChain = (VulkanSwapChain*)swapChain;
@@ -3126,11 +3149,11 @@ static void vulkan_setVertexBuffer(VGPUCommandBufferImpl* driverData, uint32_t i
     vkCmdBindVertexBuffers(commandBuffer->handle, index, 1, &vulkanBuffer->handle, &offset);
 }
 
-static void vulkan_setIndexBuffer(VGPUCommandBufferImpl* driverData, VGPUBuffer buffer, uint64_t offset, VGPUIndexType type)
+static void vulkan_setIndexBuffer(VGPUCommandBufferImpl* driverData, VGPUBuffer buffer, VGPUIndexType type, uint64_t offset)
 {
     VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
     VulkanBuffer* vulkanBuffer = (VulkanBuffer*)buffer;
-    const VkIndexType vkIndexType = (type == VGPUIndexType_UInt16) ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32;
+    const VkIndexType vkIndexType = (type == VGPUIndexType_Uint16) ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32;
     vkCmdBindIndexBuffer(commandBuffer->handle, vulkanBuffer->handle, offset, vkIndexType);
 }
 
@@ -3648,7 +3671,7 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
         appInfo.applicationVersion = 1;
         appInfo.pEngineName = "vgpu";
         appInfo.engineVersion = VK_MAKE_VERSION(VGPU_VERSION_MAJOR, VGPU_VERSION_MINOR, VGPU_VERSION_PATCH);
-        appInfo.apiVersion = VK_HEADER_VERSION_COMPLETE;
+        appInfo.apiVersion = VK_API_VERSION_1_3;
 
         VkInstanceCreateInfo createInfo;
         createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -3753,7 +3776,7 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
         std::vector<VkPhysicalDevice> physicalDevices(deviceCount);
         VK_CHECK(vkEnumeratePhysicalDevices(renderer->instance, &deviceCount, physicalDevices.data()));
 
-        std::vector<const char*> enabledExtensions;
+        std::vector<const char*> enabledDeviceExtensions;
         for (const VkPhysicalDevice& candidatePhysicalDevice : physicalDevices)
         {
             // We require minimum 1.1
@@ -3772,51 +3795,114 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
                 continue;
             }
 
+            // For debug purpose
+            //gpuProps.apiVersion = VK_API_VERSION_1_2;
+
+            // Features
+            void** features_chain = nullptr;
             renderer->features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-            renderer->features_1_1.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
-            renderer->features_1_2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+            renderer->features1_1.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
+            renderer->features1_2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
             renderer->features_1_3.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
             renderer->depthClipEnableFeatures = {};
-
-            renderer->features2.pNext = &renderer->features_1_1;
-            renderer->features_1_1.pNext = &renderer->features_1_2;
-            renderer->features_1_2.pNext = &renderer->features_1_3;
-
-            void** features_chain = &renderer->features_1_3.pNext;
             renderer->acceleration_structure_features = {};
             renderer->raytracing_features = {};
             renderer->raytracing_query_features = {};
-            renderer->fragment_shading_rate_features = {};
+            renderer->fragmentShadingRateFeatures = {};
             renderer->mesh_shader_features = {};
 
+            renderer->features2.pNext = &renderer->features1_1;
+            if (gpuProps.apiVersion >= VK_API_VERSION_1_3)
+            {
+                renderer->features1_1.pNext = &renderer->features1_2;
+                renderer->features1_2.pNext = &renderer->features_1_3;
+                features_chain = &renderer->features_1_3.pNext;
+            }
+            else if (gpuProps.apiVersion >= VK_API_VERSION_1_2)
+            {
+                renderer->features1_1.pNext = &renderer->features1_2;
+                features_chain = &renderer->features1_2.pNext;
+            }
+            else
+            {
+                features_chain = &renderer->features1_1.pNext;
+            }
+
+            // Properties
+            void** propertiesChain = nullptr;
             renderer->driverProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES;
             renderer->properties2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
             renderer->properties_1_1.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_PROPERTIES;
             renderer->properties_1_2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_PROPERTIES;
             renderer->properties_1_3.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_PROPERTIES;
-            renderer->properties2.pNext = &renderer->properties_1_1;
-            renderer->properties_1_1.pNext = &renderer->properties_1_2;
-            renderer->properties_1_2.pNext = &renderer->properties_1_3;
-
-            void** properties_chain = &renderer->properties_1_3.pNext;
             renderer->sampler_minmax_properties = {};
-            renderer->acceleration_structure_properties = {};
-            renderer->raytracing_properties = {};
-            renderer->fragment_shading_rate_properties = {};
+            renderer->accelerationStructureProperties = {};
+            renderer->rayTracingPipelineProperties = {};
+            renderer->fragmentShadingRateProperties = {};
             renderer->mesh_shader_properties = {};
 
-            renderer->sampler_minmax_properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SAMPLER_FILTER_MINMAX_PROPERTIES;
-            *properties_chain = &renderer->sampler_minmax_properties;
-            properties_chain = &renderer->sampler_minmax_properties.pNext;
-
-            enabledExtensions.clear();
-            enabledExtensions.push_back("VK_KHR_swapchain");
-
-            if (physicalDeviceExt.driver_properties)
+            renderer->properties2.pNext = &renderer->properties_1_1;
+            if (gpuProps.apiVersion >= VK_API_VERSION_1_3)
             {
-                enabledExtensions.push_back("VK_KHR_driver_properties");
-                *properties_chain = &renderer->driverProperties;
-                properties_chain = &renderer->driverProperties.pNext;
+                renderer->properties_1_1.pNext = &renderer->properties_1_2;
+                renderer->properties_1_2.pNext = &renderer->properties_1_3;
+                propertiesChain = &renderer->properties_1_3.pNext;
+            }
+            else if (gpuProps.apiVersion >= VK_API_VERSION_1_2)
+            {
+                renderer->properties_1_1.pNext = &renderer->properties_1_2;
+                propertiesChain = &renderer->properties_1_2.pNext;
+            }
+            else
+            {
+                propertiesChain = &renderer->properties_1_1.pNext;
+            }
+
+            renderer->sampler_minmax_properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SAMPLER_FILTER_MINMAX_PROPERTIES;
+            *propertiesChain = &renderer->sampler_minmax_properties;
+            propertiesChain = &renderer->sampler_minmax_properties.pNext;
+
+            enabledDeviceExtensions.clear();
+            enabledDeviceExtensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+
+            if (physicalDeviceExt.memory_budget)
+            {
+                enabledDeviceExtensions.push_back(VK_EXT_MEMORY_BUDGET_EXTENSION_NAME);
+            }
+
+            if (physicalDeviceExt.AMD_device_coherent_memory)
+            {
+                enabledDeviceExtensions.push_back(VK_AMD_DEVICE_COHERENT_MEMORY_EXTENSION_NAME);
+            }
+
+            if (physicalDeviceExt.memory_priority)
+            {
+                enabledDeviceExtensions.push_back(VK_EXT_MEMORY_PRIORITY_EXTENSION_NAME);
+            }
+
+            // Core in 1.2
+            if (gpuProps.apiVersion < VK_API_VERSION_1_2)
+            {
+                if (physicalDeviceExt.driver_properties)
+                {
+                    enabledDeviceExtensions.push_back(VK_KHR_DRIVER_PROPERTIES_EXTENSION_NAME);
+
+                    *propertiesChain = &renderer->driverProperties;
+                    propertiesChain = &renderer->driverProperties.pNext;
+                }
+
+                if (physicalDeviceExt.renderPass2)
+                {
+                    enabledDeviceExtensions.push_back(VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME);
+                }
+            }
+            else if (gpuProps.apiVersion < VK_API_VERSION_1_3)
+            {
+                // Core in 1.3
+                //if (strcmp(deviceExtensions[i].extensionName, VK_KHR_MAINTENANCE_4_EXTENSION_NAME) == 0)
+                //{
+                //    maintenance4Supported = true;
+                //}
             }
 
             // For performance queries, we also use host query reset since queryPool resets cannot live in the same command buffer as beginQuery
@@ -3824,24 +3910,19 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
                 physicalDeviceExt.host_query_reset)
             {
                 renderer->perf_counter_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PERFORMANCE_QUERY_FEATURES_KHR;
-                enabledExtensions.push_back(VK_KHR_PERFORMANCE_QUERY_EXTENSION_NAME);
+                enabledDeviceExtensions.push_back(VK_KHR_PERFORMANCE_QUERY_EXTENSION_NAME);
                 *features_chain = &renderer->perf_counter_features;
                 features_chain = &renderer->perf_counter_features.pNext;
 
                 renderer->host_query_reset_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_HOST_QUERY_RESET_FEATURES;
-                enabledExtensions.push_back(VK_EXT_HOST_QUERY_RESET_EXTENSION_NAME);
+                enabledDeviceExtensions.push_back(VK_EXT_HOST_QUERY_RESET_EXTENSION_NAME);
                 *features_chain = &renderer->host_query_reset_features;
                 features_chain = &renderer->host_query_reset_features.pNext;
             }
 
-            if (physicalDeviceExt.memory_budget)
-            {
-                enabledExtensions.push_back("VK_EXT_memory_budget");
-            }
-
             if (physicalDeviceExt.depth_clip_enable)
             {
-                enabledExtensions.push_back(VK_EXT_DEPTH_CLIP_ENABLE_EXTENSION_NAME);
+                enabledDeviceExtensions.push_back(VK_EXT_DEPTH_CLIP_ENABLE_EXTENSION_NAME);
 
                 renderer->depthClipEnableFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEPTH_CLIP_ENABLE_FEATURES_EXT;
                 *features_chain = &renderer->depthClipEnableFeatures;
@@ -3865,104 +3946,91 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
                 //enabledExtensions.push_back(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
             }
 
+            if (physicalDeviceExt.deferred_host_operations)
+            {
+                enabledDeviceExtensions.push_back(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME);
+            }
+
             if (physicalDeviceExt.accelerationStructure)
             {
+                // Required by VK_KHR_acceleration_structure
                 VGPU_ASSERT(physicalDeviceExt.deferred_host_operations);
 
-                // Required by VK_KHR_acceleration_structure
-                enabledExtensions.push_back(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME);
+                enabledDeviceExtensions.push_back(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME);
 
-                enabledExtensions.push_back(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME);
                 renderer->acceleration_structure_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
                 *features_chain = &renderer->acceleration_structure_features;
                 features_chain = &renderer->acceleration_structure_features.pNext;
-                renderer->acceleration_structure_properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_PROPERTIES_KHR;
-                *properties_chain = &renderer->acceleration_structure_properties;
-                properties_chain = &renderer->acceleration_structure_properties.pNext;
+
+                renderer->accelerationStructureProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_PROPERTIES_KHR;
+                *propertiesChain = &renderer->accelerationStructureProperties;
+                propertiesChain = &renderer->accelerationStructureProperties.pNext;
 
                 if (physicalDeviceExt.raytracingPipeline)
                 {
-                    enabledExtensions.push_back(VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME);
+                    enabledDeviceExtensions.push_back(VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME);
                     renderer->raytracing_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR;
                     *features_chain = &renderer->raytracing_features;
                     features_chain = &renderer->raytracing_features.pNext;
-                    renderer->raytracing_properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR;
-                    *properties_chain = &renderer->raytracing_properties;
-                    properties_chain = &renderer->raytracing_properties.pNext;
+
+                    renderer->rayTracingPipelineProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR;
+                    *propertiesChain = &renderer->rayTracingPipelineProperties;
+                    propertiesChain = &renderer->rayTracingPipelineProperties.pNext;
                 }
 
                 if (physicalDeviceExt.rayQuery)
                 {
-                    enabledExtensions.push_back(VK_KHR_RAY_QUERY_EXTENSION_NAME);
+                    enabledDeviceExtensions.push_back(VK_KHR_RAY_QUERY_EXTENSION_NAME);
                     renderer->raytracing_query_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR;
                     *features_chain = &renderer->raytracing_query_features;
                     features_chain = &renderer->raytracing_query_features.pNext;
                 }
             }
 
-            if (physicalDeviceExt.renderPass2)
-            {
-                enabledExtensions.push_back(VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME);
-            }
-
             if (physicalDeviceExt.fragment_shading_rate)
             {
                 VGPU_ASSERT(physicalDeviceExt.renderPass2 == true);
-                enabledExtensions.push_back(VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME);
-                renderer->fragment_shading_rate_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_FEATURES_KHR;
-                *features_chain = &renderer->fragment_shading_rate_features;
-                features_chain = &renderer->fragment_shading_rate_features.pNext;
-                renderer->fragment_shading_rate_properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_PROPERTIES_KHR;
-                *properties_chain = &renderer->fragment_shading_rate_properties;
-                properties_chain = &renderer->fragment_shading_rate_properties.pNext;
+                enabledDeviceExtensions.push_back(VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME);
+
+                renderer->fragmentShadingRateFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_FEATURES_KHR;
+                *features_chain = &renderer->fragmentShadingRateFeatures;
+                features_chain = &renderer->fragmentShadingRateFeatures.pNext;
+
+                renderer->fragmentShadingRateProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_PROPERTIES_KHR;
+                *propertiesChain = &renderer->fragmentShadingRateProperties;
+                propertiesChain = &renderer->fragmentShadingRateProperties.pNext;
             }
 
             if (physicalDeviceExt.NV_mesh_shader)
             {
-                enabledExtensions.push_back(VK_NV_MESH_SHADER_EXTENSION_NAME);
+                enabledDeviceExtensions.push_back(VK_NV_MESH_SHADER_EXTENSION_NAME);
                 renderer->mesh_shader_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_NV;
                 *features_chain = &renderer->mesh_shader_features;
                 features_chain = &renderer->mesh_shader_features.pNext;
                 renderer->mesh_shader_properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_PROPERTIES_NV;
-                *properties_chain = &renderer->mesh_shader_properties;
-                properties_chain = &renderer->mesh_shader_properties.pNext;
+                *propertiesChain = &renderer->mesh_shader_properties;
+                propertiesChain = &renderer->mesh_shader_properties.pNext;
             }
 
             if (physicalDeviceExt.EXT_conditional_rendering)
             {
-                enabledExtensions.push_back(VK_EXT_CONDITIONAL_RENDERING_EXTENSION_NAME);
+                enabledDeviceExtensions.push_back(VK_EXT_CONDITIONAL_RENDERING_EXTENSION_NAME);
                 renderer->conditional_rendering_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_CONDITIONAL_RENDERING_FEATURES_EXT;
                 *features_chain = &renderer->conditional_rendering_features;
                 features_chain = &renderer->conditional_rendering_features.pNext;
             }
 
-            if (physicalDeviceExt.vertex_attribute_divisor)
-            {
-                enabledExtensions.push_back(VK_EXT_VERTEX_ATTRIBUTE_DIVISOR_EXTENSION_NAME);
-                renderer->vertexDivisorFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VERTEX_ATTRIBUTE_DIVISOR_FEATURES_EXT;
-                *features_chain = &renderer->vertexDivisorFeatures;
-                features_chain = &renderer->vertexDivisorFeatures.pNext;
-            }
-
             if (physicalDeviceExt.extended_dynamic_state)
             {
-                enabledExtensions.push_back(VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME);
+                enabledDeviceExtensions.push_back(VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME);
                 renderer->extendedDynamicStateFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT;
                 *features_chain = &renderer->extendedDynamicStateFeatures;
                 features_chain = &renderer->extendedDynamicStateFeatures.pNext;
             }
 
-            if (physicalDeviceExt.vertex_input_dynamic_state)
-            {
-                enabledExtensions.push_back(VK_EXT_VERTEX_INPUT_DYNAMIC_STATE_EXTENSION_NAME);
-                renderer->vertexInputDynamicStateFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VERTEX_INPUT_DYNAMIC_STATE_FEATURES_EXT;
-                *features_chain = &renderer->vertexInputDynamicStateFeatures;
-                features_chain = &renderer->vertexInputDynamicStateFeatures.pNext;
-            }
-
             if (physicalDeviceExt.extended_dynamic_state2)
             {
-                enabledExtensions.push_back(VK_EXT_EXTENDED_DYNAMIC_STATE_2_EXTENSION_NAME);
+                enabledDeviceExtensions.push_back(VK_EXT_EXTENDED_DYNAMIC_STATE_2_EXTENSION_NAME);
                 renderer->extendedDynamicState2Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_2_FEATURES_EXT;
                 *features_chain = &renderer->extendedDynamicState2Features;
                 features_chain = &renderer->extendedDynamicState2Features.pNext;
@@ -3970,15 +4038,21 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
 
             vkGetPhysicalDeviceProperties2(candidatePhysicalDevice, &renderer->properties2);
 
-            bool discrete = renderer->properties2.properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
-            if (discrete || renderer->physicalDevice == VK_NULL_HANDLE)
+            bool priority = renderer->properties2.properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
+            if (info->powerPreference == VGPUPowerPreference_LowPower)
             {
+                priority = renderer->properties2.properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU;
+            }
+
+            if (priority || renderer->physicalDevice == VK_NULL_HANDLE)
+            {
+                renderer->physicalDevice = candidatePhysicalDevice;
                 renderer->supportedExtensions = physicalDeviceExt;
 
-                renderer->physicalDevice = candidatePhysicalDevice;
-                if (discrete)
+                if (priority)
                 {
-                    break; // if this is discrete GPU, look no further (prioritize discrete GPU)
+                    // If this is prioritized GPU type, look no further
+                    break;
                 }
             }
         }
@@ -3991,16 +4065,29 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
         }
 
         vkGetPhysicalDeviceFeatures2(renderer->physicalDevice, &renderer->features2);
+        vkGetPhysicalDeviceProperties2(renderer->physicalDevice, &renderer->properties2);
 
-        VGPU_ASSERT(renderer->features2.features.imageCubeArray == VK_TRUE);
-        VGPU_ASSERT(renderer->features2.features.independentBlend == VK_TRUE);
-        VGPU_ASSERT(renderer->features2.features.geometryShader == VK_TRUE);
-        VGPU_ASSERT(renderer->features2.features.samplerAnisotropy == VK_TRUE);
-        VGPU_ASSERT(renderer->features2.features.shaderClipDistance == VK_TRUE);
-        VGPU_ASSERT(renderer->features2.features.textureCompressionBC == VK_TRUE);
-        VGPU_ASSERT(renderer->features2.features.occlusionQueryPrecise == VK_TRUE);
-        VGPU_ASSERT(renderer->features_1_2.descriptorIndexing == VK_TRUE);
+        VGPU_VERIFY(renderer->features2.features.robustBufferAccess == VK_TRUE);
+        VGPU_VERIFY(renderer->features2.features.depthBiasClamp == VK_TRUE);
+        VGPU_VERIFY(renderer->features2.features.fragmentStoresAndAtomics == VK_TRUE);
+        VGPU_VERIFY(renderer->features2.features.imageCubeArray == VK_TRUE);
+        VGPU_VERIFY(renderer->features2.features.independentBlend == VK_TRUE);
+        VGPU_VERIFY(renderer->features2.features.fullDrawIndexUint32 == VK_TRUE);
+        VGPU_VERIFY(renderer->features2.features.sampleRateShading == VK_TRUE);
+        VGPU_VERIFY(renderer->features2.features.shaderClipDistance == VK_TRUE);
+        //VGPU_ASSERT(renderer->features2.features.occlusionQueryPrecise == VK_TRUE);
+
+        VGPU_ASSERT(renderer->features1_2.timelineSemaphore == VK_TRUE);
+        VGPU_ASSERT(renderer->features_1_3.synchronization2 == VK_TRUE);
         VGPU_ASSERT(renderer->features_1_3.dynamicRendering == VK_TRUE);
+
+        if (!renderer->features2.features.textureCompressionBC &&
+            !(renderer->features2.features.textureCompressionETC2 && renderer->features2.features.textureCompressionASTC_LDR))
+        {
+            vgpu_log_error("Vulkan textureCompressionBC feature required or both textureCompressionETC2 and textureCompressionASTC required.");
+            delete renderer;
+            return nullptr;
+        }
 
         // Find queue families:
         uint32_t queueFamilyCount = 0;
@@ -4097,8 +4184,8 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
         createInfo.enabledLayerCount = 0;
         createInfo.ppEnabledLayerNames = nullptr;
         createInfo.pEnabledFeatures = nullptr;
-        createInfo.enabledExtensionCount = static_cast<uint32_t>(enabledExtensions.size());
-        createInfo.ppEnabledExtensionNames = enabledExtensions.data();
+        createInfo.enabledExtensionCount = static_cast<uint32_t>(enabledDeviceExtensions.size());
+        createInfo.ppEnabledExtensionNames = enabledDeviceExtensions.data();
 
         result = vkCreateDevice(renderer->physicalDevice, &createInfo, nullptr, &renderer->device);
         if (result != VK_SUCCESS)
@@ -4126,7 +4213,15 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
             vulkan_SetObjectName(renderer, VK_OBJECT_TYPE_DEVICE, (uint64_t)renderer->device, info->label);
         }
 
-        if (renderer->supportedExtensions.driver_properties)
+        if (renderer->properties2.properties.apiVersion >= VK_API_VERSION_1_3)
+        {
+            renderer->driverDescription = renderer->properties_1_2.driverName;
+            if (renderer->properties_1_2.driverInfo[0] != '\0')
+            {
+                renderer->driverDescription += std::string(": ") + renderer->properties_1_2.driverInfo;
+            }
+        }
+        else if (renderer->supportedExtensions.driver_properties)
         {
             renderer->driverDescription = renderer->driverProperties.driverName;
             if (renderer->driverProperties.driverInfo[0] != '\0')
@@ -4142,45 +4237,40 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
 
     // Create memory allocator
     {
-        VmaVulkanFunctions vma_vulkan_func{};
-        vma_vulkan_func.vkGetInstanceProcAddr = vkGetInstanceProcAddr;
-        vma_vulkan_func.vkGetDeviceProcAddr = vkGetDeviceProcAddr;
-        vma_vulkan_func.vkGetPhysicalDeviceProperties = vkGetPhysicalDeviceProperties;
-        vma_vulkan_func.vkGetPhysicalDeviceMemoryProperties = vkGetPhysicalDeviceMemoryProperties;
-        vma_vulkan_func.vkAllocateMemory = vkAllocateMemory;
-        vma_vulkan_func.vkFreeMemory = vkFreeMemory;
-        vma_vulkan_func.vkMapMemory = vkMapMemory;
-        vma_vulkan_func.vkUnmapMemory = vkUnmapMemory;
-        vma_vulkan_func.vkFlushMappedMemoryRanges = vkFlushMappedMemoryRanges;
-        vma_vulkan_func.vkInvalidateMappedMemoryRanges = vkInvalidateMappedMemoryRanges;
-        vma_vulkan_func.vkBindBufferMemory = vkBindBufferMemory;
-        vma_vulkan_func.vkBindImageMemory = vkBindImageMemory;
-        vma_vulkan_func.vkGetBufferMemoryRequirements = vkGetBufferMemoryRequirements;
-        vma_vulkan_func.vkGetImageMemoryRequirements = vkGetImageMemoryRequirements;
-        vma_vulkan_func.vkCreateBuffer = vkCreateBuffer;
-        vma_vulkan_func.vkDestroyBuffer = vkDestroyBuffer;
-        vma_vulkan_func.vkCreateImage = vkCreateImage;
-        vma_vulkan_func.vkDestroyImage = vkDestroyImage;
-        vma_vulkan_func.vkCmdCopyBuffer = vkCmdCopyBuffer;
-
         VmaAllocatorCreateInfo allocatorInfo{};
         allocatorInfo.physicalDevice = renderer->physicalDevice;
         allocatorInfo.device = renderer->device;
         allocatorInfo.instance = renderer->instance;
+        allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_3;
 
         // Core in 1.1
         allocatorInfo.flags = VMA_ALLOCATOR_CREATE_KHR_DEDICATED_ALLOCATION_BIT | VMA_ALLOCATOR_CREATE_KHR_BIND_MEMORY2_BIT;
-        vma_vulkan_func.vkGetBufferMemoryRequirements2KHR = vkGetBufferMemoryRequirements2;
-        vma_vulkan_func.vkGetImageMemoryRequirements2KHR = vkGetImageMemoryRequirements2;
-
-        if (renderer->features_1_2.bufferDeviceAddress == VK_TRUE)
+        if (renderer->supportedExtensions.memory_budget)
         {
-            allocatorInfo.flags |= VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
-            vma_vulkan_func.vkBindBufferMemory2KHR = vkBindBufferMemory2;
-            vma_vulkan_func.vkBindImageMemory2KHR = vkBindImageMemory2;
+            allocatorInfo.flags |= VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT;
         }
 
-        allocatorInfo.pVulkanFunctions = &vma_vulkan_func;
+        if (renderer->supportedExtensions.AMD_device_coherent_memory)
+        {
+            allocatorInfo.flags |= VMA_ALLOCATOR_CREATE_AMD_DEVICE_COHERENT_MEMORY_BIT;
+        }
+
+        if (renderer->features1_2.bufferDeviceAddress == VK_TRUE)
+        {
+            allocatorInfo.flags |= VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
+        }
+
+        if (renderer->supportedExtensions.memory_priority)
+        {
+            allocatorInfo.flags |= VMA_ALLOCATOR_CREATE_EXT_MEMORY_PRIORITY_BIT;
+        }
+
+#if VMA_DYNAMIC_VULKAN_FUNCTIONS
+        static VmaVulkanFunctions vulkanFunctions = {};
+        vulkanFunctions.vkGetInstanceProcAddr = vkGetInstanceProcAddr;
+        vulkanFunctions.vkGetDeviceProcAddr = vkGetDeviceProcAddr;
+        allocatorInfo.pVulkanFunctions = &vulkanFunctions;
+#endif
 
         result = vmaCreateAllocator(&allocatorInfo, &renderer->allocator);
 

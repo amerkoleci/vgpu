@@ -87,7 +87,7 @@ VGPUBool32 vgpuIsBackendSupported(VGPUBackend backend)
 
         if (drivers[i]->backend == backend)
         {
-            return drivers[i]->is_supported();
+            return drivers[i]->isSupported();
         }
     }
 
@@ -112,7 +112,7 @@ retry:
             if (!drivers[i])
                 break;
 
-            if (drivers[i]->is_supported())
+            if (drivers[i]->isSupported())
             {
                 device = drivers[i]->createDevice(desc);
                 break;
@@ -128,7 +128,7 @@ retry:
 
             if (drivers[i]->backend == backend)
             {
-                if (drivers[i]->is_supported())
+                if (drivers[i]->isSupported())
                 {
                     device = drivers[i]->createDevice(desc);
                     break;
@@ -170,13 +170,13 @@ VGPUBackend vgpuGetBackend(VGPUDevice device)
     return device->getBackendType();
 }
 
-VGPUBool32 vgpuQueryFeature(VGPUDevice device, VGPUFeature feature, void* pInfo, uint32_t infoSize)
+VGPUBool32 vgpuQueryFeature(VGPUDevice device, VGPUFeature feature)
 {
     if (device == NULL) {
         return false;
     }
 
-    return device->queryFeature(device->driverData, feature, pInfo, infoSize);
+    return device->queryFeature(device->driverData, feature);
 }
 
 void vgpuGetAdapterProperties(VGPUDevice device, VGPUAdapterProperties* properties)
@@ -578,7 +578,7 @@ static VGPUSwapChainDesc _vgpuSwapChainDescDef(const VGPUSwapChainDesc* desc)
     return def;
 }
 
-VGPUSwapChain* vgpuCreateSwapChain(VGPUDevice device, void* window, const VGPUSwapChainDesc* desc)
+VGPUSwapChain vgpuCreateSwapChain(VGPUDevice device, void* window, const VGPUSwapChainDesc* desc)
 {
     VGPU_ASSERT(device);
     NULL_RETURN_NULL(window);
@@ -588,19 +588,25 @@ VGPUSwapChain* vgpuCreateSwapChain(VGPUDevice device, void* window, const VGPUSw
     return device->createSwapChain(device->driverData, window, &def);
 }
 
-void vgpuDestroySwapChain(VGPUDevice device, VGPUSwapChain* swapChain)
+VGPUTextureFormat vgpuSwapChainGetFormat(VGPUSwapChain swapChain)
 {
-    VGPU_ASSERT(device);
-    NULL_RETURN(swapChain);
+    VGPU_ASSERT(swapChain);
 
-    device->destroySwapChain(device->driverData, swapChain);
+    return swapChain->GetFormat();
 }
 
-VGPUTextureFormat vgpuGetSwapChainFormat(VGPUDevice device, VGPUSwapChain* swapChain)
+uint32_t vgpuSwapChainAddRef(VGPUSwapChain swapChain)
 {
-    VGPU_ASSERT(device);
+    VGPU_ASSERT(swapChain);
 
-    return device->getSwapChainFormat(device->driverData, swapChain);
+    return swapChain->AddRef();
+}
+
+uint32_t vgpuSwapChainRelease(VGPUSwapChain swapChain)
+{
+    VGPU_ASSERT(swapChain);
+
+    return swapChain->Release();
 }
 
 /* Commands */
@@ -649,7 +655,7 @@ void vgpuDispatchIndirect(VGPUCommandBuffer commandBuffer, VGPUBuffer buffer, ui
     commandBuffer->dispatchIndirect(commandBuffer->driverData, buffer, offset);
 }
 
-VGPUTexture vgpuAcquireSwapchainTexture(VGPUCommandBuffer commandBuffer, VGPUSwapChain* swapChain, uint32_t* pWidth, uint32_t* pHeight)
+VGPUTexture vgpuAcquireSwapchainTexture(VGPUCommandBuffer commandBuffer, VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight)
 {
     return commandBuffer->acquireSwapchainTexture(commandBuffer->driverData, swapChain, pWidth, pHeight);
 }
@@ -692,9 +698,9 @@ void vgpuSetVertexBuffer(VGPUCommandBuffer commandBuffer, uint32_t index, VGPUBu
     commandBuffer->setVertexBuffer(commandBuffer->driverData, index, buffer, offset);
 }
 
-void vgpuSetIndexBuffer(VGPUCommandBuffer commandBuffer, VGPUBuffer buffer, uint64_t offset, VGPUIndexType type)
+void vgpuSetIndexBuffer(VGPUCommandBuffer commandBuffer, VGPUBuffer buffer, VGPUIndexType type, uint64_t offset)
 {
-    commandBuffer->setIndexBuffer(commandBuffer->driverData, buffer, offset, type);
+    commandBuffer->setIndexBuffer(commandBuffer->driverData, buffer, type, offset);
 }
 
 void vgpuSetStencilReference(VGPUCommandBuffer commandBuffer, uint32_t reference)
@@ -881,13 +887,13 @@ VGPUBool32 vgpuIsDepthFormat(VGPUTextureFormat format)
 {
     switch (format)
     {
-    case VGPUTextureFormat_Depth16Unorm:
-    case VGPUTextureFormat_Depth32Float:
-    case VGPUTextureFormat_Depth24UnormStencil8:
-    case VGPUTextureFormat_Depth32FloatStencil8:
-        return true;
-    default:
-        return false;
+        case VGPUTextureFormat_Depth16Unorm:
+        case VGPUTextureFormat_Depth32Float:
+        case VGPUTextureFormat_Depth24UnormStencil8:
+        case VGPUTextureFormat_Depth32FloatStencil8:
+            return true;
+        default:
+            return false;
     }
 }
 
@@ -895,11 +901,11 @@ VGPUBool32 vgpuIsDepthOnlyFormat(VGPUTextureFormat format)
 {
     switch (format)
     {
-    case VGPUTextureFormat_Depth16Unorm:
-    case VGPUTextureFormat_Depth32Float:
-        return true;
-    default:
-        return false;
+        case VGPUTextureFormat_Depth16Unorm:
+        case VGPUTextureFormat_Depth32Float:
+            return true;
+        default:
+            return false;
     }
 }
 
@@ -907,10 +913,10 @@ VGPUBool32 vgpuIsStencilOnlyFormat(VGPUTextureFormat format)
 {
     switch (format)
     {
-    case VGPUTextureFormat_Stencil8:
-        return true;
-    default:
-        return false;
+        case VGPUTextureFormat_Stencil8:
+            return true;
+        default:
+            return false;
     }
 }
 
@@ -918,12 +924,12 @@ VGPUBool32 vgpuIsStencilFormat(VGPUTextureFormat format)
 {
     switch (format)
     {
-    case VGPUTextureFormat_Stencil8:
-    case VGPUTextureFormat_Depth24UnormStencil8:
-    case VGPUTextureFormat_Depth32FloatStencil8:
-        return true;
-    default:
-        return false;
+        case VGPUTextureFormat_Stencil8:
+        case VGPUTextureFormat_Depth24UnormStencil8:
+        case VGPUTextureFormat_Depth32FloatStencil8:
+            return true;
+        default:
+            return false;
     }
 }
 
@@ -931,14 +937,14 @@ VGPUBool32 vgpuIsDepthStencilFormat(VGPUTextureFormat format)
 {
     switch (format)
     {
-    case VGPUTextureFormat_Depth16Unorm:
-    case VGPUTextureFormat_Depth32Float:
-    case VGPUTextureFormat_Stencil8:
-    case VGPUTextureFormat_Depth24UnormStencil8:
-    case VGPUTextureFormat_Depth32FloatStencil8:
-        return true;
-    default:
-        return false;
+        case VGPUTextureFormat_Depth16Unorm:
+        case VGPUTextureFormat_Depth32Float:
+        case VGPUTextureFormat_Stencil8:
+        case VGPUTextureFormat_Depth24UnormStencil8:
+        case VGPUTextureFormat_Depth32FloatStencil8:
+            return true;
+        default:
+            return false;
     }
 }
 
