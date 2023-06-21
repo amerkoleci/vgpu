@@ -875,7 +875,7 @@ struct VulkanRenderer
     VkPhysicalDeviceFragmentShadingRateFeaturesKHR fragment_shading_rate_features = {};
     VkPhysicalDeviceMeshShaderFeaturesNV mesh_shader_features = {};
     VkPhysicalDeviceConditionalRenderingFeaturesEXT conditional_rendering_features = {};
-    VkPhysicalDeviceDepthClipEnableFeaturesEXT depth_clip_enable_features = {};
+    VkPhysicalDeviceDepthClipEnableFeaturesEXT depthClipEnableFeatures = {};
     VkPhysicalDevicePerformanceQueryFeaturesKHR perf_counter_features = {};
     VkPhysicalDeviceHostQueryResetFeatures host_query_reset_features = {};
     VkPhysicalDeviceVertexAttributeDivisorFeaturesEXT vertexDivisorFeatures = {};
@@ -3516,9 +3516,8 @@ static VGPUBool32 vulkan_isSupported(void)
     }
 
     const uint32_t apiVersion = volkGetInstanceVersion();
-    if (apiVersion < VK_API_VERSION_1_2)
+    if (apiVersion < VK_API_VERSION_1_1)
     {
-        //LOGW("Vulkan 1.2 is required!");
         return false;
     }
 
@@ -3757,18 +3756,16 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
         std::vector<const char*> enabledExtensions;
         for (const VkPhysicalDevice& candidatePhysicalDevice : physicalDevices)
         {
-            bool suitable = true;
-
-            // We require minimum 1.2
+            // We require minimum 1.1
             VkPhysicalDeviceProperties gpuProps;
             vkGetPhysicalDeviceProperties(candidatePhysicalDevice, &gpuProps);
-            if (gpuProps.apiVersion < VK_API_VERSION_1_2)
+            if (gpuProps.apiVersion < VK_API_VERSION_1_1)
             {
                 continue;
             }
 
             PhysicalDeviceExtensions physicalDeviceExt = QueryPhysicalDeviceExtensions(candidatePhysicalDevice);
-            suitable = physicalDeviceExt.swapchain && physicalDeviceExt.depth_clip_enable;
+            bool suitable = physicalDeviceExt.swapchain;
 
             if (!suitable)
             {
@@ -3779,6 +3776,7 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
             renderer->features_1_1.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
             renderer->features_1_2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
             renderer->features_1_3.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+            renderer->depthClipEnableFeatures = {};
 
             renderer->features2.pNext = &renderer->features_1_1;
             renderer->features_1_1.pNext = &renderer->features_1_2;
@@ -3843,10 +3841,11 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
 
             if (physicalDeviceExt.depth_clip_enable)
             {
-                renderer->depth_clip_enable_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEPTH_CLIP_ENABLE_FEATURES_EXT;
-                enabledExtensions.push_back("VK_EXT_depth_clip_enable");
-                *features_chain = &renderer->depth_clip_enable_features;
-                features_chain = &renderer->depth_clip_enable_features.pNext;
+                enabledExtensions.push_back(VK_EXT_DEPTH_CLIP_ENABLE_EXTENSION_NAME);
+
+                renderer->depthClipEnableFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEPTH_CLIP_ENABLE_FEATURES_EXT;
+                *features_chain = &renderer->depthClipEnableFeatures;
+                features_chain = &renderer->depthClipEnableFeatures.pNext;
             }
 
             // Core 1.2.

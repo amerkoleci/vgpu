@@ -12,6 +12,35 @@ set (VGPU_VERSION_MINOR 0)
 set (VGPU_VERSION_PATCH 0)
 set (VGPU_VERSION ${VGPU_VERSION_MAJOR}.${VGPU_VERSION_MINOR}.${VGPU_VERSION_PATCH})
 
+# Detect GIT stuff
+execute_process(COMMAND git rev-list --count HEAD
+    OUTPUT_VARIABLE VGPU_REVISION_ID
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
+if ("${VGPU_REVISION_ID}" STREQUAL "")
+    # We don't have any source control so just hard-code all of this information to empty
+    set (VGPU_REVISION_ID 0)
+    set (VGPU_SHORT_CHANGE_SET 0)
+    set (VGPU_CHANGE_SET 0)
+    set (VGPU_CHANGE_SET_DATE "")
+else ()
+    execute_process(COMMAND git rev-parse --short HEAD
+        OUTPUT_VARIABLE VGPU_SHORT_CHANGE_SET
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+
+    execute_process(COMMAND git rev-parse HEAD
+        OUTPUT_VARIABLE VGPU_CHANGE_SET
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+
+    execute_process(COMMAND git log -1 --abbrev=12 --date=format:%Y-%m-%d --pretty=format:%cd
+        OUTPUT_VARIABLE VGPU_CHANGE_SET_DATE
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+endif ()
+
 # Project declaration
 project (vgpu
     VERSION ${VGPU_VERSION}
@@ -69,6 +98,7 @@ else()
 endif ()
 
 option(VGPU_INSTALL "Generate the install target" ${VGPU_MASTER_PROJECT})
+set(VGPU_WSI_SELECTION "XCB" CACHE STRING "Select WSI target (XCB, XLIB, WAYLAND, D2D)")
 
 # Graphics backends
 if(EMSCRIPTEN)
@@ -92,11 +122,38 @@ endif ()
 if(EMSCRIPTEN OR WINDOWS_STORE)
     set(VGPU_SAMPLES OFF CACHE BOOL "Disable samples" FORCE)
 else()
-    option(VGPU_SAMPLES "Enable samples" ON)
+    option(VGPU_SAMPLES "Enable samples" ${VGPU_MASTER_PROJECT})
 endif()
 
 if(VGPU_INSTALL)
     include(GNUInstallDirs)
+endif ()
+
+# Print current build configuration
+message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
+message(STATUS "Version ${VGPU_VERSION}")
+message(STATUS "GIT Revision ID: ${VGPU_REVISION_ID}")
+message(STATUS "GIT Short ChangeSet: ${VGPU_SHORT_CHANGE_SET}")
+message(STATUS "GIT ChangeSet: ${VGPU_CHANGE_SET}")
+message(STATUS "GIT ChangeSet Date: ${VGPU_CHANGE_SET_DATE}")
+
+if (BUILD_SHARED_LIBS)
+    message(STATUS "  Library         SHARED")
+else ()
+    message(STATUS "  Library         STATIC")
+endif ()
+
+message(STATUS "  WSI Backend: ${VGPU_WSI_SELECTION}")
+message(STATUS "  Samples         ${VGPU_SAMPLES}")
+message(STATUS "  VGPU Backends:")
+if (VGPU_VULKAN_DRIVER)
+    message(STATUS "      - Vulkan")
+endif()
+if (VGPU_D3D11_DRIVER)
+    message(STATUS "      - Direct3D11")
+endif ()
+if (VGPU_D3D12_DRIVER)
+    message(STATUS "      - Direct3D12")
 endif ()
 
 # Third party
@@ -173,82 +230,25 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
 	SOVERSION ${VGPU_VERSION_MAJOR}
 )
 
-# Install
-if (VLIBS_INSTALL)
-    install (FILES "vgpu.h" DESTINATION DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/${PROJECT_NAME})
-
-    install(TARGETS ${PROJECT_NAME}
-        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-    )
-endif ()
-
 # Samples
 if (VGPU_SAMPLES)
     add_subdirectory(samples)
 endif ()
 
 # Install README.md and license
-if (VLIBS_INSTALL)
+if (VGPU_INSTALL)
     install (FILES
         ${CMAKE_CURRENT_SOURCE_DIR}/README.md
         ${CMAKE_CURRENT_SOURCE_DIR}/LICENSE
-        DESTINATION ${CMAKE_INSTALL_PREFIX}
-    )
-endif ()
-
-execute_process(COMMAND git rev-list --count HEAD
-    OUTPUT_VARIABLE VLIBS_REVISION_ID
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-)
-
-if ("${VLIBS_REVISION_ID}" STREQUAL "")
-    # We don't have any source control so just hard-code all of this information to empty
-    set (VLIBS_REVISION_ID 0)
-    set (VLIBS_SHORT_CHANGE_SET 0)
-    set (VLIBS_CHANGE_SET 0)
-    set (VLIBS_CHANGE_SET_DATE "")
-else ()
-    execute_process(COMMAND git rev-parse --short HEAD
-        OUTPUT_VARIABLE VLIBS_SHORT_CHANGE_SET
-        OUTPUT_STRIP_TRAILING_WHITESPACE
+        DESTINATION .
     )
 
-    execute_process(COMMAND git rev-parse HEAD
-        OUTPUT_VARIABLE VLIBS_CHANGE_SET
-        OUTPUT_STRIP_TRAILING_WHITESPACE
+    install (FILES "include/vgpu.h" DESTINATION DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/${PROJECT_NAME})
+
+    install(TARGETS ${PROJECT_NAME}
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     )
-
-    execute_process(COMMAND git log -1 --abbrev=12 --date=format:%Y-%m-%d --pretty=format:%cd
-        OUTPUT_VARIABLE VLIBS_CHANGE_SET_DATE
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-    )
-endif ()
-
-# Print current build configuration
-message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
-message(STATUS "Version ${LIB_VERSION}")
-message(STATUS "GIT Revision ID: ${VLIBS_REVISION_ID}")
-message(STATUS "GIT Short ChangeSet: ${VLIBS_SHORT_CHANGE_SET}")
-message(STATUS "GIT ChangeSet: ${VLIBS_CHANGE_SET}")
-message(STATUS "GIT ChangeSet Date: ${VLIBS_CHANGE_SET_DATE}")
-
-if (BUILD_SHARED_LIBS)
-    message(STATUS "  Library         SHARED")
-else ()
-    message(STATUS "  Library         STATIC")
-endif ()
-
-message(STATUS "  Samples         ${VLIBS_SAMPLES}")
-message(STATUS "  VGPU Backends:")
-if (VGPU_VULKAN_DRIVER)
-    message(STATUS "      - Vulkan")
-endif()
-if (VGPU_D3D11_DRIVER)
-    message(STATUS "      - Direct3D11")
-endif ()
-if (VGPU_D3D12_DRIVER)
-    message(STATUS "      - Direct3D12")
 endif ()
 

@@ -111,29 +111,19 @@ if (VGPU_D3D12_DRIVER)
     set_property(TARGET D3D12MemoryAllocator PROPERTY FOLDER "ThirdParty")
 endif ()
 
-if (VLIBS_SAMPLES)
-    # Windowing
-    if(ANDROID)
-        # native_app_glue
-        set(NATIVE_APP_GLUE_DIR "${CMAKE_ANDROID_NDK}/sources/android/native_app_glue")
+# GLFW
+if(NOT (ANDROID OR EMSCRIPTEN OR WINDOWS_STORE))
+    set(GLFW_BUILD_DOCS OFF CACHE BOOL "")
+    set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "")
+    set(GLFW_BUILD_TESTS OFF CACHE BOOL "")
+    set(GLFW_INSTALL OFF CACHE BOOL "")
+    #set(BUILD_SHARED_LIBS ON CACHE BOOL "")
 
-        file(GLOB NATIVE_APP_GLUE_FILES "${NATIVE_APP_GLUE_DIR}/*.c" "${NATIVE_APP_GLUE_DIR}/*.h")
-    
-        add_library(native_app_glue STATIC ${NATIVE_APP_GLUE_FILES})
-        
-        target_include_directories(native_app_glue PUBLIC ${NATIVE_APP_GLUE_DIR})
-    
-        set_property(TARGET native_app_glue PROPERTY FOLDER "ThirdParty")
-    elseif(NOT (EMSCRIPTEN OR WINDOWS_STORE))
-        # GLFW
-        set(GLFW_BUILD_DOCS OFF CACHE BOOL "")
-        set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "")
-        set(GLFW_BUILD_TESTS OFF CACHE BOOL "")
-        set(GLFW_INSTALL OFF CACHE BOOL "")
-        #set(BUILD_SHARED_LIBS ON CACHE BOOL "")
-
-        add_subdirectory(glfw EXCLUDE_FROM_ALL)
-        set_property(TARGET glfw PROPERTY FOLDER "ThirdParty")
-        unset(LIB_SUFFIX CACHE)
+    if (VGPU_WSI_SELECTION STREQUAL WAYLAND)
+        set(GLFW_USE_WAYLAND ON CACHE BOOL "")
     endif()
-endif ()
+
+    add_subdirectory(glfw EXCLUDE_FROM_ALL)
+    set_property(TARGET glfw PROPERTY FOLDER "ThirdParty")
+    unset(LIB_SUFFIX CACHE)
+endif()
