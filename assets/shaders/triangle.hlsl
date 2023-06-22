@@ -1,3 +1,22 @@
+#define CONCAT_X(a, b) a##b
+#define CONCAT(a, b) CONCAT_X(a, b)
+
+#if defined(VULKAN)
+#   define VERTEX_ATTRIBUTE(type, name, loc) [[vk::location(loc)]] type name : CONCAT(ATTRIBUTE, loc)
+#   define PUSH_CONSTANT(type, name, slot) [[vk::push_constant]] type name
+#elif defined(HLSL5)
+#   define PUSH_CONSTANT(type, name, slot) cbuffer name : register(CONCAT(b, slot)) { type name; }
+#else
+#   define VERTEX_ATTRIBUTE(type, name, loc) type name : CONCAT(ATTRIBUTE, loc)
+#   define PUSH_CONSTANT(type, name, slot) ConstantBuffer<type> name : register(CONCAT(b, slot))
+#endif
+
+struct PushData {
+    float4 color;
+};
+
+PUSH_CONSTANT(PushData, data, 0);
+
 struct VertexInput {
     float3 Position     : ATTRIBUTE0;
     float4 Color        : ATTRIBUTE1;
@@ -18,5 +37,5 @@ VertexOutput vertexMain(in VertexInput input)
 
 float4 fragmentMain(in VertexOutput input) : SV_TARGET
 {
-    return input.Color;
+    return input.Color * data.color;
 }

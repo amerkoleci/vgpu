@@ -1,6 +1,5 @@
 import glob, os, enum
 import argparse
-from msilib.schema import Complus
 
 parser = argparse.ArgumentParser(description='Compile all .hlsl shaders')
 parser.add_argument('--dxc', type=str, help='path to DXC executable')
@@ -30,6 +29,7 @@ def findDXC():
     sys.exit("Could not find DXC executable on PATH, and was not specified with --dxc")
 
 dxc_path = findDXC()
+dxc_path = os.path.join(os.getcwd(), "../../tools/windows/dxc.exe")
 print(dxc_path)
 
 def compile_and_log_status(command, file):
@@ -82,10 +82,10 @@ if __name__ == "__main__":
             compile_and_log_status(command, file)
 
             # SPIRV
-            command = dxc_path + " -HV 2021 -T vs_6_1 -E vertexMain " + spirvArgs + file + " -Fo " + os.path.join(compiledShadersFolder, file.split(".")[0] + "Vertex.spv")
+            command = dxc_path + " -HV 2021 -T vs_6_1 -E vertexMain " + " -D VULKAN " + spirvArgs + file + " -Fo " + os.path.join(compiledShadersFolder, file.split(".")[0] + "Vertex.spv")
             compile_and_log_status(command, file)
             
-            command = dxc_path + " -HV 2021 -T ps_6_1 -E fragmentMain " + spirvArgs + file + " -Fo " + os.path.join(compiledShadersFolder, file.split(".")[0] + "Fragment.spv")
+            command = dxc_path + " -HV 2021 -T ps_6_1 -E fragmentMain " + " -D VULKAN " + spirvArgs + file + " -Fo " + os.path.join(compiledShadersFolder, file.split(".")[0] + "Fragment.spv")
             compile_and_log_status(command, file)
 
 
