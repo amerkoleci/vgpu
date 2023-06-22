@@ -40,6 +40,17 @@ inline void vgpu_log(VGPULogLevel level, const char* message, void* user_data)
 #endif
 }
 
+struct float4 {
+    float x;
+    float y;
+    float z;
+    float w;
+};
+
+struct PushData {
+    float4 color;
+};
+
 std::string getAssetPath()
 {
     return "assets/";
@@ -105,10 +116,10 @@ void init_vgpu(GLFWwindow* window)
     deviceDesc.validationMode = VGPUValidationMode_Enabled;
 #endif
 
-    if (vgpuIsBackendSupported(VGPUBackend_Vulkan))
-    {
-        deviceDesc.preferredBackend = VGPUBackend_Vulkan;
-    }
+    //if (vgpuIsBackendSupported(VGPUBackend_Vulkan))
+    //{
+    //    deviceDesc.preferredBackend = VGPUBackend_Vulkan;
+    //}
 
     device = vgpuCreateDevice(&deviceDesc);
     assert(device != nullptr);
@@ -132,7 +143,7 @@ void init_vgpu(GLFWwindow* window)
     windowHandle = (void*)(uintptr_t)glfwGetX11Window(window);
 #endif
 
-    VGPUSwapChainDesc swapChainDesc{};
+    VGPUSwapChainDescriptor swapChainDesc{};
     swapChainDesc.width = width;
     swapChainDesc.height = height;
     swapChainDesc.format = VGPUTextureFormat_BGRA8UnormSrgb;
@@ -180,7 +191,13 @@ void init_vgpu(GLFWwindow* window)
     VGPUShaderModule vertex_shader = LoadShader("triangleVertex");
     VGPUShaderModule fragment_shader = LoadShader("triangleFragment");
 
+    VGPUPushConstantRange pushConstantRange{};
+    pushConstantRange.visibility = VGPUShaderStage_Fragment;
+    pushConstantRange.size = sizeof(PushData);
+
     VGPUPipelineLayoutDescriptor pipelineLayoutDesc{};
+    pipelineLayoutDesc.pushConstantRangeCount = 1;
+    pipelineLayoutDesc.pushConstantRanges = &pushConstantRange;
     pipelineLayout = vgpuCreatePipelineLayout(device, &pipelineLayoutDesc);
 
     RenderPipelineColorAttachmentDesc colorAttachment{};
@@ -287,6 +304,11 @@ void draw_frame()
         renderPass.depthStencilAttachment = &depthStencilAttachment;
         vgpuBeginRenderPass(commandBuffer, &renderPass);
         vgpuSetPipeline(commandBuffer, renderPipeline);
+
+        PushData pushData{};
+        pushData.color.x = 1.0f;
+        vgpuSetPushConstants(commandBuffer, 0, &pushData, sizeof(pushData));
+
         vgpuSetVertexBuffer(commandBuffer, 0, vertexBuffer, 0);
         vgpuSetIndexBuffer(commandBuffer, index_buffer, VGPUIndexType_Uint16, 0);
         vgpuDrawIndexed(commandBuffer, 6, 1, 0, 0, 0);
@@ -324,7 +346,7 @@ int main()
     vgpuBufferRelease(vertexBuffer);
     vgpuBufferRelease(index_buffer);
     vgpuTextureRelease(depthStencilTexture);
-    vgpuDestroyPipelineLayout(device, pipelineLayout);
+    vgpuPipelineLayoutRelease(pipelineLayout);
     vgpuPipelineRelease(renderPipeline);
     vgpuSwapChainRelease(swapChain);
     vgpuDestroyDevice(device);

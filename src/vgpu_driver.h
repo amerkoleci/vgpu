@@ -125,6 +125,7 @@ struct VGPUBufferImpl : public VGPUObject
 {
 public:
     virtual uint64_t GetSize() const = 0;
+    virtual VGPUBufferUsageFlags GetUsage() const = 0;
     virtual VGPUDeviceAddress GetGpuAddress() const = 0;
 };
 
@@ -142,7 +143,6 @@ public:
 struct VGPUPipelineLayoutImpl : public VGPUObject
 {
 public:
-    virtual VGPUPipelineType GetType() const = 0;
 };
 
 struct VGPUPipelineImpl : public VGPUObject
@@ -162,32 +162,37 @@ public:
     virtual VGPUTextureFormat GetFormat() const = 0;
 };
 
-typedef struct VGPUCommandBuffer_T {
-    void (*pushDebugGroup)(VGPUCommandBufferImpl* driverData, const char* groupLabel);
-    void (*popDebugGroup)(VGPUCommandBufferImpl* driverData);
-    void (*insertDebugMarker)(VGPUCommandBufferImpl* driverData, const char* debugLabel);
+struct VGPUCommandBufferImpl
+{
+public:
+    virtual ~VGPUCommandBufferImpl() = default;
 
-    void (*setPipeline)(VGPUCommandBufferImpl* driverData, VGPUPipeline pipeline);
-    void (*dispatch)(VGPUCommandBufferImpl* driverData, uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ);
-    void (*dispatchIndirect)(VGPUCommandBufferImpl* driverData, VGPUBuffer buffer, uint64_t offset);
+    virtual void pushDebugGroup(const char* groupLabel) = 0;
+    virtual void popDebugGroup() = 0;
+    virtual void insertDebugMarker(const char* markerLabel) = 0;
 
-    VGPUTexture(*acquireSwapchainTexture)(VGPUCommandBufferImpl* driverData, VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight);
-    void (*beginRenderPass)(VGPUCommandBufferImpl* driverData, const VGPURenderPassDesc* desc);
-    void (*endRenderPass)(VGPUCommandBufferImpl* driverData);
+    virtual void setPipeline(VGPUPipeline pipeline) = 0;
+    virtual void SetPushConstants(uint32_t pushConstantIndex, const void* data, uint32_t size) = 0;
 
-    void (*setViewport)(VGPUCommandBufferImpl* driverData, const VGPUViewport* viewport);
-    void (*setViewports)(VGPUCommandBufferImpl* driverData, uint32_t count, const VGPUViewport* viewports);
-    void (*setScissorRect)(VGPUCommandBufferImpl* driverData, const VGPURect* rects);
-    void (*setVertexBuffer)(VGPUCommandBufferImpl* driverData, uint32_t index, VGPUBuffer buffer, uint64_t offset);
-    void (*setIndexBuffer)(VGPUCommandBufferImpl* driverData, VGPUBuffer buffer, VGPUIndexType type, uint64_t offset);
-    void (*setStencilReference)(VGPUCommandBufferImpl* driverData, uint32_t reference);
+    virtual void dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ) = 0;
+    virtual void dispatchIndirect(VGPUBuffer buffer, uint64_t offset) = 0;
 
-    void (*draw)(VGPUCommandBufferImpl* driverData, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t firstInstance);
-    void (*drawIndexed)(VGPUCommandBufferImpl* driverData, uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t baseVertex, uint32_t firstInstance);
+    virtual VGPUTexture acquireSwapchainTexture(VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight) = 0;
+    virtual void beginRenderPass(const VGPURenderPassDesc* desc) = 0;
+    virtual void endRenderPass() = 0;
 
-    /* Opaque pointer for the Driver */
-    VGPUCommandBufferImpl* driverData;
-} VGPUCommandBuffer_T;
+    virtual void setViewport(const VGPUViewport* viewport) = 0;
+    virtual void setViewports(uint32_t count, const VGPUViewport* viewports) = 0;
+    virtual void SetScissorRect(const VGPURect* rect) = 0;
+    virtual void SetScissorRects(uint32_t count, const VGPURect* rects) = 0;
+
+    virtual void setVertexBuffer(uint32_t index, VGPUBuffer buffer, uint64_t offset) = 0;
+    virtual void setIndexBuffer(VGPUBuffer buffer, VGPUIndexType type, uint64_t offset) = 0;
+    virtual void setStencilReference(uint32_t reference) = 0;
+
+    virtual void draw(uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t firstInstance) = 0;
+    virtual void drawIndexed(uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t baseVertex, uint32_t firstInstance) = 0;
+};
 
 typedef struct VGPUDeviceImpl
 {
@@ -210,7 +215,6 @@ typedef struct VGPUDeviceImpl
     void(*destroyShaderModule)(VGPURenderer* driverData, VGPUShaderModule resource);
 
     VGPUPipelineLayout(*createPipelineLayout)(VGPURenderer* driverData, const VGPUPipelineLayoutDescriptor* desc);
-    void(*destroyPipelineLayout)(VGPURenderer* driverData, VGPUPipelineLayout resource);
 
     VGPUPipeline(*createRenderPipeline)(VGPURenderer* driverData, const VGPURenderPipelineDescriptor* desc);
     VGPUPipeline(*createComputePipeline)(VGPURenderer* driverData, const VGPUComputePipelineDescriptor* desc);
@@ -218,7 +222,7 @@ typedef struct VGPUDeviceImpl
 
     VGPUQueryHeap(*createQueryHeap)(VGPURenderer* driverData, const VGPUQueryHeapDescriptor* descriptor);
 
-    VGPUSwapChain (*createSwapChain)(VGPURenderer* driverData, void* windowHandle, const VGPUSwapChainDesc* desc);
+    VGPUSwapChain(*createSwapChain)(VGPURenderer* driverData, void* windowHandle, const VGPUSwapChainDescriptor* desc);
 
     VGPUCommandBuffer(*beginCommandBuffer)(VGPURenderer* driverData, VGPUCommandQueue queueType, const char* label);
     uint64_t(*submit)(VGPURenderer* driverData, VGPUCommandBuffer* commandBuffers, uint32_t count);
@@ -231,26 +235,6 @@ typedef struct VGPUDeviceImpl
 } VGPUDeviceImpl;
 
 #define ASSIGN_DRIVER_FUNC(func, name) device->func = name##_##func;
-#define ASSIGN_COMMAND_BUFFER_FUNC(func, name) commandBuffer->func = name##_##func;
-
-#define ASSIGN_COMMAND_BUFFER(name) \
-ASSIGN_COMMAND_BUFFER_FUNC(pushDebugGroup, name) \
-ASSIGN_COMMAND_BUFFER_FUNC(popDebugGroup, name) \
-ASSIGN_COMMAND_BUFFER_FUNC(insertDebugMarker, name) \
-ASSIGN_COMMAND_BUFFER_FUNC(setPipeline, name) \
-ASSIGN_COMMAND_BUFFER_FUNC(dispatch, name) \
-ASSIGN_COMMAND_BUFFER_FUNC(dispatchIndirect, name) \
-ASSIGN_COMMAND_BUFFER_FUNC(acquireSwapchainTexture, name) \
-ASSIGN_COMMAND_BUFFER_FUNC(beginRenderPass, name) \
-ASSIGN_COMMAND_BUFFER_FUNC(endRenderPass, name) \
-ASSIGN_COMMAND_BUFFER_FUNC(setViewport, name) \
-ASSIGN_COMMAND_BUFFER_FUNC(setViewports, name) \
-ASSIGN_COMMAND_BUFFER_FUNC(setScissorRect, name) \
-ASSIGN_COMMAND_BUFFER_FUNC(setVertexBuffer, name) \
-ASSIGN_COMMAND_BUFFER_FUNC(setIndexBuffer, name) \
-ASSIGN_COMMAND_BUFFER_FUNC(setStencilReference, name) \
-ASSIGN_COMMAND_BUFFER_FUNC(draw, name) \
-ASSIGN_COMMAND_BUFFER_FUNC(drawIndexed, name)
 
 #define ASSIGN_DRIVER(name) \
 ASSIGN_DRIVER_FUNC(destroyDevice, name) \
@@ -266,7 +250,6 @@ ASSIGN_DRIVER_FUNC(createSampler, name) \
 ASSIGN_DRIVER_FUNC(createShaderModule, name) \
 ASSIGN_DRIVER_FUNC(destroyShaderModule, name) \
 ASSIGN_DRIVER_FUNC(createPipelineLayout, name) \
-ASSIGN_DRIVER_FUNC(destroyPipelineLayout, name) \
 ASSIGN_DRIVER_FUNC(createRenderPipeline, name) \
 ASSIGN_DRIVER_FUNC(createComputePipeline, name) \
 ASSIGN_DRIVER_FUNC(createRayTracingPipeline, name) \

@@ -585,7 +585,7 @@ namespace
                 return VK_QUERY_TYPE_TIMESTAMP;
 
             case VGPUQueryType_Occlusion:
-            //case VGPUQueryType_BinaryOcclusion:
+                //case VGPUQueryType_BinaryOcclusion:
                 return VK_QUERY_TYPE_OCCLUSION;
 
             case VGPUQueryType_PipelineStatistics:
@@ -677,11 +677,11 @@ namespace
     static_assert(offsetof(VGPUViewport, minDepth) == offsetof(VkViewport, minDepth), "Layout mismatch");
     static_assert(offsetof(VGPUViewport, maxDepth) == offsetof(VkViewport, maxDepth), "Layout mismatch");
 
-    static_assert(sizeof(VGPURect) == sizeof(VkRect2D), "vgpu_rect mismatch");
-    static_assert(offsetof(VGPURect, x) == offsetof(VkRect2D, offset.x), "vgpu_rect Layout mismatch");
-    static_assert(offsetof(VGPURect, y) == offsetof(VkRect2D, offset.y), "vgpu_rect Layout mismatch");
-    static_assert(offsetof(VGPURect, width) == offsetof(VkRect2D, extent.width), "vgpu_rect Layout mismatch");
-    static_assert(offsetof(VGPURect, height) == offsetof(VkRect2D, extent.height), "vgpu_rect Layout mismatch");
+    static_assert(sizeof(VGPURect) == sizeof(VkRect2D), "VGPURect mismatch");
+    static_assert(offsetof(VGPURect, x) == offsetof(VkRect2D, offset.x), "VGPURect Layout mismatch");
+    static_assert(offsetof(VGPURect, y) == offsetof(VkRect2D, offset.y), "VGPURect Layout mismatch");
+    static_assert(offsetof(VGPURect, width) == offsetof(VkRect2D, extent.width), "VGPURect Layout mismatch");
+    static_assert(offsetof(VGPURect, height) == offsetof(VkRect2D, extent.height), "VGPURect Layout mismatch");
 
     static_assert(sizeof(VGPUDispatchIndirectCommand) == sizeof(VkDispatchIndirectCommand), "DispatchIndirectCommand mismatch");
     static_assert(offsetof(VGPUDispatchIndirectCommand, x) == offsetof(VkDispatchIndirectCommand, x), "Layout mismatch");
@@ -723,6 +723,7 @@ struct VulkanBuffer final : public VGPUBufferImpl
     VkBuffer handle = VK_NULL_HANDLE;
     VmaAllocation  allocation = nullptr;
     uint64_t size = 0;
+    VGPUBufferUsageFlags usage = 0;
     uint64_t allocatedSize = 0;
     VkDeviceAddress gpuAddress = 0;
     void* pMappedData = nullptr;
@@ -731,6 +732,7 @@ struct VulkanBuffer final : public VGPUBufferImpl
     void SetLabel(const char* label) override;
 
     uint64_t GetSize() const override { return size; }
+    VGPUBufferUsageFlags GetUsage() const override { return usage; }
     VGPUDeviceAddress GetGpuAddress() const override { return gpuAddress; }
 };
 
@@ -766,12 +768,17 @@ struct VulkanShader
     VkShaderModule handle;
 };
 
-struct VulkanPipelineLayout final
+struct VulkanPipelineLayout final : public VGPUPipelineLayoutImpl
 {
     VulkanRenderer* renderer = nullptr;
-    std::vector<VkDescriptorSetLayout> descriptorSetLayouts;
-    std::vector<uint32_t> descriptorSetSpaces;
+    std::vector<VkDescriptorSetLayout>  descriptorSetLayouts;
+    std::vector<uint32_t>               descriptorSetSpaces;
+    std::vector<VkPushConstantRange>    pushConstantRanges;
+
     VkPipelineLayout handle = VK_NULL_HANDLE;
+
+    ~VulkanPipelineLayout() override;
+    void SetLabel(const char* label) override;
 };
 
 struct VulkanPipeline final : public VGPUPipelineImpl
@@ -817,19 +824,84 @@ struct VulkanSwapChain final : public VGPUSwapChainImpl
     VGPUTextureFormat GetFormat() const override { return colorFormat; }
 };
 
-struct VulkanCommandBuffer
+class VulkanCommandBuffer final : public VGPUCommandBufferImpl
 {
+public:
     VulkanRenderer* renderer;
     bool hasLabel;
     VkCommandPool commandPools[VGPU_MAX_INFLIGHT_FRAMES];
     VkCommandBuffer commandBuffers[VGPU_MAX_INFLIGHT_FRAMES];
-    VkCommandBuffer handle;
+    VkCommandBuffer commandBuffer;
 
     uint32_t clearValueCount = 0;
     VkClearValue clearValues[VGPU_MAX_COLOR_ATTACHMENTS + 1];
 
+    VulkanPipeline* currentPipeline = nullptr;
     bool insideRenderPass;
     std::vector<VulkanSwapChain*> swapChains;
+
+    ~VulkanCommandBuffer() override;
+
+    void Reset();
+    void Begin(uint32_t frameIndex, const char* label);
+
+    void InsertImageMemoryBarrier(
+        VkImage                 image,
+        VkAccessFlags           src_access_mask,
+        VkAccessFlags           dst_access_mask,
+        VkImageLayout           old_layout,
+        VkImageLayout           new_layout,
+        VkPipelineStageFlags    src_stage_mask,
+        VkPipelineStageFlags    dst_stage_mask,
+        VkImageSubresourceRange subresource_range)
+    {
+        VkImageMemoryBarrier barrier{};
+        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.srcAccessMask = src_access_mask;
+        barrier.dstAccessMask = dst_access_mask;
+        barrier.oldLayout = old_layout;
+        barrier.newLayout = new_layout;
+        barrier.image = image;
+        barrier.subresourceRange = subresource_range;
+
+        vkCmdPipelineBarrier(
+            commandBuffer,
+            src_stage_mask,
+            dst_stage_mask,
+            0,
+            0, nullptr,
+            0, nullptr,
+            1, &barrier);
+    }
+
+    void pushDebugGroup(const char* groupLabel) override;
+    void popDebugGroup() override;
+    void insertDebugMarker(const char* debugLabel) override;
+    void setPipeline(VGPUPipeline pipeline) override;
+    void SetPushConstants(uint32_t pushConstantIndex, const void* data, uint32_t size) override;
+
+    void dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ) override;
+    void dispatchIndirect(VGPUBuffer buffer, uint64_t offset) override;
+
+    VGPUTexture acquireSwapchainTexture(VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight) override;
+
+    void beginRenderPass(const VGPURenderPassDesc* desc) override;
+    void endRenderPass() override;
+
+    void setViewport(const VGPUViewport* viewport) override;
+    void setViewports(uint32_t count, const VGPUViewport* viewports) override;
+
+    void SetScissorRect(const VGPURect* rects) override;
+    void SetScissorRects(uint32_t count, const VGPURect* rects) override;
+
+    void setVertexBuffer(uint32_t index, VGPUBuffer buffer, uint64_t offset) override;
+    void setIndexBuffer(VGPUBuffer buffer, VGPUIndexType type, uint64_t offset) override;
+    void setStencilReference(uint32_t reference) override;
+
+    void draw(uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t firstInstance) override;
+    void drawIndexed(uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t baseVertex, uint32_t firstInstance) override;
 };
 
 struct Vulkan_UploadContext
@@ -923,7 +995,7 @@ struct VulkanRenderer
     /* Command contexts */
     std::mutex cmdBuffersLocker;
     uint32_t cmdBuffersCount{ 0 };
-    std::vector<VGPUCommandBuffer_T*> commandBuffers;
+    std::vector<VulkanCommandBuffer*> commandBuffers;
 
     std::mutex uploadLocker;
     VkSemaphore uploadSemaphore = VK_NULL_HANDLE;
@@ -1396,22 +1468,11 @@ void VulkanTexture::SetLabel(const char* label)
     vulkan_SetObjectName(renderer, VK_OBJECT_TYPE_IMAGE, (uint64_t)handle, label);
 }
 
-/* VulkanSampler */
-VulkanSampler::~VulkanSampler()
-{
-    renderer->destroyMutex.lock();
-    renderer->destroyedSamplers.push_back(std::make_pair(handle, renderer->frameCount));
-    renderer->destroyMutex.unlock();
-}
-
-void VulkanSampler::SetLabel(const char* label)
-{
-    vulkan_SetObjectName(renderer, VK_OBJECT_TYPE_SAMPLER, (uint64_t)handle, label);
-}
-
 /* VulkanPipeline */
 VulkanPipeline::~VulkanPipeline()
 {
+    pipelineLayout->Release();
+
     renderer->destroyMutex.lock();
     renderer->destroyedPipelines.push_back(std::make_pair(handle, renderer->frameCount));
     renderer->destroyMutex.unlock();
@@ -1435,13 +1496,8 @@ static void vulkan_destroyDevice(VGPUDevice device)
 
     for (size_t i = 0; i < renderer->commandBuffers.size(); ++i)
     {
-        VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)renderer->commandBuffers[i]->driverData;
-        for (uint32_t j = 0; j < VGPU_MAX_INFLIGHT_FRAMES; ++j)
-        {
-            vkFreeCommandBuffers(renderer->device, commandBuffer->commandPools[j], 1, &commandBuffer->commandBuffers[j]);
-            vkDestroyCommandPool(renderer->device, commandBuffer->commandPools[j], nullptr);
-            //binderPools[i].Shutdown();
-        }
+        VulkanCommandBuffer* commandBuffer = renderer->commandBuffers[i];
+        delete commandBuffer;
     }
     renderer->commandBuffers.clear();
 
@@ -1651,8 +1707,8 @@ static void vulkan_getAdapterProperties(VGPURenderer* driverData, VGPUAdapterPro
 {
     VulkanRenderer* renderer = (VulkanRenderer*)driverData;
 
-    properties->vendorID = renderer->properties2.properties.vendorID;
-    properties->deviceID = renderer->properties2.properties.deviceID;
+    properties->vendorId = renderer->properties2.properties.vendorID;
+    properties->deviceId = renderer->properties2.properties.deviceID;
     properties->name = renderer->properties2.properties.deviceName;
     properties->driverDescription = renderer->driverDescription.c_str();
 
@@ -1749,6 +1805,7 @@ inline VGPUBuffer vulkan_createBuffer(VGPURenderer* driverData, const VGPUBuffer
         VulkanBuffer* buffer = new VulkanBuffer();
         buffer->renderer = renderer;
         buffer->size = desc->size;
+        buffer->usage = desc->usage;
         buffer->handle = (VkBuffer)desc->handle;
         buffer->allocation = VK_NULL_HANDLE;
         buffer->allocatedSize = 0u;
@@ -1817,8 +1874,6 @@ inline VGPUBuffer vulkan_createBuffer(VGPURenderer* driverData, const VGPUBuffer
     {
         bufferInfo.usage |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
     }
-
-    bufferInfo.usage |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
     bufferInfo.usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 
     uint32_t sharingIndices[3] = {};
@@ -1855,7 +1910,6 @@ inline VGPUBuffer vulkan_createBuffer(VGPURenderer* driverData, const VGPUBuffer
     memoryInfo.usage = VMA_MEMORY_USAGE_AUTO;
     if (desc->cpuAccess == VGPUCpuAccessMode_Read)
     {
-        bufferInfo.usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
         memoryInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
     }
     else if (desc->cpuAccess == VGPUCpuAccessMode_Write)
@@ -1879,10 +1933,11 @@ inline VGPUBuffer vulkan_createBuffer(VGPURenderer* driverData, const VGPUBuffer
     }
 
     buffer->size = desc->size;
+    buffer->usage = desc->usage;
 
     if (desc->label)
     {
-        vulkan_SetObjectName(renderer, VK_OBJECT_TYPE_BUFFER, (uint64_t)buffer->handle, desc->label);
+        buffer->SetLabel(desc->label);
     }
 
     if (memoryInfo.flags & VMA_ALLOCATION_CREATE_MAPPED_BIT)
@@ -2135,6 +2190,11 @@ static VGPUTexture vulkan_createTexture(VGPURenderer* driverData, const VGPUText
         return nullptr;
     }
 
+    if (desc->label)
+    {
+        texture->SetLabel(desc->label);
+    }
+
     if (pInitialData != nullptr)
     {
     }
@@ -2170,7 +2230,19 @@ static VGPUTexture vulkan_createTexture(VGPURenderer* driverData, const VGPUText
     return texture;
 }
 
-/* Sampler */
+/* VulkanSampler */
+VulkanSampler::~VulkanSampler()
+{
+    renderer->destroyMutex.lock();
+    renderer->destroyedSamplers.push_back(std::make_pair(handle, renderer->frameCount));
+    renderer->destroyMutex.unlock();
+}
+
+void VulkanSampler::SetLabel(const char* label)
+{
+    vulkan_SetObjectName(renderer, VK_OBJECT_TYPE_SAMPLER, (uint64_t)handle, label);
+}
+
 static VGPUSampler vulkan_createSampler(VGPURenderer* driverData, const VGPUSamplerDesc* desc)
 {
     VulkanRenderer* renderer = (VulkanRenderer*)driverData;
@@ -2225,7 +2297,7 @@ static VGPUSampler vulkan_createSampler(VGPURenderer* driverData, const VGPUSamp
 
     if (desc->label)
     {
-        vulkan_SetObjectName(renderer, VK_OBJECT_TYPE_SAMPLER, (uint64_t)sampler->handle, desc->label);
+        sampler->SetLabel(desc->label);
     }
 
     return sampler;
@@ -2266,10 +2338,24 @@ static void vulkan_destroyShaderModule(VGPURenderer* driverData, VGPUShaderModul
 }
 
 /* PipelineLayout */
+VulkanPipelineLayout::~VulkanPipelineLayout()
+{
+    renderer->destroyMutex.lock();
+    renderer->destroyedPipelineLayouts.push_back(std::make_pair(handle, renderer->frameCount));
+    renderer->destroyMutex.unlock();
+}
+
+void VulkanPipelineLayout::SetLabel(const char* label)
+{
+    vulkan_SetObjectName(renderer, VK_OBJECT_TYPE_PIPELINE_LAYOUT, (uint64_t)handle, label);
+}
+
 static VGPUPipelineLayout vulkan_createPipelineLayout(VGPURenderer* driverData, const VGPUPipelineLayoutDescriptor* descriptor)
 {
     VulkanRenderer* renderer = (VulkanRenderer*)driverData;
+
     VulkanPipelineLayout* layout = new VulkanPipelineLayout();
+    layout->renderer = renderer;
     layout->descriptorSetLayouts.resize(descriptor->descriptorSetCount);
     layout->descriptorSetSpaces.resize(descriptor->descriptorSetCount);
 
@@ -2284,20 +2370,23 @@ static VGPUPipelineLayout vulkan_createPipelineLayout(VGPURenderer* driverData, 
     setNum++;
 
     // Push constants
-    std::vector<VkPushConstantRange> pushConstantRanges;
-    uint32_t offset = 0;
-
-    for (uint32_t i = 0; i < descriptor->pushConstantCount; i++)
+    if (descriptor->pushConstantRangeCount > 0)
     {
-        const VGPUPushConstantDesc& pushConstantDesc = descriptor->pushConstants[i];
+        uint32_t offset = 0;
+        layout->pushConstantRanges.resize(descriptor->pushConstantRangeCount);
 
-        VkPushConstantRange& range = pushConstantRanges[i];
-        range = {};
-        range.stageFlags = ToVkShaderStageFlags(pushConstantDesc.visibility);
-        range.offset = offset;
-        range.size = pushConstantDesc.size;
+        for (uint32_t i = 0; i < descriptor->pushConstantRangeCount; i++)
+        {
+            const VGPUPushConstantRange& pushConstantRange = descriptor->pushConstantRanges[i];
 
-        offset += pushConstantDesc.size;
+            VkPushConstantRange& range = layout->pushConstantRanges[i];
+            range = {};
+            range.stageFlags = ToVkShaderStageFlags(pushConstantRange.visibility);
+            range.offset = offset;
+            range.size = pushConstantRange.size;
+
+            offset += pushConstantRange.size;
+        }
     }
 
     // Create pipeline layout
@@ -2305,8 +2394,8 @@ static VGPUPipelineLayout vulkan_createPipelineLayout(VGPURenderer* driverData, 
     createInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     //createInfo.setLayoutCount = setNum;
     //createInfo.pSetLayouts = descriptorSetLayouts;
-    createInfo.pushConstantRangeCount = descriptor->pushConstantCount;
-    createInfo.pPushConstantRanges = pushConstantRanges.data();
+    createInfo.pushConstantRangeCount = descriptor->pushConstantRangeCount;
+    createInfo.pPushConstantRanges = layout->pushConstantRanges.data();
 
     VkResult result = vkCreatePipelineLayout(renderer->device, &createInfo, nullptr, &layout->handle);
     if (result != VK_SUCCESS)
@@ -2315,18 +2404,12 @@ static VGPUPipelineLayout vulkan_createPipelineLayout(VGPURenderer* driverData, 
         return nullptr;
     }
 
-    return (VGPUPipelineLayout)layout;
-}
+    if (descriptor->label)
+    {
+        layout->SetLabel(descriptor->label);
+    }
 
-static void vulkan_destroyPipelineLayout(VGPURenderer* driverData, VGPUPipelineLayout resource)
-{
-    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
-    VulkanPipelineLayout* layout = (VulkanPipelineLayout*)resource;
-
-    renderer->destroyMutex.lock();
-    renderer->destroyedPipelineLayouts.push_back(std::make_pair(layout->handle, renderer->frameCount));
-    renderer->destroyMutex.unlock();
-    delete layout;
+    return layout;
 }
 
 /* Pipeline */
@@ -2522,13 +2605,21 @@ static VGPUPipeline vulkan_createRenderPipeline(VGPURenderer* driverData, const 
     pipeline->renderer = renderer;
     pipeline->type = VGPUPipelineType_Render;
     pipeline->pipelineLayout = layout;
+    pipeline->pipelineLayout->AddRef();
     pipeline->handle = handle;
+
+    if (desc->label)
+    {
+        pipeline->SetLabel(desc->label);
+    }
+
     return pipeline;
 }
 
 static VGPUPipeline vulkan_createComputePipeline(VGPURenderer* driverData, const VGPUComputePipelineDescriptor* desc)
 {
     VulkanRenderer* renderer = (VulkanRenderer*)driverData;
+    VulkanPipelineLayout* layout = (VulkanPipelineLayout*)desc->layout;
     VulkanShader* shader = (VulkanShader*)desc->shader;
 
     VkComputePipelineCreateInfo createInfo = {};
@@ -2553,18 +2644,35 @@ static VGPUPipeline vulkan_createComputePipeline(VGPURenderer* driverData, const
     VulkanPipeline* pipeline = new VulkanPipeline();
     pipeline->renderer = renderer;
     pipeline->type = VGPUPipelineType_Compute;
+    pipeline->pipelineLayout = layout;
+    pipeline->pipelineLayout->AddRef();
     pipeline->handle = handle;
+
+    if (desc->label)
+    {
+        pipeline->SetLabel(desc->label);
+    }
+
     return pipeline;
 }
 
 static VGPUPipeline vulkan_createRayTracingPipeline(VGPURenderer* driverData, const VGPURayTracingPipelineDescriptor* desc)
 {
     VulkanRenderer* renderer = (VulkanRenderer*)driverData;
+    VulkanPipelineLayout* layout = (VulkanPipelineLayout*)desc->layout;
     VGPU_UNUSED(desc);
 
     VulkanPipeline* pipeline = new VulkanPipeline();
     pipeline->renderer = renderer;
     pipeline->type = VGPUPipelineType_RayTracing;
+    pipeline->pipelineLayout = layout;
+    pipeline->pipelineLayout->AddRef();
+
+    if (desc->label)
+    {
+        pipeline->SetLabel(desc->label);
+    }
+
     return pipeline;
 }
 
@@ -2576,6 +2684,38 @@ VulkanQueryHeap::~VulkanQueryHeap()
 void VulkanQueryHeap::SetLabel(const char* label)
 {
     vulkan_SetObjectName(renderer, VK_OBJECT_TYPE_QUERY_POOL, (uint64_t)handle, label);
+}
+
+static VGPUQueryHeap vulkan_createQueryHeap(VGPURenderer* driverData, const VGPUQueryHeapDescriptor* descriptor)
+{
+    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
+
+    VulkanQueryHeap* heap = new VulkanQueryHeap();
+    heap->renderer = renderer;
+    heap->queryType = descriptor->type;
+
+    VkQueryPoolCreateInfo createInfo = {};
+    createInfo.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
+    createInfo.queryType = ToVk(descriptor->type);
+    createInfo.queryCount = descriptor->count;
+
+    if (descriptor->type == VGPUQueryType_PipelineStatistics)
+    {
+        //createInfo.pipelineStatistics = VulkanQueryPipelineStatisticFlags(GetPipelineStatistics());
+    }
+
+    VkResult result = vkCreateQueryPool(renderer->device, &createInfo, nullptr, &heap->handle);
+    if (result != VK_SUCCESS)
+    {
+        return nullptr;
+    }
+
+    if (descriptor->label)
+    {
+        heap->SetLabel(descriptor->label);
+    }
+
+    return heap;
 }
 
 /* VulkanSwapChain */
@@ -2616,35 +2756,6 @@ void VulkanSwapChain::SetLabel(const char* label)
     vulkan_SetObjectName(renderer, VK_OBJECT_TYPE_SWAPCHAIN_KHR, (uint64_t)handle, label);
 }
 
-static VGPUQueryHeap vulkan_createQueryHeap(VGPURenderer* driverData, const VGPUQueryHeapDescriptor* descriptor)
-{
-    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
-
-    VulkanQueryHeap* heap = new VulkanQueryHeap();
-    heap->renderer = renderer;
-    heap->queryType = descriptor->type;
-
-    VkQueryPoolCreateInfo createInfo = {};
-    createInfo.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
-    createInfo.queryType = ToVk(descriptor->type);
-    createInfo.queryCount = descriptor->count;
-
-    if (descriptor->type == VGPUQueryType_PipelineStatistics)
-    {
-        //createInfo.pipelineStatistics = VulkanQueryPipelineStatisticFlags(GetPipelineStatistics());
-    }
-
-    VkResult result = vkCreateQueryPool(renderer->device, &createInfo, nullptr, &heap->handle);
-    if (result != VK_SUCCESS)
-    {
-        return nullptr;
-    }
-
-    return heap;
-}
-
-
-/* SwapChain */
 static void vulkan_updateSwapChain(VulkanRenderer* renderer, VulkanSwapChain* swapChain)
 {
     VkResult result = VK_SUCCESS;
@@ -2805,7 +2916,7 @@ static void vulkan_updateSwapChain(VulkanRenderer* renderer, VulkanSwapChain* sw
     swapChain->extent = createInfo.imageExtent;
 }
 
-static VGPUSwapChain vulkan_createSwapChain(VGPURenderer* driverData, void* windowHandle, const VGPUSwapChainDesc* desc)
+static VGPUSwapChain vulkan_createSwapChain(VGPURenderer* driverData, void* windowHandle, const VGPUSwapChainDescriptor* desc)
 {
     VulkanRenderer* renderer = (VulkanRenderer*)driverData;
     VkSurfaceKHR vk_surface = vulkan_createSurface(renderer, windowHandle);
@@ -2830,47 +2941,76 @@ static VGPUSwapChain vulkan_createSwapChain(VGPURenderer* driverData, void* wind
     swapChain->vsync = desc->presentMode == VGPUPresentMode_Fifo;
     vulkan_updateSwapChain(renderer, swapChain);
 
+    if (desc->label)
+    {
+        swapChain->SetLabel(desc->label);
+    }
+
     return swapChain;
 }
 
-/* Commands */
-static void vulkan_insertImageMemoryBarrier(
-    VkCommandBuffer         commandBuffer,
-    VkImage                 image,
-    VkAccessFlags           src_access_mask,
-    VkAccessFlags           dst_access_mask,
-    VkImageLayout           old_layout,
-    VkImageLayout           new_layout,
-    VkPipelineStageFlags    src_stage_mask,
-    VkPipelineStageFlags    dst_stage_mask,
-    VkImageSubresourceRange subresource_range)
+/* CommandBuffer */
+VulkanCommandBuffer::~VulkanCommandBuffer()
 {
-    VkImageMemoryBarrier barrier{};
-    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.srcAccessMask = src_access_mask;
-    barrier.dstAccessMask = dst_access_mask;
-    barrier.oldLayout = old_layout;
-    barrier.newLayout = new_layout;
-    barrier.image = image;
-    barrier.subresourceRange = subresource_range;
+    Reset();
 
-    vkCmdPipelineBarrier(
-        commandBuffer,
-        src_stage_mask,
-        dst_stage_mask,
-        0,
-        0, nullptr,
-        0, nullptr,
-        1, &barrier);
+    for (uint32_t j = 0; j < VGPU_MAX_INFLIGHT_FRAMES; ++j)
+    {
+        //vkFreeCommandBuffers(renderer->device, commandPools[j], 1, &commandBuffers[j]);
+        vkDestroyCommandPool(renderer->device, commandPools[j], nullptr);
+        //binderPools[i].Shutdown();
+    }
 }
 
-static void vulkan_pushDebugGroup(VGPUCommandBufferImpl* driverData, const char* groupLabel)
+void VulkanCommandBuffer::Reset()
 {
-    VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
+    hasLabel = false;
+    clearValueCount = 0u;
+    insideRenderPass = false;
+    swapChains.clear();
 
-    if (!commandBuffer->renderer->debugUtils)
+    if (currentPipeline)
+    {
+        currentPipeline->Release();
+        currentPipeline = nullptr;
+    }
+}
+
+void VulkanCommandBuffer::Begin(uint32_t frameIndex, const char* label)
+{
+    VK_CHECK(vkResetCommandPool(renderer->device, commandPools[frameIndex], 0));
+
+    VkCommandBufferBeginInfo beginInfo = {};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    beginInfo.pInheritanceInfo = nullptr; // Optional
+    VK_CHECK(vkBeginCommandBuffer(commandBuffers[frameIndex], &beginInfo));
+
+    Reset();
+    commandBuffer = commandBuffers[frameIndex];
+
+    //binderPools[frameIndex].Reset();
+    //binder.Reset();
+    //frameAllocators[frameIndex].Reset();
+    //
+    //SetStencilReference(0);
+    //SetBlendColor(Colors::Transparent);
+    //
+    //if (device->features2.features.depthBounds == VK_TRUE)
+    //{
+    //    vkCmdSetDepthBounds(commandBuffer, 0.0f, 1.0f);
+    //}
+
+    if (label)
+    {
+        pushDebugGroup(label);
+        hasLabel = true;
+    }
+}
+
+void VulkanCommandBuffer::pushDebugGroup(const char* groupLabel)
+{
+    if (!renderer->debugUtils)
         return;
 
     VkDebugUtilsLabelEXT label;
@@ -2881,75 +3021,76 @@ static void vulkan_pushDebugGroup(VGPUCommandBufferImpl* driverData, const char*
     label.color[1] = 0.0f;
     label.color[2] = 0.0f;
     label.color[3] = 1.0f;
-    vkCmdBeginDebugUtilsLabelEXT(commandBuffer->handle, &label);
+    vkCmdBeginDebugUtilsLabelEXT(commandBuffer, &label);
 }
 
-static void vulkan_popDebugGroup(VGPUCommandBufferImpl* driverData)
+void VulkanCommandBuffer::popDebugGroup()
 {
-    VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
-
-    if (!commandBuffer->renderer->debugUtils)
+    if (!renderer->debugUtils)
         return;
 
-    vkCmdEndDebugUtilsLabelEXT(commandBuffer->handle);
+    vkCmdEndDebugUtilsLabelEXT(commandBuffer);
 }
 
-static void vulkan_insertDebugMarker(VGPUCommandBufferImpl* driverData, const char* groupLabel)
+void VulkanCommandBuffer::insertDebugMarker(const char* markerLabel)
 {
-    VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
-
-    if (!commandBuffer->renderer->debugUtils)
+    if (!renderer->debugUtils)
         return;
 
     VkDebugUtilsLabelEXT label;
     label.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT;
     label.pNext = nullptr;
-    label.pLabelName = groupLabel;
+    label.pLabelName = markerLabel;
     label.color[0] = 0.0f;
     label.color[1] = 0.0f;
     label.color[2] = 0.0f;
     label.color[3] = 1.0f;
-    vkCmdInsertDebugUtilsLabelEXT(commandBuffer->handle, &label);
+    vkCmdInsertDebugUtilsLabelEXT(commandBuffer, &label);
 }
 
-static void vulkan_setPipeline(VGPUCommandBufferImpl* driverData, VGPUPipeline pipeline)
+void VulkanCommandBuffer::setPipeline(VGPUPipeline pipeline)
 {
-    VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
-    VulkanPipeline* vulkanPipeline = (VulkanPipeline*)pipeline;
-    vkCmdBindPipeline(commandBuffer->handle, vulkanPipeline->bindPoint, vulkanPipeline->handle);
+    VulkanPipeline* newPipeline = (VulkanPipeline*)pipeline;
+    if (currentPipeline == newPipeline)
+        return;
+
+    currentPipeline = newPipeline;
+    currentPipeline->AddRef();
+
+    vkCmdBindPipeline(commandBuffer, currentPipeline->bindPoint, currentPipeline->handle);
 }
 
-static void vulkan_prepareDispatch(VulkanCommandBuffer* commandBuffer)
+void VulkanCommandBuffer::SetPushConstants(uint32_t pushConstantIndex, const void* data, uint32_t size)
 {
-    VGPU_UNUSED(commandBuffer);
-    VGPU_ASSERT(commandBuffer->insideRenderPass);
+    //VGPU_ASSERT(size <= renderer->limits.pushConstantsMaxSize);
+    VGPU_ASSERT(currentPipeline);
+
+    const VkPushConstantRange& range = currentPipeline->pipelineLayout->pushConstantRanges[pushConstantIndex];
+    vkCmdPushConstants(commandBuffer, currentPipeline->pipelineLayout->handle, range.stageFlags, range.offset, size, data);
 }
 
-static void vulkan_dispatch(VGPUCommandBufferImpl* driverData, uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)
+void VulkanCommandBuffer::dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)
 {
-    VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
-    vulkan_prepareDispatch(commandBuffer);
-    vkCmdDispatch(commandBuffer->handle, groupCountX, groupCountY, groupCountZ);
+    VGPU_ASSERT(!insideRenderPass);
+    vkCmdDispatch(commandBuffer, groupCountX, groupCountY, groupCountZ);
 }
 
-static void vulkan_dispatchIndirect(VGPUCommandBufferImpl* driverData, VGPUBuffer buffer, uint64_t offset)
+void VulkanCommandBuffer::dispatchIndirect(VGPUBuffer buffer, uint64_t offset)
 {
-    VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
-    vulkan_prepareDispatch(commandBuffer);
-
+    VGPU_ASSERT(!insideRenderPass);
     VulkanBuffer* vulkanBuffer = (VulkanBuffer*)buffer;
-    vkCmdDispatchIndirect(commandBuffer->handle, vulkanBuffer->handle, offset);
+
+    vkCmdDispatchIndirect(commandBuffer, vulkanBuffer->handle, offset);
 }
 
-static VGPUTexture vulkan_acquireSwapchainTexture(VGPUCommandBufferImpl* driverData, VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight)
+VGPUTexture VulkanCommandBuffer::acquireSwapchainTexture(VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight)
 {
-    VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
     VulkanSwapChain* vulkanSwapChain = (VulkanSwapChain*)swapChain;
 
     // Check if window is minimized
     VkSurfaceCapabilitiesKHR surfaceProperties;
     VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
-        commandBuffer->renderer->physicalDevice,
+        renderer->physicalDevice,
         vulkanSwapChain->surface,
         &surfaceProperties));
 
@@ -2962,11 +3103,11 @@ static VGPUTexture vulkan_acquireSwapchainTexture(VGPUCommandBufferImpl* driverD
     if (vulkanSwapChain->extent.width != surfaceProperties.currentExtent.width ||
         vulkanSwapChain->extent.height != surfaceProperties.currentExtent.height)
     {
-        vulkan_waitIdle((VGPURenderer*)commandBuffer->renderer);
-        vulkan_updateSwapChain(commandBuffer->renderer, vulkanSwapChain);
+        vulkan_waitIdle((VGPURenderer*)renderer);
+        vulkan_updateSwapChain(renderer, vulkanSwapChain);
     }
 
-    VkResult result = vkAcquireNextImageKHR(commandBuffer->renderer->device,
+    VkResult result = vkAcquireNextImageKHR(renderer->device,
         vulkanSwapChain->handle,
         UINT64_MAX,
         vulkanSwapChain->acquireSemaphore, VK_NULL_HANDLE,
@@ -2977,9 +3118,9 @@ static VGPUTexture vulkan_acquireSwapchainTexture(VGPUCommandBufferImpl* driverD
         // Handle outdated error in acquire
         if (result == VK_SUBOPTIMAL_KHR || result == VK_ERROR_OUT_OF_DATE_KHR)
         {
-            vulkan_waitIdle((VGPURenderer*)commandBuffer->renderer);
-            vulkan_updateSwapChain(commandBuffer->renderer, vulkanSwapChain);
-            return vulkan_acquireSwapchainTexture(driverData, swapChain, pWidth, pHeight);
+            vulkan_waitIdle((VGPURenderer*)renderer);
+            vulkan_updateSwapChain(renderer, vulkanSwapChain);
+            return acquireSwapchainTexture(swapChain, pWidth, pHeight);
         }
     }
 
@@ -2992,8 +3133,7 @@ static VGPUTexture vulkan_acquireSwapchainTexture(VGPUCommandBufferImpl* driverD
     range.levelCount = VK_REMAINING_MIP_LEVELS;
     range.baseArrayLayer = 0;
     range.layerCount = VK_REMAINING_ARRAY_LAYERS;
-    vulkan_insertImageMemoryBarrier(
-        commandBuffer->handle,
+    InsertImageMemoryBarrier(
         swapchainTexture->handle,
         0,
         VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
@@ -3004,7 +3144,7 @@ static VGPUTexture vulkan_acquireSwapchainTexture(VGPUCommandBufferImpl* driverD
         range
     );
 
-    commandBuffer->swapChains.push_back(vulkanSwapChain);
+    swapChains.push_back(vulkanSwapChain);
 
     if (pWidth) {
         *pWidth = vulkanSwapChain->extent.width;
@@ -3014,14 +3154,11 @@ static VGPUTexture vulkan_acquireSwapchainTexture(VGPUCommandBufferImpl* driverD
         *pHeight = vulkanSwapChain->extent.height;
     }
 
-    return (VGPUTexture)swapchainTexture;
+    return swapchainTexture;
 }
 
-static void vulkan_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGPURenderPassDesc* desc)
+void VulkanCommandBuffer::beginRenderPass(const VGPURenderPassDesc* desc)
 {
-    VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
-    VulkanRenderer* renderer = commandBuffer->renderer;
-
     uint32_t width = renderer->properties2.properties.limits.maxFramebufferWidth;
     uint32_t height = renderer->properties2.properties.limits.maxFramebufferHeight;
 
@@ -3051,7 +3188,7 @@ static void vulkan_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGPU
         attachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
         attachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
         attachmentInfo.pNext = nullptr;
-        attachmentInfo.imageView = vulkan_GetRTV(commandBuffer->renderer, texture, level, slice);
+        attachmentInfo.imageView = vulkan_GetRTV(renderer, texture, level, slice);
         attachmentInfo.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         attachmentInfo.resolveMode = VK_RESOLVE_MODE_NONE;
         attachmentInfo.loadOp = ToVkAttachmentLoadOp(attachment->loadAction);
@@ -3076,7 +3213,7 @@ static void vulkan_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGPU
 
         depthAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
         depthAttachment.pNext = VK_NULL_HANDLE;
-        depthAttachment.imageView = vulkan_GetRTV(commandBuffer->renderer, texture, level, slice);
+        depthAttachment.imageView = vulkan_GetRTV(renderer, texture, level, slice);
         depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
         depthAttachment.resolveMode = VK_RESOLVE_MODE_NONE;
         depthAttachment.loadOp = ToVkAttachmentLoadOp(attachment->depthLoadOp);
@@ -3091,8 +3228,7 @@ static void vulkan_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGPU
         depthTextureRange.baseArrayLayer = 0;
         depthTextureRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
 
-        vulkan_insertImageMemoryBarrier(
-            commandBuffer->handle,
+        InsertImageMemoryBarrier(
             texture->handle,
             0,
             VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
@@ -3112,7 +3248,7 @@ static void vulkan_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGPU
     renderingInfo.pDepthAttachment = hasDepthOrStencil ? &depthAttachment : nullptr;
     renderingInfo.pStencilAttachment = nullptr;  // !vgpuIsDepthOnlyFormat(depthStencilFormat) ? &depthAttachment : nullptr;
 
-    vkCmdBeginRendering(commandBuffer->handle, &renderingInfo);
+    vkCmdBeginRendering(commandBuffer, &renderingInfo);
 
     // The viewport and scissor default to cover all of the attachments
     VkViewport viewport;
@@ -3122,56 +3258,27 @@ static void vulkan_beginRenderPass(VGPUCommandBufferImpl* driverData, const VGPU
     viewport.height = -static_cast<float>(height);
     viewport.minDepth = 0.0f;
     viewport.maxDepth = 1.0f;
-    vkCmdSetViewport(commandBuffer->handle, 0, 1, &viewport);
+    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
 
     VkRect2D scissorRect;
     scissorRect.offset.x = 0;
     scissorRect.offset.y = 0;
     scissorRect.extent.width = width;
     scissorRect.extent.height = height;
-    vkCmdSetScissor(commandBuffer->handle, 0, 1, &scissorRect);
+    vkCmdSetScissor(commandBuffer, 0, 1, &scissorRect);
 
-    commandBuffer->insideRenderPass = true;
+    insideRenderPass = true;
 }
 
-static void vulkan_endRenderPass(VGPUCommandBufferImpl* driverData)
+void VulkanCommandBuffer::endRenderPass()
 {
-    VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
-    vkCmdEndRendering(commandBuffer->handle);
+    vkCmdEndRendering(commandBuffer);
 
-    commandBuffer->insideRenderPass = false;
+    insideRenderPass = false;
 }
 
-static void vulkan_setVertexBuffer(VGPUCommandBufferImpl* driverData, uint32_t index, VGPUBuffer buffer, uint64_t offset)
+void VulkanCommandBuffer::setViewport(const VGPUViewport* viewport)
 {
-    VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
-    VulkanBuffer* vulkanBuffer = (VulkanBuffer*)buffer;
-    vkCmdBindVertexBuffers(commandBuffer->handle, index, 1, &vulkanBuffer->handle, &offset);
-}
-
-static void vulkan_setIndexBuffer(VGPUCommandBufferImpl* driverData, VGPUBuffer buffer, VGPUIndexType type, uint64_t offset)
-{
-    VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
-    VulkanBuffer* vulkanBuffer = (VulkanBuffer*)buffer;
-    const VkIndexType vkIndexType = (type == VGPUIndexType_Uint16) ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32;
-    vkCmdBindIndexBuffer(commandBuffer->handle, vulkanBuffer->handle, offset, vkIndexType);
-}
-
-static void vulkan_setStencilReference(VGPUCommandBufferImpl* driverData, uint32_t reference)
-{
-    VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
-    vkCmdSetStencilReference(commandBuffer->handle, VK_STENCIL_FRONT_AND_BACK, reference);
-}
-
-static void vulkan_prepareDraw(VulkanCommandBuffer* commandBuffer)
-{
-    VGPU_VERIFY(commandBuffer->insideRenderPass);
-}
-
-static void vulkan_setViewport(VGPUCommandBufferImpl* driverData, const VGPUViewport* viewport)
-{
-    VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
-
     VkViewport vkViewport;
     vkViewport.x = viewport->x;
     vkViewport.y = viewport->height - viewport->y;
@@ -3180,14 +3287,12 @@ static void vulkan_setViewport(VGPUCommandBufferImpl* driverData, const VGPUView
     vkViewport.minDepth = viewport->minDepth;
     vkViewport.maxDepth = viewport->maxDepth;
 
-    vkCmdSetViewport(commandBuffer->handle, 0, 1, &vkViewport);
+    vkCmdSetViewport(commandBuffer, 0, 1, &vkViewport);
 }
 
-static void vulkan_setViewports(VGPUCommandBufferImpl* driverData, uint32_t count, const VGPUViewport* viewports)
+void VulkanCommandBuffer::setViewports(uint32_t count, const VGPUViewport* viewports)
 {
-    VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
-
-    VGPU_ASSERT(count < commandBuffer->renderer->properties2.properties.limits.maxViewports);
+    VGPU_ASSERT(count < renderer->properties2.properties.limits.maxViewports);
 
     // Flip viewport to match DirectX coordinate system
     VkViewport vkViewports[16];
@@ -3200,54 +3305,68 @@ static void vulkan_setViewports(VGPUCommandBufferImpl* driverData, uint32_t coun
         vkViewport.height = -viewport.height;
     }
 
-    vkCmdSetViewport(commandBuffer->handle, 0, count, vkViewports);
+    vkCmdSetViewport(commandBuffer, 0, count, vkViewports);
 }
 
-static void vulkan_setScissorRect(VGPUCommandBufferImpl* driverData, const VGPURect* rect)
+void VulkanCommandBuffer::SetScissorRect(const VGPURect* rect)
 {
-    VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
-    VkRect2D vk_rect = {};
-    vk_rect.offset.x = rect->x;
-    vk_rect.offset.y = rect->y;
-    vk_rect.extent.width = (uint32_t)rect->width;
-    vk_rect.extent.height = (uint32_t)rect->height;
-
-    vkCmdSetScissor(commandBuffer->handle, 0u, 1u, &vk_rect);
+    vkCmdSetScissor(commandBuffer, 0, 1, (VkRect2D*)&rect);
 }
 
-//static void vulkan_setScissorRects(VGPUCommandBufferImpl* driverData, uint32_t count, const VGPURect* rects)
-//{
-//    VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
-//    VGPU_ASSERT(count < commandBuffer->renderer->properties2.properties.limits.maxViewports);
-//
-//    vkCmdSetScissor(commandBuffer->handle, 0, count, (const VkRect2D*)rects);
-//}
-
-static void vulkan_draw(VGPUCommandBufferImpl* driverData, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t firstInstance)
+void VulkanCommandBuffer::SetScissorRects(uint32_t count, const VGPURect* rects)
 {
-    VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
-    vulkan_prepareDraw(commandBuffer);
-    vkCmdDraw(commandBuffer->handle, vertexCount, instanceCount, vertexStart, firstInstance);
+    VGPU_ASSERT(count < renderer->properties2.properties.limits.maxViewports);
+
+    vkCmdSetScissor(commandBuffer, 0, count, (const VkRect2D*)rects);
 }
 
-static void vulkan_drawIndexed(VGPUCommandBufferImpl* driverData, uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t baseVertex, uint32_t firstInstance)
+void VulkanCommandBuffer::setVertexBuffer(uint32_t index, VGPUBuffer buffer, uint64_t offset)
 {
-    VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)driverData;
-    vulkan_prepareDraw(commandBuffer);
-    vkCmdDrawIndexed(commandBuffer->handle, indexCount, instanceCount, firstIndex, baseVertex, firstInstance);
+    VulkanBuffer* vulkanBuffer = (VulkanBuffer*)buffer;
+
+    vkCmdBindVertexBuffers(commandBuffer, index, 1, &vulkanBuffer->handle, &offset);
 }
+
+void VulkanCommandBuffer::setIndexBuffer(VGPUBuffer buffer, VGPUIndexType type, uint64_t offset)
+{
+    VulkanBuffer* vulkanBuffer = (VulkanBuffer*)buffer;
+
+    const VkIndexType vkIndexType = (type == VGPUIndexType_Uint16) ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32;
+    vkCmdBindIndexBuffer(commandBuffer, vulkanBuffer->handle, offset, vkIndexType);
+}
+
+void VulkanCommandBuffer::setStencilReference(uint32_t reference)
+{
+    vkCmdSetStencilReference(commandBuffer, VK_STENCIL_FRONT_AND_BACK, reference);
+}
+
+void VulkanCommandBuffer::draw(uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t firstInstance)
+{
+    VGPU_ASSERT(insideRenderPass);
+
+    vkCmdDraw(commandBuffer, vertexCount, instanceCount, vertexStart, firstInstance);
+}
+
+void VulkanCommandBuffer::drawIndexed(uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t baseVertex, uint32_t firstInstance)
+{
+    VGPU_ASSERT(insideRenderPass);
+
+    vkCmdDrawIndexed(commandBuffer, indexCount, instanceCount, firstIndex, baseVertex, firstInstance);
+}
+
 
 static VGPUCommandBuffer vulkan_beginCommandBuffer(VGPURenderer* driverData, VGPUCommandQueue queueType, const char* label)
 {
     VulkanRenderer* renderer = (VulkanRenderer*)driverData;
-    VulkanCommandBuffer* impl = nullptr;
+
+    VulkanCommandBuffer* commandBuffer = nullptr;
 
     renderer->cmdBuffersLocker.lock();
     uint32_t cmd_current = renderer->cmdBuffersCount++;
     if (cmd_current >= renderer->commandBuffers.size())
     {
-        impl = new VulkanCommandBuffer();
-        impl->renderer = renderer;
+        commandBuffer = new VulkanCommandBuffer();
+        commandBuffer->renderer = renderer;
 
         for (uint32_t i = 0; i < VGPU_MAX_INFLIGHT_FRAMES; ++i)
         {
@@ -3272,62 +3391,28 @@ static VGPUCommandBuffer vulkan_beginCommandBuffer(VGPURenderer* driverData, VGP
 
             poolInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
             //poolInfo.queueFamilyIndex = renderer->computeQueueFamily;
-            VK_CHECK(vkCreateCommandPool(renderer->device, &poolInfo, nullptr, &impl->commandPools[i]));
+            VK_CHECK(vkCreateCommandPool(renderer->device, &poolInfo, nullptr, &commandBuffer->commandPools[i]));
 
             VkCommandBufferAllocateInfo commandBufferInfo = {};
             commandBufferInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
             commandBufferInfo.commandBufferCount = 1;
-            commandBufferInfo.commandPool = impl->commandPools[i];
+            commandBufferInfo.commandPool = commandBuffer->commandPools[i];
             commandBufferInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-            VK_CHECK(vkAllocateCommandBuffers(renderer->device, &commandBufferInfo, &impl->commandBuffers[i]));
+            VK_CHECK(vkAllocateCommandBuffers(renderer->device, &commandBufferInfo, &commandBuffer->commandBuffers[i]));
             //binderPools[i].Init(device);
         }
-
-        VGPUCommandBuffer_T* commandBuffer = new VGPUCommandBuffer_T();
-        ASSIGN_COMMAND_BUFFER(vulkan);
-        commandBuffer->driverData = (VGPUCommandBufferImpl*)impl;
 
         renderer->commandBuffers.push_back(commandBuffer);
     }
     else
     {
-        impl = (VulkanCommandBuffer*)renderer->commandBuffers.back()->driverData;
+        commandBuffer = (VulkanCommandBuffer*)renderer->commandBuffers.back();
     }
 
     renderer->cmdBuffersLocker.unlock();
 
     // Begin recording
-    VK_CHECK(vkResetCommandPool(renderer->device, impl->commandPools[renderer->frameIndex], 0));
-
-    VkCommandBufferBeginInfo beginInfo = {};
-    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-    beginInfo.pInheritanceInfo = nullptr; // Optional
-    VK_CHECK(vkBeginCommandBuffer(impl->commandBuffers[renderer->frameIndex], &beginInfo));
-
-    impl->handle = impl->commandBuffers[renderer->frameIndex];
-    impl->hasLabel = false;
-    impl->clearValueCount = 0u;
-    impl->insideRenderPass = false;
-    impl->swapChains.clear();
-
-    //binderPools[frameIndex].Reset();
-    //binder.Reset();
-    //frameAllocators[frameIndex].Reset();
-    //
-    //SetStencilReference(0);
-    //SetBlendColor(Colors::Transparent);
-    //
-    //if (device->features2.features.depthBounds == VK_TRUE)
-    //{
-    //    vkCmdSetDepthBounds(commandBuffer, 0.0f, 1.0f);
-    //}
-
-    if (label)
-    {
-        vulkan_pushDebugGroup((VGPUCommandBufferImpl*)impl, label);
-        impl->hasLabel = true;
-    }
+    commandBuffer->Begin(renderer->frameIndex, label);
 
     return renderer->commandBuffers.back();
 }
@@ -3375,7 +3460,7 @@ static uint64_t vulkan_submit(VGPURenderer* driverData, VGPUCommandBuffer* comma
 
         for (uint32_t i = 0; i < count; i += 1)
         {
-            VulkanCommandBuffer* commandBuffer = (VulkanCommandBuffer*)commandBuffers[i]->driverData;
+            VulkanCommandBuffer* commandBuffer = static_cast<VulkanCommandBuffer*>(commandBuffers[i]);
 
             for (size_t j = 0; j < commandBuffer->swapChains.size(); ++j)
             {
@@ -3397,8 +3482,7 @@ static uint64_t vulkan_submit(VGPURenderer* driverData, VGPUCommandBuffer* comma
                 range.levelCount = VK_REMAINING_MIP_LEVELS;
                 range.baseArrayLayer = 0;
                 range.layerCount = VK_REMAINING_ARRAY_LAYERS;
-                vulkan_insertImageMemoryBarrier(
-                    commandBuffer->handle,
+                commandBuffer->InsertImageMemoryBarrier(
                     swapChain->backbufferTextures[swapChain->imageIndex]->handle,
                     VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
                     0,
@@ -3411,12 +3495,12 @@ static uint64_t vulkan_submit(VGPURenderer* driverData, VGPUCommandBuffer* comma
 
             if (commandBuffer->hasLabel)
             {
-                vulkan_popDebugGroup((VGPUCommandBufferImpl*)commandBuffer);
+                commandBuffer->popDebugGroup();
             }
 
-            result = vkEndCommandBuffer(commandBuffer->handle);
+            result = vkEndCommandBuffer(commandBuffer->commandBuffer);
             VGPU_ASSERT(result == VK_SUCCESS);
-            submitCommandBuffers.push_back(commandBuffer->handle);
+            submitCommandBuffers.push_back(commandBuffer->commandBuffer);
         }
 
         // Submit now
@@ -3564,7 +3648,7 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
     if (renderer->x11xcb.handle)
     {
         renderer->x11xcb.GetXCBConnection = (PFN_XGetXCBConnection)dlsym(renderer->x11xcb.handle, "XGetXCBConnection");
-    }
+}
 #endif
 
     VkResult result = VK_SUCCESS;
@@ -4105,35 +4189,35 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
         const auto FindVacantQueue = [&](uint32_t& family, uint32_t& index,
             VkQueueFlags required, VkQueueFlags ignore_flags,
             float priority) -> bool
+        {
+            for (uint32_t familyIndex = 0; familyIndex < queueFamilyCount; familyIndex++)
             {
-                for (uint32_t familyIndex = 0; familyIndex < queueFamilyCount; familyIndex++)
+                if ((queueFamilies[familyIndex].queueFlags & ignore_flags) != 0)
+                    continue;
+
+                // A graphics queue candidate must support present for us to select it.
+                if ((required & VK_QUEUE_GRAPHICS_BIT) != 0)
                 {
-                    if ((queueFamilies[familyIndex].queueFlags & ignore_flags) != 0)
+                    VkBool32 supported = vulkan_queryPresentationSupport(renderer->physicalDevice, familyIndex);
+                    if (!supported)
                         continue;
-
-                    // A graphics queue candidate must support present for us to select it.
-                    if ((required & VK_QUEUE_GRAPHICS_BIT) != 0)
-                    {
-                        VkBool32 supported = vulkan_queryPresentationSupport(renderer->physicalDevice, familyIndex);
-                        if (!supported)
-                            continue;
-                        //if (vkGetPhysicalDeviceSurfaceSupportKHR(renderer->physicalDevice, familyIndex, vk_surface, &supported) != VK_SUCCESS || !supported)
-                        //    continue;
-                    }
-
-                    if (queueFamilies[familyIndex].queueCount &&
-                        (queueFamilies[familyIndex].queueFlags & required) == required)
-                    {
-                        family = familyIndex;
-                        queueFamilies[familyIndex].queueCount--;
-                        index = queueOffsets[familyIndex]++;
-                        queuePriorities[familyIndex].push_back(priority);
-                        return true;
-                    }
+                    //if (vkGetPhysicalDeviceSurfaceSupportKHR(renderer->physicalDevice, familyIndex, vk_surface, &supported) != VK_SUCCESS || !supported)
+                    //    continue;
                 }
 
-                return false;
-            };
+                if (queueFamilies[familyIndex].queueCount &&
+                    (queueFamilies[familyIndex].queueFlags & required) == required)
+                {
+                    family = familyIndex;
+                    queueFamilies[familyIndex].queueCount--;
+                    index = queueOffsets[familyIndex]++;
+                    queuePriorities[familyIndex].push_back(priority);
+                    return true;
+                }
+            }
+
+            return false;
+        };
 
         if (!FindVacantQueue(renderer->graphicsQueueFamily, graphicsQueueIndex,
             VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT, 0, 0.5f))
