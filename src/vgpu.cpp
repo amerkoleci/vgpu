@@ -660,7 +660,7 @@ void vgpuSetPipeline(VGPUCommandBuffer commandBuffer, VGPUPipeline pipeline)
 {
     VGPU_ASSERT(pipeline);
 
-    commandBuffer->setPipeline(pipeline);
+    commandBuffer->SetPipeline(pipeline);
 }
 
 void vgpuSetPushConstants(VGPUCommandBuffer commandBuffer, uint32_t pushConstantIndex, const void* data, uint32_t size)
@@ -673,14 +673,14 @@ void vgpuSetPushConstants(VGPUCommandBuffer commandBuffer, uint32_t pushConstant
 
 void vgpuDispatch(VGPUCommandBuffer commandBuffer, uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)
 {
-    commandBuffer->dispatch(groupCountX, groupCountY, groupCountZ);
+    commandBuffer->Dispatch(groupCountX, groupCountY, groupCountZ);
 }
 
 void vgpuDispatchIndirect(VGPUCommandBuffer commandBuffer, VGPUBuffer buffer, uint64_t offset)
 {
     NULL_RETURN(buffer);
 
-    commandBuffer->dispatchIndirect(buffer, offset);
+    commandBuffer->DispatchIndirect(buffer, offset);
 }
 
 VGPUTexture vgpuAcquireSwapchainTexture(VGPUCommandBuffer commandBuffer, VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight)
@@ -753,6 +753,26 @@ void vgpuDraw(VGPUCommandBuffer commandBuffer, uint32_t vertexStart, uint32_t ve
 void vgpuDrawIndexed(VGPUCommandBuffer commandBuffer, uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t baseVertex, uint32_t firstInstance)
 {
     commandBuffer->drawIndexed(indexCount, instanceCount, firstIndex, baseVertex, firstInstance);
+}
+
+void vgpuBeginQuery(VGPUCommandBuffer commandBuffer, VGPUQueryHeap heap, uint32_t index)
+{
+    commandBuffer->BeginQuery(heap, index);
+}
+
+void vgpuEndQuery(VGPUCommandBuffer commandBuffer, VGPUQueryHeap heap, uint32_t index)
+{
+    commandBuffer->EndQuery(heap, index);
+}
+
+void vgpuResolveQuery(VGPUCommandBuffer commandBuffer, VGPUQueryHeap heap, uint32_t index, uint32_t count, VGPUBuffer destinationBuffer, uint64_t destinationOffset)
+{
+    commandBuffer->ResolveQuery(heap, index, count, destinationBuffer, destinationOffset);
+}
+
+void vgpuResetQuery(VGPUCommandBuffer commandBuffer, VGPUQueryHeap heap, uint32_t index, uint32_t count)
+{
+    commandBuffer->ResetQuery(heap, index, count);
 }
 
 // Format mapping table. The rows must be in the exactly same order as Format enum members are defined.

@@ -538,22 +538,33 @@ typedef enum VGPUPipelineType
 } VGPUPipelineType;
 
 typedef enum VGPUQueryType {
-    VGPUQueryType_Occlusion = 0x00000000,
-    VGPUQueryType_PipelineStatistics = 0x00000001,
-    VGPUQueryType_Timestamp = 0x00000002,
+    /// Used for occlusion query heap or occlusion queries
+    VGPUQueryType_Occlusion = 0,
+    /// Can be used in the same heap as occlusion
+    VGPUQueryType_BinaryOcclusion = 1,
+    /// Create a heap to contain timestamp queries
+    VGPUQueryType_Timestamp = 2,
+    /// Create a heap to contain a structure of `PipelineStatistics`
+    VGPUQueryType_PipelineStatistics = 3,
 
     _VGPUQueryType_Force32 = 0x7FFFFFFF
 } VGPUQueryType;
 
-typedef enum VGPUPipelineStatisticName {
-    VGPUPipelineStatisticName_VertexShaderInvocations = 0x00000000,
-    VGPUPipelineStatisticName_ClipperInvocations = 0x00000001,
-    VGPUPipelineStatisticName_ClipperPrimitivesOut = 0x00000002,
-    VGPUPipelineStatisticName_FragmentShaderInvocations = 0x00000003,
-    VGPUPipelineStatisticName_ComputeShaderInvocations = 0x00000004,
+typedef enum VGPUQueryPipelineStatistic {
+    VGPUQueryPipelineStatistic_None = 0,
+    VGPUQueryPipelineStatistic_InputAssemblyVertices = (1 << 0),
+    VGPUQueryPipelineStatistic_InputAssemblyPrimitives = (1 << 1),
+    VGPUQueryPipelineStatistic_VertexShaderInvocations = (1 << 2),
+    VGPUQueryPipelineStatistic_ClipperInvocations = (1 << 3),
+    VGPUQueryPipelineStatistic_ClipperPrimitives = (1 << 4),
+    VGPUQueryPipelineStatistic_FragmentShaderInvocations = (1 << 5),
+    VGPUQueryPipelineStatistic_HullShaderInvocations = (1 << 6),
+    VGPUQueryPipelineStatistic_DomainShaderInvocations = (1 << 7),
+    VGPUQueryPipelineStatistic_ComputeShaderInvocations = (1 << 8),
 
-    _VGPUPipelineStatisticName_Force32 = 0x7FFFFFFF
-} VGPUPipelineStatisticName;
+    _VGPUQueryPipelineStatistic_Force32 = 0x7FFFFFFF
+} VGPUQueryPipelineStatistic;
+typedef VGPUFlags VGPUQueryPipelineStatisticFlags;
 
 typedef struct VGPUColor {
     float r;
@@ -805,8 +816,7 @@ typedef struct VGPUQueryHeapDescriptor {
     const char* label;
     VGPUQueryType type;
     uint32_t count;
-    const VGPUPipelineStatisticName* pipelineStatistics;
-    uint32_t pipelineStatisticsCount;
+    VGPUQueryPipelineStatisticFlags pipelineStatistics;
 } VGPUQueryHeapDescriptor;
 
 typedef struct VGPUSwapChainDescriptor {
@@ -963,9 +973,13 @@ VGPU_API void vgpuSetStencilReference(VGPUCommandBuffer commandBuffer, uint32_t 
 VGPU_API void vgpuDraw(VGPUCommandBuffer commandBuffer, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t firstInstance);
 VGPU_API void vgpuDrawIndexed(VGPUCommandBuffer commandBuffer, uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t baseVertex, uint32_t firstInstance);
 
+VGPU_API void vgpuBeginQuery(VGPUCommandBuffer commandBuffer, VGPUQueryHeap heap, uint32_t index);
+VGPU_API void vgpuEndQuery(VGPUCommandBuffer commandBuffer, VGPUQueryHeap heap, uint32_t index);
+VGPU_API void vgpuResolveQuery(VGPUCommandBuffer commandBuffer, VGPUQueryHeap heap, uint32_t index, uint32_t count, VGPUBuffer destinationBuffer, uint64_t destinationOffset);
+VGPU_API void vgpuResetQuery(VGPUCommandBuffer commandBuffer, VGPUQueryHeap heap, uint32_t index, uint32_t count);
+
 /* Helper functions */
-typedef struct VGPUPixelFormatInfo
-{
+typedef struct VGPUPixelFormatInfo {
     VGPUTextureFormat format;
     const char* name;
     uint8_t bytesPerBlock;
@@ -974,8 +988,7 @@ typedef struct VGPUPixelFormatInfo
     VGPUFormatKind kind;
 } VGPUPixelFormatInfo;
 
-typedef struct VGPUVertexFormatInfo
-{
+typedef struct VGPUVertexFormatInfo {
     VGPUVertexFormat format;
     uint32_t byteSize;
     uint32_t componentCount;

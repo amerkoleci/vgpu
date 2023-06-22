@@ -581,12 +581,12 @@ namespace
     {
         switch (type)
         {
+            case VGPUQueryType_Occlusion:
+            case VGPUQueryType_BinaryOcclusion:
+                return VK_QUERY_TYPE_OCCLUSION;
+
             case VGPUQueryType_Timestamp:
                 return VK_QUERY_TYPE_TIMESTAMP;
-
-            case VGPUQueryType_Occlusion:
-                //case VGPUQueryType_BinaryOcclusion:
-                return VK_QUERY_TYPE_OCCLUSION;
 
             case VGPUQueryType_PipelineStatistics:
                 return VK_QUERY_TYPE_PIPELINE_STATISTICS;
@@ -879,11 +879,11 @@ public:
     void pushDebugGroup(const char* groupLabel) override;
     void popDebugGroup() override;
     void insertDebugMarker(const char* debugLabel) override;
-    void setPipeline(VGPUPipeline pipeline) override;
+    void SetPipeline(VGPUPipeline pipeline) override;
     void SetPushConstants(uint32_t pushConstantIndex, const void* data, uint32_t size) override;
 
-    void dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ) override;
-    void dispatchIndirect(VGPUBuffer buffer, uint64_t offset) override;
+    void Dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ) override;
+    void DispatchIndirect(VGPUBuffer buffer, uint64_t offset) override;
 
     VGPUTexture acquireSwapchainTexture(VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight) override;
 
@@ -899,6 +899,11 @@ public:
     void setVertexBuffer(uint32_t index, VGPUBuffer buffer, uint64_t offset) override;
     void setIndexBuffer(VGPUBuffer buffer, VGPUIndexType type, uint64_t offset) override;
     void setStencilReference(uint32_t reference) override;
+
+    void BeginQuery(VGPUQueryHeap heap, uint32_t index) override;
+    void EndQuery(VGPUQueryHeap heap, uint32_t index) override;
+    void ResolveQuery(VGPUQueryHeap heap, uint32_t index, uint32_t count, VGPUBuffer destinationBuffer, uint64_t destinationOffset) override;
+    void ResetQuery(VGPUQueryHeap heap, uint32_t index, uint32_t count) override;
 
     void draw(uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t firstInstance) override;
     void drawIndexed(uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t baseVertex, uint32_t firstInstance) override;
@@ -934,7 +939,7 @@ struct VulkanRenderer
     VkPhysicalDeviceFeatures2 features2 = {};
     VkPhysicalDeviceVulkan11Features features1_1 = {};
     VkPhysicalDeviceVulkan12Features features1_2 = {};
-    VkPhysicalDeviceVulkan13Features features_1_3 = {};
+    VkPhysicalDeviceVulkan13Features features1_3 = {};
 
     VkPhysicalDeviceDepthClipEnableFeaturesEXT depthClipEnableFeatures = {};
     VkPhysicalDevicePerformanceQueryFeaturesKHR perf_counter_features = {};
@@ -2701,7 +2706,32 @@ static VGPUQueryHeap vulkan_createQueryHeap(VGPURenderer* driverData, const VGPU
 
     if (descriptor->type == VGPUQueryType_PipelineStatistics)
     {
-        //createInfo.pipelineStatistics = VulkanQueryPipelineStatisticFlags(GetPipelineStatistics());
+        if (descriptor->pipelineStatistics & VGPUQueryPipelineStatistic_InputAssemblyVertices)
+            createInfo.pipelineStatistics |= VK_QUERY_PIPELINE_STATISTIC_INPUT_ASSEMBLY_VERTICES_BIT;
+
+        if (descriptor->pipelineStatistics & VGPUQueryPipelineStatistic_InputAssemblyPrimitives)
+            createInfo.pipelineStatistics |= VK_QUERY_PIPELINE_STATISTIC_INPUT_ASSEMBLY_PRIMITIVES_BIT;
+
+        if (descriptor->pipelineStatistics & VGPUQueryPipelineStatistic_VertexShaderInvocations)
+            createInfo.pipelineStatistics |= VK_QUERY_PIPELINE_STATISTIC_VERTEX_SHADER_INVOCATIONS_BIT;
+
+        if (descriptor->pipelineStatistics & VGPUQueryPipelineStatistic_ClipperInvocations)
+            createInfo.pipelineStatistics |= VK_QUERY_PIPELINE_STATISTIC_CLIPPING_INVOCATIONS_BIT;
+
+        if (descriptor->pipelineStatistics & VGPUQueryPipelineStatistic_ClipperPrimitives)
+            createInfo.pipelineStatistics |= VK_QUERY_PIPELINE_STATISTIC_CLIPPING_PRIMITIVES_BIT;
+
+        if (descriptor->pipelineStatistics & VGPUQueryPipelineStatistic_FragmentShaderInvocations)
+            createInfo.pipelineStatistics |= VK_QUERY_PIPELINE_STATISTIC_FRAGMENT_SHADER_INVOCATIONS_BIT;
+
+        if (descriptor->pipelineStatistics & VGPUQueryPipelineStatistic_HullShaderInvocations)
+            createInfo.pipelineStatistics |= VK_QUERY_PIPELINE_STATISTIC_TESSELLATION_CONTROL_SHADER_PATCHES_BIT;
+
+        if (descriptor->pipelineStatistics & VGPUQueryPipelineStatistic_DomainShaderInvocations)
+            createInfo.pipelineStatistics |= VK_QUERY_PIPELINE_STATISTIC_TESSELLATION_EVALUATION_SHADER_INVOCATIONS_BIT;
+
+        if (descriptor->pipelineStatistics & VGPUQueryPipelineStatistic_ComputeShaderInvocations)
+            createInfo.pipelineStatistics |= VK_QUERY_PIPELINE_STATISTIC_COMPUTE_SHADER_INVOCATIONS_BIT;
     }
 
     VkResult result = vkCreateQueryPool(renderer->device, &createInfo, nullptr, &heap->handle);
@@ -3048,7 +3078,7 @@ void VulkanCommandBuffer::insertDebugMarker(const char* markerLabel)
     vkCmdInsertDebugUtilsLabelEXT(commandBuffer, &label);
 }
 
-void VulkanCommandBuffer::setPipeline(VGPUPipeline pipeline)
+void VulkanCommandBuffer::SetPipeline(VGPUPipeline pipeline)
 {
     VulkanPipeline* newPipeline = (VulkanPipeline*)pipeline;
     if (currentPipeline == newPipeline)
@@ -3069,13 +3099,13 @@ void VulkanCommandBuffer::SetPushConstants(uint32_t pushConstantIndex, const voi
     vkCmdPushConstants(commandBuffer, currentPipeline->pipelineLayout->handle, range.stageFlags, range.offset, size, data);
 }
 
-void VulkanCommandBuffer::dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)
+void VulkanCommandBuffer::Dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)
 {
     VGPU_ASSERT(!insideRenderPass);
     vkCmdDispatch(commandBuffer, groupCountX, groupCountY, groupCountZ);
 }
 
-void VulkanCommandBuffer::dispatchIndirect(VGPUBuffer buffer, uint64_t offset)
+void VulkanCommandBuffer::DispatchIndirect(VGPUBuffer buffer, uint64_t offset)
 {
     VGPU_ASSERT(!insideRenderPass);
     VulkanBuffer* vulkanBuffer = (VulkanBuffer*)buffer;
@@ -3338,6 +3368,90 @@ void VulkanCommandBuffer::setIndexBuffer(VGPUBuffer buffer, VGPUIndexType type, 
 void VulkanCommandBuffer::setStencilReference(uint32_t reference)
 {
     vkCmdSetStencilReference(commandBuffer, VK_STENCIL_FRONT_AND_BACK, reference);
+}
+
+void VulkanCommandBuffer::BeginQuery(VGPUQueryHeap heap, uint32_t index)
+{
+    VulkanQueryHeap* vulkanHeap = static_cast<VulkanQueryHeap*>(heap);
+
+    switch (vulkanHeap->queryType)
+    {
+        case VGPUQueryType_Occlusion:
+            if (renderer->features2.features.occlusionQueryPrecise == VK_TRUE)
+            {
+                vkCmdBeginQuery(commandBuffer, vulkanHeap->handle, index, VK_QUERY_CONTROL_PRECISE_BIT);
+            }
+            else
+            {
+                vkCmdBeginQuery(commandBuffer, vulkanHeap->handle, index, 0);
+            }
+            break;
+        case VGPUQueryType_BinaryOcclusion:
+            vkCmdBeginQuery(commandBuffer, vulkanHeap->handle, index, 0);
+            break;
+        case VGPUQueryType_Timestamp:
+            break;
+        case VGPUQueryType_PipelineStatistics:
+            break;
+    }
+}
+
+void VulkanCommandBuffer::EndQuery(VGPUQueryHeap heap, uint32_t index)
+{
+    VulkanQueryHeap* vulkanHeap = static_cast<VulkanQueryHeap*>(heap);
+
+    switch (vulkanHeap->queryType)
+    {
+        case VGPUQueryType_Timestamp:
+            if (renderer->features1_3.synchronization2 == VK_TRUE)
+            {
+                vkCmdWriteTimestamp2(commandBuffer, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, vulkanHeap->handle, index);
+            }
+            else
+            {
+                vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, vulkanHeap->handle, index);
+            }
+            break;
+        case VGPUQueryType_Occlusion:
+        case VGPUQueryType_BinaryOcclusion:
+            vkCmdEndQuery(commandBuffer, vulkanHeap->handle, index);
+            break;
+    }
+}
+
+void VulkanCommandBuffer::ResolveQuery(VGPUQueryHeap heap, uint32_t index, uint32_t count, VGPUBuffer destinationBuffer, uint64_t destinationOffset)
+{
+    VulkanQueryHeap* vulkanHeap = static_cast<VulkanQueryHeap*>(heap);
+    VulkanBuffer* vulkanDestBuffer = static_cast<VulkanBuffer*>(destinationBuffer);
+
+    VkQueryResultFlags flags = VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT;
+
+    switch (vulkanHeap->queryType)
+    {
+        case VGPUQueryType_BinaryOcclusion:
+            flags |= VK_QUERY_RESULT_PARTIAL_BIT;
+            break;
+        default:
+            break;
+    }
+
+    vkCmdCopyQueryPoolResults(
+        commandBuffer,
+        vulkanHeap->handle,
+        index,
+        count,
+        vulkanDestBuffer->handle,
+        destinationOffset,
+        sizeof(uint64_t),
+        flags
+    );
+}
+
+void VulkanCommandBuffer::ResetQuery(VGPUQueryHeap heap, uint32_t index, uint32_t count)
+{
+    VulkanQueryHeap* vulkanHeap = static_cast<VulkanQueryHeap*>(heap);
+
+    vkCmdResetQueryPool(commandBuffer, vulkanHeap->handle, index, count);
 }
 
 void VulkanCommandBuffer::draw(uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t firstInstance)
@@ -3648,7 +3762,7 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
     if (renderer->x11xcb.handle)
     {
         renderer->x11xcb.GetXCBConnection = (PFN_XGetXCBConnection)dlsym(renderer->x11xcb.handle, "XGetXCBConnection");
-}
+    }
 #endif
 
     VkResult result = VK_SUCCESS;
@@ -3887,7 +4001,7 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
             renderer->features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
             renderer->features1_1.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
             renderer->features1_2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
-            renderer->features_1_3.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+            renderer->features1_3.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
             renderer->depthClipEnableFeatures = {};
             renderer->acceleration_structure_features = {};
             renderer->raytracing_features = {};
@@ -3899,8 +4013,8 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
             if (gpuProps.apiVersion >= VK_API_VERSION_1_3)
             {
                 renderer->features1_1.pNext = &renderer->features1_2;
-                renderer->features1_2.pNext = &renderer->features_1_3;
-                features_chain = &renderer->features_1_3.pNext;
+                renderer->features1_2.pNext = &renderer->features1_3;
+                features_chain = &renderer->features1_3.pNext;
             }
             else if (gpuProps.apiVersion >= VK_API_VERSION_1_2)
             {
@@ -4159,11 +4273,10 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
         VGPU_VERIFY(renderer->features2.features.fullDrawIndexUint32 == VK_TRUE);
         VGPU_VERIFY(renderer->features2.features.sampleRateShading == VK_TRUE);
         VGPU_VERIFY(renderer->features2.features.shaderClipDistance == VK_TRUE);
-        //VGPU_ASSERT(renderer->features2.features.occlusionQueryPrecise == VK_TRUE);
 
         VGPU_ASSERT(renderer->features1_2.timelineSemaphore == VK_TRUE);
-        VGPU_ASSERT(renderer->features_1_3.synchronization2 == VK_TRUE);
-        VGPU_ASSERT(renderer->features_1_3.dynamicRendering == VK_TRUE);
+        VGPU_ASSERT(renderer->features1_3.synchronization2 == VK_TRUE);
+        VGPU_ASSERT(renderer->features1_3.dynamicRendering == VK_TRUE);
 
         if (!renderer->features2.features.textureCompressionBC &&
             !(renderer->features2.features.textureCompressionETC2 && renderer->features2.features.textureCompressionASTC_LDR))

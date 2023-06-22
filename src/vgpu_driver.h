@@ -171,11 +171,11 @@ public:
     virtual void popDebugGroup() = 0;
     virtual void insertDebugMarker(const char* markerLabel) = 0;
 
-    virtual void setPipeline(VGPUPipeline pipeline) = 0;
+    virtual void SetPipeline(VGPUPipeline pipeline) = 0;
     virtual void SetPushConstants(uint32_t pushConstantIndex, const void* data, uint32_t size) = 0;
 
-    virtual void dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ) = 0;
-    virtual void dispatchIndirect(VGPUBuffer buffer, uint64_t offset) = 0;
+    virtual void Dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ) = 0;
+    virtual void DispatchIndirect(VGPUBuffer buffer, uint64_t offset) = 0;
 
     virtual VGPUTexture acquireSwapchainTexture(VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight) = 0;
     virtual void beginRenderPass(const VGPURenderPassDesc* desc) = 0;
@@ -189,6 +189,11 @@ public:
     virtual void setVertexBuffer(uint32_t index, VGPUBuffer buffer, uint64_t offset) = 0;
     virtual void setIndexBuffer(VGPUBuffer buffer, VGPUIndexType type, uint64_t offset) = 0;
     virtual void setStencilReference(uint32_t reference) = 0;
+
+    virtual void BeginQuery(VGPUQueryHeap heap, uint32_t index) = 0;
+    virtual void EndQuery(VGPUQueryHeap heap, uint32_t index) = 0;
+    virtual void ResolveQuery(VGPUQueryHeap heap, uint32_t index, uint32_t count, VGPUBuffer destinationBuffer, uint64_t destinationOffset) = 0;
+    virtual void ResetQuery(VGPUQueryHeap heap, uint32_t index, uint32_t count) = 0;
 
     virtual void draw(uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t firstInstance) = 0;
     virtual void drawIndexed(uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t baseVertex, uint32_t firstInstance) = 0;

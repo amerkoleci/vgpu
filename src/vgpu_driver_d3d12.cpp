@@ -380,12 +380,12 @@ namespace
     {
         switch (type)
         {
+            case VGPUQueryType_Occlusion:
+            case VGPUQueryType_BinaryOcclusion:
+                return D3D12_QUERY_HEAP_TYPE_OCCLUSION;
+
             case VGPUQueryType_Timestamp:
                 return D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
-
-            case VGPUQueryType_Occlusion:
-                //case VGPUQueryType_BinaryOcclusion:
-                return D3D12_QUERY_HEAP_TYPE_OCCLUSION;
 
             case VGPUQueryType_PipelineStatistics:
                 return D3D12_QUERY_HEAP_TYPE_PIPELINE_STATISTICS;
@@ -399,14 +399,14 @@ namespace
     {
         switch (type)
         {
-            case VGPUQueryType_Timestamp:
-                return D3D12_QUERY_TYPE_TIMESTAMP;
-
             case VGPUQueryType_Occlusion:
                 return D3D12_QUERY_TYPE_OCCLUSION;
 
-                //case VGPUQueryType_BinaryOcclusion:
-                //    return D3D12_QUERY_TYPE_BINARY_OCCLUSION;
+            case VGPUQueryType_BinaryOcclusion:
+                return D3D12_QUERY_TYPE_BINARY_OCCLUSION;
+
+            case VGPUQueryType_Timestamp:
+                return D3D12_QUERY_TYPE_TIMESTAMP;
 
             case VGPUQueryType_PipelineStatistics:
                 return D3D12_QUERY_TYPE_PIPELINE_STATISTICS;
@@ -745,11 +745,11 @@ public:
     void pushDebugGroup(const char* groupLabel) override;
     void popDebugGroup() override;
     void insertDebugMarker(const char* debugLabel) override;
-    void setPipeline(VGPUPipeline pipeline) override;
+    void SetPipeline(VGPUPipeline pipeline) override;
     void SetPushConstants(uint32_t pushConstantIndex, const void* data, uint32_t size) override;
 
-    void dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ) override;
-    void dispatchIndirect(VGPUBuffer buffer, uint64_t offset) override;
+    void Dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ) override;
+    void DispatchIndirect(VGPUBuffer buffer, uint64_t offset) override;
 
     VGPUTexture acquireSwapchainTexture(VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight) override;
 
@@ -765,6 +765,11 @@ public:
     void setVertexBuffer(uint32_t index, VGPUBuffer buffer, uint64_t offset) override;
     void setIndexBuffer(VGPUBuffer buffer, VGPUIndexType type, uint64_t offset) override;
     void setStencilReference(uint32_t reference) override;
+
+    void BeginQuery(VGPUQueryHeap heap, uint32_t index) override;
+    void EndQuery(VGPUQueryHeap heap, uint32_t index) override;
+    void ResolveQuery(VGPUQueryHeap heap, uint32_t index, uint32_t count, VGPUBuffer destinationBuffer, uint64_t destinationOffset) override;
+    void ResetQuery(VGPUQueryHeap heap, uint32_t index, uint32_t count) override;
 
     void PrepareDraw();
     void draw(uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t firstInstance) override;
@@ -2442,7 +2447,7 @@ void D3D12CommandBuffer::insertDebugMarker(const char* markerLabel)
     commandList->SetMarker(PIX_EVENT_UNICODE_VERSION, wide_name.c_str(), size);
 }
 
-void D3D12CommandBuffer::setPipeline(VGPUPipeline pipeline) 
+void D3D12CommandBuffer::SetPipeline(VGPUPipeline pipeline)
 {
     D3D12Pipeline* newPipeline = (D3D12Pipeline*)pipeline;
 
@@ -2493,14 +2498,14 @@ void D3D12CommandBuffer::SetPushConstants(uint32_t pushConstantIndex, const void
     }
 }
 
-void D3D12CommandBuffer::dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ) 
+void D3D12CommandBuffer::Dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)
 {
     VGPU_VERIFY(!insideRenderPass);
 
     commandList->Dispatch(groupCountX, groupCountY, groupCountZ);
 }
 
-void D3D12CommandBuffer::dispatchIndirect(VGPUBuffer buffer, uint64_t offset) 
+void D3D12CommandBuffer::DispatchIndirect(VGPUBuffer buffer, uint64_t offset)
 {
     VGPU_VERIFY(!insideRenderPass);
     D3D12Resource* d3dBuffer = (D3D12Resource*)buffer;
@@ -2512,7 +2517,7 @@ void D3D12CommandBuffer::dispatchIndirect(VGPUBuffer buffer, uint64_t offset)
         0);
 }
 
-VGPUTexture D3D12CommandBuffer::acquireSwapchainTexture(VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight) 
+VGPUTexture D3D12CommandBuffer::acquireSwapchainTexture(VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight)
 {
     D3D12_SwapChain* d3d12SwapChain = (D3D12_SwapChain*)swapChain;
 
@@ -2684,7 +2689,7 @@ void D3D12CommandBuffer::beginRenderPass(const VGPURenderPassDesc* desc)
     insideRenderPass = true;
 }
 
-void D3D12CommandBuffer::endRenderPass() 
+void D3D12CommandBuffer::endRenderPass()
 {
     commandList->EndRenderPass();
     insideRenderPass = false;
@@ -2749,6 +2754,43 @@ void D3D12CommandBuffer::setIndexBuffer(VGPUBuffer buffer, VGPUIndexType type, u
 void D3D12CommandBuffer::setStencilReference(uint32_t reference)
 {
     commandList->OMSetStencilRef(reference);
+}
+
+
+void D3D12CommandBuffer::BeginQuery(VGPUQueryHeap heap, uint32_t index)
+{
+    auto d3dHeap = static_cast<D3D12QueryHeap*>(heap);
+
+    commandList->BeginQuery(d3dHeap->handle, d3dHeap->queryType, index);
+}
+
+void D3D12CommandBuffer::EndQuery(VGPUQueryHeap heap, uint32_t index)
+{
+    auto d3dHeap = static_cast<D3D12QueryHeap*>(heap);
+
+    commandList->EndQuery(d3dHeap->handle, d3dHeap->queryType, index);
+}
+
+void D3D12CommandBuffer::ResolveQuery(VGPUQueryHeap heap, uint32_t index, uint32_t count, VGPUBuffer destinationBuffer, uint64_t destinationOffset)
+{
+    auto d3dHeap = static_cast<D3D12QueryHeap*>(heap);
+    auto d3dDestBuffer = static_cast<D3D12Buffer*>(destinationBuffer);
+
+    commandList->ResolveQueryData(
+        d3dHeap->handle,
+        d3dHeap->queryType,
+        index,
+        count,
+        d3dDestBuffer->handle,
+        destinationOffset
+    );
+}
+
+void D3D12CommandBuffer::ResetQuery(VGPUQueryHeap heap, uint32_t index, uint32_t count)
+{
+    VGPU_UNUSED(heap);
+    VGPU_UNUSED(index);
+    VGPU_UNUSED(count);
 }
 
 void D3D12CommandBuffer::PrepareDraw()
