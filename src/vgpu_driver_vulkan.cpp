@@ -1,4 +1,4 @@
-// Copyright © Amer Koleci.
+// Copyright © Amer Koleci and Contributors.
 // Licensed under the MIT License (MIT). See LICENSE in the repository root for more information.
 
 #if defined(VGPU_VULKAN_DRIVER)
@@ -463,6 +463,54 @@ namespace
         }
     }
 
+    constexpr VkPrimitiveTopology ToVk(VGPUPrimitiveTopology type)
+    {
+        switch (type)
+        {
+            case VGPUPrimitiveTopology_PointList:      return VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
+            case VGPUPrimitiveTopology_LineList:       return VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
+            case VGPUPrimitiveTopology_LineStrip:      return VK_PRIMITIVE_TOPOLOGY_LINE_STRIP;
+            case VGPUPrimitiveTopology_TriangleList:   return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+            case VGPUPrimitiveTopology_TriangleStrip:  return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
+            case VGPUPrimitiveTopology_PatchList:      return VK_PRIMITIVE_TOPOLOGY_PATCH_LIST;
+            default:
+                return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+        }
+    }
+
+    constexpr VkPolygonMode ToVk(VGPUFillMode mode, bool fillModeNonSolid)
+    {
+        switch (mode)
+        {
+            default:
+            case VGPUFillMode_Solid:
+                return VK_POLYGON_MODE_FILL;
+
+            case VGPUFillMode_Wireframe:
+                if (!fillModeNonSolid)
+                {
+                    vgpu_log_warn("Vulkan: Wireframe fill mode is being used but it's not supported on this device");
+                    return VK_POLYGON_MODE_FILL;
+                }
+
+                return VK_POLYGON_MODE_LINE;
+        }
+    }
+
+    constexpr VkCullModeFlags ToVk(VGPUCullMode mode)
+    {
+        switch (mode)
+        {
+            default:
+            case VGPUCullMode_Back:
+                return VK_CULL_MODE_BACK_BIT;
+            case VGPUCullMode_None:
+                return VK_CULL_MODE_NONE;
+            case VGPUCullMode_Front:
+                return VK_CULL_MODE_FRONT_BIT;
+        }
+    }
+
     constexpr VkImageAspectFlags GetImageAspectFlags(VkFormat format)
     {
         switch (format)
@@ -743,15 +791,17 @@ struct VulkanTexture final : public VGPUTextureImpl
     VmaAllocation  allocation = VK_NULL_HANDLE;
 
     VGPUTextureDimension dimension = VGPUTextureDimension_2D;
+    VGPUTextureFormat format{};
     uint32_t width = 0;
     uint32_t height = 0;
-    VkFormat format = VK_FORMAT_UNDEFINED;
+    VkFormat vkFormat = VK_FORMAT_UNDEFINED;
     std::unordered_map<size_t, VkImageView> viewCache;
 
     ~VulkanTexture() override;
     void SetLabel(const char* label) override;
 
     VGPUTextureDimension GetDimension() const override { return dimension; }
+    VGPUTextureFormat GetFormat() const override { return format; }
 };
 
 struct VulkanSampler final : public VGPUSamplerImpl
@@ -797,11 +847,14 @@ struct VulkanPipeline final : public VGPUPipelineImpl
 struct VulkanQueryHeap final : public VGPUQueryHeapImpl
 {
     VulkanRenderer* renderer = nullptr;
+    VGPUQueryType type;
+    uint32_t count;
     VkQueryPool handle = VK_NULL_HANDLE;
-    VGPUQueryType queryType{};
 
     ~VulkanQueryHeap() override;
     void SetLabel(const char* label) override;
+    VGPUQueryType GetType() const override { return type; }
+    uint32_t GetCount() const override { return count; }
 };
 
 struct VulkanSwapChain final : public VGPUSwapChainImpl
@@ -1116,7 +1169,7 @@ static VkSurfaceKHR vulkan_createSurface(VulkanRenderer* renderer, void* windowH
     return vk_surface;
 }
 
-VGPUBuffer vulkan_createBuffer(VGPURenderer* driverData, const VGPUBufferDescriptor* desc, const void* pInitialData);
+VGPUBuffer vulkan_createBuffer(VGPURenderer* driverData, const VGPUBufferDesc* desc, const void* pInitialData);
 
 static Vulkan_UploadContext vulkan_AllocateUpload(VGPURenderer* driverData, uint64_t size)
 {
@@ -1172,7 +1225,7 @@ static Vulkan_UploadContext vulkan_AllocateUpload(VGPURenderer* driverData, uint
 
         uint64_t newSize = vgpuNextPowerOfTwo(size);
 
-        VGPUBufferDescriptor uploadBufferDesc{};
+        VGPUBufferDesc uploadBufferDesc{};
         uploadBufferDesc.label = "UploadBuffer";
         uploadBufferDesc.size = newSize;
         uploadBufferDesc.cpuAccess = VGPUCpuAccessMode_Write;
@@ -1273,7 +1326,7 @@ static VkImageView vulkan_GetView(VulkanRenderer* renderer, VulkanTexture* textu
         viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
         viewInfo.image = texture->handle;
         viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        viewInfo.format = texture->format;
+        viewInfo.format = texture->vkFormat;
         viewInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
         viewInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
         viewInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
@@ -1801,7 +1854,7 @@ static void vulkan_getLimits(VGPURenderer* driverData, VGPULimits* limits)
 
 
 /* Buffer */
-inline VGPUBuffer vulkan_createBuffer(VGPURenderer* driverData, const VGPUBufferDescriptor* desc, const void* pInitialData)
+inline VGPUBuffer vulkan_createBuffer(VGPURenderer* driverData, const VGPUBufferDesc* desc, const void* pInitialData)
 {
     VulkanRenderer* renderer = (VulkanRenderer*)driverData;
 
@@ -2177,9 +2230,10 @@ static VGPUTexture vulkan_createTexture(VGPURenderer* driverData, const VGPUText
     VulkanTexture* texture = new VulkanTexture();
     texture->renderer = renderer;
     texture->dimension = desc->dimension;
+    texture->format = desc->format;
     texture->width = createInfo.extent.width;
     texture->height = createInfo.extent.height;
-    texture->format = createInfo.format;
+    texture->vkFormat = createInfo.format;
     texture->viewCache.clear();
 
     VkResult result = vmaCreateImage(renderer->allocator,
@@ -2355,7 +2409,7 @@ void VulkanPipelineLayout::SetLabel(const char* label)
     vulkan_SetObjectName(renderer, VK_OBJECT_TYPE_PIPELINE_LAYOUT, (uint64_t)handle, label);
 }
 
-static VGPUPipelineLayout vulkan_createPipelineLayout(VGPURenderer* driverData, const VGPUPipelineLayoutDescriptor* descriptor)
+static VGPUPipelineLayout vulkan_createPipelineLayout(VGPURenderer* driverData, const VGPUPipelineLayoutDesc* descriptor)
 {
     VulkanRenderer* renderer = (VulkanRenderer*)driverData;
 
@@ -2418,7 +2472,7 @@ static VGPUPipelineLayout vulkan_createPipelineLayout(VGPURenderer* driverData, 
 }
 
 /* Pipeline */
-static VGPUPipeline vulkan_createRenderPipeline(VGPURenderer* driverData, const VGPURenderPipelineDescriptor* desc)
+static VGPUPipeline vulkan_createRenderPipeline(VGPURenderer* driverData, const VGPURenderPipelineDesc* desc)
 {
     VulkanRenderer* renderer = (VulkanRenderer*)driverData;
 
@@ -2443,11 +2497,11 @@ static VGPUPipeline vulkan_createRenderPipeline(VGPURenderer* driverData, const 
     VkPipelineRenderingCreateInfo renderingInfo = {};
     renderingInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
 
-    for (uint32_t i = 0; i < desc->colorAttachmentCount; ++i)
+    for (uint32_t i = 0; i < desc->colorFormatCount; ++i)
     {
-        VGPU_ASSERT(desc->colorAttachments[i].format != VGPUTextureFormat_Undefined);
+        VGPU_ASSERT(desc->colorFormats[i] != VGPUTextureFormat_Undefined);
 
-        colorAttachmentFormats[renderingInfo.colorAttachmentCount] = ToVkFormat(desc->colorAttachments[i].format);
+        colorAttachmentFormats[renderingInfo.colorAttachmentCount] = ToVkFormat(desc->colorFormats[i]);
         renderingInfo.colorAttachmentCount++;
     }
     renderingInfo.pColorAttachmentFormats = colorAttachmentFormats;
@@ -2489,7 +2543,29 @@ static VGPUPipeline vulkan_createRenderPipeline(VGPURenderer* driverData, const 
     // InputAssemblyState
     VkPipelineInputAssemblyStateCreateInfo inputAssemblyState = {};
     inputAssemblyState.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-    inputAssemblyState.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    inputAssemblyState.topology = ToVk(desc->primitiveTopology);
+    switch (desc->primitiveTopology)
+    {
+        case VGPUPrimitiveTopology_LineStrip:
+        case VGPUPrimitiveTopology_TriangleStrip:
+            inputAssemblyState.primitiveRestartEnable = VK_TRUE;
+            break;
+        default:
+            inputAssemblyState.primitiveRestartEnable = VK_FALSE;
+            break;
+    }
+
+    // TessellationState
+    VkPipelineTessellationStateCreateInfo tessellationState = {};
+    tessellationState.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    if (inputAssemblyState.topology == VK_PRIMITIVE_TOPOLOGY_PATCH_LIST)
+    {
+        tessellationState.patchControlPoints = desc->patchControlPoints;
+    }
+    else
+    {
+        tessellationState.patchControlPoints = 0;
+    }
 
     // ViewportState
     VkPipelineViewportStateCreateInfo viewportState = {};
@@ -2500,54 +2576,83 @@ static VGPUPipeline vulkan_createRenderPipeline(VGPURenderer* driverData, const 
     // RasterizationState
     VkPipelineRasterizationStateCreateInfo rasterizationState = {};
     rasterizationState.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-    rasterizationState.polygonMode = VK_POLYGON_MODE_FILL;
-    rasterizationState.cullMode = VK_CULL_MODE_NONE;
-    rasterizationState.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     rasterizationState.depthClampEnable = VK_FALSE;
+
+    VkPipelineRasterizationDepthClipStateCreateInfoEXT depthClipStateInfo = {};
+    depthClipStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_DEPTH_CLIP_STATE_CREATE_INFO_EXT;
+
+    if (desc->rasterizerState.depthClipMode == VGPUDepthClipMode_Clip &&
+        renderer->depthClipEnableFeatures.depthClipEnable == VK_TRUE)
+    {
+        rasterizationState.pNext = &depthClipStateInfo;
+        depthClipStateInfo.depthClipEnable = VK_TRUE;
+    }
+    else
+    {
+        rasterizationState.depthClampEnable = VK_TRUE;
+    }
     rasterizationState.rasterizerDiscardEnable = VK_FALSE;
-    rasterizationState.depthBiasEnable = VK_FALSE;
+    rasterizationState.polygonMode = ToVk(desc->rasterizerState.fillMode, renderer->features2.features.fillModeNonSolid);
+    rasterizationState.cullMode = ToVk(desc->rasterizerState.cullMode);
+    rasterizationState.frontFace = desc->rasterizerState.frontFaceCounterClockwise ? VK_FRONT_FACE_COUNTER_CLOCKWISE : VK_FRONT_FACE_CLOCKWISE;
+    // Can be managed by command buffer
+    rasterizationState.depthBiasEnable = desc->rasterizerState.depthBias != 0.0f || desc->rasterizerState.slopeScaledDepthBias != 0.0f;
+    rasterizationState.depthBiasConstantFactor = desc->rasterizerState.depthBias;
+    rasterizationState.depthBiasClamp = desc->rasterizerState.depthBiasClamp;
+    rasterizationState.depthBiasSlopeFactor = desc->rasterizerState.slopeScaledDepthBias;
     rasterizationState.lineWidth = 1.0f;
 
     // Multi sampling state
     VkPipelineMultisampleStateCreateInfo multisampleState = {};
     multisampleState.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-    multisampleState.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-    multisampleState.pSampleMask = nullptr;
+    multisampleState.rasterizationSamples = static_cast<VkSampleCountFlagBits>(desc->sampleCount);
+
+    VGPU_ASSERT(multisampleState.rasterizationSamples <= 32);
+    if (multisampleState.rasterizationSamples > VK_SAMPLE_COUNT_1_BIT)
+    {
+        //multisampleState.alphaToCoverageEnable = desc.blendState.alphaToCoverageEnable ? VK_TRUE : VK_FALSE;
+        multisampleState.alphaToOneEnable = VK_FALSE;
+        multisampleState.sampleShadingEnable = VK_FALSE;
+        multisampleState.minSampleShading = 1.0f;
+    }
+    const VkSampleMask sampleMask = UINT_MAX;
+    multisampleState.pSampleMask = &sampleMask;
 
     // DepthStencilState
     VkPipelineDepthStencilStateCreateInfo depthStencilState = {};
     depthStencilState.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-    depthStencilState.depthTestEnable = (desc->depthStencilState.depthCompareFunction != VGPUCompareFunction_Always || desc->depthStencilState.depthWriteEnabled) ? VK_TRUE : VK_FALSE;
-    depthStencilState.depthWriteEnable = desc->depthStencilState.depthWriteEnabled ? VK_TRUE : VK_FALSE;
-    depthStencilState.depthCompareOp = ToVk(desc->depthStencilState.depthCompareFunction);
-    depthStencilState.depthBoundsTestEnable = VK_FALSE;
-    depthStencilState.minDepthBounds = 0.0f;
-    depthStencilState.maxDepthBounds = 1.0f;
-
-    depthStencilState.stencilTestEnable = vgpuStencilTestEnabled(&desc->depthStencilState) ? VK_TRUE : VK_FALSE;
-    depthStencilState.front.failOp = ToVk(desc->depthStencilState.stencilFront.failOperation);
-    depthStencilState.front.passOp = ToVk(desc->depthStencilState.stencilFront.passOperation);
-    depthStencilState.front.depthFailOp = ToVk(desc->depthStencilState.stencilFront.depthFailOperation);
-    depthStencilState.front.compareOp = ToVk(desc->depthStencilState.stencilFront.compareFunction);
-    depthStencilState.front.compareMask = desc->depthStencilState.stencilReadMask;
-    depthStencilState.front.writeMask = desc->depthStencilState.stencilWriteMask;
-    depthStencilState.front.reference = 0;
-
-    depthStencilState.back.failOp = ToVk(desc->depthStencilState.stencilBack.failOperation);
-    depthStencilState.back.passOp = ToVk(desc->depthStencilState.stencilBack.passOperation);
-    depthStencilState.back.depthFailOp = ToVk(desc->depthStencilState.stencilBack.depthFailOperation);
-    depthStencilState.back.compareOp = ToVk(desc->depthStencilState.stencilBack.compareFunction);
-    depthStencilState.back.compareMask = desc->depthStencilState.stencilReadMask;
-    depthStencilState.back.writeMask = desc->depthStencilState.stencilWriteMask;
-    depthStencilState.back.reference = 0;
-
-    if (desc->depthStencilState.format != VGPUTextureFormat_Undefined)
+    
+    if (desc->depthStencilFormat != VGPUTextureFormat_Undefined)
     {
-        renderingInfo.depthAttachmentFormat = ToVkFormat(desc->depthStencilState.format);
-        if (!vgpuIsDepthOnlyFormat(desc->depthStencilState.format))
+        renderingInfo.depthAttachmentFormat = ToVkFormat(desc->depthStencilFormat);
+        if (!vgpuIsDepthOnlyFormat(desc->depthStencilFormat))
         {
-            renderingInfo.stencilAttachmentFormat = ToVkFormat(desc->depthStencilState.format);
+            renderingInfo.stencilAttachmentFormat = ToVkFormat(desc->depthStencilFormat);
         }
+
+        depthStencilState.depthTestEnable = (desc->depthStencilState.depthCompareFunction != VGPUCompareFunction_Always || desc->depthStencilState.depthWriteEnabled) ? VK_TRUE : VK_FALSE;
+        depthStencilState.depthWriteEnable = desc->depthStencilState.depthWriteEnabled ? VK_TRUE : VK_FALSE;
+        depthStencilState.depthCompareOp = ToVk(desc->depthStencilState.depthCompareFunction);
+        depthStencilState.depthBoundsTestEnable = VK_FALSE;
+        depthStencilState.minDepthBounds = 0.0f;
+        depthStencilState.maxDepthBounds = 1.0f;
+
+        depthStencilState.stencilTestEnable = vgpuStencilTestEnabled(&desc->depthStencilState) ? VK_TRUE : VK_FALSE;
+        depthStencilState.front.failOp = ToVk(desc->depthStencilState.stencilFront.failOperation);
+        depthStencilState.front.passOp = ToVk(desc->depthStencilState.stencilFront.passOperation);
+        depthStencilState.front.depthFailOp = ToVk(desc->depthStencilState.stencilFront.depthFailOperation);
+        depthStencilState.front.compareOp = ToVk(desc->depthStencilState.stencilFront.compareFunction);
+        depthStencilState.front.compareMask = desc->depthStencilState.stencilReadMask;
+        depthStencilState.front.writeMask = desc->depthStencilState.stencilWriteMask;
+        depthStencilState.front.reference = 0;
+
+        depthStencilState.back.failOp = ToVk(desc->depthStencilState.stencilBack.failOperation);
+        depthStencilState.back.passOp = ToVk(desc->depthStencilState.stencilBack.passOperation);
+        depthStencilState.back.depthFailOp = ToVk(desc->depthStencilState.stencilBack.depthFailOperation);
+        depthStencilState.back.compareOp = ToVk(desc->depthStencilState.stencilBack.compareFunction);
+        depthStencilState.back.compareMask = desc->depthStencilState.stencilReadMask;
+        depthStencilState.back.writeMask = desc->depthStencilState.stencilWriteMask;
+        depthStencilState.back.reference = 0;
     }
     else
     {
@@ -2589,7 +2694,7 @@ static VGPUPipeline vulkan_createRenderPipeline(VGPURenderer* driverData, const 
     createInfo.pStages = shaderStages;
     createInfo.pVertexInputState = &vertexInputState;
     createInfo.pInputAssemblyState = &inputAssemblyState;
-    createInfo.pTessellationState = nullptr;
+    createInfo.pTessellationState = (inputAssemblyState.topology == VK_PRIMITIVE_TOPOLOGY_PATCH_LIST) ? &tessellationState : nullptr;
     createInfo.pViewportState = &viewportState;
     createInfo.pRasterizationState = &rasterizationState;
     createInfo.pMultisampleState = &multisampleState;
@@ -2621,7 +2726,7 @@ static VGPUPipeline vulkan_createRenderPipeline(VGPURenderer* driverData, const 
     return pipeline;
 }
 
-static VGPUPipeline vulkan_createComputePipeline(VGPURenderer* driverData, const VGPUComputePipelineDescriptor* desc)
+static VGPUPipeline vulkan_createComputePipeline(VGPURenderer* driverData, const VGPUComputePipelineDesc* desc)
 {
     VulkanRenderer* renderer = (VulkanRenderer*)driverData;
     VulkanPipelineLayout* layout = (VulkanPipelineLayout*)desc->layout;
@@ -2661,7 +2766,7 @@ static VGPUPipeline vulkan_createComputePipeline(VGPURenderer* driverData, const
     return pipeline;
 }
 
-static VGPUPipeline vulkan_createRayTracingPipeline(VGPURenderer* driverData, const VGPURayTracingPipelineDescriptor* desc)
+static VGPUPipeline vulkan_createRayTracingPipeline(VGPURenderer* driverData, const VGPURayTracingPipelineDesc* desc)
 {
     VulkanRenderer* renderer = (VulkanRenderer*)driverData;
     VulkanPipelineLayout* layout = (VulkanPipelineLayout*)desc->layout;
@@ -2691,46 +2796,47 @@ void VulkanQueryHeap::SetLabel(const char* label)
     vulkan_SetObjectName(renderer, VK_OBJECT_TYPE_QUERY_POOL, (uint64_t)handle, label);
 }
 
-static VGPUQueryHeap vulkan_createQueryHeap(VGPURenderer* driverData, const VGPUQueryHeapDescriptor* descriptor)
+static VGPUQueryHeap vulkan_createQueryHeap(VGPURenderer* driverData, const VGPUQueryHeapDesc* desc)
 {
     VulkanRenderer* renderer = (VulkanRenderer*)driverData;
 
     VulkanQueryHeap* heap = new VulkanQueryHeap();
     heap->renderer = renderer;
-    heap->queryType = descriptor->type;
+    heap->type = desc->type;
+    heap->count = desc->count;
 
     VkQueryPoolCreateInfo createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
-    createInfo.queryType = ToVk(descriptor->type);
-    createInfo.queryCount = descriptor->count;
+    createInfo.queryType = ToVk(desc->type);
+    createInfo.queryCount = desc->count;
 
-    if (descriptor->type == VGPUQueryType_PipelineStatistics)
+    if (desc->type == VGPUQueryType_PipelineStatistics)
     {
-        if (descriptor->pipelineStatistics & VGPUQueryPipelineStatistic_InputAssemblyVertices)
+        if (desc->pipelineStatistics & VGPUQueryPipelineStatistic_InputAssemblyVertices)
             createInfo.pipelineStatistics |= VK_QUERY_PIPELINE_STATISTIC_INPUT_ASSEMBLY_VERTICES_BIT;
 
-        if (descriptor->pipelineStatistics & VGPUQueryPipelineStatistic_InputAssemblyPrimitives)
+        if (desc->pipelineStatistics & VGPUQueryPipelineStatistic_InputAssemblyPrimitives)
             createInfo.pipelineStatistics |= VK_QUERY_PIPELINE_STATISTIC_INPUT_ASSEMBLY_PRIMITIVES_BIT;
 
-        if (descriptor->pipelineStatistics & VGPUQueryPipelineStatistic_VertexShaderInvocations)
+        if (desc->pipelineStatistics & VGPUQueryPipelineStatistic_VertexShaderInvocations)
             createInfo.pipelineStatistics |= VK_QUERY_PIPELINE_STATISTIC_VERTEX_SHADER_INVOCATIONS_BIT;
 
-        if (descriptor->pipelineStatistics & VGPUQueryPipelineStatistic_ClipperInvocations)
+        if (desc->pipelineStatistics & VGPUQueryPipelineStatistic_ClipperInvocations)
             createInfo.pipelineStatistics |= VK_QUERY_PIPELINE_STATISTIC_CLIPPING_INVOCATIONS_BIT;
 
-        if (descriptor->pipelineStatistics & VGPUQueryPipelineStatistic_ClipperPrimitives)
+        if (desc->pipelineStatistics & VGPUQueryPipelineStatistic_ClipperPrimitives)
             createInfo.pipelineStatistics |= VK_QUERY_PIPELINE_STATISTIC_CLIPPING_PRIMITIVES_BIT;
 
-        if (descriptor->pipelineStatistics & VGPUQueryPipelineStatistic_FragmentShaderInvocations)
+        if (desc->pipelineStatistics & VGPUQueryPipelineStatistic_FragmentShaderInvocations)
             createInfo.pipelineStatistics |= VK_QUERY_PIPELINE_STATISTIC_FRAGMENT_SHADER_INVOCATIONS_BIT;
 
-        if (descriptor->pipelineStatistics & VGPUQueryPipelineStatistic_HullShaderInvocations)
+        if (desc->pipelineStatistics & VGPUQueryPipelineStatistic_HullShaderInvocations)
             createInfo.pipelineStatistics |= VK_QUERY_PIPELINE_STATISTIC_TESSELLATION_CONTROL_SHADER_PATCHES_BIT;
 
-        if (descriptor->pipelineStatistics & VGPUQueryPipelineStatistic_DomainShaderInvocations)
+        if (desc->pipelineStatistics & VGPUQueryPipelineStatistic_DomainShaderInvocations)
             createInfo.pipelineStatistics |= VK_QUERY_PIPELINE_STATISTIC_TESSELLATION_EVALUATION_SHADER_INVOCATIONS_BIT;
 
-        if (descriptor->pipelineStatistics & VGPUQueryPipelineStatistic_ComputeShaderInvocations)
+        if (desc->pipelineStatistics & VGPUQueryPipelineStatistic_ComputeShaderInvocations)
             createInfo.pipelineStatistics |= VK_QUERY_PIPELINE_STATISTIC_COMPUTE_SHADER_INVOCATIONS_BIT;
     }
 
@@ -2740,9 +2846,9 @@ static VGPUQueryHeap vulkan_createQueryHeap(VGPURenderer* driverData, const VGPU
         return nullptr;
     }
 
-    if (descriptor->label)
+    if (desc->label)
     {
-        heap->SetLabel(descriptor->label);
+        heap->SetLabel(desc->label);
     }
 
     return heap;
@@ -2906,6 +3012,24 @@ static void vulkan_updateSwapChain(VulkanRenderer* renderer, VulkanSwapChain* sw
     std::vector<VkImage> swapchainImages(imageCount);
     VK_CHECK(vkGetSwapchainImagesKHR(renderer->device, swapChain->handle, &imageCount, swapchainImages.data()));
 
+    VGPUTextureFormat colorFormat = VGPUTextureFormat_BGRA8Unorm;
+    if (createInfo.imageFormat == VK_FORMAT_B8G8R8A8_UNORM)
+    {
+        colorFormat = VGPUTextureFormat_BGRA8Unorm;
+    }
+    else if (createInfo.imageFormat == VK_FORMAT_B8G8R8A8_SRGB)
+    {
+        colorFormat = VGPUTextureFormat_BGRA8UnormSrgb;
+    }
+    else if (createInfo.imageFormat == VK_FORMAT_R8G8B8A8_UNORM)
+    {
+        colorFormat = VGPUTextureFormat_RGBA8Unorm;
+    }
+    else if (createInfo.imageFormat == VK_FORMAT_R8G8B8A8_SRGB)
+    {
+        colorFormat = VGPUTextureFormat_RGBA8UnormSrgb;
+    }
+
     swapChain->imageIndex = 0;
     swapChain->backbufferTextures.resize(imageCount);
     for (uint32_t i = 0; i < imageCount; ++i)
@@ -2913,10 +3037,11 @@ static void vulkan_updateSwapChain(VulkanRenderer* renderer, VulkanSwapChain* sw
         VulkanTexture* texture = new VulkanTexture();
         texture->renderer = renderer;
         texture->dimension = VGPUTextureDimension_2D;
+        texture->format = colorFormat;
         texture->handle = swapchainImages[i];
         texture->width = createInfo.imageExtent.width;
         texture->height = createInfo.imageExtent.height;
-        texture->format = createInfo.imageFormat;
+        texture->vkFormat = createInfo.imageFormat;
         swapChain->backbufferTextures[i] = texture;
     }
 
@@ -2946,7 +3071,7 @@ static void vulkan_updateSwapChain(VulkanRenderer* renderer, VulkanSwapChain* sw
     swapChain->extent = createInfo.imageExtent;
 }
 
-static VGPUSwapChain vulkan_createSwapChain(VGPURenderer* driverData, void* windowHandle, const VGPUSwapChainDescriptor* desc)
+static VGPUSwapChain vulkan_createSwapChain(VGPURenderer* driverData, void* windowHandle, const VGPUSwapChainDesc* desc)
 {
     VulkanRenderer* renderer = (VulkanRenderer*)driverData;
     VkSurfaceKHR vk_surface = vulkan_createSurface(renderer, windowHandle);
@@ -3201,9 +3326,6 @@ void VulkanCommandBuffer::beginRenderPass(const VGPURenderPassDesc* desc)
     renderingInfo.viewMask = 0;
 
     VkRenderingAttachmentInfo colorAttachments[VGPU_MAX_COLOR_ATTACHMENTS] = {};
-    VkRenderingAttachmentInfo depthAttachment = {};
-    VkRenderingAttachmentInfo stencilAttachment = {};
-
     for (uint32_t i = 0; i < desc->colorAttachmentCount; ++i)
     {
         const VGPURenderPassColorAttachment* attachment = &desc->colorAttachments[i];
@@ -3230,10 +3352,15 @@ void VulkanCommandBuffer::beginRenderPass(const VGPURenderPassDesc* desc)
         attachmentInfo.clearValue.color.float32[3] = attachment->clearColor.a;
     }
 
+    VGPUTextureFormat depthStencilFormat = VGPUTextureFormat_Undefined;
+    VkRenderingAttachmentInfo depthAttachment = {};
+    VkRenderingAttachmentInfo stencilAttachment = {};
     const bool hasDepthOrStencil = desc->depthStencilAttachment != nullptr && desc->depthStencilAttachment->texture != nullptr;
     if (hasDepthOrStencil)
     {
         const VGPURenderPassDepthStencilAttachment* attachment = desc->depthStencilAttachment;
+
+        depthStencilFormat = attachment->texture->GetFormat();
         VulkanTexture* texture = (VulkanTexture*)attachment->texture;
         const uint32_t level = attachment->level;
         const uint32_t slice = attachment->slice;
@@ -3248,7 +3375,8 @@ void VulkanCommandBuffer::beginRenderPass(const VGPURenderPassDesc* desc)
         depthAttachment.resolveMode = VK_RESOLVE_MODE_NONE;
         depthAttachment.loadOp = ToVkAttachmentLoadOp(attachment->depthLoadOp);
         depthAttachment.storeOp = ToVkAttachmentStoreOp(attachment->depthStoreOp);
-        depthAttachment.clearValue.depthStencil.depth = attachment->clearDepth;
+        depthAttachment.clearValue.depthStencil.depth = attachment->depthClearValue;
+        depthAttachment.clearValue.depthStencil.stencil = attachment->stencilClearValue;
 
         // Barrier
         VkImageSubresourceRange depthTextureRange{};
@@ -3276,12 +3404,12 @@ void VulkanCommandBuffer::beginRenderPass(const VGPURenderPassDesc* desc)
     renderingInfo.renderArea.extent.height = height;
     renderingInfo.pColorAttachments = colorAttachments;
     renderingInfo.pDepthAttachment = hasDepthOrStencil ? &depthAttachment : nullptr;
-    renderingInfo.pStencilAttachment = nullptr;  // !vgpuIsDepthOnlyFormat(depthStencilFormat) ? &depthAttachment : nullptr;
+    renderingInfo.pStencilAttachment = !vgpuIsDepthOnlyFormat(depthStencilFormat) ? &depthAttachment : nullptr;
 
     vkCmdBeginRendering(commandBuffer, &renderingInfo);
 
     // The viewport and scissor default to cover all of the attachments
-    VkViewport viewport;
+    VkViewport viewport{};
     viewport.x = 0.0f;
     viewport.y = static_cast<float>(height);
     viewport.width = static_cast<float>(width);
@@ -3290,7 +3418,7 @@ void VulkanCommandBuffer::beginRenderPass(const VGPURenderPassDesc* desc)
     viewport.maxDepth = 1.0f;
     vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
 
-    VkRect2D scissorRect;
+    VkRect2D scissorRect{};
     scissorRect.offset.x = 0;
     scissorRect.offset.y = 0;
     scissorRect.extent.width = width;
@@ -3374,7 +3502,7 @@ void VulkanCommandBuffer::BeginQuery(VGPUQueryHeap heap, uint32_t index)
 {
     VulkanQueryHeap* vulkanHeap = static_cast<VulkanQueryHeap*>(heap);
 
-    switch (vulkanHeap->queryType)
+    switch (vulkanHeap->type)
     {
         case VGPUQueryType_Occlusion:
             if (renderer->features2.features.occlusionQueryPrecise == VK_TRUE)
@@ -3400,7 +3528,7 @@ void VulkanCommandBuffer::EndQuery(VGPUQueryHeap heap, uint32_t index)
 {
     VulkanQueryHeap* vulkanHeap = static_cast<VulkanQueryHeap*>(heap);
 
-    switch (vulkanHeap->queryType)
+    switch (vulkanHeap->type)
     {
         case VGPUQueryType_Timestamp:
             if (renderer->features1_3.synchronization2 == VK_TRUE)
@@ -3426,7 +3554,7 @@ void VulkanCommandBuffer::ResolveQuery(VGPUQueryHeap heap, uint32_t index, uint3
 
     VkQueryResultFlags flags = VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT;
 
-    switch (vulkanHeap->queryType)
+    switch (vulkanHeap->type)
     {
         case VGPUQueryType_BinaryOcclusion:
             flags |= VK_QUERY_RESULT_PARTIAL_BIT;

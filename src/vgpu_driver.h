@@ -1,4 +1,4 @@
-// Copyright © Amer Koleci.
+// Copyright © Amer Koleci and Contributors.
 // Licensed under the MIT License (MIT). See LICENSE in the repository root for more information.
 
 #ifndef _VGPU_DRIVER_H_
@@ -133,6 +133,7 @@ struct VGPUTextureImpl : public VGPUObject
 {
 public:
     virtual VGPUTextureDimension GetDimension() const = 0;
+    virtual VGPUTextureFormat GetFormat() const = 0;
 };
 
 struct VGPUSamplerImpl : public VGPUObject
@@ -154,6 +155,8 @@ public:
 struct VGPUQueryHeapImpl : public VGPUObject
 {
 public:
+    virtual VGPUQueryType GetType() const = 0;
+    virtual uint32_t GetCount() const = 0;
 };
 
 struct VGPUSwapChainImpl : public VGPUObject
@@ -210,7 +213,7 @@ typedef struct VGPUDeviceImpl
     void (*getAdapterProperties)(VGPURenderer* driverData, VGPUAdapterProperties* properties);
     void (*getLimits)(VGPURenderer* driverData, VGPULimits* limits);
 
-    VGPUBuffer(*createBuffer)(VGPURenderer* driverData, const VGPUBufferDescriptor* desc, const void* pInitialData);
+    VGPUBuffer(*createBuffer)(VGPURenderer* driverData, const VGPUBufferDesc* desc, const void* pInitialData);
 
     VGPUTexture(*createTexture)(VGPURenderer* driverData, const VGPUTextureDesc* desc, const void* pInitialData);
 
@@ -219,15 +222,15 @@ typedef struct VGPUDeviceImpl
     VGPUShaderModule(*createShaderModule)(VGPURenderer* driverData, const void* pCode, size_t codeSize);
     void(*destroyShaderModule)(VGPURenderer* driverData, VGPUShaderModule resource);
 
-    VGPUPipelineLayout(*createPipelineLayout)(VGPURenderer* driverData, const VGPUPipelineLayoutDescriptor* desc);
+    VGPUPipelineLayout(*createPipelineLayout)(VGPURenderer* driverData, const VGPUPipelineLayoutDesc* desc);
 
-    VGPUPipeline(*createRenderPipeline)(VGPURenderer* driverData, const VGPURenderPipelineDescriptor* desc);
-    VGPUPipeline(*createComputePipeline)(VGPURenderer* driverData, const VGPUComputePipelineDescriptor* desc);
-    VGPUPipeline(*createRayTracingPipeline)(VGPURenderer* driverData, const VGPURayTracingPipelineDescriptor* desc);
+    VGPUPipeline(*createRenderPipeline)(VGPURenderer* driverData, const VGPURenderPipelineDesc* desc);
+    VGPUPipeline(*createComputePipeline)(VGPURenderer* driverData, const VGPUComputePipelineDesc* desc);
+    VGPUPipeline(*createRayTracingPipeline)(VGPURenderer* driverData, const VGPURayTracingPipelineDesc* desc);
 
-    VGPUQueryHeap(*createQueryHeap)(VGPURenderer* driverData, const VGPUQueryHeapDescriptor* descriptor);
+    VGPUQueryHeap(*createQueryHeap)(VGPURenderer* driverData, const VGPUQueryHeapDesc* desc);
 
-    VGPUSwapChain(*createSwapChain)(VGPURenderer* driverData, void* windowHandle, const VGPUSwapChainDescriptor* desc);
+    VGPUSwapChain(*createSwapChain)(VGPURenderer* driverData, void* windowHandle, const VGPUSwapChainDesc* desc);
 
     VGPUCommandBuffer(*beginCommandBuffer)(VGPURenderer* driverData, VGPUCommandQueue queueType, const char* label);
     uint64_t(*submit)(VGPURenderer* driverData, VGPUCommandBuffer* commandBuffers, uint32_t count);

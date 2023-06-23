@@ -1,4 +1,4 @@
-// Copyright © Amer Koleci.
+// Copyright © Amer Koleci and Contributors.
 // Licensed under the MIT License (MIT). See LICENSE in the repository root for more information.
 
 #if defined(VGPU_D3D11_DRIVER) && defined(TODO)

@@ -1,13 +1,6 @@
 // Copyright © Amer Koleci and Contributors.
 // Distributed under the MIT license. See the LICENSE file in the project root for more information.
 
-#if defined(__EMSCRIPTEN__)
-#include <emscripten.h>
-#include <emscripten/html5.h>
-#ifndef KEEP_IN_MODULE
-#define KEEP_IN_MODULE extern "C" __attribute__((used, visibility("default")))
-#endif
-#else
 #include "GLFW/glfw3.h"
 #if defined(__linux__)
 #   define GLFW_EXPOSE_NATIVE_X11
@@ -15,7 +8,7 @@
 #   define GLFW_EXPOSE_NATIVE_WIN32
 #endif
 #include "GLFW/glfw3native.h"
-#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <iostream>
@@ -94,21 +87,7 @@ VGPUShaderModule LoadShader(const char* fileName)
     }
 }
 
-#if defined(__EMSCRIPTEN__)
-namespace
-{
-    static EM_BOOL _app_emsc_frame(double time, void* userData)
-    {
-        //emscripten_log(EM_LOG_CONSOLE, "%s", "frame");
-        vgpu_frame();
-        return EM_TRUE;
-    }
-}
-
-void init_vgpu()
-#else
 void init_vgpu(GLFWwindow* window)
-#endif
 {
     VGPUDeviceDescriptor deviceDesc{};
     deviceDesc.label = "test device";
@@ -116,10 +95,10 @@ void init_vgpu(GLFWwindow* window)
     deviceDesc.validationMode = VGPUValidationMode_Enabled;
 #endif
 
-    //if (vgpuIsBackendSupported(VGPUBackend_Vulkan))
-    //{
-    //    deviceDesc.preferredBackend = VGPUBackend_Vulkan;
-    //}
+    if (vgpuIsBackendSupported(VGPUBackend_Vulkan))
+    {
+        deviceDesc.preferredBackend = VGPUBackend_Vulkan;
+    }
 
     device = vgpuCreateDevice(&deviceDesc);
     assert(device != nullptr);
@@ -135,15 +114,13 @@ void init_vgpu(GLFWwindow* window)
     glfwGetWindowSize(window, &width, &height);
 
     void* windowHandle = nullptr;
-#if defined(__EMSCRIPTEN__)
-    windowHandle = "canvas";
-#elif defined(GLFW_EXPOSE_NATIVE_WIN32)
+#if defined(GLFW_EXPOSE_NATIVE_WIN32)
     windowHandle = glfwGetWin32Window(window);
 #elif defined(GLFW_EXPOSE_NATIVE_X11)
     windowHandle = (void*)(uintptr_t)glfwGetX11Window(window);
 #endif
 
-    VGPUSwapChainDescriptor swapChainDesc{};
+    VGPUSwapChainDesc swapChainDesc{};
     swapChainDesc.width = width;
     swapChainDesc.height = height;
     swapChainDesc.format = VGPUTextureFormat_BGRA8UnormSrgb;
@@ -172,7 +149,7 @@ void init_vgpu(GLFWwindow* window)
         -0.5f, -0.5f, 0.5f,     1.0f, 1.0f, 0.0f, 1.0f,
     };
 
-    VGPUBufferDescriptor vertex_buffer_desc{};
+    VGPUBufferDesc vertex_buffer_desc{};
     vertex_buffer_desc.label = "Vertex Buffer";
     vertex_buffer_desc.size = sizeof(vertices);
     vertex_buffer_desc.usage = VGPUBufferUsage_Vertex;
@@ -182,7 +159,7 @@ void init_vgpu(GLFWwindow* window)
         0, 1, 2,    // first triangle
         0, 2, 3,    // second triangle
     };
-    VGPUBufferDescriptor index_buffer_desc{};
+    VGPUBufferDesc index_buffer_desc{};
     index_buffer_desc.label = "Vertex Buffer";
     index_buffer_desc.size = sizeof(indices);
     index_buffer_desc.usage = VGPUBufferUsage_Index;
@@ -195,13 +172,12 @@ void init_vgpu(GLFWwindow* window)
     pushConstantRange.visibility = VGPUShaderStage_Fragment;
     pushConstantRange.size = sizeof(PushData);
 
-    VGPUPipelineLayoutDescriptor pipelineLayoutDesc{};
+    VGPUPipelineLayoutDesc pipelineLayoutDesc{};
     pipelineLayoutDesc.pushConstantRangeCount = 1;
     pipelineLayoutDesc.pushConstantRanges = &pushConstantRange;
     pipelineLayout = vgpuCreatePipelineLayout(device, &pipelineLayoutDesc);
 
-    RenderPipelineColorAttachmentDesc colorAttachment{};
-    colorAttachment.format = vgpuSwapChainGetFormat(swapChain);
+    VGPUTextureFormat colorFormat = vgpuSwapChainGetFormat(swapChain);
 
     std::array<VGPUVertexAttribute, 2> vertexAttributes = {};
     // Attribute location 0: Position
@@ -218,7 +194,7 @@ void init_vgpu(GLFWwindow* window)
     vertexBufferLayout.attributeCount = 2;
     vertexBufferLayout.attributes = vertexAttributes.data();
 
-    VGPURenderPipelineDescriptor renderPipelineDesc{};
+    VGPURenderPipelineDesc renderPipelineDesc{};
     renderPipelineDesc.label = "Triangle";
     renderPipelineDesc.layout = pipelineLayout;
     renderPipelineDesc.vertex.module = vertex_shader;
@@ -226,9 +202,9 @@ void init_vgpu(GLFWwindow* window)
     renderPipelineDesc.vertex.layouts = &vertexBufferLayout;
 
     renderPipelineDesc.fragment = fragment_shader;
-    renderPipelineDesc.colorAttachmentCount = 1u;
-    renderPipelineDesc.colorAttachments = &colorAttachment;
-    renderPipelineDesc.depthStencilState.format = VGPUTextureFormat_Depth32Float;
+    renderPipelineDesc.colorFormatCount = 1u;
+    renderPipelineDesc.colorFormats = &colorFormat;
+    renderPipelineDesc.depthStencilFormat = VGPUTextureFormat_Depth32Float;
     renderPipelineDesc.depthStencilState.depthWriteEnabled = true;
     renderPipelineDesc.depthStencilState.depthCompareFunction = VGPUCompareFunction_LessEqual;
 
@@ -236,42 +212,6 @@ void init_vgpu(GLFWwindow* window)
     vgpuDestroyShaderModule(device, vertex_shader);
     vgpuDestroyShaderModule(device, fragment_shader);
 }
-
-#if defined(__EMSCRIPTEN__)
-EM_JS(void, glue_preint, (), {
-    var entry = __glue_main_;
-    if (entry) {
-        /*
-         * None of the WebGPU properties appear to survive Closure, including
-         * Emscripten's own `preinitializedWebGPUDevice` (which from looking at
-         *`library_html5` is probably designed to be inited in script before
-         * loading the Wasm).
-         */
-        if (navigator["gpu"]) {
-            navigator["gpu"]["requestAdapter"]().then(function(adapter) {
-                adapter["requestDevice"]().then(function(device) {
-                    Module["preinitializedWebGPUDevice"] = device;
-                    entry();
-                });
-            }, function() {
-                console.error("No WebGPU adapter; not starting");
-            });
-        }
- else {
-  console.error("No support for WebGPU; not starting");
-}
-}
-else {
- console.error("Entry point not found; unable to start");
-}
-    });
-
-KEEP_IN_MODULE void _glue_main_()
-{
-    init_gfx();
-    emscripten_request_animation_frame_loop(_app_emsc_frame);
-}
-#endif
 
 void draw_frame()
 {
@@ -296,7 +236,7 @@ void draw_frame()
         depthStencilAttachment.texture = depthStencilTexture;
         depthStencilAttachment.depthLoadOp = VGPULoadAction_Clear;
         depthStencilAttachment.depthStoreOp = VGPUStoreAction_Store;
-        depthStencilAttachment.clearDepth = 1.0f;
+        depthStencilAttachment.depthClearValue = 1.0f;
 
         VGPURenderPassDesc renderPass{};
         renderPass.colorAttachmentCount = 1u;
@@ -320,9 +260,6 @@ void draw_frame()
 
 int main()
 {
-#if defined(__EMSCRIPTEN__)
-    glue_preint();
-#else
     if (!glfwInit())
     {
         return EXIT_FAILURE;
@@ -352,6 +289,5 @@ int main()
     vgpuDestroyDevice(device);
     glfwDestroyWindow(window);
     glfwTerminate();
-#endif
     return EXIT_SUCCESS;
 }

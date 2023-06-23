@@ -1,4 +1,4 @@
-// Copyright © Amer Koleci.
+// Copyright © Amer Koleci and Contributors.
 // Licensed under the MIT License (MIT). See LICENSE in the repository root for more information.
 
 #if defined(VGPU_D3D12_DRIVER)
@@ -365,6 +365,34 @@ namespace
         }
     }
 
+    constexpr D3D12_FILL_MODE ToD3D12(VGPUFillMode mode)
+    {
+        switch (mode)
+        {
+            default:
+            case VGPUFillMode_Solid:
+                return D3D12_FILL_MODE_SOLID;
+
+            case VGPUFillMode_Wireframe:
+                return D3D12_FILL_MODE_WIREFRAME;
+        }
+    }
+
+    constexpr D3D12_CULL_MODE ToD3D12(VGPUCullMode mode)
+    {
+        switch (mode)
+        {
+            default:
+            case VGPUCullMode_Back:
+                return D3D12_CULL_MODE_BACK;
+
+            case VGPUCullMode_None:
+                return D3D12_CULL_MODE_NONE;
+            case VGPUCullMode_Front:
+                return D3D12_CULL_MODE_FRONT;
+        }
+    }
+
 
     D3D12_DEPTH_STENCILOP_DESC ToD3D12StencilOpDesc(const VGPUStencilFaceState& state)
     {
@@ -544,6 +572,7 @@ struct D3D12Buffer final : public VGPUBufferImpl, public D3D12Resource
 struct D3D12Texture final : public VGPUTextureImpl, public D3D12Resource
 {
     VGPUTextureDimension dimension{};
+    VGPUTextureFormat format{};
     uint32_t width = 0;
     uint32_t height = 0;
     DXGI_FORMAT dxgiFormat = DXGI_FORMAT_UNKNOWN;
@@ -555,6 +584,7 @@ struct D3D12Texture final : public VGPUTextureImpl, public D3D12Resource
     void SetLabel(const char* label) override;
 
     VGPUTextureDimension GetDimension() const override { return dimension; }
+    VGPUTextureFormat GetFormat() const override { return format; }
 };
 
 struct D3D12Sampler final : public VGPUSamplerImpl
@@ -601,11 +631,16 @@ struct D3D12Pipeline final : public VGPUPipelineImpl
 struct D3D12QueryHeap final : public VGPUQueryHeapImpl
 {
     D3D12_Renderer* renderer = nullptr;
+    VGPUQueryType type;
+    uint32_t count;
     ID3D12QueryHeap* handle = nullptr;
-    D3D12_QUERY_TYPE queryType = D3D12_QUERY_TYPE_OCCLUSION;
+    D3D12_QUERY_TYPE d3dQueryType = D3D12_QUERY_TYPE_OCCLUSION;
 
     ~D3D12QueryHeap() override;
     void SetLabel(const char* label) override;
+
+    VGPUQueryType GetType() const override { return type; }
+    uint32_t GetCount() const override { return count; }
 };
 
 struct D3D12_SwapChain final : public VGPUSwapChainImpl
@@ -1331,6 +1366,7 @@ static void d3d12_updateSwapChain(D3D12_Renderer* renderer, D3D12_SwapChain* swa
         D3D12Texture* texture = new D3D12Texture();
         texture->renderer = renderer;
         texture->dimension = VGPUTextureDimension_2D;
+        texture->format = swapChain->colorFormat;
         texture->state = D3D12_RESOURCE_STATE_PRESENT;
         texture->width = swapChainDesc.Width;
         texture->height = swapChainDesc.Height;
@@ -1510,7 +1546,7 @@ static void d3d12_setLabel(VGPURenderer* driverData, const char* label)
 }
 
 /* Buffer */
-static VGPUBuffer d3d12_createBuffer(VGPURenderer* driverData, const VGPUBufferDescriptor* desc, const void* pInitialData)
+static VGPUBuffer d3d12_createBuffer(VGPURenderer* driverData, const VGPUBufferDesc* desc, const void* pInitialData)
 {
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
 
@@ -1799,6 +1835,7 @@ static VGPUTexture d3d12_createTexture(VGPURenderer* driverData, const VGPUTextu
     D3D12Texture* texture = new D3D12Texture();
     texture->renderer = renderer;
     texture->dimension = desc->dimension;
+    texture->format = desc->format;
     texture->state = resourceState;
     texture->width = desc->width;
     texture->height = desc->height;
@@ -1945,7 +1982,7 @@ static HRESULT d3d12_CreateRootSignature(ID3D12Device* device, ID3D12RootSignatu
     return device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(rootSignature));
 }
 
-static VGPUPipelineLayout d3d12_createPipelineLayout(VGPURenderer* driverData, const VGPUPipelineLayoutDescriptor* descriptor)
+static VGPUPipelineLayout d3d12_createPipelineLayout(VGPURenderer* driverData, const VGPUPipelineLayoutDesc* desc)
 {
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
 
@@ -1953,9 +1990,9 @@ static VGPUPipelineLayout d3d12_createPipelineLayout(VGPURenderer* driverData, c
     layout->renderer = renderer;
 
     uint32_t rangeMax = 0;
-    for (uint32_t i = 0; i < descriptor->descriptorSetCount; i++)
+    for (uint32_t i = 0; i < desc->descriptorSetCount; i++)
     {
-        rangeMax += descriptor->descriptorSets[i].rangeCount;
+        rangeMax += desc->descriptorSets[i].rangeCount;
     }
 
     uint32_t totalRangeNum = 0;
@@ -1963,13 +2000,13 @@ static VGPUPipelineLayout d3d12_createPipelineLayout(VGPURenderer* driverData, c
     std::vector<D3D12_DESCRIPTOR_RANGE1> descriptorRanges(rangeMax);
     std::vector<D3D12_STATIC_SAMPLER_DESC> staticSamplers;
 
-    if (descriptor->pushConstantRangeCount > 0)
+    if (desc->pushConstantRangeCount > 0)
     {
         layout->pushConstantsBaseIndex = (uint32_t)rootParameters.size();
 
-        for (uint32_t i = 0; i < descriptor->pushConstantRangeCount; i++)
+        for (uint32_t i = 0; i < desc->pushConstantRangeCount; i++)
         {
-            const VGPUPushConstantRange& pushConstantRange = descriptor->pushConstantRanges[i];
+            const VGPUPushConstantRange& pushConstantRange = desc->pushConstantRanges[i];
 
             D3D12_ROOT_PARAMETER1 rootParameter = {};
             rootParameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
@@ -2016,7 +2053,7 @@ void D3D12Pipeline::SetLabel(const char* label)
     D3D12SetName(handle, label);
 }
 
-static VGPUPipeline d3d12_createRenderPipeline(VGPURenderer* driverData, const VGPURenderPipelineDescriptor* desc)
+static VGPUPipeline d3d12_createRenderPipeline(VGPURenderer* driverData, const VGPURenderPipelineDesc* desc)
 {
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
 
@@ -2071,13 +2108,13 @@ static VGPUPipeline d3d12_createRenderPipeline(VGPURenderer* driverData, const V
 
     // Color Attachments + RTV
     D3D12_BLEND_DESC blendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
-    blendState.AlphaToCoverageEnable = desc->alphaToCoverageEnabled;
-    blendState.IndependentBlendEnable = TRUE;
-    for (uint32_t i = 0; i < desc->colorAttachmentCount; ++i)
+    blendState.AlphaToCoverageEnable = desc->blendState.alphaToCoverageEnable ? TRUE : FALSE;
+    blendState.IndependentBlendEnable = desc->blendState.independentBlendEnable ? TRUE : FALSE;
+    for (uint32_t i = 0; i < desc->colorFormatCount; ++i)
     {
-        VGPU_ASSERT(desc->colorAttachments[i].format != VGPUTextureFormat_Undefined);
+        VGPU_ASSERT(desc->colorFormats[i] != VGPUTextureFormat_Undefined);
 
-        const RenderPipelineColorAttachmentDesc& attachment = desc->colorAttachments[i];
+        const VGPURenderTargetBlendState& attachment = desc->blendState.renderTargets[i];
 
         blendState.RenderTarget[i].BlendEnable = attachment.blendEnabled;
         blendState.RenderTarget[i].LogicOpEnable = FALSE;
@@ -2091,17 +2128,31 @@ static VGPUPipeline d3d12_createRenderPipeline(VGPURenderer* driverData, const V
         blendState.RenderTarget[i].RenderTargetWriteMask = D3D12RenderTargetWriteMask(attachment.colorWriteMask);
 
         // RTV
-        d3dDesc.RTVFormats[d3dDesc.NumRenderTargets] = ToDxgiFormat(desc->colorAttachments[i].format);
+        d3dDesc.RTVFormats[d3dDesc.NumRenderTargets] = ToDxgiFormat(desc->colorFormats[i]);
         d3dDesc.NumRenderTargets++;
     }
 
     d3dDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
     d3dDesc.SampleMask = UINT_MAX;
-    d3dDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+
+    // RasterizerState
+    CD3DX12_RASTERIZER_DESC rasterizerState{};
+    rasterizerState.FillMode = ToD3D12(desc->rasterizerState.fillMode);
+    rasterizerState.CullMode = ToD3D12(desc->rasterizerState.cullMode);
+    rasterizerState.FrontCounterClockwise = desc->rasterizerState.frontFaceCounterClockwise ? TRUE : FALSE;
+    rasterizerState.DepthBias = static_cast<INT>(desc->rasterizerState.depthBias);
+    rasterizerState.DepthBiasClamp = desc->rasterizerState.depthBiasClamp;
+    rasterizerState.SlopeScaledDepthBias = desc->rasterizerState.slopeScaledDepthBias;
+    rasterizerState.DepthClipEnable = (desc->rasterizerState.depthClipMode == VGPUDepthClipMode_Clip) ? TRUE : FALSE;
+    rasterizerState.MultisampleEnable = desc->sampleCount > 1 ? TRUE : FALSE;
+    rasterizerState.AntialiasedLineEnable = FALSE;
+    rasterizerState.ForcedSampleCount = 0;
+    rasterizerState.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
+    d3dDesc.RasterizerState = rasterizerState;
 
     // DepthStencilState
     const D3D12_DEPTH_STENCILOP_DESC defaultStencilOp = { D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, D3D12_COMPARISON_FUNC_ALWAYS };
-    if (desc->depthStencilState.format != VGPUTextureFormat_Undefined)
+    if (desc->depthStencilFormat != VGPUTextureFormat_Undefined)
     {
         d3dDesc.DepthStencilState.DepthEnable = desc->depthStencilState.depthCompareFunction != VGPUCompareFunction_Always || desc->depthStencilState.depthWriteEnabled;
         d3dDesc.DepthStencilState.DepthWriteMask = desc->depthStencilState.depthWriteEnabled ? D3D12_DEPTH_WRITE_MASK_ALL : D3D12_DEPTH_WRITE_MASK_ZERO;
@@ -2127,7 +2178,7 @@ static VGPUPipeline d3d12_createRenderPipeline(VGPURenderer* driverData, const V
     d3dDesc.InputLayout = { inputElementDescs.data(), (UINT)inputElementDescs.size() };
     d3dDesc.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
 
-    switch (desc->primitive.topology)
+    switch (desc->primitiveTopology)
     {
         case VGPUPrimitiveTopology_PointList:
             d3dDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT;
@@ -2146,7 +2197,7 @@ static VGPUPipeline d3d12_createRenderPipeline(VGPURenderer* driverData, const V
     }
 
     // DSV format
-    d3dDesc.DSVFormat = ToDxgiFormat(desc->depthStencilState.format);
+    d3dDesc.DSVFormat = ToDxgiFormat(desc->depthStencilFormat);
     d3dDesc.SampleDesc.Count = desc->sampleCount;
 
     if (FAILED(renderer->device->CreateGraphicsPipelineState(&d3dDesc, IID_PPV_ARGS(&pipeline->handle))))
@@ -2156,11 +2207,11 @@ static VGPUPipeline d3d12_createRenderPipeline(VGPURenderer* driverData, const V
     }
 
     D3D12SetName(pipeline->handle, desc->label);
-    pipeline->primitiveTopology = ToD3DPrimitiveTopology(desc->primitive.topology, desc->primitive.patchControlPoints);
+    pipeline->primitiveTopology = ToD3DPrimitiveTopology(desc->primitiveTopology, desc->patchControlPoints);
     return pipeline;
 }
 
-static VGPUPipeline d3d12_createComputePipeline(VGPURenderer* driverData, const VGPUComputePipelineDescriptor* desc)
+static VGPUPipeline d3d12_createComputePipeline(VGPURenderer* driverData, const VGPUComputePipelineDesc* desc)
 {
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
 
@@ -2172,13 +2223,20 @@ static VGPUPipeline d3d12_createComputePipeline(VGPURenderer* driverData, const 
 
     D3D12Shader* shader = (D3D12Shader*)desc->shader;
 
-    D3D12_SHADER_BYTECODE cs = { shader->byteCode, shader->byteCodeSize };
+    struct PSO_STREAM
+    {
+        CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE pRootSignature;
+        CD3DX12_PIPELINE_STATE_STREAM_CS CS;
+    } stream;
 
-    D3D12_COMPUTE_PIPELINE_STATE_DESC d3dDesc = {};
-    d3dDesc.pRootSignature = pipeline->pipelineLayout->handle;
-    d3dDesc.CS = cs;
+    stream.pRootSignature = pipeline->pipelineLayout->handle;
+    stream.CS = { shader->byteCode, shader->byteCodeSize };
 
-    if (FAILED(renderer->device->CreateComputePipelineState(&d3dDesc, IID_PPV_ARGS(&pipeline->handle))))
+    D3D12_PIPELINE_STATE_STREAM_DESC streamDesc = {};
+    streamDesc.pPipelineStateSubobjectStream = &stream;
+    streamDesc.SizeInBytes = sizeof(stream);
+
+    if (FAILED(renderer->device->CreatePipelineState(&streamDesc, IID_PPV_ARGS(&pipeline->handle))))
     {
         delete pipeline;
         return nullptr;
@@ -2188,7 +2246,7 @@ static VGPUPipeline d3d12_createComputePipeline(VGPURenderer* driverData, const 
     return pipeline;
 }
 
-static VGPUPipeline d3d12_createRayTracingPipeline(VGPURenderer* driverData, const VGPURayTracingPipelineDescriptor* desc)
+static VGPUPipeline d3d12_createRayTracingPipeline(VGPURenderer* driverData, const VGPURayTracingPipelineDesc* desc)
 {
     VGPU_UNUSED(desc);
     VGPU_UNUSED(driverData);
@@ -2213,17 +2271,19 @@ void D3D12QueryHeap::SetLabel(const char* label)
     D3D12SetName(handle, label);
 }
 
-static VGPUQueryHeap d3d12_createQueryHeap(VGPURenderer* driverData, const VGPUQueryHeapDescriptor* descriptor)
+static VGPUQueryHeap d3d12_createQueryHeap(VGPURenderer* driverData, const VGPUQueryHeapDesc* desc)
 {
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
 
     D3D12QueryHeap* heap = new D3D12QueryHeap();
     heap->renderer = renderer;
-    heap->queryType = ToD3D12QueryType(descriptor->type);
+    heap->type = desc->type;
+    heap->count = desc->count;
+    heap->d3dQueryType = ToD3D12QueryType(desc->type);
 
     D3D12_QUERY_HEAP_DESC d3dDesc = {};
-    d3dDesc.Type = ToD3D12(descriptor->type);
-    d3dDesc.Count = descriptor->count;
+    d3dDesc.Type = ToD3D12(desc->type);
+    d3dDesc.Count = desc->count;
     d3dDesc.NodeMask = 0;
 
     HRESULT hr = renderer->device->CreateQueryHeap(&d3dDesc, IID_PPV_ARGS(&heap->handle));
@@ -2232,9 +2292,9 @@ static VGPUQueryHeap d3d12_createQueryHeap(VGPURenderer* driverData, const VGPUQ
         return nullptr;
     }
 
-    if (descriptor->label)
+    if (desc->label)
     {
-        heap->SetLabel(descriptor->label);
+        heap->SetLabel(desc->label);
     }
 
     return heap;
@@ -2256,7 +2316,7 @@ void D3D12_SwapChain::SetLabel(const char* label)
     VGPU_UNUSED(label);
 }
 
-static VGPUSwapChain d3d12_createSwapChain(VGPURenderer* driverData, void* windowHandle, const VGPUSwapChainDescriptor* desc)
+static VGPUSwapChain d3d12_createSwapChain(VGPURenderer* driverData, void* windowHandle, const VGPUSwapChainDesc* desc)
 {
     D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
 
@@ -2666,17 +2726,17 @@ void D3D12CommandBuffer::beginRenderPass(const VGPURenderPassDesc* desc)
         if (attachment->depthLoadOp == VGPULoadAction_Clear)
         {
             DSV.DepthBeginningAccess.Clear.ClearValue.Format = texture->dxgiFormat;
-            DSV.DepthBeginningAccess.Clear.ClearValue.DepthStencil.Depth = attachment->clearDepth;
+            DSV.DepthBeginningAccess.Clear.ClearValue.DepthStencil.Depth = attachment->depthClearValue;
         }
         DSV.DepthEndingAccess.Type = ToD3D12(attachment->depthStoreOp);
 
-        DSV.StencilBeginningAccess.Type = ToD3D12(attachment->stencilLoadOp);
-        if (attachment->stencilLoadOp == VGPULoadAction_Clear)
+        DSV.StencilBeginningAccess.Type = ToD3D12(attachment->stencilLoadAction);
+        if (attachment->stencilLoadAction == VGPULoadAction_Clear)
         {
             DSV.StencilBeginningAccess.Clear.ClearValue.Format = texture->dxgiFormat;
-            DSV.StencilBeginningAccess.Clear.ClearValue.DepthStencil.Stencil = attachment->clearStencil;
+            DSV.StencilBeginningAccess.Clear.ClearValue.DepthStencil.Stencil = static_cast<UINT8>(attachment->stencilClearValue);
         }
-        DSV.StencilEndingAccess.Type = ToD3D12(attachment->stencilStoreOp);
+        DSV.StencilEndingAccess.Type = ToD3D12(attachment->stencilStoreAction);
     }
 
     commandList->BeginRenderPass(numRTVS, RTVs, hasDepthStencil ? &DSV : nullptr, renderPassFlags);
@@ -2761,14 +2821,14 @@ void D3D12CommandBuffer::BeginQuery(VGPUQueryHeap heap, uint32_t index)
 {
     auto d3dHeap = static_cast<D3D12QueryHeap*>(heap);
 
-    commandList->BeginQuery(d3dHeap->handle, d3dHeap->queryType, index);
+    commandList->BeginQuery(d3dHeap->handle, d3dHeap->d3dQueryType, index);
 }
 
 void D3D12CommandBuffer::EndQuery(VGPUQueryHeap heap, uint32_t index)
 {
     auto d3dHeap = static_cast<D3D12QueryHeap*>(heap);
 
-    commandList->EndQuery(d3dHeap->handle, d3dHeap->queryType, index);
+    commandList->EndQuery(d3dHeap->handle, d3dHeap->d3dQueryType, index);
 }
 
 void D3D12CommandBuffer::ResolveQuery(VGPUQueryHeap heap, uint32_t index, uint32_t count, VGPUBuffer destinationBuffer, uint64_t destinationOffset)
@@ -2778,7 +2838,7 @@ void D3D12CommandBuffer::ResolveQuery(VGPUQueryHeap heap, uint32_t index, uint32
 
     commandList->ResolveQueryData(
         d3dHeap->handle,
-        d3dHeap->queryType,
+        d3dHeap->d3dQueryType,
         index,
         count,
         d3dDestBuffer->handle,

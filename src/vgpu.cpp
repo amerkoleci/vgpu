@@ -1,4 +1,4 @@
-// Copyright © Amer Koleci.
+// Copyright © Amer Koleci and Contributors.
 // Licensed under the MIT License (MIT). See LICENSE in the repository root for more information.
 
 #include "vgpu_driver.h"
@@ -215,19 +215,19 @@ uint32_t vgpuGetFrameIndex(VGPUDevice device)
 }
 
 /* Buffer */
-static VGPUBufferDescriptor _vgpu_buffer_desc_def(const VGPUBufferDescriptor* desc)
+static VGPUBufferDesc _vgpu_buffer_desc_def(const VGPUBufferDesc* desc)
 {
-    VGPUBufferDescriptor def = *desc;
+    VGPUBufferDesc def = *desc;
     def.size = _VGPU_DEF(def.size, 4);
     return def;
 }
 
-VGPUBuffer vgpuCreateBuffer(VGPUDevice device, const VGPUBufferDescriptor* descriptor, const void* pInitialData)
+VGPUBuffer vgpuCreateBuffer(VGPUDevice device, const VGPUBufferDesc* desc, const void* pInitialData)
 {
     VGPU_ASSERT(device);
-    NULL_RETURN_NULL(descriptor);
+    NULL_RETURN_NULL(desc);
 
-    VGPUBufferDescriptor desc_def = _vgpu_buffer_desc_def(descriptor);
+    VGPUBufferDesc desc_def = _vgpu_buffer_desc_def(desc);
     return device->createBuffer(device->driverData, &desc_def, pInitialData);
 }
 
@@ -360,7 +360,16 @@ VGPUTexture vgpuCreateTexture(VGPUDevice device, const VGPUTextureDesc* desc, co
 
 VGPUTextureDimension vgpuTextureGetDimension(VGPUTexture texture)
 {
+    VGPU_ASSERT(texture);
+
     return texture->GetDimension();
+}
+
+VGPUTextureFormat vgpuTextureGetFormat(VGPUTexture texture)
+{
+    VGPU_ASSERT(texture);
+
+    return texture->GetFormat();
 }
 
 void vgpuTextureSetLabel(VGPUTexture texture, const char* label)
@@ -440,18 +449,18 @@ void vgpuDestroyShaderModule(VGPUDevice device, VGPUShaderModule module)
 }
 
 /* PipelineLayout */
-static VGPUPipelineLayoutDescriptor _VGPUPipelineLayoutDescriptor_Def(const VGPUPipelineLayoutDescriptor* desc)
+static VGPUPipelineLayoutDesc _VGPUPipelineLayoutDesc_Def(const VGPUPipelineLayoutDesc* desc)
 {
-    VGPUPipelineLayoutDescriptor def = *desc;
+    VGPUPipelineLayoutDesc def = *desc;
     return def;
 }
 
-VGPUPipelineLayout vgpuCreatePipelineLayout(VGPUDevice device, const VGPUPipelineLayoutDescriptor* descriptor)
+VGPUPipelineLayout vgpuCreatePipelineLayout(VGPUDevice device, const VGPUPipelineLayoutDesc* desc)
 {
     VGPU_ASSERT(device);
-    NULL_RETURN_NULL(descriptor);
+    NULL_RETURN_NULL(desc);
 
-    VGPUPipelineLayoutDescriptor desc_def = _VGPUPipelineLayoutDescriptor_Def(descriptor);
+    VGPUPipelineLayoutDesc desc_def = _VGPUPipelineLayoutDesc_Def(desc);
     return device->createPipelineLayout(device->driverData, &desc_def);
 }
 
@@ -477,12 +486,12 @@ uint32_t vgpuPipelineLayoutRelease(VGPUPipelineLayout pipelineLayout)
 }
 
 /* Pipeline */
-static VGPURenderPipelineDescriptor _vgpuRenderPipelineDescDef(const VGPURenderPipelineDescriptor* desc)
+static VGPURenderPipelineDesc _vgpuRenderPipelineDescDef(const VGPURenderPipelineDesc* desc)
 {
-    VGPURenderPipelineDescriptor def = *desc;
+    VGPURenderPipelineDesc def = *desc;
 
-    def.primitive.topology = _VGPU_DEF(def.primitive.topology, VGPUPrimitiveTopology_TriangleList);
-    def.primitive.patchControlPoints = _VGPU_DEF(def.primitive.patchControlPoints, 1);
+    def.primitiveTopology = _VGPU_DEF(def.primitiveTopology, VGPUPrimitiveTopology_TriangleList);
+    def.patchControlPoints = _VGPU_DEF(def.patchControlPoints, 1);
 
     def.depthStencilState.depthCompareFunction = _VGPU_DEF(def.depthStencilState.depthCompareFunction, VGPUCompareFunction_Always);
     def.depthStencilState.stencilFront.compareFunction = _VGPU_DEF(def.depthStencilState.stencilFront.compareFunction, VGPUCompareFunction_Always);
@@ -501,34 +510,34 @@ static VGPURenderPipelineDescriptor _vgpuRenderPipelineDescDef(const VGPURenderP
     return def;
 }
 
-VGPUPipeline vgpuCreateRenderPipeline(VGPUDevice device, const VGPURenderPipelineDescriptor* desc)
+VGPUPipeline vgpuCreateRenderPipeline(VGPUDevice device, const VGPURenderPipelineDesc* desc)
 {
     VGPU_ASSERT(device);
     NULL_RETURN_NULL(desc);
     VGPU_ASSERT(desc->layout);
     VGPU_ASSERT(desc->vertex.module);
 
-    VGPURenderPipelineDescriptor desc_def = _vgpuRenderPipelineDescDef(desc);
+    VGPURenderPipelineDesc desc_def = _vgpuRenderPipelineDescDef(desc);
     return device->createRenderPipeline(device->driverData, &desc_def);
 }
 
-VGPUPipeline vgpuCreateComputePipeline(VGPUDevice device, const VGPUComputePipelineDescriptor* descriptor)
+VGPUPipeline vgpuCreateComputePipeline(VGPUDevice device, const VGPUComputePipelineDesc* desc)
 {
     VGPU_ASSERT(device);
 
-    NULL_RETURN_NULL(descriptor);
-    VGPU_ASSERT(descriptor->layout);
-    VGPU_ASSERT(descriptor->shader);
+    NULL_RETURN_NULL(desc);
+    VGPU_ASSERT(desc->layout);
+    VGPU_ASSERT(desc->shader);
 
-    return device->createComputePipeline(device->driverData, descriptor);
+    return device->createComputePipeline(device->driverData, desc);
 }
 
-VGPUPipeline vgpuCreateRayTracingPipeline(VGPUDevice device, const VGPURayTracingPipelineDescriptor* descriptor)
+VGPUPipeline vgpuCreateRayTracingPipeline(VGPUDevice device, const VGPURayTracingPipelineDesc* desc)
 {
     VGPU_ASSERT(device);
-    NULL_RETURN_NULL(descriptor);
+    NULL_RETURN_NULL(desc);
 
-    return device->createRayTracingPipeline(device->driverData, descriptor);
+    return device->createRayTracingPipeline(device->driverData, desc);
 }
 
 VGPUPipelineType vgpuPipelineGetType(VGPUPipeline pipeline)
@@ -560,51 +569,65 @@ uint32_t vgpuPipelineRelease(VGPUPipeline pipeline)
 }
 
 /* QueryHeap */
-VGPUQueryHeap vgpuCreateQueryHeap(VGPUDevice device, const VGPUQueryHeapDescriptor* descriptor)
+VGPUQueryHeap vgpuCreateQueryHeap(VGPUDevice device, const VGPUQueryHeapDesc* desc)
 {
     VGPU_ASSERT(device);
-    NULL_RETURN_NULL(descriptor);
+    NULL_RETURN_NULL(desc);
 
-    return device->createQueryHeap(device->driverData, descriptor);
+    return device->createQueryHeap(device->driverData, desc);
 }
 
-void vgpuQueryHeapSetLabel(VGPUQueryHeap heap, const char* label)
+VGPUQueryType vgpuQueryHeapGetType(VGPUQueryHeap queryHeap)
 {
-    NULL_RETURN(heap);
+    VGPU_ASSERT(queryHeap);
 
-    heap->SetLabel(label);
+    return queryHeap->GetType();
 }
 
-uint32_t vgpuQueryHeapAddRef(VGPUQueryHeap heap)
+uint32_t vgpuQuerySetGetCount(VGPUQueryHeap queryHeap)
 {
-    VGPU_ASSERT(heap);
+    VGPU_ASSERT(queryHeap);
 
-    return heap->AddRef();
+    return queryHeap->GetCount();
 }
 
-uint32_t vgpuQueryHeapRelease(VGPUQueryHeap heap)
+void vgpuQueryHeapSetLabel(VGPUQueryHeap queryHeap, const char* label)
 {
-    VGPU_ASSERT(heap);
+    NULL_RETURN(queryHeap);
 
-    return heap->Release();
+    queryHeap->SetLabel(label);
+}
+
+uint32_t vgpuQueryHeapAddRef(VGPUQueryHeap queryHeap)
+{
+    VGPU_ASSERT(queryHeap);
+
+    return queryHeap->AddRef();
+}
+
+uint32_t vgpuQueryHeapRelease(VGPUQueryHeap queryHeap)
+{
+    VGPU_ASSERT(queryHeap);
+
+    return queryHeap->Release();
 }
 
 /* SwapChain */
-static VGPUSwapChainDescriptor _vgpuSwapChainDescDef(const VGPUSwapChainDescriptor* desc)
+static VGPUSwapChainDesc _vgpuSwapChainDescDef(const VGPUSwapChainDesc* desc)
 {
-    VGPUSwapChainDescriptor def = *desc;
+    VGPUSwapChainDesc def = *desc;
     def.format = _VGPU_DEF(def.format, VGPUTextureFormat_BGRA8Unorm);
     def.presentMode = _VGPU_DEF(def.presentMode, VGPUPresentMode_Immediate);
     return def;
 }
 
-VGPUSwapChain vgpuCreateSwapChain(VGPUDevice device, void* window, const VGPUSwapChainDescriptor* descriptor)
+VGPUSwapChain vgpuCreateSwapChain(VGPUDevice device, void* window, const VGPUSwapChainDesc* desc)
 {
     VGPU_ASSERT(device);
     NULL_RETURN_NULL(window);
-    NULL_RETURN_NULL(descriptor);
+    NULL_RETURN_NULL(desc);
 
-    VGPUSwapChainDescriptor def = _vgpuSwapChainDescDef(descriptor);
+    VGPUSwapChainDesc def = _vgpuSwapChainDescDef(desc);
     return device->createSwapChain(device->driverData, window, &def);
 }
 
@@ -755,24 +778,24 @@ void vgpuDrawIndexed(VGPUCommandBuffer commandBuffer, uint32_t indexCount, uint3
     commandBuffer->drawIndexed(indexCount, instanceCount, firstIndex, baseVertex, firstInstance);
 }
 
-void vgpuBeginQuery(VGPUCommandBuffer commandBuffer, VGPUQueryHeap heap, uint32_t index)
+void vgpuBeginQuery(VGPUCommandBuffer commandBuffer, VGPUQueryHeap queryHeap, uint32_t index)
 {
-    commandBuffer->BeginQuery(heap, index);
+    commandBuffer->BeginQuery(queryHeap, index);
 }
 
-void vgpuEndQuery(VGPUCommandBuffer commandBuffer, VGPUQueryHeap heap, uint32_t index)
+void vgpuEndQuery(VGPUCommandBuffer commandBuffer, VGPUQueryHeap queryHeap, uint32_t index)
 {
-    commandBuffer->EndQuery(heap, index);
+    commandBuffer->EndQuery(queryHeap, index);
 }
 
-void vgpuResolveQuery(VGPUCommandBuffer commandBuffer, VGPUQueryHeap heap, uint32_t index, uint32_t count, VGPUBuffer destinationBuffer, uint64_t destinationOffset)
+void vgpuResolveQuery(VGPUCommandBuffer commandBuffer, VGPUQueryHeap queryHeap, uint32_t index, uint32_t count, VGPUBuffer destinationBuffer, uint64_t destinationOffset)
 {
-    commandBuffer->ResolveQuery(heap, index, count, destinationBuffer, destinationOffset);
+    commandBuffer->ResolveQuery(queryHeap, index, count, destinationBuffer, destinationOffset);
 }
 
-void vgpuResetQuery(VGPUCommandBuffer commandBuffer, VGPUQueryHeap heap, uint32_t index, uint32_t count)
+void vgpuResetQuery(VGPUCommandBuffer commandBuffer, VGPUQueryHeap queryHeap, uint32_t index, uint32_t count)
 {
-    commandBuffer->ResetQuery(heap, index, count);
+    commandBuffer->ResetQuery(queryHeap, index, count);
 }
 
 // Format mapping table. The rows must be in the exactly same order as Format enum members are defined.
