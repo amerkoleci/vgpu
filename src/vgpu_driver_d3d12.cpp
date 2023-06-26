@@ -541,7 +541,7 @@ struct D3D12GpuDescriptorHeap final
     }
 };
 
-struct D3D12_Renderer;
+class D3D12_Renderer;
 
 struct D3D12Resource
 {
@@ -683,7 +683,7 @@ class D3D12CommandBuffer final : public VGPUCommandBufferImpl
 public:
     D3D12_Renderer* renderer;
     VGPUCommandQueue queueType;
-    bool hasLabel;
+    bool hasLabel = false;
 
     ID3D12CommandAllocator* commandAllocators[VGPU_MAX_INFLIGHT_FRAMES];
     ID3D12GraphicsCommandList4* commandList;
@@ -692,6 +692,7 @@ public:
     UINT numBarriersToFlush;
 
     bool insideRenderPass = false;
+    bool hasRenderPassLabel = false;
     D3D12Pipeline* currentPipeline = nullptr;
 
     std::vector<D3D12_SwapChain*> swapChains;
@@ -777,29 +778,28 @@ public:
         }
     }
 
-    void pushDebugGroup(const char* groupLabel) override;
-    void popDebugGroup() override;
-    void insertDebugMarker(const char* debugLabel) override;
+    void PushDebugGroup(const char* groupLabel) override;
+    void PopDebugGroup() override;
+    void InsertDebugMarker(const char* debugLabel) override;
     void SetPipeline(VGPUPipeline pipeline) override;
     void SetPushConstants(uint32_t pushConstantIndex, const void* data, uint32_t size) override;
 
     void Dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ) override;
     void DispatchIndirect(VGPUBuffer buffer, uint64_t offset) override;
 
-    VGPUTexture acquireSwapchainTexture(VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight) override;
+    VGPUTexture AcquireSwapchainTexture(VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight) override;
 
-    void beginRenderPass(const VGPURenderPassDesc* desc) override;
-    void endRenderPass() override;
+    void BeginRenderPass(const VGPURenderPassDesc* desc) override;
+    void EndRenderPass() override;
 
-    void setViewport(const VGPUViewport* viewport) override;
-    void setViewports(uint32_t count, const VGPUViewport* viewports) override;
-
+    void SetViewport(const VGPUViewport* viewport) override;
+    void SetViewports(uint32_t count, const VGPUViewport* viewports) override;
     void SetScissorRect(const VGPURect* rects) override;
     void SetScissorRects(uint32_t count, const VGPURect* rects) override;
 
-    void setVertexBuffer(uint32_t index, VGPUBuffer buffer, uint64_t offset) override;
-    void setIndexBuffer(VGPUBuffer buffer, VGPUIndexType type, uint64_t offset) override;
-    void setStencilReference(uint32_t reference) override;
+    void SetVertexBuffer(uint32_t index, VGPUBuffer buffer, uint64_t offset) override;
+    void SetIndexBuffer(VGPUBuffer buffer, VGPUIndexType type, uint64_t offset) override;
+    void SetStencilReference(uint32_t reference) override;
 
     void BeginQuery(VGPUQueryHeap heap, uint32_t index) override;
     void EndQuery(VGPUQueryHeap heap, uint32_t index) override;
@@ -807,8 +807,10 @@ public:
     void ResetQuery(VGPUQueryHeap heap, uint32_t index, uint32_t count) override;
 
     void PrepareDraw();
-    void draw(uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t firstInstance) override;
-    void drawIndexed(uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t baseVertex, uint32_t firstInstance) override;
+    void Draw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance) override;
+    void DrawIndexed(uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t baseVertex, uint32_t firstInstance) override;
+    void DrawIndirect(VGPUBuffer indirectBuffer, uint64_t indirectBufferOffset) override;
+    void DrawIndexedIndirect(VGPUBuffer indirectBuffer, uint64_t indirectBufferOffset) override;
 };
 
 struct D3D12Queue final
@@ -819,8 +821,44 @@ struct D3D12Queue final
     std::vector<ID3D12CommandList*> submitCommandLists;
 };
 
-struct D3D12_Renderer
+class D3D12_Renderer final : public VGPUDeviceImpl
 {
+public:
+    ~D3D12_Renderer() override;
+
+    void SetLabel(const char* label) override;
+    void WaitIdle() override;
+    VGPUBackend GetBackendType() const override { return VGPUBackend_D3D12; }
+    VGPUBool32 QueryFeature(VGPUFeature feature) const override;
+    void GetAdapterProperties(VGPUAdapterProperties* properties) const override;
+    void GetLimits(VGPULimits* limits) const override;
+
+    VGPUBuffer CreateBuffer(const VGPUBufferDesc* desc, const void* pInitialData) override;
+    VGPUTexture CreateTexture(const VGPUTextureDesc* desc, const void* pInitialData) override;
+    VGPUSampler CreateSampler(const VGPUSamplerDesc* desc) override;
+
+    VGPUShaderModule CreateShaderModule(const void* pCode, size_t codeSize) override;
+    void DestroyShaderModule(VGPUShaderModule resource) override;
+
+    VGPUPipelineLayout CreatePipelineLayout(const VGPUPipelineLayoutDesc* desc) override;
+
+    VGPUPipeline CreateRenderPipeline(const VGPURenderPipelineDesc* desc) override;
+    VGPUPipeline CreateComputePipeline(const VGPUComputePipelineDesc* desc) override;
+    VGPUPipeline CreateRayTracingPipeline(const VGPURayTracingPipelineDesc* desc) override;
+
+    VGPUQueryHeap CreateQueryHeap(const VGPUQueryHeapDesc* desc) override;
+
+    VGPUSwapChain CreateSwapChain(void* windowHandle, const VGPUSwapChainDesc* desc) override;
+
+    VGPUCommandBuffer BeginCommandBuffer(VGPUCommandQueue queueType, const char* label) override;
+    uint64_t Submit(VGPUCommandBuffer* commandBuffers, uint32_t count) override;
+
+    uint64_t GetFrameCount() override { return frameCount; }
+    uint32_t GetFrameIndex() override { return frameIndex; }
+
+    void DeferDestroy(IUnknown* resource, D3D12MA::Allocation* allocation = nullptr);
+    void ProcessDeletionQueue();
+
     ComPtr<IDXGIFactory4> factory;
     bool tearingSupported = false;
     ID3D12Device5* device = nullptr;
@@ -840,7 +878,7 @@ struct D3D12_Renderer
     /* Command contexts */
     std::mutex cmdBuffersLocker;
     uint32_t cmdBuffersCount{ 0 };
-    std::vector<D3D12CommandBuffer*> commandBuffers;
+    std::vector<D3D12CommandBuffer*> commandBuffersPool;
 
     uint32_t frameIndex = 0;
     uint64_t frameCount = 0;
@@ -867,42 +905,42 @@ struct D3D12_Renderer
     std::deque<std::pair<IUnknown*, uint64_t>> deferredReleases;
 };
 
-static void d3d12_DeferDestroy(D3D12_Renderer* renderer, IUnknown* resource, D3D12MA::Allocation* allocation = nullptr)
+void D3D12_Renderer::DeferDestroy(IUnknown* resource, D3D12MA::Allocation* allocation)
 {
     if (resource == nullptr)
     {
         return;
     }
 
-    renderer->destroyMutex.lock();
+    destroyMutex.lock();
 
-    if (renderer->shuttingDown || renderer->device == nullptr)
+    if (shuttingDown || device == nullptr)
     {
         resource->Release();
         SAFE_RELEASE(allocation);
 
-        renderer->destroyMutex.unlock();
+        destroyMutex.unlock();
         return;
     }
 
-    renderer->deferredReleases.push_back(std::make_pair(resource, renderer->frameCount));
+    deferredReleases.push_back(std::make_pair(resource, frameCount));
     if (allocation != nullptr)
     {
-        renderer->deferredAllocations.push_back(std::make_pair(allocation, renderer->frameCount));
+        deferredAllocations.push_back(std::make_pair(allocation, frameCount));
     }
-    renderer->destroyMutex.unlock();
+    destroyMutex.unlock();
 }
 
-static void d3d12_ProcessDeletionQueue(D3D12_Renderer* renderer)
+void D3D12_Renderer::ProcessDeletionQueue()
 {
-    renderer->destroyMutex.lock();
+    destroyMutex.lock();
 
-    while (!renderer->deferredAllocations.empty())
+    while (!deferredAllocations.empty())
     {
-        if (renderer->deferredAllocations.front().second + VGPU_MAX_INFLIGHT_FRAMES < renderer->frameCount)
+        if (deferredAllocations.front().second + VGPU_MAX_INFLIGHT_FRAMES < frameCount)
         {
-            auto item = renderer->deferredAllocations.front();
-            renderer->deferredAllocations.pop_front();
+            auto item = deferredAllocations.front();
+            deferredAllocations.pop_front();
             item.first->Release();
         }
         else
@@ -911,12 +949,12 @@ static void d3d12_ProcessDeletionQueue(D3D12_Renderer* renderer)
         }
     }
 
-    while (!renderer->deferredReleases.empty())
+    while (!deferredReleases.empty())
     {
-        if (renderer->deferredReleases.front().second + VGPU_MAX_INFLIGHT_FRAMES < renderer->frameCount)
+        if (deferredReleases.front().second + VGPU_MAX_INFLIGHT_FRAMES < frameCount)
         {
-            auto item = renderer->deferredReleases.front();
-            renderer->deferredReleases.pop_front();
+            auto item = deferredReleases.front();
+            deferredReleases.pop_front();
             item.first->Release();
         }
         else
@@ -925,7 +963,7 @@ static void d3d12_ProcessDeletionQueue(D3D12_Renderer* renderer)
         }
     }
 
-    renderer->destroyMutex.unlock();
+    destroyMutex.unlock();
 }
 
 static D3D12_UploadContext d3d12_AllocateUpload(D3D12_Renderer* renderer, uint64_t size)
@@ -1194,7 +1232,7 @@ static void d3d12_UploadSubmit(D3D12_Renderer* renderer, D3D12_UploadContext con
 /* D3D12Buffer */
 D3D12Buffer::~D3D12Buffer()
 {
-    d3d12_DeferDestroy(renderer, handle, allocation);
+    renderer->DeferDestroy(handle, allocation);
 }
 
 void D3D12Buffer::SetLabel(const char* label)
@@ -1205,7 +1243,7 @@ void D3D12Buffer::SetLabel(const char* label)
 /* D3D12Texture */
 D3D12Texture::~D3D12Texture()
 {
-    d3d12_DeferDestroy(renderer, handle, allocation);
+    renderer->DeferDestroy(handle, allocation);
     for (auto& it : rtvCache)
     {
         renderer->rtvAllocator.Free(it.second);
@@ -1234,29 +1272,28 @@ void D3D12Sampler::SetLabel(const char*/* label*/)
 {
 }
 
-static void d3d12_destroyDevice(VGPUDevice device)
+/* D3D12_Renderer */
+D3D12_Renderer::~D3D12_Renderer()
 {
     // Wait idle
-    vgpuWaitIdle(device);
+    WaitIdle();
+    shuttingDown = true;
 
-    D3D12_Renderer* renderer = (D3D12_Renderer*)device->driverData;
-    renderer->shuttingDown = true;
-
-    renderer->frameCount = UINT64_MAX;
-    d3d12_ProcessDeletionQueue(renderer);
-    renderer->frameCount = 0;
+    frameCount = UINT64_MAX;
+    ProcessDeletionQueue();
+    frameCount = 0;
 
     // Destroy command buffers first
-    for (size_t i = 0; i < renderer->commandBuffers.size(); ++i)
+    for (size_t i = 0; i < commandBuffersPool.size(); ++i)
     {
-        D3D12CommandBuffer* commandBuffer = renderer->commandBuffers[i];
+        D3D12CommandBuffer* commandBuffer = commandBuffersPool[i];
         delete commandBuffer;
     }
-    renderer->commandBuffers.clear();
+    commandBuffersPool.clear();
 
     // Upload/Copy allocations
     {
-        for (auto& item : renderer->uploadFreeList)
+        for (auto& item : uploadFreeList)
         {
             item.uploadBuffer->Release();
             item.uploadBufferAllocation->Release();
@@ -1264,63 +1301,63 @@ static void d3d12_destroyDevice(VGPUDevice device)
             item.commandList->Release();
             item.fence->Release();
         }
-        renderer->uploadFreeList.clear();
+        uploadFreeList.clear();
     }
 
     // CPU descriptor allocators
     {
-        renderer->resourceAllocator.Shutdown();
-        renderer->samplerAllocator.Shutdown();
-        renderer->rtvAllocator.Shutdown();
-        renderer->dsvAllocator.Shutdown();
+        resourceAllocator.Shutdown();
+        samplerAllocator.Shutdown();
+        rtvAllocator.Shutdown();
+        dsvAllocator.Shutdown();
 
         // GPU Heaps
-        SAFE_RELEASE(renderer->resourceDescriptorHeap.handle);
-        SAFE_RELEASE(renderer->resourceDescriptorHeap.fence);
-        SAFE_RELEASE(renderer->samplerDescriptorHeap.handle);
-        SAFE_RELEASE(renderer->samplerDescriptorHeap.fence);
+        SAFE_RELEASE(resourceDescriptorHeap.handle);
+        SAFE_RELEASE(resourceDescriptorHeap.fence);
+        SAFE_RELEASE(samplerDescriptorHeap.handle);
+        SAFE_RELEASE(samplerDescriptorHeap.fence);
     }
 
-    SAFE_RELEASE(renderer->dispatchIndirectCommandSignature);
-    SAFE_RELEASE(renderer->drawIndirectCommandSignature);
-    SAFE_RELEASE(renderer->drawIndexedIndirectCommandSignature);
-    SAFE_RELEASE(renderer->dispatchMeshIndirectCommandSignature);
+    SAFE_RELEASE(dispatchIndirectCommandSignature);
+    SAFE_RELEASE(drawIndirectCommandSignature);
+    SAFE_RELEASE(drawIndexedIndirectCommandSignature);
+    SAFE_RELEASE(dispatchMeshIndirectCommandSignature);
 
     for (uint32_t queue = 0; queue < _VGPUCommandQueue_Count; ++queue)
     {
-        SAFE_RELEASE(renderer->queues[queue].handle);
-        SAFE_RELEASE(renderer->queues[queue].fence);
+        SAFE_RELEASE(queues[queue].handle);
+        SAFE_RELEASE(queues[queue].fence);
 
-        for (uint32_t frameIndex = 0; frameIndex < VGPU_MAX_INFLIGHT_FRAMES; ++frameIndex)
+        for (uint32_t i = 0; i < VGPU_MAX_INFLIGHT_FRAMES; ++i)
         {
-            SAFE_RELEASE(renderer->queues[queue].frameFences[frameIndex]);
+            SAFE_RELEASE(queues[queue].frameFences[i]);
         }
     }
 
     // Allocator.
-    if (renderer->allocator != nullptr)
+    if (allocator != nullptr)
     {
         D3D12MA::TotalStatistics stats;
-        renderer->allocator->CalculateStatistics(&stats);
+        allocator->CalculateStatistics(&stats);
         if (stats.Total.Stats.AllocationBytes > 0)
         {
-            //LOGI("Total device memory leaked: {} bytes.", stats.Total.UsedBytes);
+            //vgpu_log_warn("Total device memory leaked: {} bytes.", stats.Total.UsedBytes);
         }
 
-        SAFE_RELEASE(renderer->allocator);
+        SAFE_RELEASE(allocator);
     }
 
-    if (renderer->device)
+    if (device)
     {
-        const ULONG refCount = renderer->device->Release();
+        const ULONG deviceRefCount = device->Release();
 
 #if defined(_DEBUG)
-        if (refCount)
+        if (deviceRefCount)
         {
             //DebugString("There are %d unreleased references left on the D3D device!", ref_count);
 
             ID3D12DebugDevice* debugDevice = nullptr;
-            if (SUCCEEDED(renderer->device->QueryInterface(&debugDevice)))
+            if (SUCCEEDED(device->QueryInterface(&debugDevice)))
             {
                 debugDevice->ReportLiveDeviceObjects(D3D12_RLDO_DETAIL | D3D12_RLDO_IGNORE_INTERNAL);
                 debugDevice->Release();
@@ -1328,26 +1365,24 @@ static void d3d12_destroyDevice(VGPUDevice device)
 
         }
 #else
-        (void)refCount; // avoid warning
+        (void)deviceRefCount; // avoid warning
 #endif
-        renderer->device = nullptr;
+        device = nullptr;
     }
 
-    renderer->factory.Reset();
+    factory.Reset();
 
 #if defined(_DEBUG) && WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
     {
-        ComPtr<IDXGIDebug1> dxgiDebug;
+        IDXGIDebug1* dxgiDebug = nullptr;
         if (vgpuDXGIGetDebugInterface1 != nullptr
             && SUCCEEDED(vgpuDXGIGetDebugInterface1(0, IID_PPV_ARGS(&dxgiDebug))))
         {
             dxgiDebug->ReportLiveObjects(VGFX_DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_FLAGS(DXGI_DEBUG_RLO_SUMMARY | DXGI_DEBUG_RLO_IGNORE_INTERNAL));
+            dxgiDebug->Release();
         }
     }
 #endif
-
-    delete renderer;
-    delete device;
 }
 
 static void d3d12_updateSwapChain(D3D12_Renderer* renderer, D3D12_SwapChain* swapChain)
@@ -1381,17 +1416,15 @@ static void d3d12_updateSwapChain(D3D12_Renderer* renderer, D3D12_SwapChain* swa
     }
 }
 
-static void d3d12_waitIdle(VGPURenderer* driverData)
+void D3D12_Renderer::WaitIdle()
 {
-    D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
-
     ComPtr<ID3D12Fence> fence;
-    VHR(renderer->device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence)));
+    VHR(device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence)));
 
     // Wait for the GPU to fully catch up with the CPU
     for (uint32_t queue = 0; queue < _VGPUCommandQueue_Count; ++queue)
     {
-        VHR(renderer->queues[queue].handle->Signal(fence.Get(), 1));
+        VHR(queues[queue].handle->Signal(fence.Get(), 1));
 
         if (fence->GetCompletedValue() < 1)
         {
@@ -1402,17 +1435,11 @@ static void d3d12_waitIdle(VGPURenderer* driverData)
     }
 
     // Safe delete deferred destroys
-    d3d12_ProcessDeletionQueue(renderer);
+    ProcessDeletionQueue();
 }
 
-static VGPUBackend d3d12_getBackendType(void)
+VGPUBool32 D3D12_Renderer::QueryFeature(VGPUFeature feature) const
 {
-    return VGPUBackend_D3D12;
-}
-
-static VGPUBool32 d3d12_queryFeature(VGPURenderer* driverData, VGPUFeature feature)
-{
-    D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
     switch (feature)
     {
         case VGPUFeature_DepthClipControl:
@@ -1433,64 +1460,60 @@ static VGPUBool32 d3d12_queryFeature(VGPURenderer* driverData, VGPUFeature featu
 
         case VGPUFeature_ShaderFloat16:
             //const bool supportsDP4a = d3dFeatures.HighestShaderModel() >= D3D_SHADER_MODEL_6_4;
-            return renderer->d3dFeatures.HighestShaderModel() >= D3D_SHADER_MODEL_6_2 && renderer->d3dFeatures.Native16BitShaderOpsSupported();
+            return d3dFeatures.HighestShaderModel() >= D3D_SHADER_MODEL_6_2 && d3dFeatures.Native16BitShaderOpsSupported();
 
         case VGPUFeature_DepthBoundsTest:
-            return (renderer->d3dFeatures.DepthBoundsTestSupported() == TRUE);
+            return (d3dFeatures.DepthBoundsTestSupported() == TRUE);
 
         case VGPUFeature_SamplerAnisotropy:
             return true;
 
             // https://docs.microsoft.com/en-us/windows/win32/direct3d11/tiled-resources-texture-sampling-features
         case VGPUFeature_SamplerMinMax:
-            if (renderer->d3dFeatures.TiledResourcesTier() >= D3D12_TILED_RESOURCES_TIER_2)
+            if (d3dFeatures.TiledResourcesTier() >= D3D12_TILED_RESOURCES_TIER_2)
             {
                 // Tier 2 for tiled resources
                 // https://learn.microsoft.com/en-us/windows/win32/direct3d11/tiled-resources-texture-sampling-features
             }
 
-            return (renderer->d3dFeatures.MaxSupportedFeatureLevel() >= D3D_FEATURE_LEVEL_11_1);
+            return (d3dFeatures.MaxSupportedFeatureLevel() >= D3D_FEATURE_LEVEL_11_1);
 
         case VGPUFeature_ShaderOutputViewportIndex:
-            return (renderer->d3dFeatures.VPAndRTArrayIndexFromAnyShaderFeedingRasterizerSupportedWithoutGSEmulation() == TRUE);
+            return (d3dFeatures.VPAndRTArrayIndexFromAnyShaderFeedingRasterizerSupportedWithoutGSEmulation() == TRUE);
 
         case VGPUFeature_VariableRateShading:
-            return (renderer->d3dFeatures.VariableShadingRateTier() >= D3D12_VARIABLE_SHADING_RATE_TIER_1);
+            return (d3dFeatures.VariableShadingRateTier() >= D3D12_VARIABLE_SHADING_RATE_TIER_1);
 
         case VGPUFeature_VariableRateShadingTier2:
-            return (renderer->d3dFeatures.VariableShadingRateTier() >= D3D12_VARIABLE_SHADING_RATE_TIER_2);
+            return (d3dFeatures.VariableShadingRateTier() >= D3D12_VARIABLE_SHADING_RATE_TIER_2);
 
         case VGPUFeature_RayTracing:
-            return (renderer->d3dFeatures.RaytracingTier() >= D3D12_RAYTRACING_TIER_1_0);
+            return (d3dFeatures.RaytracingTier() >= D3D12_RAYTRACING_TIER_1_0);
 
         case VGPUFeature_RayTracingTier2:
-            return (renderer->d3dFeatures.RaytracingTier() >= D3D12_RAYTRACING_TIER_1_1);
+            return (d3dFeatures.RaytracingTier() >= D3D12_RAYTRACING_TIER_1_1);
 
         case VGPUFeature_MeshShader:
-            return (renderer->d3dFeatures.MeshShaderTier() >= D3D12_MESH_SHADER_TIER_1);;
+            return (d3dFeatures.MeshShaderTier() >= D3D12_MESH_SHADER_TIER_1);;
 
         default:
             return false;
     }
 }
 
-static void d3d12_getAdapterProperties(VGPURenderer* driverData, VGPUAdapterProperties* properties)
+void D3D12_Renderer::GetAdapterProperties(VGPUAdapterProperties* properties) const
 {
-    D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
-
-    properties->vendorId = renderer->vendorID;
-    properties->deviceId = renderer->deviceID;
-    properties->name = renderer->adapterName.c_str();
-    properties->driverDescription = renderer->driverDescription.c_str();
-    properties->adapterType = renderer->adapterType;
+    properties->vendorId = vendorID;
+    properties->deviceId = deviceID;
+    properties->name = adapterName.c_str();
+    properties->driverDescription = driverDescription.c_str();
+    properties->adapterType = adapterType;
 }
 
-static void d3d12_getLimits(VGPURenderer* driverData, VGPULimits* limits)
+void D3D12_Renderer::GetLimits(VGPULimits* limits) const
 {
-    D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
-
     D3D12_FEATURE_DATA_D3D12_OPTIONS featureData = {};
-    HRESULT hr = renderer->device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &featureData, sizeof(featureData));
+    HRESULT hr = device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &featureData, sizeof(featureData));
     if (FAILED(hr))
     {
     }
@@ -1528,7 +1551,7 @@ static void d3d12_getLimits(VGPURenderer* driverData, VGPULimits* limits)
     limits->maxViewportDimensions[1] = D3D12_VIEWPORT_BOUNDS_MAX;
     limits->maxColorAttachments = D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT;
 
-    if (renderer->d3dFeatures.RaytracingTier() >= D3D12_RAYTRACING_TIER_1_0)
+    if (d3dFeatures.RaytracingTier() >= D3D12_RAYTRACING_TIER_1_0)
     {
         limits->rayTracingShaderGroupIdentifierSize = D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT;
         limits->rayTracingShaderTableAligment = D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT;
@@ -1539,21 +1562,18 @@ static void d3d12_getLimits(VGPURenderer* driverData, VGPULimits* limits)
 
 }
 
-static void d3d12_setLabel(VGPURenderer* driverData, const char* label)
+void D3D12_Renderer::SetLabel(const char* label)
 {
-    D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
-    D3D12SetName(renderer->device, label);
+    D3D12SetName(device, label);
 }
 
 /* Buffer */
-static VGPUBuffer d3d12_createBuffer(VGPURenderer* driverData, const VGPUBufferDesc* desc, const void* pInitialData)
+VGPUBuffer D3D12_Renderer::CreateBuffer(const VGPUBufferDesc* desc, const void* pInitialData)
 {
-    D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
-
     if (desc->handle)
     {
         D3D12Buffer* buffer = new D3D12Buffer();
-        buffer->renderer = renderer;
+        buffer->renderer = this;
         buffer->handle = (ID3D12Resource*)desc->handle;
         buffer->handle->AddRef();
         buffer->allocation = nullptr;
@@ -1617,14 +1637,14 @@ static VGPUBuffer d3d12_createBuffer(VGPURenderer* driverData, const VGPUBufferD
     }
 
     D3D12Buffer* buffer = new D3D12Buffer();
-    buffer->renderer = renderer;
+    buffer->renderer = this;
     buffer->state = resourceState;
     buffer->size = desc->size;
     buffer->usage = desc->usage;
 
-    renderer->device->GetCopyableFootprints(&resourceDesc, 0, 1, 0, &buffer->footprint, nullptr, nullptr, &buffer->allocatedSize);
+    device->GetCopyableFootprints(&resourceDesc, 0, 1, 0, &buffer->footprint, nullptr, nullptr, &buffer->allocatedSize);
 
-    HRESULT hr = renderer->allocator->CreateResource(
+    HRESULT hr = allocator->CreateResource(
         &allocationDesc,
         &resourceDesc,
         resourceState,
@@ -1666,7 +1686,7 @@ static VGPUBuffer d3d12_createBuffer(VGPURenderer* driverData, const VGPUBufferD
         }
         else
         {
-            auto context = d3d12_AllocateUpload(renderer, desc->size);
+            auto context = d3d12_AllocateUpload(this, desc->size);
             memcpy(context.uploadBufferData, pInitialData, desc->size);
 
             context.commandList->CopyBufferRegion(
@@ -1677,7 +1697,7 @@ static VGPUBuffer d3d12_createBuffer(VGPURenderer* driverData, const VGPUBufferD
                 desc->size
             );
 
-            d3d12_UploadSubmit(renderer, context);
+            d3d12_UploadSubmit(this, context);
         }
     }
 
@@ -1694,8 +1714,8 @@ static VGPUBuffer d3d12_createBuffer(VGPURenderer* driverData, const VGPUBufferD
         srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_RAW;
         srvDesc.Buffer.NumElements = (UINT)(desc->size / sizeof(uint32_t));
 
-        D3D12_CPU_DESCRIPTOR_HANDLE handle = renderer->resourceAllocator.Allocate();
-        renderer->device->CreateShaderResourceView(buffer->handle, &srvDesc, handle);
+        D3D12_CPU_DESCRIPTOR_HANDLE handle = resourceAllocator.Allocate();
+        device->CreateShaderResourceView(buffer->handle, &srvDesc, handle);
 
         // bindless allocation.
         //const uint32_t bindlessSRV = AllocateBindlessResource(handle);
@@ -1714,8 +1734,8 @@ static VGPUBuffer d3d12_createBuffer(VGPURenderer* driverData, const VGPUBufferD
         uavDesc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_RAW;
         uavDesc.Buffer.NumElements = (UINT)(desc->size / sizeof(uint32_t));
 
-        D3D12_CPU_DESCRIPTOR_HANDLE handle = renderer->resourceAllocator.Allocate();
-        renderer->device->CreateUnorderedAccessView(buffer->handle, nullptr, &uavDesc, handle);
+        D3D12_CPU_DESCRIPTOR_HANDLE handle = resourceAllocator.Allocate();
+        device->CreateUnorderedAccessView(buffer->handle, nullptr, &uavDesc, handle);
 
         // bindless allocation.
         //const uint32_t bindlessUAV = AllocateBindlessResource(handle);
@@ -1725,17 +1745,9 @@ static VGPUBuffer d3d12_createBuffer(VGPURenderer* driverData, const VGPUBufferD
     return buffer;
 }
 
-static VGPUDeviceAddress d3d12_buffer_get_device_address(VGPUBuffer resource)
-{
-    D3D12Buffer* d3dBuffer = (D3D12Buffer*)resource;
-    return d3dBuffer->gpuAddress;
-}
-
 /* Texture */
-static VGPUTexture d3d12_createTexture(VGPURenderer* driverData, const VGPUTextureDesc* desc, const void* pInitialData)
+VGPUTexture D3D12_Renderer::CreateTexture(const VGPUTextureDesc* desc, const void* pInitialData)
 {
-    D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
-
     D3D12MA::ALLOCATION_DESC allocationDesc = {};
     allocationDesc.HeapType = D3D12_HEAP_TYPE_DEFAULT;
 
@@ -1833,7 +1845,7 @@ static VGPUTexture d3d12_createTexture(VGPURenderer* driverData, const VGPUTextu
 
     // TODO: TextureLayout/State
     D3D12Texture* texture = new D3D12Texture();
-    texture->renderer = renderer;
+    texture->renderer = this;
     texture->dimension = desc->dimension;
     texture->format = desc->format;
     texture->state = resourceState;
@@ -1841,7 +1853,7 @@ static VGPUTexture d3d12_createTexture(VGPURenderer* driverData, const VGPUTextu
     texture->height = desc->height;
     texture->dxgiFormat = resourceDesc.Format;
 
-    HRESULT hr = renderer->allocator->CreateResource(
+    HRESULT hr = allocator->CreateResource(
         &allocationDesc,
         &resourceDesc,
         texture->state,
@@ -1862,15 +1874,13 @@ static VGPUTexture d3d12_createTexture(VGPURenderer* driverData, const VGPUTextu
         D3D12SetName(texture->handle, desc->label);
     }
 
-    return (VGPUTexture)texture;
+    return texture;
 }
 
 
 /* Sampler */
-static VGPUSampler d3d12_createSampler(VGPURenderer* driverData, const VGPUSamplerDesc* desc)
+VGPUSampler D3D12_Renderer::CreateSampler(const VGPUSamplerDesc* desc)
 {
-    D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
-
     const D3D12_FILTER_REDUCTION_TYPE d3dReductionType = desc->compareFunction != VGPUCompareFunction_Never ? D3D12_FILTER_REDUCTION_TYPE_COMPARISON : D3D12_FILTER_REDUCTION_TYPE_STANDARD;
     const D3D12_FILTER_TYPE d3dMinFilter = ToD3D12FilterType(desc->minFilter);
     const D3D12_FILTER_TYPE d3dMagFilter = ToD3D12FilterType(desc->magFilter);
@@ -1921,19 +1931,17 @@ static VGPUSampler d3d12_createSampler(VGPURenderer* driverData, const VGPUSampl
     samplerDesc.MaxLOD = desc->lodMaxClamp;
 
     D3D12Sampler* sampler = new D3D12Sampler();
-    sampler->renderer = renderer;
-    sampler->handle = renderer->samplerAllocator.Allocate();
-    renderer->device->CreateSampler(&samplerDesc, sampler->handle);
+    sampler->renderer = this;
+    sampler->handle = samplerAllocator.Allocate();
+    device->CreateSampler(&samplerDesc, sampler->handle);
     //sampler->bindlessIndex = AllocateBindlessSampler(sampler->handle);
 
-    return (VGPUSampler)sampler;
+    return sampler;
 }
 
 /* ShaderModule */
-static VGPUShaderModule d3d12_createShaderModule(VGPURenderer* driverData, const void* pCode, size_t codeSize)
+VGPUShaderModule D3D12_Renderer::CreateShaderModule(const void* pCode, size_t codeSize)
 {
-    VGPU_UNUSED(driverData);
-
     D3D12Shader* shader = new D3D12Shader();
     shader->byteCode = malloc(codeSize);
     shader->byteCodeSize = codeSize;
@@ -1942,10 +1950,8 @@ static VGPUShaderModule d3d12_createShaderModule(VGPURenderer* driverData, const
     return (VGPUShaderModule)shader;
 }
 
-static void d3d12_destroyShaderModule(VGPURenderer* driverData, VGPUShaderModule resource)
+void D3D12_Renderer::DestroyShaderModule(VGPUShaderModule resource)
 {
-    VGPU_UNUSED(driverData);
-
     D3D12Shader* shader = (D3D12Shader*)resource;
     free(shader->byteCode);
     delete shader;
@@ -1954,9 +1960,8 @@ static void d3d12_destroyShaderModule(VGPURenderer* driverData, VGPUShaderModule
 /* PipelineLayout */
 D3D12PipelineLayout::~D3D12PipelineLayout()
 {
-    d3d12_DeferDestroy(renderer, handle, nullptr);
+    renderer->DeferDestroy(handle, nullptr);
 }
-
 
 void D3D12PipelineLayout::SetLabel(const char* label)
 {
@@ -1982,12 +1987,10 @@ static HRESULT d3d12_CreateRootSignature(ID3D12Device* device, ID3D12RootSignatu
     return device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(rootSignature));
 }
 
-static VGPUPipelineLayout d3d12_createPipelineLayout(VGPURenderer* driverData, const VGPUPipelineLayoutDesc* desc)
+VGPUPipelineLayout D3D12_Renderer::CreatePipelineLayout(const VGPUPipelineLayoutDesc* desc)
 {
-    D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
-
     D3D12PipelineLayout* layout = new D3D12PipelineLayout();
-    layout->renderer = renderer;
+    layout->renderer = this;
 
     uint32_t rangeMax = 0;
     for (uint32_t i = 0; i < desc->descriptorSetCount; i++)
@@ -2031,7 +2034,7 @@ static VGPUPipelineLayout d3d12_createPipelineLayout(VGPURenderer* driverData, c
     rootSignatureDesc.Flags |= D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED;
 #endif
 
-    const HRESULT hr = d3d12_CreateRootSignature(renderer->device, &layout->handle, rootSignatureDesc);
+    const HRESULT hr = d3d12_CreateRootSignature(device, &layout->handle, rootSignatureDesc);
     if (FAILED(hr))
     {
         delete layout;
@@ -2045,7 +2048,7 @@ static VGPUPipelineLayout d3d12_createPipelineLayout(VGPURenderer* driverData, c
 D3D12Pipeline::~D3D12Pipeline()
 {
     pipelineLayout->Release();
-    d3d12_DeferDestroy(renderer, handle, nullptr);
+    renderer->DeferDestroy(handle, nullptr);
 }
 
 void D3D12Pipeline::SetLabel(const char* label)
@@ -2053,12 +2056,10 @@ void D3D12Pipeline::SetLabel(const char* label)
     D3D12SetName(handle, label);
 }
 
-static VGPUPipeline d3d12_createRenderPipeline(VGPURenderer* driverData, const VGPURenderPipelineDesc* desc)
+VGPUPipeline D3D12_Renderer::CreateRenderPipeline(const VGPURenderPipelineDesc* desc)
 {
-    D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
-
     D3D12Pipeline* pipeline = new D3D12Pipeline();
-    pipeline->renderer = renderer;
+    pipeline->renderer = this;
     pipeline->type = VGPUPipelineType_Render;
     pipeline->pipelineLayout = (D3D12PipelineLayout*)desc->layout;
     pipeline->pipelineLayout->AddRef();
@@ -2200,7 +2201,7 @@ static VGPUPipeline d3d12_createRenderPipeline(VGPURenderer* driverData, const V
     d3dDesc.DSVFormat = ToDxgiFormat(desc->depthStencilFormat);
     d3dDesc.SampleDesc.Count = desc->sampleCount;
 
-    if (FAILED(renderer->device->CreateGraphicsPipelineState(&d3dDesc, IID_PPV_ARGS(&pipeline->handle))))
+    if (FAILED(device->CreateGraphicsPipelineState(&d3dDesc, IID_PPV_ARGS(&pipeline->handle))))
     {
         delete pipeline;
         return nullptr;
@@ -2211,12 +2212,10 @@ static VGPUPipeline d3d12_createRenderPipeline(VGPURenderer* driverData, const V
     return pipeline;
 }
 
-static VGPUPipeline d3d12_createComputePipeline(VGPURenderer* driverData, const VGPUComputePipelineDesc* desc)
+VGPUPipeline D3D12_Renderer::CreateComputePipeline(const VGPUComputePipelineDesc* desc)
 {
-    D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
-
     D3D12Pipeline* pipeline = new D3D12Pipeline();
-    pipeline->renderer = renderer;
+    pipeline->renderer = this;
     pipeline->type = VGPUPipelineType_Compute;
     pipeline->pipelineLayout = (D3D12PipelineLayout*)desc->layout;
     pipeline->pipelineLayout->AddRef();
@@ -2236,7 +2235,7 @@ static VGPUPipeline d3d12_createComputePipeline(VGPURenderer* driverData, const 
     streamDesc.pPipelineStateSubobjectStream = &stream;
     streamDesc.SizeInBytes = sizeof(stream);
 
-    if (FAILED(renderer->device->CreatePipelineState(&streamDesc, IID_PPV_ARGS(&pipeline->handle))))
+    if (FAILED(device->CreatePipelineState(&streamDesc, IID_PPV_ARGS(&pipeline->handle))))
     {
         delete pipeline;
         return nullptr;
@@ -2246,13 +2245,12 @@ static VGPUPipeline d3d12_createComputePipeline(VGPURenderer* driverData, const 
     return pipeline;
 }
 
-static VGPUPipeline d3d12_createRayTracingPipeline(VGPURenderer* driverData, const VGPURayTracingPipelineDesc* desc)
+VGPUPipeline D3D12_Renderer::CreateRayTracingPipeline(const VGPURayTracingPipelineDesc* desc)
 {
     VGPU_UNUSED(desc);
-    VGPU_UNUSED(driverData);
 
-    //D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
     D3D12Pipeline* pipeline = new D3D12Pipeline();
+    pipeline->renderer = this;
     pipeline->type = VGPUPipelineType_RayTracing;
     pipeline->pipelineLayout = (D3D12PipelineLayout*)desc->layout;
     pipeline->pipelineLayout->AddRef();
@@ -2263,7 +2261,7 @@ static VGPUPipeline d3d12_createRayTracingPipeline(VGPURenderer* driverData, con
 /*D3D12QueryHeap */
 D3D12QueryHeap::~D3D12QueryHeap()
 {
-    d3d12_DeferDestroy(renderer, handle, nullptr);
+    renderer->DeferDestroy(handle, nullptr);
 }
 
 void D3D12QueryHeap::SetLabel(const char* label)
@@ -2271,12 +2269,10 @@ void D3D12QueryHeap::SetLabel(const char* label)
     D3D12SetName(handle, label);
 }
 
-static VGPUQueryHeap d3d12_createQueryHeap(VGPURenderer* driverData, const VGPUQueryHeapDesc* desc)
+VGPUQueryHeap D3D12_Renderer::CreateQueryHeap(const VGPUQueryHeapDesc* desc)
 {
-    D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
-
     D3D12QueryHeap* heap = new D3D12QueryHeap();
-    heap->renderer = renderer;
+    heap->renderer = this;
     heap->type = desc->type;
     heap->count = desc->count;
     heap->d3dQueryType = ToD3D12QueryType(desc->type);
@@ -2286,7 +2282,7 @@ static VGPUQueryHeap d3d12_createQueryHeap(VGPURenderer* driverData, const VGPUQ
     d3dDesc.Count = desc->count;
     d3dDesc.NodeMask = 0;
 
-    HRESULT hr = renderer->device->CreateQueryHeap(&d3dDesc, IID_PPV_ARGS(&heap->handle));
+    HRESULT hr = device->CreateQueryHeap(&d3dDesc, IID_PPV_ARGS(&heap->handle));
     if (FAILED(hr))
     {
         return nullptr;
@@ -2316,10 +2312,8 @@ void D3D12_SwapChain::SetLabel(const char* label)
     VGPU_UNUSED(label);
 }
 
-static VGPUSwapChain d3d12_createSwapChain(VGPURenderer* driverData, void* windowHandle, const VGPUSwapChainDesc* desc)
+VGPUSwapChain D3D12_Renderer::CreateSwapChain(void* windowHandle, const VGPUSwapChainDesc* desc)
 {
-    D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
-
     DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
     swapChainDesc.Width = desc->width;
     swapChainDesc.Height = desc->height;
@@ -2332,7 +2326,7 @@ static VGPUSwapChain d3d12_createSwapChain(VGPURenderer* driverData, void* windo
     swapChainDesc.Scaling = DXGI_SCALING_STRETCH;
     swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
     swapChainDesc.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
-    swapChainDesc.Flags = renderer->tearingSupported ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0u;
+    swapChainDesc.Flags = tearingSupported ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0u;
 
     IDXGISwapChain1* tempSwapChain = nullptr;
 
@@ -2344,8 +2338,8 @@ static VGPUSwapChain d3d12_createSwapChain(VGPURenderer* driverData, void* windo
     fsSwapChainDesc.Windowed = !desc->isFullscreen;
 
     // Create a swap chain for the window.
-    HRESULT hr = renderer->factory->CreateSwapChainForHwnd(
-        renderer->queues[VGPUCommandQueue_Graphics].handle,
+    HRESULT hr = factory->CreateSwapChainForHwnd(
+        queues[VGPUCommandQueue_Graphics].handle,
         window,
         &swapChainDesc,
         &fsSwapChainDesc,
@@ -2359,14 +2353,14 @@ static VGPUSwapChain d3d12_createSwapChain(VGPURenderer* driverData, void* windo
     }
 
     // This class does not support exclusive full-screen mode and prevents DXGI from responding to the ALT+ENTER shortcut
-    hr = renderer->factory->MakeWindowAssociation(window, DXGI_MWA_NO_ALT_ENTER);
+    hr = factory->MakeWindowAssociation(window, DXGI_MWA_NO_ALT_ENTER);
 #else
     swapChainDesc.Scaling = DXGI_SCALING_ASPECT_RATIO_STRETCH;
 
     IUnknown* window = static_cast<IUnknown*>(windowHandle);
 
-    HRESULT hr = renderer->factory->CreateSwapChainForCoreWindow(
-        renderer->queues[VGPUCommandQueue_Graphics].handle,
+    HRESULT hr = factory->CreateSwapChainForCoreWindow(
+        queues[VGPUCommandQueue_Graphics].handle,
         window,
         &swapChainDesc,
         nullptr,
@@ -2377,8 +2371,8 @@ static VGPUSwapChain d3d12_createSwapChain(VGPURenderer* driverData, void* windo
     //ComPtr<ISwapChainPanelNative> swapChainPanelNative;
     //swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
     //swapChainDesc.Scaling = DXGI_SCALING_ASPECT_RATIO_STRETCH;
-    //hr = renderer->factory->CreateSwapChainForComposition(
-    //    renderer->graphicsQueue,
+    //hr = factory->CreateSwapChainForComposition(
+    //    graphicsQueue,
     //    &swapChainDesc,
     //    nullptr,
     //    tempSwapChain.GetAddressOf()
@@ -2412,13 +2406,13 @@ static VGPUSwapChain d3d12_createSwapChain(VGPURenderer* driverData, void* windo
     SAFE_RELEASE(tempSwapChain);
 
     D3D12_SwapChain* swapChain = new D3D12_SwapChain();
-    swapChain->renderer = renderer;
+    swapChain->renderer = this;
     swapChain->window = window;
     swapChain->handle = handle;
     swapChain->colorFormat = desc->format;
     swapChain->backBufferCount = swapChainDesc.BufferCount;
     swapChain->syncInterval = PresentModeToSwapInterval(desc->presentMode);
-    d3d12_updateSwapChain(renderer, swapChain);
+    d3d12_updateSwapChain(this, swapChain);
     return swapChain;
 }
 
@@ -2437,6 +2431,7 @@ D3D12CommandBuffer::~D3D12CommandBuffer()
 void D3D12CommandBuffer::Reset()
 {
     hasLabel = false;
+    hasRenderPassLabel = false;
     insideRenderPass = false;
     numBarriersToFlush = 0;
 
@@ -2483,24 +2478,24 @@ void D3D12CommandBuffer::Begin(uint32_t frameIndex, const char* label)
 
     if (label)
     {
-        pushDebugGroup(label);
+        PushDebugGroup(label);
         hasLabel = true;
     }
 }
 
-void D3D12CommandBuffer::pushDebugGroup(const char* groupLabel)
+void D3D12CommandBuffer::PushDebugGroup(const char* groupLabel)
 {
     std::wstring wide_name = UTF8ToWStr(groupLabel);
     UINT size = static_cast<UINT>((strlen(groupLabel) + 1) * sizeof(wchar_t));
     commandList->BeginEvent(PIX_EVENT_UNICODE_VERSION, wide_name.c_str(), size);
 }
 
-void D3D12CommandBuffer::popDebugGroup()
+void D3D12CommandBuffer::PopDebugGroup()
 {
     commandList->EndEvent();
 }
 
-void D3D12CommandBuffer::insertDebugMarker(const char* markerLabel)
+void D3D12CommandBuffer::InsertDebugMarker(const char* markerLabel)
 {
     std::wstring wide_name = UTF8ToWStr(markerLabel);
     UINT size = static_cast<UINT>((strlen(markerLabel) + 1) * sizeof(wchar_t));
@@ -2577,7 +2572,7 @@ void D3D12CommandBuffer::DispatchIndirect(VGPUBuffer buffer, uint64_t offset)
         0);
 }
 
-VGPUTexture D3D12CommandBuffer::acquireSwapchainTexture(VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight)
+VGPUTexture D3D12CommandBuffer::AcquireSwapchainTexture(VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight)
 {
     D3D12_SwapChain* d3d12SwapChain = (D3D12_SwapChain*)swapChain;
 
@@ -2608,7 +2603,7 @@ VGPUTexture D3D12CommandBuffer::acquireSwapchainTexture(VGPUSwapChain swapChain,
     if (width != swapChainDesc.Width ||
         height != swapChainDesc.Height)
     {
-        d3d12_waitIdle((VGPURenderer*)renderer);
+        renderer->WaitIdle();
 
         // Release resources that are tied to the swap chain and update fence values.
         for (size_t i = 0, count = d3d12SwapChain->backbufferTextures.size(); i < count; ++i)
@@ -2670,13 +2665,19 @@ VGPUTexture D3D12CommandBuffer::acquireSwapchainTexture(VGPUSwapChain swapChain,
     return swapChainTexture;
 }
 
-void D3D12CommandBuffer::beginRenderPass(const VGPURenderPassDesc* desc)
+void D3D12CommandBuffer::BeginRenderPass(const VGPURenderPassDesc* desc)
 {
     uint32_t width = UINT32_MAX;
     uint32_t height = UINT32_MAX;
     uint32_t numRTVS = 0;
     D3D12_RENDER_PASS_FLAGS renderPassFlags = D3D12_RENDER_PASS_FLAG_NONE;
     D3D12_RENDER_PASS_DEPTH_STENCIL_DESC DSV = {};
+
+    if (desc->label)
+    {
+        PushDebugGroup(desc->label);
+        hasRenderPassLabel = true;
+    }
 
     for (uint32_t i = 0; i < desc->colorAttachmentCount; ++i)
     {
@@ -2722,13 +2723,13 @@ void D3D12CommandBuffer::beginRenderPass(const VGPURenderPassDesc* desc)
 
         DSV.cpuDescriptor = d3d12_GetDSV(renderer, texture, level, slice);
 
-        DSV.DepthBeginningAccess.Type = ToD3D12(attachment->depthLoadOp);
-        if (attachment->depthLoadOp == VGPULoadAction_Clear)
+        DSV.DepthBeginningAccess.Type = ToD3D12(attachment->depthLoadAction);
+        if (attachment->depthLoadAction == VGPULoadAction_Clear)
         {
             DSV.DepthBeginningAccess.Clear.ClearValue.Format = texture->dxgiFormat;
             DSV.DepthBeginningAccess.Clear.ClearValue.DepthStencil.Depth = attachment->depthClearValue;
         }
-        DSV.DepthEndingAccess.Type = ToD3D12(attachment->depthStoreOp);
+        DSV.DepthEndingAccess.Type = ToD3D12(attachment->depthStoreAction);
 
         DSV.StencilBeginningAccess.Type = ToD3D12(attachment->stencilLoadAction);
         if (attachment->stencilLoadAction == VGPULoadAction_Clear)
@@ -2749,18 +2750,24 @@ void D3D12CommandBuffer::beginRenderPass(const VGPURenderPassDesc* desc)
     insideRenderPass = true;
 }
 
-void D3D12CommandBuffer::endRenderPass()
+void D3D12CommandBuffer::EndRenderPass()
 {
     commandList->EndRenderPass();
+
+    if (hasRenderPassLabel)
+    {
+        PopDebugGroup();
+    }
+
     insideRenderPass = false;
 }
 
-void D3D12CommandBuffer::setViewport(const VGPUViewport* viewport)
+void D3D12CommandBuffer::SetViewport(const VGPUViewport* viewport)
 {
     commandList->RSSetViewports(1, (const D3D12_VIEWPORT*)viewport);
 }
 
-void D3D12CommandBuffer::setViewports(uint32_t count, const VGPUViewport* viewports)
+void D3D12CommandBuffer::SetViewports(uint32_t count, const VGPUViewport* viewports)
 {
     VGPU_ASSERT(count < D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE);
     commandList->RSSetViewports(count, (const D3D12_VIEWPORT*)viewports);
@@ -2791,7 +2798,7 @@ void D3D12CommandBuffer::SetScissorRects(uint32_t count, const VGPURect* rects)
     commandList->RSSetScissorRects(count, d3dScissorRects);
 }
 
-void D3D12CommandBuffer::setVertexBuffer(uint32_t index, VGPUBuffer buffer, uint64_t offset)
+void D3D12CommandBuffer::SetVertexBuffer(uint32_t index, VGPUBuffer buffer, uint64_t offset)
 {
     D3D12Buffer* d3d12Buffer = (D3D12Buffer*)buffer;
 
@@ -2800,7 +2807,7 @@ void D3D12CommandBuffer::setVertexBuffer(uint32_t index, VGPUBuffer buffer, uint
     vboViews[index].StrideInBytes = 0;
 }
 
-void D3D12CommandBuffer::setIndexBuffer(VGPUBuffer buffer, VGPUIndexType type, uint64_t offset)
+void D3D12CommandBuffer::SetIndexBuffer(VGPUBuffer buffer, VGPUIndexType type, uint64_t offset)
 {
     D3D12Buffer* d3d12Buffer = (D3D12Buffer*)buffer;
 
@@ -2811,11 +2818,10 @@ void D3D12CommandBuffer::setIndexBuffer(VGPUBuffer buffer, VGPUIndexType type, u
     commandList->IASetIndexBuffer(&view);
 }
 
-void D3D12CommandBuffer::setStencilReference(uint32_t reference)
+void D3D12CommandBuffer::SetStencilReference(uint32_t reference)
 {
     commandList->OMSetStencilRef(reference);
 }
-
 
 void D3D12CommandBuffer::BeginQuery(VGPUQueryHeap heap, uint32_t index)
 {
@@ -2868,64 +2874,90 @@ void D3D12CommandBuffer::PrepareDraw()
     }
 }
 
-void D3D12CommandBuffer::draw(uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t firstInstance)
+void D3D12CommandBuffer::Draw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance)
 {
     PrepareDraw();
-    commandList->DrawInstanced(vertexCount, instanceCount, vertexStart, firstInstance);
+    commandList->DrawInstanced(vertexCount, instanceCount, firstVertex, firstInstance);
 }
 
-void D3D12CommandBuffer::drawIndexed(uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t baseVertex, uint32_t firstInstance)
+void D3D12CommandBuffer::DrawIndexed(uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t baseVertex, uint32_t firstInstance)
 {
     PrepareDraw();
     commandList->DrawIndexedInstanced(indexCount, instanceCount, firstIndex, baseVertex, firstInstance);
 }
 
-static VGPUCommandBuffer d3d12_beginCommandBuffer(VGPURenderer* driverData, VGPUCommandQueue queueType, const char* label)
+void D3D12CommandBuffer::DrawIndirect(VGPUBuffer indirectBuffer, uint64_t indirectBufferOffset)
 {
-    D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
+    VGPU_ASSERT(indirectBuffer);
+    PrepareDraw();
 
+    D3D12Buffer* backendBuffer = static_cast<D3D12Buffer*>(indirectBuffer);
+    commandList->ExecuteIndirect(
+        renderer->drawIndirectCommandSignature,
+        1,
+        backendBuffer->handle,
+        indirectBufferOffset,
+        nullptr,
+        0);
+}
+
+void D3D12CommandBuffer::DrawIndexedIndirect(VGPUBuffer indirectBuffer, uint64_t indirectBufferOffset)
+{
+    VGPU_ASSERT(indirectBuffer);
+    PrepareDraw();
+
+    D3D12Buffer* backendBuffer = static_cast<D3D12Buffer*>(indirectBuffer);
+    commandList->ExecuteIndirect(
+        renderer->drawIndexedIndirectCommandSignature,
+        1,
+        backendBuffer->handle,
+        indirectBufferOffset,
+        nullptr,
+        0);
+}
+
+VGPUCommandBuffer D3D12_Renderer::BeginCommandBuffer(VGPUCommandQueue queueType, const char* label)
+{
     HRESULT hr = S_OK;
     D3D12CommandBuffer* commandBuffer = nullptr;
 
-    renderer->cmdBuffersLocker.lock();
-    uint32_t cmd_current = renderer->cmdBuffersCount++;
-    if (cmd_current >= renderer->commandBuffers.size())
+    cmdBuffersLocker.lock();
+    uint32_t cmd_current = cmdBuffersCount++;
+    if (cmd_current >= commandBuffersPool.size())
     {
         D3D12_COMMAND_LIST_TYPE d3dCommandListType = ToD3D12(queueType);
 
         commandBuffer = new D3D12CommandBuffer();
-        commandBuffer->renderer = renderer;
+        commandBuffer->renderer = this;
         commandBuffer->queueType = queueType;
 
         for (uint32_t i = 0; i < VGPU_MAX_INFLIGHT_FRAMES; ++i)
         {
-            VHR(renderer->device->CreateCommandAllocator(d3dCommandListType, IID_PPV_ARGS(&commandBuffer->commandAllocators[i])));
+            VHR(device->CreateCommandAllocator(d3dCommandListType, IID_PPV_ARGS(&commandBuffer->commandAllocators[i])));
         }
 
-        hr = renderer->device->CreateCommandList1(0, d3dCommandListType, D3D12_COMMAND_LIST_FLAG_NONE,
+        hr = device->CreateCommandList1(0, d3dCommandListType, D3D12_COMMAND_LIST_FLAG_NONE,
             IID_PPV_ARGS(&commandBuffer->commandList)
         );
         VHR(hr);
 
-        renderer->commandBuffers.push_back(commandBuffer);
+        commandBuffersPool.push_back(commandBuffer);
     }
     else
     {
-        commandBuffer = renderer->commandBuffers.back();
+        commandBuffer = commandBuffersPool.back();
     }
 
-    renderer->cmdBuffersLocker.unlock();
+    cmdBuffersLocker.unlock();
 
     // Start the command list in a default state.
-    commandBuffer->Begin(renderer->frameIndex, label);
+    commandBuffer->Begin(frameIndex, label);
 
-    return renderer->commandBuffers.back();
+    return commandBuffersPool.back();
 }
 
-static uint64_t d3d12_submit(VGPURenderer* driverData, VGPUCommandBuffer* commandBuffers, uint32_t count)
+uint64_t D3D12_Renderer::Submit(VGPUCommandBuffer* commandBuffers, uint32_t count)
 {
-    D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
-
     HRESULT hr = S_OK;
     std::vector<D3D12_SwapChain*> presentSwapChains;
     for (uint32_t i = 0; i < count; i += 1)
@@ -2946,10 +2978,10 @@ static uint64_t d3d12_submit(VGPURenderer* driverData, VGPUCommandBuffer* comman
         }
         commandBuffer->swapChains.clear();
 
-        /* Push debug group label -> if any */
+        // Push debug group label -> if any
         if (commandBuffer->hasLabel)
         {
-            commandBuffer->popDebugGroup();
+            commandBuffer->PopDebugGroup();
         }
 
         // Flush any pending barriers 
@@ -2962,13 +2994,13 @@ static uint64_t d3d12_submit(VGPURenderer* driverData, VGPUCommandBuffer* comman
             return 0;
         }
 
-        D3D12Queue& queue = renderer->queues[commandBuffer->queueType];
+        D3D12Queue& queue = queues[commandBuffer->queueType];
         queue.submitCommandLists.push_back(commandBuffer->commandList);
     }
 
     for (uint32_t i = 0; i < _VGPUCommandQueue_Count; ++i)
     {
-        D3D12Queue& queue = renderer->queues[i];
+        D3D12Queue& queue = queues[i];
 
         if (!queue.submitCommandLists.empty())
         {
@@ -2979,10 +3011,10 @@ static uint64_t d3d12_submit(VGPURenderer* driverData, VGPUCommandBuffer* comman
             queue.submitCommandLists.clear();
         }
 
-        VHR(queue.handle->Signal(queue.frameFences[renderer->frameIndex], 1));
+        VHR(queue.handle->Signal(queue.frameFences[frameIndex], 1));
     }
 
-    renderer->cmdBuffersCount = 0;
+    cmdBuffersCount = 0;
 
     // Present acquired SwapChains
     for (size_t i = 0; i < presentSwapChains.size() && SUCCEEDED(hr); ++i)
@@ -3006,7 +3038,7 @@ static uint64_t d3d12_submit(VGPURenderer* driverData, VGPUCommandBuffer* comman
 #ifdef _DEBUG
             char buff[64] = {};
             sprintf_s(buff, "Device Lost on Present: Reason code 0x%08X\n",
-                static_cast<unsigned int>((hr == DXGI_ERROR_DEVICE_REMOVED) ? renderer->device->GetDeviceRemovedReason() : hr));
+                static_cast<unsigned int>((hr == DXGI_ERROR_DEVICE_REMOVED) ? device->GetDeviceRemovedReason() : hr));
             OutputDebugStringA(buff);
 #endif
             //HandleDeviceLost();
@@ -3014,42 +3046,31 @@ static uint64_t d3d12_submit(VGPURenderer* driverData, VGPUCommandBuffer* comman
         }
     }
 
-    renderer->resourceDescriptorHeap.SignalGPU(renderer->queues[VGPUCommandQueue_Graphics].handle);
-    renderer->samplerDescriptorHeap.SignalGPU(renderer->queues[VGPUCommandQueue_Graphics].handle);
+    resourceDescriptorHeap.SignalGPU(queues[VGPUCommandQueue_Graphics].handle);
+    samplerDescriptorHeap.SignalGPU(queues[VGPUCommandQueue_Graphics].handle);
 
-    renderer->frameCount++;
-    renderer->frameIndex = renderer->frameCount % VGPU_MAX_INFLIGHT_FRAMES;
+    // Begin new frame
+    frameCount++;
+    frameIndex = frameCount % VGPU_MAX_INFLIGHT_FRAMES;
 
     for (uint32_t queue = 0; queue < _VGPUCommandQueue_Count; ++queue)
     {
-        if (renderer->frameCount >= VGPU_MAX_INFLIGHT_FRAMES &&
-            renderer->queues[queue].frameFences[renderer->frameIndex]->GetCompletedValue() < 1)
+        if (frameCount >= VGPU_MAX_INFLIGHT_FRAMES &&
+            queues[queue].frameFences[frameIndex]->GetCompletedValue() < 1)
         {
             // NULL event handle will simply wait immediately:
-            //	https://docs.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12fence-seteventoncompletion#remarks
-            hr = renderer->queues[queue].frameFences[renderer->frameIndex]->SetEventOnCompletion(1, nullptr);
+            // https://docs.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12fence-seteventoncompletion#remarks
+            hr = queues[queue].frameFences[frameIndex]->SetEventOnCompletion(1, nullptr);
             VHR(hr);
         }
     }
 
     // Begin new frame
     // Safe delete deferred destroys
-    d3d12_ProcessDeletionQueue(renderer);
+    ProcessDeletionQueue();
 
     // Return current frame
-    return renderer->frameCount - 1;
-}
-
-static uint64_t d3d12_getFrameCount(VGPURenderer* driverData)
-{
-    D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
-    return renderer->frameCount;
-}
-
-static uint32_t d3d12_getFrameIndex(VGPURenderer* driverData)
-{
-    D3D12_Renderer* renderer = (D3D12_Renderer*)driverData;
-    return renderer->frameIndex;
+    return frameCount - 1;
 }
 
 static VGPUBool32 d3d12_isSupported(void)
@@ -3578,10 +3599,7 @@ static VGPUDeviceImpl* d3d12_createDevice(const VGPUDeviceDescriptor* info)
         }
     }
 
-    VGPUDeviceImpl* device = new VGPUDeviceImpl();
-    ASSIGN_DRIVER(d3d12);
-    device->driverData = (VGPURenderer*)renderer;
-    return device;
+    return renderer;
 }
 
 VGPUDriver D3D12_Driver = {

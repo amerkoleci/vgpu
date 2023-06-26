@@ -146,28 +146,35 @@ retry:
     return device;
 }
 
-void vgpuDestroyDevice(VGPUDevice device)
-{
-    NULL_RETURN(device);
-
-    device->destroyDevice(device);
-}
-
 void vgpuDeviceSetLabel(VGPUDevice device, const char* label)
 {
     NULL_RETURN(device);
 
-    device->setLabel(device->driverData, label);
+    device->SetLabel(label);
+}
+
+uint32_t vgpuDeviceAddRef(VGPUDevice device)
+{
+    VGPU_ASSERT(device);
+
+    return device->AddRef();
+}
+
+uint32_t vgpuDeviceRelease(VGPUDevice device)
+{
+    VGPU_ASSERT(device);
+
+    return device->Release();
 }
 
 void vgpuWaitIdle(VGPUDevice device)
 {
-    device->waitIdle(device->driverData);
+    device->WaitIdle();
 }
 
 VGPUBackend vgpuGetBackend(VGPUDevice device)
 {
-    return device->getBackendType();
+    return device->GetBackendType();
 }
 
 VGPUBool32 vgpuQueryFeature(VGPUDevice device, VGPUFeature feature)
@@ -176,7 +183,7 @@ VGPUBool32 vgpuQueryFeature(VGPUDevice device, VGPUFeature feature)
         return false;
     }
 
-    return device->queryFeature(device->driverData, feature);
+    return device->QueryFeature(feature);
 }
 
 void vgpuGetAdapterProperties(VGPUDevice device, VGPUAdapterProperties* properties)
@@ -184,7 +191,7 @@ void vgpuGetAdapterProperties(VGPUDevice device, VGPUAdapterProperties* properti
     VGPU_ASSERT(device);
     NULL_RETURN(properties);
 
-    device->getAdapterProperties(device->driverData, properties);
+    device->GetAdapterProperties(properties);
 }
 
 void vgpuGetLimits(VGPUDevice device, VGPULimits* limits)
@@ -192,7 +199,7 @@ void vgpuGetLimits(VGPUDevice device, VGPULimits* limits)
     VGPU_ASSERT(device);
     NULL_RETURN(limits);
 
-    device->getLimits(device->driverData, limits);
+    device->GetLimits(limits);
 }
 
 uint64_t vgpuSubmit(VGPUDevice device, VGPUCommandBuffer* commandBuffers, uint32_t count)
@@ -201,17 +208,17 @@ uint64_t vgpuSubmit(VGPUDevice device, VGPUCommandBuffer* commandBuffers, uint32
     VGPU_ASSERT(commandBuffers);
     VGPU_ASSERT(count);
 
-    return device->submit(device->driverData, commandBuffers, count);
+    return device->Submit(commandBuffers, count);
 }
 
 uint64_t vgpuGetFrameCount(VGPUDevice device)
 {
-    return device->getFrameCount(device->driverData);
+    return device->GetFrameCount();
 }
 
 uint32_t vgpuGetFrameIndex(VGPUDevice device)
 {
-    return device->getFrameIndex(device->driverData);
+    return device->GetFrameIndex();
 }
 
 /* Buffer */
@@ -228,7 +235,7 @@ VGPUBuffer vgpuCreateBuffer(VGPUDevice device, const VGPUBufferDesc* desc, const
     NULL_RETURN_NULL(desc);
 
     VGPUBufferDesc desc_def = _vgpu_buffer_desc_def(desc);
-    return device->createBuffer(device->driverData, &desc_def, pInitialData);
+    return device->CreateBuffer(&desc_def, pInitialData);
 }
 
 uint64_t vgpuBufferGetSize(VGPUBuffer buffer)
@@ -355,7 +362,7 @@ VGPUTexture vgpuCreateTexture(VGPUDevice device, const VGPUTextureDesc* desc, co
         return NULL;
     }
 
-    return device->createTexture(device->driverData, &desc_def, pInitialData);
+    return device->CreateTexture(&desc_def, pInitialData);
 }
 
 VGPUTextureDimension vgpuTextureGetDimension(VGPUTexture texture)
@@ -407,7 +414,7 @@ VGPUSampler vgpuCreateSampler(VGPUDevice device, const VGPUSamplerDesc* desc)
     NULL_RETURN_NULL(desc);
 
     VGPUSamplerDesc desc_def = _vgpuSamplerDescDef(desc);
-    return device->createSampler(device->driverData, &desc_def);
+    return device->CreateSampler(&desc_def);
 }
 
 void vgpuSamplerSetLabel(VGPUSampler sampler, const char* label)
@@ -437,7 +444,7 @@ VGPUShaderModule vgpuCreateShaderModule(VGPUDevice device, const void* pCode, si
     VGPU_ASSERT(device);
     NULL_RETURN_NULL(pCode);
 
-    return device->createShaderModule(device->driverData, pCode, codeSize);
+    return device->CreateShaderModule(pCode, codeSize);
 }
 
 void vgpuDestroyShaderModule(VGPUDevice device, VGPUShaderModule module)
@@ -445,7 +452,7 @@ void vgpuDestroyShaderModule(VGPUDevice device, VGPUShaderModule module)
     VGPU_ASSERT(device);
     NULL_RETURN(module);
 
-    device->destroyShaderModule(device->driverData, module);
+    device->DestroyShaderModule(module);
 }
 
 /* PipelineLayout */
@@ -461,7 +468,7 @@ VGPUPipelineLayout vgpuCreatePipelineLayout(VGPUDevice device, const VGPUPipelin
     NULL_RETURN_NULL(desc);
 
     VGPUPipelineLayoutDesc desc_def = _VGPUPipelineLayoutDesc_Def(desc);
-    return device->createPipelineLayout(device->driverData, &desc_def);
+    return device->CreatePipelineLayout(&desc_def);
 }
 
 void vgpuPipelineLayoutSetLabel(VGPUPipelineLayout pipelineLayout, const char* label)
@@ -518,7 +525,7 @@ VGPUPipeline vgpuCreateRenderPipeline(VGPUDevice device, const VGPURenderPipelin
     VGPU_ASSERT(desc->vertex.module);
 
     VGPURenderPipelineDesc desc_def = _vgpuRenderPipelineDescDef(desc);
-    return device->createRenderPipeline(device->driverData, &desc_def);
+    return device->CreateRenderPipeline(&desc_def);
 }
 
 VGPUPipeline vgpuCreateComputePipeline(VGPUDevice device, const VGPUComputePipelineDesc* desc)
@@ -529,7 +536,7 @@ VGPUPipeline vgpuCreateComputePipeline(VGPUDevice device, const VGPUComputePipel
     VGPU_ASSERT(desc->layout);
     VGPU_ASSERT(desc->shader);
 
-    return device->createComputePipeline(device->driverData, desc);
+    return device->CreateComputePipeline(desc);
 }
 
 VGPUPipeline vgpuCreateRayTracingPipeline(VGPUDevice device, const VGPURayTracingPipelineDesc* desc)
@@ -537,7 +544,7 @@ VGPUPipeline vgpuCreateRayTracingPipeline(VGPUDevice device, const VGPURayTracin
     VGPU_ASSERT(device);
     NULL_RETURN_NULL(desc);
 
-    return device->createRayTracingPipeline(device->driverData, desc);
+    return device->CreateRayTracingPipeline(desc);
 }
 
 VGPUPipelineType vgpuPipelineGetType(VGPUPipeline pipeline)
@@ -574,7 +581,7 @@ VGPUQueryHeap vgpuCreateQueryHeap(VGPUDevice device, const VGPUQueryHeapDesc* de
     VGPU_ASSERT(device);
     NULL_RETURN_NULL(desc);
 
-    return device->createQueryHeap(device->driverData, desc);
+    return device->CreateQueryHeap(desc);
 }
 
 VGPUQueryType vgpuQueryHeapGetType(VGPUQueryHeap queryHeap)
@@ -628,7 +635,7 @@ VGPUSwapChain vgpuCreateSwapChain(VGPUDevice device, void* window, const VGPUSwa
     NULL_RETURN_NULL(desc);
 
     VGPUSwapChainDesc def = _vgpuSwapChainDescDef(desc);
-    return device->createSwapChain(device->driverData, window, &def);
+    return device->CreateSwapChain(window, &def);
 }
 
 VGPUTextureFormat vgpuSwapChainGetFormat(VGPUSwapChain swapChain)
@@ -657,26 +664,26 @@ VGPUCommandBuffer vgpuBeginCommandBuffer(VGPUDevice device, VGPUCommandQueue que
 {
     VGPU_ASSERT(device);
 
-    return device->beginCommandBuffer(device->driverData, queueType, label);
+    return device->BeginCommandBuffer(queueType, label);
 }
 
 void vgpuPushDebugGroup(VGPUCommandBuffer commandBuffer, const char* groupLabel)
 {
     NULL_RETURN(groupLabel);
 
-    commandBuffer->pushDebugGroup(groupLabel);
+    commandBuffer->PushDebugGroup(groupLabel);
 }
 
 void vgpuPopDebugGroup(VGPUCommandBuffer commandBuffer)
 {
-    commandBuffer->popDebugGroup();
+    commandBuffer->PopDebugGroup();
 }
 
 void vgpuInsertDebugMarker(VGPUCommandBuffer commandBuffer, const char* markerLabel)
 {
     NULL_RETURN(markerLabel);
 
-    commandBuffer->insertDebugMarker(markerLabel);
+    commandBuffer->InsertDebugMarker(markerLabel);
 }
 
 void vgpuSetPipeline(VGPUCommandBuffer commandBuffer, VGPUPipeline pipeline)
@@ -699,6 +706,27 @@ void vgpuDispatch(VGPUCommandBuffer commandBuffer, uint32_t groupCountX, uint32_
     commandBuffer->Dispatch(groupCountX, groupCountY, groupCountZ);
 }
 
+void vgpuDispatch1D(VGPUCommandBuffer commandBuffer, uint32_t threadCountX, uint32_t groupSizeX)
+{
+    commandBuffer->Dispatch(DivideByMultiple(threadCountX, groupSizeX), 1, 1);
+}
+
+void vgpuDispatch2D(VGPUCommandBuffer commandBuffer, uint32_t threadCountX, uint32_t threadCountY, uint32_t groupSizeX, uint32_t groupSizeY)
+{
+    commandBuffer->Dispatch(
+        DivideByMultiple(threadCountX, groupSizeX),
+        DivideByMultiple(threadCountY, groupSizeY), 1);
+}
+
+void vgpuDispatch3D(VGPUCommandBuffer commandBuffer, uint32_t threadCountX, uint32_t threadCountY, uint32_t threadCountZ, uint32_t groupSizeX, uint32_t groupSizeY, uint32_t groupSizeZ)
+{
+    commandBuffer->Dispatch(
+        DivideByMultiple(threadCountX, groupSizeX),
+        DivideByMultiple(threadCountY, groupSizeY),
+        DivideByMultiple(threadCountZ, groupSizeZ)
+    );
+}
+
 void vgpuDispatchIndirect(VGPUCommandBuffer commandBuffer, VGPUBuffer buffer, uint64_t offset)
 {
     NULL_RETURN(buffer);
@@ -708,26 +736,26 @@ void vgpuDispatchIndirect(VGPUCommandBuffer commandBuffer, VGPUBuffer buffer, ui
 
 VGPUTexture vgpuAcquireSwapchainTexture(VGPUCommandBuffer commandBuffer, VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight)
 {
-    return commandBuffer->acquireSwapchainTexture(swapChain, pWidth, pHeight);
+    return commandBuffer->AcquireSwapchainTexture(swapChain, pWidth, pHeight);
 }
 
 void vgpuBeginRenderPass(VGPUCommandBuffer commandBuffer, const VGPURenderPassDesc* desc)
 {
     NULL_RETURN(desc);
 
-    commandBuffer->beginRenderPass(desc);
+    commandBuffer->BeginRenderPass(desc);
 }
 
 void vgpuEndRenderPass(VGPUCommandBuffer commandBuffer)
 {
-    commandBuffer->endRenderPass();
+    commandBuffer->EndRenderPass();
 }
 
 void vgpuSetViewport(VGPUCommandBuffer commandBuffer, const VGPUViewport* viewport)
 {
     VGPU_ASSERT(viewport);
 
-    commandBuffer->setViewport(viewport);
+    commandBuffer->SetViewport(viewport);
 }
 
 void vgpuSetViewports(VGPUCommandBuffer commandBuffer, uint32_t count, const VGPUViewport* viewports)
@@ -735,7 +763,7 @@ void vgpuSetViewports(VGPUCommandBuffer commandBuffer, uint32_t count, const VGP
     VGPU_ASSERT(count > 0);
     VGPU_ASSERT(viewports);
 
-    commandBuffer->setViewports(count, viewports);
+    commandBuffer->SetViewports(count, viewports);
 }
 
 void vgpuSetScissorRect(VGPUCommandBuffer commandBuffer, const VGPURect* scissorRect)
@@ -755,27 +783,37 @@ void vgpuSetScissorRects(VGPUCommandBuffer commandBuffer, uint32_t count, const 
 
 void vgpuSetVertexBuffer(VGPUCommandBuffer commandBuffer, uint32_t index, VGPUBuffer buffer, uint64_t offset)
 {
-    commandBuffer->setVertexBuffer(index, buffer, offset);
+    commandBuffer->SetVertexBuffer(index, buffer, offset);
 }
 
 void vgpuSetIndexBuffer(VGPUCommandBuffer commandBuffer, VGPUBuffer buffer, VGPUIndexType type, uint64_t offset)
 {
-    commandBuffer->setIndexBuffer(buffer, type, offset);
+    commandBuffer->SetIndexBuffer(buffer, type, offset);
 }
 
 void vgpuSetStencilReference(VGPUCommandBuffer commandBuffer, uint32_t reference)
 {
-    commandBuffer->setStencilReference(reference);
+    commandBuffer->SetStencilReference(reference);
 }
 
-void vgpuDraw(VGPUCommandBuffer commandBuffer, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t firstInstance)
+void vgpuDraw(VGPUCommandBuffer commandBuffer, uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance)
 {
-    commandBuffer->draw(vertexStart, vertexCount, instanceCount, firstInstance);
+    commandBuffer->Draw(vertexCount, instanceCount, firstVertex, firstInstance);
 }
 
 void vgpuDrawIndexed(VGPUCommandBuffer commandBuffer, uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t baseVertex, uint32_t firstInstance)
 {
-    commandBuffer->drawIndexed(indexCount, instanceCount, firstIndex, baseVertex, firstInstance);
+    commandBuffer->DrawIndexed(indexCount, instanceCount, firstIndex, baseVertex, firstInstance);
+}
+
+void vgpuDrawIndirect(VGPUCommandBuffer commandBuffer, VGPUBuffer indirectBuffer, uint64_t indirectBufferOffset)
+{
+    commandBuffer->DrawIndirect(indirectBuffer, indirectBufferOffset);
+}
+
+void vgpuDrawIndexedIndirect(VGPUCommandBuffer commandBuffer, VGPUBuffer indirectBuffer, uint64_t indirectBufferOffset)
+{
+    commandBuffer->DrawIndexedIndirect(indirectBuffer, indirectBufferOffset);
 }
 
 void vgpuBeginQuery(VGPUCommandBuffer commandBuffer, VGPUQueryHeap queryHeap, uint32_t index)

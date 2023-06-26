@@ -659,8 +659,8 @@ typedef struct VGPURenderPassDepthStencilAttachment {
     VGPUTexture         texture;
     uint32_t            level;
     uint32_t            slice;
-    VGPULoadAction      depthLoadOp;
-    VGPUStoreAction     depthStoreOp;
+    VGPULoadAction      depthLoadAction;
+    VGPUStoreAction     depthStoreAction;
     float               depthClearValue;
     VGPULoadAction      stencilLoadAction;
     VGPUStoreAction     stencilStoreAction;
@@ -668,6 +668,7 @@ typedef struct VGPURenderPassDepthStencilAttachment {
 } VGPURenderPassDepthStencilAttachment;
 
 typedef struct VGPURenderPassDesc {
+    const char* label;
     uint32_t colorAttachmentCount;
     const VGPURenderPassColorAttachment* colorAttachments;
     const VGPURenderPassDepthStencilAttachment* depthStencilAttachment;
@@ -695,7 +696,7 @@ typedef struct VGPUTextureDesc {
 } VGPUTextureDesc;
 
 typedef struct VGPUSamplerDesc {
-    const char* label;
+    const char*             label;
     VGPUSamplerFilter       minFilter;
     VGPUSamplerFilter       magFilter;
     VGPUSamplerMipFilter    mipFilter;
@@ -914,8 +915,9 @@ VGPU_API void vgpuSetLogCallback(VGPULogCallback func, void* userData);
 
 VGPU_API VGPUBool32 vgpuIsBackendSupported(VGPUBackend backend);
 VGPU_API VGPUDevice vgpuCreateDevice(const VGPUDeviceDescriptor* descriptor);
-VGPU_API void vgpuDestroyDevice(VGPUDevice device);
 VGPU_API void vgpuDeviceSetLabel(VGPUDevice device, const char* label);
+VGPU_API uint32_t vgpuDeviceAddRef(VGPUDevice device);
+VGPU_API uint32_t vgpuDeviceRelease(VGPUDevice device);
 
 VGPU_API void vgpuWaitIdle(VGPUDevice device);
 VGPU_API VGPUBackend vgpuGetBackend(VGPUDevice device);
@@ -992,6 +994,9 @@ VGPU_API void vgpuSetPushConstants(VGPUCommandBuffer commandBuffer, uint32_t pus
 
 /* Compute commands */
 VGPU_API void vgpuDispatch(VGPUCommandBuffer commandBuffer, uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ);
+VGPU_API void vgpuDispatch1D(VGPUCommandBuffer commandBuffer, uint32_t threadCountX, uint32_t groupSizeX);
+VGPU_API void vgpuDispatch2D(VGPUCommandBuffer commandBuffer, uint32_t threadCountX, uint32_t threadCountY, uint32_t groupSizeX, uint32_t groupSizeY);
+VGPU_API void vgpuDispatch3D(VGPUCommandBuffer commandBuffer, uint32_t threadCountX, uint32_t threadCountY, uint32_t threadCountZ, uint32_t groupSizeX, uint32_t groupSizeY, uint32_t groupSizeZ);
 VGPU_API void vgpuDispatchIndirect(VGPUCommandBuffer commandBuffer, VGPUBuffer buffer, uint64_t offset);
 
 /* Render commands */
@@ -1007,8 +1012,10 @@ VGPU_API void vgpuSetVertexBuffer(VGPUCommandBuffer commandBuffer, uint32_t inde
 VGPU_API void vgpuSetIndexBuffer(VGPUCommandBuffer commandBuffer, VGPUBuffer buffer, VGPUIndexType type, uint64_t offset);
 VGPU_API void vgpuSetStencilReference(VGPUCommandBuffer commandBuffer, uint32_t reference);
 
-VGPU_API void vgpuDraw(VGPUCommandBuffer commandBuffer, uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t firstInstance);
+VGPU_API void vgpuDraw(VGPUCommandBuffer commandBuffer, uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance);
 VGPU_API void vgpuDrawIndexed(VGPUCommandBuffer commandBuffer, uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t baseVertex, uint32_t firstInstance);
+VGPU_API void vgpuDrawIndirect(VGPUCommandBuffer commandBuffer, VGPUBuffer indirectBuffer, uint64_t indirectBufferOffset);
+VGPU_API void vgpuDrawIndexedIndirect(VGPUCommandBuffer commandBuffer, VGPUBuffer indirectBuffer, uint64_t indirectBufferOffset);
 
 VGPU_API void vgpuBeginQuery(VGPUCommandBuffer commandBuffer, VGPUQueryHeap queryHeap, uint32_t index);
 VGPU_API void vgpuEndQuery(VGPUCommandBuffer commandBuffer, VGPUQueryHeap queryHeap, uint32_t index);

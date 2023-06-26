@@ -890,7 +890,8 @@ public:
     VkClearValue clearValues[VGPU_MAX_COLOR_ATTACHMENTS + 1];
 
     VulkanPipeline* currentPipeline = nullptr;
-    bool insideRenderPass;
+    bool insideRenderPass = false;
+    bool hasRenderPassLabel = false;
     std::vector<VulkanSwapChain*> swapChains;
 
     ~VulkanCommandBuffer() override;
@@ -929,37 +930,39 @@ public:
             1, &barrier);
     }
 
-    void pushDebugGroup(const char* groupLabel) override;
-    void popDebugGroup() override;
-    void insertDebugMarker(const char* debugLabel) override;
+    void PushDebugGroup(const char* groupLabel) override;
+    void PopDebugGroup() override;
+    void InsertDebugMarker(const char* debugLabel) override;
     void SetPipeline(VGPUPipeline pipeline) override;
     void SetPushConstants(uint32_t pushConstantIndex, const void* data, uint32_t size) override;
 
     void Dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ) override;
     void DispatchIndirect(VGPUBuffer buffer, uint64_t offset) override;
 
-    VGPUTexture acquireSwapchainTexture(VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight) override;
+    VGPUTexture AcquireSwapchainTexture(VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight) override;
 
-    void beginRenderPass(const VGPURenderPassDesc* desc) override;
-    void endRenderPass() override;
+    void BeginRenderPass(const VGPURenderPassDesc* desc) override;
+    void EndRenderPass() override;
 
-    void setViewport(const VGPUViewport* viewport) override;
-    void setViewports(uint32_t count, const VGPUViewport* viewports) override;
-
+    void SetViewport(const VGPUViewport* viewport) override;
+    void SetViewports(uint32_t count, const VGPUViewport* viewports) override;
     void SetScissorRect(const VGPURect* rects) override;
     void SetScissorRects(uint32_t count, const VGPURect* rects) override;
 
-    void setVertexBuffer(uint32_t index, VGPUBuffer buffer, uint64_t offset) override;
-    void setIndexBuffer(VGPUBuffer buffer, VGPUIndexType type, uint64_t offset) override;
-    void setStencilReference(uint32_t reference) override;
+    void SetVertexBuffer(uint32_t index, VGPUBuffer buffer, uint64_t offset) override;
+    void SetIndexBuffer(VGPUBuffer buffer, VGPUIndexType type, uint64_t offset) override;
+    void SetStencilReference(uint32_t reference) override;
 
     void BeginQuery(VGPUQueryHeap heap, uint32_t index) override;
     void EndQuery(VGPUQueryHeap heap, uint32_t index) override;
     void ResolveQuery(VGPUQueryHeap heap, uint32_t index, uint32_t count, VGPUBuffer destinationBuffer, uint64_t destinationOffset) override;
     void ResetQuery(VGPUQueryHeap heap, uint32_t index, uint32_t count) override;
 
-    void draw(uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t firstInstance) override;
-    void drawIndexed(uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t baseVertex, uint32_t firstInstance) override;
+    void PrepareDraw();
+    void Draw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance) override;
+    void DrawIndexed(uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t baseVertex, uint32_t firstInstance) override;
+    void DrawIndirect(VGPUBuffer indirectBuffer, uint64_t indirectBufferOffset) override;
+    void DrawIndexedIndirect(VGPUBuffer indirectBuffer, uint64_t indirectBufferOffset) override;
 };
 
 struct Vulkan_UploadContext
@@ -973,8 +976,44 @@ struct Vulkan_UploadContext
     void* uploadBufferData = nullptr;
 };
 
-struct VulkanRenderer
+struct VulkanRenderer final : public VGPUDeviceImpl
 {
+public:
+    ~VulkanRenderer() override;
+
+    void SetLabel(const char* label) override;
+    void WaitIdle() override;
+    VGPUBackend GetBackendType() const override { return VGPUBackend_Vulkan; }
+    VGPUBool32 QueryFeature(VGPUFeature feature) const override;
+    void GetAdapterProperties(VGPUAdapterProperties* properties) const override;
+    void GetLimits(VGPULimits* limits) const override;
+
+    VGPUBuffer CreateBuffer(const VGPUBufferDesc* desc, const void* pInitialData) override;
+    VGPUTexture CreateTexture(const VGPUTextureDesc* desc, const void* pInitialData) override;
+    VGPUSampler CreateSampler(const VGPUSamplerDesc* desc) override;
+
+    VGPUShaderModule CreateShaderModule(const void* pCode, size_t codeSize) override;
+    void DestroyShaderModule(VGPUShaderModule resource) override;
+
+    VGPUPipelineLayout CreatePipelineLayout(const VGPUPipelineLayoutDesc* desc) override;
+
+    VGPUPipeline CreateRenderPipeline(const VGPURenderPipelineDesc* desc) override;
+    VGPUPipeline CreateComputePipeline(const VGPUComputePipelineDesc* desc) override;
+    VGPUPipeline CreateRayTracingPipeline(const VGPURayTracingPipelineDesc* desc) override;
+
+    VGPUQueryHeap CreateQueryHeap(const VGPUQueryHeapDesc* desc) override;
+
+    VGPUSwapChain CreateSwapChain(void* windowHandle, const VGPUSwapChainDesc* desc) override;
+
+    VGPUCommandBuffer BeginCommandBuffer(VGPUCommandQueue queueType, const char* label) override;
+    uint64_t Submit(VGPUCommandBuffer* commandBuffers, uint32_t count) override;
+
+    uint64_t GetFrameCount() override { return frameCount; }
+    uint32_t GetFrameIndex() override { return frameIndex; }
+
+    void SetObjectName(VkObjectType type, uint64_t handle, const char* name);
+
+public:
 #if defined(VK_USE_PLATFORM_XCB_KHR)
     struct {
         void* handle;
@@ -1053,7 +1092,7 @@ struct VulkanRenderer
     /* Command contexts */
     std::mutex cmdBuffersLocker;
     uint32_t cmdBuffersCount{ 0 };
-    std::vector<VulkanCommandBuffer*> commandBuffers;
+    std::vector<VulkanCommandBuffer*> commandBuffersPool;
 
     std::mutex uploadLocker;
     VkSemaphore uploadSemaphore = VK_NULL_HANDLE;
@@ -1097,9 +1136,9 @@ struct VulkanRenderer
     std::deque<std::pair<VkQueryPool, uint64_t>> destroyedQueryPools;
 };
 
-static void vulkan_SetObjectName(VulkanRenderer* renderer, VkObjectType type, uint64_t handle, const char* name)
+void VulkanRenderer::SetObjectName(VkObjectType type, uint64_t handle, const char* name)
 {
-    if (!renderer->debugUtils)
+    if (!debugUtils)
     {
         return;
     }
@@ -1110,7 +1149,7 @@ static void vulkan_SetObjectName(VulkanRenderer* renderer, VkObjectType type, ui
     info.objectType = type;
     info.objectHandle = handle;
     info.pObjectName = name;
-    VK_CHECK(vkSetDebugUtilsObjectNameEXT(renderer->device, &info));
+    VK_CHECK(vkSetDebugUtilsObjectNameEXT(device, &info));
 }
 
 static VkSurfaceKHR vulkan_createSurface(VulkanRenderer* renderer, void* windowHandle)
@@ -1169,11 +1208,8 @@ static VkSurfaceKHR vulkan_createSurface(VulkanRenderer* renderer, void* windowH
     return vk_surface;
 }
 
-VGPUBuffer vulkan_createBuffer(VGPURenderer* driverData, const VGPUBufferDesc* desc, const void* pInitialData);
-
-static Vulkan_UploadContext vulkan_AllocateUpload(VGPURenderer* driverData, uint64_t size)
+static Vulkan_UploadContext vulkan_AllocateUpload(VulkanRenderer* renderer, uint64_t size)
 {
-    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
     renderer->uploadLocker.lock();
 
     // Create a new command list if there are no free ones.
@@ -1229,7 +1265,7 @@ static Vulkan_UploadContext vulkan_AllocateUpload(VGPURenderer* driverData, uint
         uploadBufferDesc.label = "UploadBuffer";
         uploadBufferDesc.size = newSize;
         uploadBufferDesc.cpuAccess = VGPUCpuAccessMode_Write;
-        context.uploadBuffer = vulkan_createBuffer(driverData, &uploadBufferDesc, nullptr);
+        context.uploadBuffer = renderer->CreateBuffer(&uploadBufferDesc, nullptr);
         context.uploadBufferData = ((VulkanBuffer*)context.uploadBuffer)->pMappedData;
     }
 
@@ -1502,7 +1538,7 @@ VulkanBuffer::~VulkanBuffer()
 
 void VulkanBuffer::SetLabel(const char* label)
 {
-    vulkan_SetObjectName(renderer, VK_OBJECT_TYPE_BUFFER, (uint64_t)handle, label);
+    renderer->SetObjectName(VK_OBJECT_TYPE_BUFFER, (uint64_t)handle, label);
 }
 
 /* VulkanTexture */
@@ -1523,7 +1559,7 @@ VulkanTexture::~VulkanTexture()
 
 void VulkanTexture::SetLabel(const char* label)
 {
-    vulkan_SetObjectName(renderer, VK_OBJECT_TYPE_IMAGE, (uint64_t)handle, label);
+    renderer->SetObjectName(VK_OBJECT_TYPE_IMAGE, (uint64_t)handle, label);
 }
 
 /* VulkanPipeline */
@@ -1538,59 +1574,59 @@ VulkanPipeline::~VulkanPipeline()
 
 void VulkanPipeline::SetLabel(const char* label)
 {
-    vulkan_SetObjectName(renderer, VK_OBJECT_TYPE_PIPELINE, (uint64_t)handle, label);
+    renderer->SetObjectName(VK_OBJECT_TYPE_PIPELINE, (uint64_t)handle, label);
 }
 
-static void vulkan_destroyDevice(VGPUDevice device)
+/* VulkanRenderer */
+VulkanRenderer::~VulkanRenderer()
 {
-    VulkanRenderer* renderer = (VulkanRenderer*)device->driverData;
-    VK_CHECK(vkDeviceWaitIdle(renderer->device));
+    VK_CHECK(vkDeviceWaitIdle(device));
 
-    for (auto& frame : renderer->frames)
+    for (auto& frame : frames)
     {
-        vkDestroyFence(renderer->device, frame.fence, nullptr);
-        vkDestroyCommandPool(renderer->device, frame.initCommandPool, nullptr);
+        vkDestroyFence(device, frame.fence, nullptr);
+        vkDestroyCommandPool(device, frame.initCommandPool, nullptr);
     }
 
-    for (size_t i = 0; i < renderer->commandBuffers.size(); ++i)
+    for (size_t i = 0; i < commandBuffersPool.size(); ++i)
     {
-        VulkanCommandBuffer* commandBuffer = renderer->commandBuffers[i];
+        VulkanCommandBuffer* commandBuffer = commandBuffersPool[i];
         delete commandBuffer;
     }
-    renderer->commandBuffers.clear();
+    commandBuffersPool.clear();
 
     // Destroy upload stuff
-    vkQueueWaitIdle(renderer->copyQueue);
-    for (auto& x : renderer->uploadFreeList)
+    vkQueueWaitIdle(copyQueue);
+    for (auto& x : uploadFreeList)
     {
         vgpuBufferRelease(x.uploadBuffer);
-        vkDestroyCommandPool(renderer->device, x.commandPool, nullptr);
+        vkDestroyCommandPool(device, x.commandPool, nullptr);
     }
-    vkDestroySemaphore(renderer->device, renderer->uploadSemaphore, nullptr);
+    vkDestroySemaphore(device, uploadSemaphore, nullptr);
 
-    renderer->frameCount = UINT64_MAX;
-    vulkan_ProcessDeletionQueue(renderer);
-    renderer->frameCount = 0;
+    frameCount = UINT64_MAX;
+    vulkan_ProcessDeletionQueue(this);
+    frameCount = 0;
 
-    vmaDestroyBuffer(renderer->allocator, renderer->nullBuffer, renderer->nullBufferAllocation);
-    vkDestroyBufferView(renderer->device, renderer->nullBufferView, nullptr);
-    vmaDestroyImage(renderer->allocator, renderer->nullImage1D, renderer->nullImageAllocation1D);
-    vmaDestroyImage(renderer->allocator, renderer->nullImage2D, renderer->nullImageAllocation2D);
-    vmaDestroyImage(renderer->allocator, renderer->nullImage3D, renderer->nullImageAllocation3D);
-    vkDestroyImageView(renderer->device, renderer->nullImageView1D, nullptr);
-    vkDestroyImageView(renderer->device, renderer->nullImageView1DArray, nullptr);
-    vkDestroyImageView(renderer->device, renderer->nullImageView2D, nullptr);
-    vkDestroyImageView(renderer->device, renderer->nullImageView2DArray, nullptr);
-    vkDestroyImageView(renderer->device, renderer->nullImageViewCube, nullptr);
-    vkDestroyImageView(renderer->device, renderer->nullImageViewCubeArray, nullptr);
-    vkDestroyImageView(renderer->device, renderer->nullImageView3D, nullptr);
-    vkDestroySampler(renderer->device, renderer->nullSampler, nullptr);
+    vmaDestroyBuffer(allocator, nullBuffer, nullBufferAllocation);
+    vkDestroyBufferView(device, nullBufferView, nullptr);
+    vmaDestroyImage(allocator, nullImage1D, nullImageAllocation1D);
+    vmaDestroyImage(allocator, nullImage2D, nullImageAllocation2D);
+    vmaDestroyImage(allocator, nullImage3D, nullImageAllocation3D);
+    vkDestroyImageView(device, nullImageView1D, nullptr);
+    vkDestroyImageView(device, nullImageView1DArray, nullptr);
+    vkDestroyImageView(device, nullImageView2D, nullptr);
+    vkDestroyImageView(device, nullImageView2DArray, nullptr);
+    vkDestroyImageView(device, nullImageViewCube, nullptr);
+    vkDestroyImageView(device, nullImageViewCubeArray, nullptr);
+    vkDestroyImageView(device, nullImageView3D, nullptr);
+    vkDestroySampler(device, nullSampler, nullptr);
 
-    if (renderer->allocator != VK_NULL_HANDLE)
+    if (allocator != VK_NULL_HANDLE)
     {
 #if defined(_DEBUG)
         VmaTotalStatistics stats;
-        vmaCalculateStatistics(renderer->allocator, &stats);
+        vmaCalculateStatistics(allocator, &stats);
 
         if (stats.total.statistics.allocationBytes > 0)
         {
@@ -1598,11 +1634,11 @@ static void vulkan_destroyDevice(VGPUDevice device)
         }
 #endif
 
-        vmaDestroyAllocator(renderer->allocator);
-        renderer->allocator = VK_NULL_HANDLE;
+        vmaDestroyAllocator(allocator);
+        allocator = VK_NULL_HANDLE;
     }
 
-    if (renderer->pipelineCache != VK_NULL_HANDLE)
+    if (pipelineCache != VK_NULL_HANDLE)
     {
         // Get size of pipeline cache
         //size_t size{};
@@ -1614,108 +1650,96 @@ static void vulkan_destroyDevice(VGPUDevice device)
         //assert(res == VK_SUCCESS);
 
         // Destroy Vulkan pipeline cache 
-        vkDestroyPipelineCache(renderer->device, renderer->pipelineCache, nullptr);
-        renderer->pipelineCache = VK_NULL_HANDLE;
+        vkDestroyPipelineCache(device, pipelineCache, nullptr);
+        pipelineCache = VK_NULL_HANDLE;
     }
 
-    if (renderer->device != VK_NULL_HANDLE)
+    if (device != VK_NULL_HANDLE)
     {
-        vkDestroyDevice(renderer->device, nullptr);
-        renderer->device = VK_NULL_HANDLE;
+        vkDestroyDevice(device, nullptr);
+        device = VK_NULL_HANDLE;
     }
 
-    if (renderer->debugUtilsMessenger != VK_NULL_HANDLE)
+    if (debugUtilsMessenger != VK_NULL_HANDLE)
     {
-        vkDestroyDebugUtilsMessengerEXT(renderer->instance, renderer->debugUtilsMessenger, nullptr);
-        renderer->debugUtilsMessenger = VK_NULL_HANDLE;
+        vkDestroyDebugUtilsMessengerEXT(instance, debugUtilsMessenger, nullptr);
+        debugUtilsMessenger = VK_NULL_HANDLE;
     }
 
-    if (renderer->instance != VK_NULL_HANDLE)
+    if (instance != VK_NULL_HANDLE)
     {
-        vkDestroyInstance(renderer->instance, nullptr);
-        renderer->instance = VK_NULL_HANDLE;
+        vkDestroyInstance(instance, nullptr);
+        instance = VK_NULL_HANDLE;
     }
 
 #if defined(VK_USE_PLATFORM_XCB_KHR)
-    if (renderer->x11xcb.handle)
+    if (x11xcb.handle)
     {
-        dlclose(renderer->x11xcb.handle);
-        renderer->x11xcb.handle = NULL;
+        dlclose(x11xcb.handle);
+        x11xcb.handle = NULL;
     }
 #endif
-
-    delete renderer;
-    delete device;
 }
 
-inline void vulkan_setLabel(VGPURenderer* driverData, const char* label)
+void VulkanRenderer::SetLabel(const char* label)
 {
-    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
-
-    vulkan_SetObjectName(renderer, VK_OBJECT_TYPE_DEVICE, (uint64_t)renderer->device, label);
+    SetObjectName(VK_OBJECT_TYPE_DEVICE, (uint64_t)device, label);
 }
 
-static void vulkan_waitIdle(VGPURenderer* driverData)
+void VulkanRenderer::WaitIdle()
 {
-    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
-    VK_CHECK(vkDeviceWaitIdle(renderer->device));
+    VK_CHECK(vkDeviceWaitIdle(device));
 }
 
-static VGPUBackend vulkan_getBackendType(void)
+VGPUBool32 VulkanRenderer::QueryFeature(VGPUFeature feature) const
 {
-    return VGPUBackend_Vulkan;
-}
-
-static VGPUBool32 vulkan_queryFeature(VGPURenderer* driverData, VGPUFeature feature)
-{
-    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
     switch (feature)
     {
         case VGPUFeature_DepthClipControl:
             return
-                renderer->features2.features.depthClamp == VK_TRUE &&
-                renderer->depthClipEnableFeatures.depthClipEnable == VK_TRUE;
+                features2.features.depthClamp == VK_TRUE &&
+                depthClipEnableFeatures.depthClipEnable == VK_TRUE;
 
         case VGPUFeature_Depth32FloatStencil8:
-            return IsDepthStencilFormatSupported(renderer->physicalDevice, VK_FORMAT_D32_SFLOAT_S8_UINT);
+            return IsDepthStencilFormatSupported(physicalDevice, VK_FORMAT_D32_SFLOAT_S8_UINT);
 
         case VGPUFeature_TimestampQuery:
-            return renderer->properties2.properties.limits.timestampComputeAndGraphics == VK_TRUE;
+            return properties2.properties.limits.timestampComputeAndGraphics == VK_TRUE;
 
         case VGPUFeature_PipelineStatisticsQuery:
-            return renderer->features2.features.pipelineStatisticsQuery == VK_TRUE;
+            return features2.features.pipelineStatisticsQuery == VK_TRUE;
 
         case VGPUFeature_TextureCompressionBC:
-            return renderer->features2.features.textureCompressionBC;
+            return features2.features.textureCompressionBC;
 
         case VGPUFeature_TextureCompressionETC2:
-            return renderer->features2.features.textureCompressionETC2;
+            return features2.features.textureCompressionETC2;
 
         case VGPUFeature_TextureCompressionASTC:
-            return renderer->features2.features.textureCompressionASTC_LDR;
+            return features2.features.textureCompressionASTC_LDR;
 
         case VGPUFeature_IndirectFirstInstance:
-            return renderer->features2.features.drawIndirectFirstInstance == VK_TRUE;
+            return features2.features.drawIndirectFirstInstance == VK_TRUE;
 
         case VGPUFeature_ShaderFloat16:
             // VK_KHR_16bit_storage core in 1.1
             // VK_KHR_shader_float16_int8 core in 1.2
-            return renderer->features1_2.shaderFloat16 == VK_TRUE;
+            return features1_2.shaderFloat16 == VK_TRUE;
 
         case VGPUFeature_GeometryShader:
-            return renderer->features2.features.geometryShader == VK_TRUE;
+            return features2.features.geometryShader == VK_TRUE;
 
         case VGPUFeature_TessellationShader:
-            return renderer->features2.features.tessellationShader == VK_TRUE;
+            return features2.features.tessellationShader == VK_TRUE;
 
         case VGPUFeature_DepthBoundsTest:
-            return renderer->features2.features.depthBounds == VK_TRUE;
+            return features2.features.depthBounds == VK_TRUE;
 
         case VGPUFeature_SamplerAnisotropy:
-            return renderer->features2.features.samplerAnisotropy == VK_TRUE;
+            return features2.features.samplerAnisotropy == VK_TRUE;
 
         case VGPUFeature_SamplerMinMax:
-            return renderer->features1_2.samplerFilterMinmax == VK_TRUE;
+            return features1_2.samplerFilterMinmax == VK_TRUE;
 
         case VGPUFeature_DescriptorIndexing:
             //VGPU_ASSERT(renderer->features1_2.descriptorIndexing == VK_TRUE);
@@ -1723,24 +1747,24 @@ static VGPUBool32 vulkan_queryFeature(VGPURenderer* driverData, VGPUFeature feat
             //VGPU_ASSERT(renderer->features1_2.descriptorBindingPartiallyBound == VK_TRUE);
             //VGPU_ASSERT(renderer->features1_2.descriptorBindingVariableDescriptorCount == VK_TRUE);
             //VGPU_ASSERT(renderer->features1_2.shaderSampledImageArrayNonUniformIndexing == VK_TRUE);
-            return renderer->features1_2.descriptorIndexing == VK_TRUE;
+            return features1_2.descriptorIndexing == VK_TRUE;
 
         case VGPUFeature_Predication:
-            return renderer->conditional_rendering_features.conditionalRendering == VK_TRUE;
+            return conditional_rendering_features.conditionalRendering == VK_TRUE;
 
         case VGPUFeature_ShaderOutputViewportIndex:
-            return renderer->features1_2.shaderOutputLayer == VK_TRUE && renderer->features1_2.shaderOutputViewportIndex == VK_TRUE;
+            return features1_2.shaderOutputLayer == VK_TRUE && features1_2.shaderOutputViewportIndex == VK_TRUE;
 
         case VGPUFeature_VariableRateShading:
-            return (renderer->fragmentShadingRateFeatures.pipelineFragmentShadingRate == VK_TRUE);
+            return (fragmentShadingRateFeatures.pipelineFragmentShadingRate == VK_TRUE);
 
         case VGPUFeature_VariableRateShadingTier2:
-            return (renderer->fragmentShadingRateFeatures.attachmentFragmentShadingRate == VK_TRUE);
+            return (fragmentShadingRateFeatures.attachmentFragmentShadingRate == VK_TRUE);
 
         case VGPUFeature_RayTracing:
-            if (renderer->features1_2.bufferDeviceAddress == VK_TRUE &&
-                renderer->acceleration_structure_features.accelerationStructure == VK_TRUE &&
-                renderer->raytracing_features.rayTracingPipeline == VK_TRUE
+            if (features1_2.bufferDeviceAddress == VK_TRUE &&
+                acceleration_structure_features.accelerationStructure == VK_TRUE &&
+                raytracing_features.rayTracingPipeline == VK_TRUE
                 )
             {
                 return true;
@@ -1749,11 +1773,11 @@ static VGPUBool32 vulkan_queryFeature(VGPURenderer* driverData, VGPUFeature feat
             return false;
 
         case VGPUFeature_RayTracingTier2:
-            return vulkan_queryFeature(driverData, VGPUFeature_RayTracing) & (renderer->raytracing_query_features.rayQuery == VK_TRUE);
+            return QueryFeature(VGPUFeature_RayTracing) & (raytracing_query_features.rayQuery == VK_TRUE);
 
 
         case VGPUFeature_MeshShader:
-            return renderer->mesh_shader_features.meshShader == VK_TRUE && renderer->mesh_shader_features.taskShader == VK_TRUE;
+            return mesh_shader_features.meshShader == VK_TRUE && mesh_shader_features.taskShader == VK_TRUE;
 
 
         default:
@@ -1761,16 +1785,14 @@ static VGPUBool32 vulkan_queryFeature(VGPURenderer* driverData, VGPUFeature feat
     }
 }
 
-static void vulkan_getAdapterProperties(VGPURenderer* driverData, VGPUAdapterProperties* properties)
+void VulkanRenderer::GetAdapterProperties(VGPUAdapterProperties* properties) const
 {
-    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
+    properties->vendorId = properties2.properties.vendorID;
+    properties->deviceId = properties2.properties.deviceID;
+    properties->name = properties2.properties.deviceName;
+    properties->driverDescription = driverDescription.c_str();
 
-    properties->vendorId = renderer->properties2.properties.vendorID;
-    properties->deviceId = renderer->properties2.properties.deviceID;
-    properties->name = renderer->properties2.properties.deviceName;
-    properties->driverDescription = renderer->driverDescription.c_str();
-
-    switch (renderer->properties2.properties.deviceType)
+    switch (properties2.properties.deviceType)
     {
         case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU:
             properties->adapterType = VGPUAdapterType_IntegratedGPU;
@@ -1790,11 +1812,9 @@ static void vulkan_getAdapterProperties(VGPURenderer* driverData, VGPUAdapterPro
     }
 }
 
-static void vulkan_getLimits(VGPURenderer* driverData, VGPULimits* limits)
+void VulkanRenderer::GetLimits(VGPULimits* limits) const
 {
-    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
-
-#define SET_LIMIT_FROM_VULKAN(vulkanName, name) limits->name = renderer->properties2.properties.limits.vulkanName
+#define SET_LIMIT_FROM_VULKAN(vulkanName, name) limits->name = properties2.properties.limits.vulkanName
     SET_LIMIT_FROM_VULKAN(maxImageDimension1D, maxTextureDimension1D);
     SET_LIMIT_FROM_VULKAN(maxImageDimension2D, maxTextureDimension2D);
     SET_LIMIT_FROM_VULKAN(maxImageDimension3D, maxTextureDimension3D);
@@ -1809,17 +1829,17 @@ static void vulkan_getLimits(VGPURenderer* driverData, VGPULimits* limits)
     //SET_LIMIT_FROM_VULKAN(maxPerStageDescriptorStorageImages, maxStorageTexturesPerShaderStage);
     //SET_LIMIT_FROM_VULKAN(maxPerStageDescriptorUniformBuffers, maxUniformBuffersPerShaderStage);
 
-    limits->maxConstantBufferBindingSize = renderer->properties2.properties.limits.maxUniformBufferRange;
-    limits->maxStorageBufferBindingSize = renderer->properties2.properties.limits.maxStorageBufferRange;
-    limits->minUniformBufferOffsetAlignment = (uint32_t)renderer->properties2.properties.limits.minUniformBufferOffsetAlignment;
-    limits->minStorageBufferOffsetAlignment = (uint32_t)renderer->properties2.properties.limits.minStorageBufferOffsetAlignment;
+    limits->maxConstantBufferBindingSize = properties2.properties.limits.maxUniformBufferRange;
+    limits->maxStorageBufferBindingSize = properties2.properties.limits.maxStorageBufferRange;
+    limits->minUniformBufferOffsetAlignment = (uint32_t)properties2.properties.limits.minUniformBufferOffsetAlignment;
+    limits->minStorageBufferOffsetAlignment = (uint32_t)properties2.properties.limits.minStorageBufferOffsetAlignment;
 
-    limits->maxVertexBuffers = renderer->properties2.properties.limits.maxVertexInputBindings;
-    limits->maxVertexAttributes = renderer->properties2.properties.limits.maxVertexInputAttributes;
+    limits->maxVertexBuffers = properties2.properties.limits.maxVertexInputBindings;
+    limits->maxVertexAttributes = properties2.properties.limits.maxVertexInputAttributes;
 
     limits->maxVertexBufferArrayStride = _VGPU_MIN(
-        renderer->properties2.properties.limits.maxVertexInputBindingStride,
-        renderer->properties2.properties.limits.maxVertexInputAttributeOffset + 1);
+        properties2.properties.limits.maxVertexInputBindingStride,
+        properties2.properties.limits.maxVertexInputAttributeOffset + 1);
 
     SET_LIMIT_FROM_VULKAN(maxComputeSharedMemorySize, maxComputeWorkgroupStorageSize);
     SET_LIMIT_FROM_VULKAN(maxComputeWorkGroupInvocations, maxComputeInvocationsPerWorkGroup);
@@ -1830,23 +1850,23 @@ static void vulkan_getLimits(VGPURenderer* driverData, VGPULimits* limits)
 
     limits->maxComputeWorkGroupsPerDimension = _VGPU_MIN(
         _VGPU_MIN(
-            renderer->properties2.properties.limits.maxComputeWorkGroupCount[0],
-            renderer->properties2.properties.limits.maxComputeWorkGroupCount[1]),
-        renderer->properties2.properties.limits.maxComputeWorkGroupCount[2]
+            properties2.properties.limits.maxComputeWorkGroupCount[0],
+            properties2.properties.limits.maxComputeWorkGroupCount[1]),
+        properties2.properties.limits.maxComputeWorkGroupCount[2]
     );
 
-    limits->maxViewports = renderer->properties2.properties.limits.maxViewports;
-    limits->maxViewportDimensions[0] = renderer->properties2.properties.limits.maxViewportDimensions[0];
-    limits->maxViewportDimensions[1] = renderer->properties2.properties.limits.maxViewportDimensions[1];
-    limits->maxColorAttachments = renderer->properties2.properties.limits.maxColorAttachments;
+    limits->maxViewports = properties2.properties.limits.maxViewports;
+    limits->maxViewportDimensions[0] = properties2.properties.limits.maxViewportDimensions[0];
+    limits->maxViewportDimensions[1] = properties2.properties.limits.maxViewportDimensions[1];
+    limits->maxColorAttachments = properties2.properties.limits.maxColorAttachments;
 
-    if (vulkan_queryFeature(driverData, VGPUFeature_RayTracing))
+    if (QueryFeature(VGPUFeature_RayTracing))
     {
-        limits->rayTracingShaderGroupIdentifierSize = renderer->rayTracingPipelineProperties.shaderGroupHandleSize;
-        limits->rayTracingShaderTableAligment = renderer->rayTracingPipelineProperties.shaderGroupBaseAlignment;
-        limits->rayTracingShaderTableMaxStride = renderer->rayTracingPipelineProperties.maxShaderGroupStride;
-        limits->rayTracingShaderRecursionMaxDepth = renderer->rayTracingPipelineProperties.maxRayRecursionDepth;
-        limits->rayTracingMaxGeometryCount = (uint32_t)renderer->accelerationStructureProperties.maxGeometryCount;
+        limits->rayTracingShaderGroupIdentifierSize = rayTracingPipelineProperties.shaderGroupHandleSize;
+        limits->rayTracingShaderTableAligment = rayTracingPipelineProperties.shaderGroupBaseAlignment;
+        limits->rayTracingShaderTableMaxStride = rayTracingPipelineProperties.maxShaderGroupStride;
+        limits->rayTracingShaderRecursionMaxDepth = rayTracingPipelineProperties.maxRayRecursionDepth;
+        limits->rayTracingMaxGeometryCount = (uint32_t)accelerationStructureProperties.maxGeometryCount;
     }
 
 #undef SET_LIMIT_FROM_VULKAN
@@ -1854,14 +1874,12 @@ static void vulkan_getLimits(VGPURenderer* driverData, VGPULimits* limits)
 
 
 /* Buffer */
-inline VGPUBuffer vulkan_createBuffer(VGPURenderer* driverData, const VGPUBufferDesc* desc, const void* pInitialData)
+VGPUBuffer VulkanRenderer::CreateBuffer(const VGPUBufferDesc* desc, const void* pInitialData)
 {
-    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
-
     if (desc->handle)
     {
         VulkanBuffer* buffer = new VulkanBuffer();
-        buffer->renderer = renderer;
+        buffer->renderer = this;
         buffer->size = desc->size;
         buffer->usage = desc->usage;
         buffer->handle = (VkBuffer)desc->handle;
@@ -1871,7 +1889,7 @@ inline VGPUBuffer vulkan_createBuffer(VGPURenderer* driverData, const VGPUBuffer
 
         if (desc->label)
         {
-            vulkan_SetObjectName(renderer, VK_OBJECT_TYPE_BUFFER, (uint64_t)buffer->handle, desc->label);
+            SetObjectName(VK_OBJECT_TYPE_BUFFER, (uint64_t)buffer->handle, desc->label);
         }
 
         return (VGPUBuffer)buffer;
@@ -1893,7 +1911,7 @@ inline VGPUBuffer vulkan_createBuffer(VGPURenderer* driverData, const VGPUBuffer
 
     if (desc->usage & VGPUBufferUsage_Constant)
     {
-        bufferInfo.size = VmaAlignUp(bufferInfo.size, renderer->properties2.properties.limits.minUniformBufferOffsetAlignment);
+        bufferInfo.size = VmaAlignUp(bufferInfo.size, properties2.properties.limits.minUniformBufferOffsetAlignment);
         bufferInfo.usage |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
     }
 
@@ -1916,7 +1934,7 @@ inline VGPUBuffer vulkan_createBuffer(VGPURenderer* driverData, const VGPUBuffer
     }
 
     if (desc->usage & VGPUBufferUsage_Predication &&
-        renderer->conditional_rendering_features.conditionalRendering == VK_TRUE)
+        conditional_rendering_features.conditionalRendering == VK_TRUE)
     {
         bufferInfo.usage |= VK_BUFFER_USAGE_CONDITIONAL_RENDERING_BIT_EXT;
     }
@@ -1928,31 +1946,31 @@ inline VGPUBuffer vulkan_createBuffer(VGPURenderer* driverData, const VGPUBuffer
         bufferInfo.usage |= VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR;
     }
 
-    if (renderer->features1_2.bufferDeviceAddress == VK_TRUE)
+    if (features1_2.bufferDeviceAddress == VK_TRUE)
     {
         bufferInfo.usage |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
     }
     bufferInfo.usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 
     uint32_t sharingIndices[3] = {};
-    if (renderer->graphicsQueueFamily != renderer->computeQueueFamily ||
-        renderer->graphicsQueueFamily != renderer->copyQueueFamily)
+    if (graphicsQueueFamily != computeQueueFamily ||
+        graphicsQueueFamily != copyQueueFamily)
     {
         // For buffers, always just use CONCURRENT access modes,
         // so we don't have to deal with acquire/release barriers in async compute.
         bufferInfo.sharingMode = VK_SHARING_MODE_CONCURRENT;
 
-        sharingIndices[bufferInfo.queueFamilyIndexCount++] = renderer->graphicsQueueFamily;
+        sharingIndices[bufferInfo.queueFamilyIndexCount++] = graphicsQueueFamily;
 
-        if (renderer->graphicsQueueFamily != renderer->computeQueueFamily)
+        if (graphicsQueueFamily != computeQueueFamily)
         {
-            sharingIndices[bufferInfo.queueFamilyIndexCount++] = renderer->computeQueueFamily;
+            sharingIndices[bufferInfo.queueFamilyIndexCount++] = computeQueueFamily;
         }
 
-        if (renderer->graphicsQueueFamily != renderer->copyQueueFamily
-            && renderer->computeQueueFamily != renderer->copyQueueFamily)
+        if (graphicsQueueFamily != copyQueueFamily
+            && computeQueueFamily != copyQueueFamily)
         {
-            sharingIndices[bufferInfo.queueFamilyIndexCount++] = renderer->copyQueueFamily;
+            sharingIndices[bufferInfo.queueFamilyIndexCount++] = copyQueueFamily;
         }
 
         bufferInfo.pQueueFamilyIndices = sharingIndices;
@@ -1978,8 +1996,8 @@ inline VGPUBuffer vulkan_createBuffer(VGPURenderer* driverData, const VGPUBuffer
 
     VmaAllocationInfo allocationInfo{};
     VulkanBuffer* buffer = new VulkanBuffer();
-    buffer->renderer = renderer;
-    VkResult result = vmaCreateBuffer(renderer->allocator, &bufferInfo, &memoryInfo,
+    buffer->renderer = this;
+    VkResult result = vmaCreateBuffer(allocator, &bufferInfo, &memoryInfo,
         &buffer->handle,
         &buffer->allocation,
         &allocationInfo);
@@ -2008,7 +2026,7 @@ inline VGPUBuffer vulkan_createBuffer(VGPURenderer* driverData, const VGPUBuffer
         VkBufferDeviceAddressInfo info = {};
         info.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
         info.buffer = buffer->handle;
-        buffer->gpuAddress = vkGetBufferDeviceAddress(renderer->device, &info);
+        buffer->gpuAddress = vkGetBufferDeviceAddress(device, &info);
     }
 
     // Issue data copy.
@@ -2020,7 +2038,7 @@ inline VGPUBuffer vulkan_createBuffer(VGPURenderer* driverData, const VGPUBuffer
         }
         else
         {
-            auto context = vulkan_AllocateUpload(driverData, desc->size);
+            auto context = vulkan_AllocateUpload(this, desc->size);
             memcpy(context.uploadBufferData, pInitialData, desc->size);
 
             VkBufferMemoryBarrier barrier = {};
@@ -2101,24 +2119,16 @@ inline VGPUBuffer vulkan_createBuffer(VGPURenderer* driverData, const VGPUBuffer
                 0, nullptr
             );
 
-            vulkan_UploadSubmit(renderer, context);
+            vulkan_UploadSubmit(this, context);
         }
     }
 
     return buffer;
 }
 
-inline VGPUDeviceAddress vulkan_buffer_get_device_address(VGPUBuffer resource)
-{
-    VulkanBuffer* buffer = (VulkanBuffer*)resource;
-    return buffer->gpuAddress;
-}
-
 /* Texture */
-static VGPUTexture vulkan_createTexture(VGPURenderer* driverData, const VGPUTextureDesc* desc, const void* pInitialData)
+VGPUTexture VulkanRenderer::CreateTexture(const VGPUTextureDesc* desc, const void* pInitialData)
 {
-    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
-
     VmaAllocationCreateInfo memoryInfo = {};
     memoryInfo.usage = VMA_MEMORY_USAGE_AUTO;
 
@@ -2196,24 +2206,24 @@ static VGPUTexture vulkan_createTexture(VGPURenderer* driverData, const VGPUText
     }
 
     uint32_t sharingIndices[3] = {};
-    if (renderer->graphicsQueueFamily != renderer->computeQueueFamily ||
-        renderer->graphicsQueueFamily != renderer->copyQueueFamily)
+    if (graphicsQueueFamily != computeQueueFamily ||
+        graphicsQueueFamily != copyQueueFamily)
     {
         // For buffers, always just use CONCURRENT access modes,
         // so we don't have to deal with acquire/release barriers in async compute.
         createInfo.sharingMode = VK_SHARING_MODE_CONCURRENT;
 
-        sharingIndices[createInfo.queueFamilyIndexCount++] = renderer->graphicsQueueFamily;
+        sharingIndices[createInfo.queueFamilyIndexCount++] = graphicsQueueFamily;
 
-        if (renderer->graphicsQueueFamily != renderer->computeQueueFamily)
+        if (graphicsQueueFamily != computeQueueFamily)
         {
-            sharingIndices[createInfo.queueFamilyIndexCount++] = renderer->computeQueueFamily;
+            sharingIndices[createInfo.queueFamilyIndexCount++] = computeQueueFamily;
         }
 
-        if (renderer->graphicsQueueFamily != renderer->copyQueueFamily
-            && renderer->computeQueueFamily != renderer->copyQueueFamily)
+        if (graphicsQueueFamily != copyQueueFamily
+            && computeQueueFamily != copyQueueFamily)
         {
-            sharingIndices[createInfo.queueFamilyIndexCount++] = renderer->copyQueueFamily;
+            sharingIndices[createInfo.queueFamilyIndexCount++] = copyQueueFamily;
         }
 
         createInfo.pQueueFamilyIndices = sharingIndices;
@@ -2228,7 +2238,7 @@ static VGPUTexture vulkan_createTexture(VGPURenderer* driverData, const VGPUText
     // TODO: Handle readback texture
 
     VulkanTexture* texture = new VulkanTexture();
-    texture->renderer = renderer;
+    texture->renderer = this;
     texture->dimension = desc->dimension;
     texture->format = desc->format;
     texture->width = createInfo.extent.width;
@@ -2236,7 +2246,7 @@ static VGPUTexture vulkan_createTexture(VGPURenderer* driverData, const VGPUText
     texture->vkFormat = createInfo.format;
     texture->viewCache.clear();
 
-    VkResult result = vmaCreateImage(renderer->allocator,
+    VkResult result = vmaCreateImage(allocator,
         &createInfo, &memoryInfo,
         &texture->handle,
         &texture->allocation,
@@ -2281,10 +2291,10 @@ static VGPUTexture vulkan_createTexture(VGPURenderer* driverData, const VGPUText
     dependencyInfo.imageMemoryBarrierCount = 1;
     dependencyInfo.pImageMemoryBarriers = &barrier;
 
-    renderer->initLocker.lock();
-    vkCmdPipelineBarrier2(renderer->GetFrameResources().initCommandBuffer, &dependencyInfo);
-    renderer->submitInits = true;
-    renderer->initLocker.unlock();
+    initLocker.lock();
+    vkCmdPipelineBarrier2(GetFrameResources().initCommandBuffer, &dependencyInfo);
+    submitInits = true;
+    initLocker.unlock();
 
     return texture;
 }
@@ -2299,13 +2309,11 @@ VulkanSampler::~VulkanSampler()
 
 void VulkanSampler::SetLabel(const char* label)
 {
-    vulkan_SetObjectName(renderer, VK_OBJECT_TYPE_SAMPLER, (uint64_t)handle, label);
+    renderer->SetObjectName(VK_OBJECT_TYPE_SAMPLER, (uint64_t)handle, label);
 }
 
-static VGPUSampler vulkan_createSampler(VGPURenderer* driverData, const VGPUSamplerDesc* desc)
+VGPUSampler VulkanRenderer::CreateSampler(const VGPUSamplerDesc* desc)
 {
-    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
-
     VkSamplerCreateInfo createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
     createInfo.magFilter = ToVkFilter(desc->magFilter);
@@ -2319,7 +2327,7 @@ static VGPUSampler vulkan_createSampler(VGPURenderer* driverData, const VGPUSamp
     if (desc->maxAnisotropy > 1)
     {
         createInfo.anisotropyEnable = VK_TRUE;
-        createInfo.maxAnisotropy = _VGPU_MIN(float(desc->maxAnisotropy), renderer->properties2.properties.limits.maxSamplerAnisotropy);
+        createInfo.maxAnisotropy = _VGPU_MIN(float(desc->maxAnisotropy), properties2.properties.limits.maxSamplerAnisotropy);
     }
     else
     {
@@ -2344,8 +2352,8 @@ static VGPUSampler vulkan_createSampler(VGPURenderer* driverData, const VGPUSamp
     createInfo.unnormalizedCoordinates = VK_FALSE;
 
     VulkanSampler* sampler = new VulkanSampler();
-    sampler->renderer = renderer;
-    VkResult result = vkCreateSampler(renderer->device, &createInfo, nullptr, &sampler->handle);
+    sampler->renderer = this;
+    VkResult result = vkCreateSampler(device, &createInfo, nullptr, &sampler->handle);
 
     if (result != VK_SUCCESS)
     {
@@ -2363,17 +2371,15 @@ static VGPUSampler vulkan_createSampler(VGPURenderer* driverData, const VGPUSamp
 }
 
 /* ShaderModule */
-static VGPUShaderModule vulkan_createShaderModule(VGPURenderer* driverData, const void* pCode, size_t codeSize)
+VGPUShaderModule VulkanRenderer::CreateShaderModule(const void* pCode, size_t codeSize)
 {
-    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
-
     VkShaderModuleCreateInfo createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     createInfo.codeSize = codeSize;
     createInfo.pCode = (const uint32_t*)pCode;
 
     VkShaderModule handle;
-    VkResult result = vkCreateShaderModule(renderer->device, &createInfo, nullptr, &handle);
+    VkResult result = vkCreateShaderModule(device, &createInfo, nullptr, &handle);
     if (result != VK_SUCCESS)
     {
         return nullptr;
@@ -2384,14 +2390,13 @@ static VGPUShaderModule vulkan_createShaderModule(VGPURenderer* driverData, cons
     return (VGPUShaderModule)shader;
 }
 
-static void vulkan_destroyShaderModule(VGPURenderer* driverData, VGPUShaderModule resource)
+void VulkanRenderer::DestroyShaderModule(VGPUShaderModule resource)
 {
-    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
     VulkanShader* shader = (VulkanShader*)resource;
 
-    renderer->destroyMutex.lock();
-    renderer->destroyedShaderModules.push_back(std::make_pair(shader->handle, renderer->frameCount));
-    renderer->destroyMutex.unlock();
+    destroyMutex.lock();
+    destroyedShaderModules.push_back(std::make_pair(shader->handle, frameCount));
+    destroyMutex.unlock();
 
     delete shader;
 }
@@ -2406,15 +2411,13 @@ VulkanPipelineLayout::~VulkanPipelineLayout()
 
 void VulkanPipelineLayout::SetLabel(const char* label)
 {
-    vulkan_SetObjectName(renderer, VK_OBJECT_TYPE_PIPELINE_LAYOUT, (uint64_t)handle, label);
+    renderer->SetObjectName(VK_OBJECT_TYPE_PIPELINE_LAYOUT, (uint64_t)handle, label);
 }
 
-static VGPUPipelineLayout vulkan_createPipelineLayout(VGPURenderer* driverData, const VGPUPipelineLayoutDesc* descriptor)
+VGPUPipelineLayout VulkanRenderer::CreatePipelineLayout(const VGPUPipelineLayoutDesc* descriptor)
 {
-    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
-
     VulkanPipelineLayout* layout = new VulkanPipelineLayout();
-    layout->renderer = renderer;
+    layout->renderer = this;
     layout->descriptorSetLayouts.resize(descriptor->descriptorSetCount);
     layout->descriptorSetSpaces.resize(descriptor->descriptorSetCount);
 
@@ -2456,7 +2459,7 @@ static VGPUPipelineLayout vulkan_createPipelineLayout(VGPURenderer* driverData, 
     createInfo.pushConstantRangeCount = descriptor->pushConstantRangeCount;
     createInfo.pPushConstantRanges = layout->pushConstantRanges.data();
 
-    VkResult result = vkCreatePipelineLayout(renderer->device, &createInfo, nullptr, &layout->handle);
+    VkResult result = vkCreatePipelineLayout(device, &createInfo, nullptr, &layout->handle);
     if (result != VK_SUCCESS)
     {
         delete layout;
@@ -2472,10 +2475,8 @@ static VGPUPipelineLayout vulkan_createPipelineLayout(VGPURenderer* driverData, 
 }
 
 /* Pipeline */
-static VGPUPipeline vulkan_createRenderPipeline(VGPURenderer* driverData, const VGPURenderPipelineDesc* desc)
+VGPUPipeline VulkanRenderer::CreateRenderPipeline(const VGPURenderPipelineDesc* desc)
 {
-    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
-
     VulkanPipelineLayout* layout = (VulkanPipelineLayout*)desc->layout;
     VulkanShader* vertexShader = (VulkanShader*)desc->vertex.module;
     VulkanShader* fragmentShader = (VulkanShader*)desc->fragment;
@@ -2582,7 +2583,7 @@ static VGPUPipeline vulkan_createRenderPipeline(VGPURenderer* driverData, const 
     depthClipStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_DEPTH_CLIP_STATE_CREATE_INFO_EXT;
 
     if (desc->rasterizerState.depthClipMode == VGPUDepthClipMode_Clip &&
-        renderer->depthClipEnableFeatures.depthClipEnable == VK_TRUE)
+        depthClipEnableFeatures.depthClipEnable == VK_TRUE)
     {
         rasterizationState.pNext = &depthClipStateInfo;
         depthClipStateInfo.depthClipEnable = VK_TRUE;
@@ -2592,7 +2593,7 @@ static VGPUPipeline vulkan_createRenderPipeline(VGPURenderer* driverData, const 
         rasterizationState.depthClampEnable = VK_TRUE;
     }
     rasterizationState.rasterizerDiscardEnable = VK_FALSE;
-    rasterizationState.polygonMode = ToVk(desc->rasterizerState.fillMode, renderer->features2.features.fillModeNonSolid);
+    rasterizationState.polygonMode = ToVk(desc->rasterizerState.fillMode, features2.features.fillModeNonSolid);
     rasterizationState.cullMode = ToVk(desc->rasterizerState.cullMode);
     rasterizationState.frontFace = desc->rasterizerState.frontFaceCounterClockwise ? VK_FRONT_FACE_COUNTER_CLOCKWISE : VK_FRONT_FACE_CLOCKWISE;
     // Can be managed by command buffer
@@ -2700,19 +2701,19 @@ static VGPUPipeline vulkan_createRenderPipeline(VGPURenderer* driverData, const 
     createInfo.pMultisampleState = &multisampleState;
     createInfo.pDepthStencilState = &depthStencilState;
     createInfo.pColorBlendState = &colorBlendState;
-    createInfo.pDynamicState = &renderer->dynamicStateInfo;
+    createInfo.pDynamicState = &dynamicStateInfo;
     createInfo.layout = layout->handle;
     createInfo.renderPass = VK_NULL_HANDLE;
 
     VkPipeline handle = VK_NULL_HANDLE;
-    const VkResult result = vkCreateGraphicsPipelines(renderer->device, renderer->pipelineCache, 1, &createInfo, nullptr, &handle);
+    const VkResult result = vkCreateGraphicsPipelines(device, pipelineCache, 1, &createInfo, nullptr, &handle);
     if (result != VK_SUCCESS)
     {
         return nullptr;
     }
 
     VulkanPipeline* pipeline = new VulkanPipeline();
-    pipeline->renderer = renderer;
+    pipeline->renderer = this;
     pipeline->type = VGPUPipelineType_Render;
     pipeline->pipelineLayout = layout;
     pipeline->pipelineLayout->AddRef();
@@ -2726,9 +2727,8 @@ static VGPUPipeline vulkan_createRenderPipeline(VGPURenderer* driverData, const 
     return pipeline;
 }
 
-static VGPUPipeline vulkan_createComputePipeline(VGPURenderer* driverData, const VGPUComputePipelineDesc* desc)
+VGPUPipeline VulkanRenderer::CreateComputePipeline(const VGPUComputePipelineDesc* desc)
 {
-    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
     VulkanPipelineLayout* layout = (VulkanPipelineLayout*)desc->layout;
     VulkanShader* shader = (VulkanShader*)desc->shader;
 
@@ -2740,7 +2740,7 @@ static VGPUPipeline vulkan_createComputePipeline(VGPURenderer* driverData, const
     createInfo.layout = VK_NULL_HANDLE;
 
     VkPipeline handle;
-    VkResult result = vkCreateComputePipelines(renderer->device,
+    VkResult result = vkCreateComputePipelines(device,
         VK_NULL_HANDLE,
         1, &createInfo,
         nullptr,
@@ -2752,7 +2752,7 @@ static VGPUPipeline vulkan_createComputePipeline(VGPURenderer* driverData, const
     }
 
     VulkanPipeline* pipeline = new VulkanPipeline();
-    pipeline->renderer = renderer;
+    pipeline->renderer = this;
     pipeline->type = VGPUPipelineType_Compute;
     pipeline->pipelineLayout = layout;
     pipeline->pipelineLayout->AddRef();
@@ -2766,14 +2766,13 @@ static VGPUPipeline vulkan_createComputePipeline(VGPURenderer* driverData, const
     return pipeline;
 }
 
-static VGPUPipeline vulkan_createRayTracingPipeline(VGPURenderer* driverData, const VGPURayTracingPipelineDesc* desc)
+VGPUPipeline VulkanRenderer::CreateRayTracingPipeline(const VGPURayTracingPipelineDesc* desc)
 {
-    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
     VulkanPipelineLayout* layout = (VulkanPipelineLayout*)desc->layout;
     VGPU_UNUSED(desc);
 
     VulkanPipeline* pipeline = new VulkanPipeline();
-    pipeline->renderer = renderer;
+    pipeline->renderer = this;
     pipeline->type = VGPUPipelineType_RayTracing;
     pipeline->pipelineLayout = layout;
     pipeline->pipelineLayout->AddRef();
@@ -2793,15 +2792,13 @@ VulkanQueryHeap::~VulkanQueryHeap()
 
 void VulkanQueryHeap::SetLabel(const char* label)
 {
-    vulkan_SetObjectName(renderer, VK_OBJECT_TYPE_QUERY_POOL, (uint64_t)handle, label);
+    renderer->SetObjectName(VK_OBJECT_TYPE_QUERY_POOL, (uint64_t)handle, label);
 }
 
-static VGPUQueryHeap vulkan_createQueryHeap(VGPURenderer* driverData, const VGPUQueryHeapDesc* desc)
+VGPUQueryHeap VulkanRenderer::CreateQueryHeap(const VGPUQueryHeapDesc* desc)
 {
-    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
-
     VulkanQueryHeap* heap = new VulkanQueryHeap();
-    heap->renderer = renderer;
+    heap->renderer = this;
     heap->type = desc->type;
     heap->count = desc->count;
 
@@ -2840,7 +2837,7 @@ static VGPUQueryHeap vulkan_createQueryHeap(VGPURenderer* driverData, const VGPU
             createInfo.pipelineStatistics |= VK_QUERY_PIPELINE_STATISTIC_COMPUTE_SHADER_INVOCATIONS_BIT;
     }
 
-    VkResult result = vkCreateQueryPool(renderer->device, &createInfo, nullptr, &heap->handle);
+    VkResult result = vkCreateQueryPool(device, &createInfo, nullptr, &heap->handle);
     if (result != VK_SUCCESS)
     {
         return nullptr;
@@ -2889,7 +2886,7 @@ VulkanSwapChain::~VulkanSwapChain()
 
 void VulkanSwapChain::SetLabel(const char* label)
 {
-    vulkan_SetObjectName(renderer, VK_OBJECT_TYPE_SWAPCHAIN_KHR, (uint64_t)handle, label);
+    renderer->SetObjectName(VK_OBJECT_TYPE_SWAPCHAIN_KHR, (uint64_t)handle, label);
 }
 
 static void vulkan_updateSwapChain(VulkanRenderer* renderer, VulkanSwapChain* swapChain)
@@ -3071,30 +3068,29 @@ static void vulkan_updateSwapChain(VulkanRenderer* renderer, VulkanSwapChain* sw
     swapChain->extent = createInfo.imageExtent;
 }
 
-static VGPUSwapChain vulkan_createSwapChain(VGPURenderer* driverData, void* windowHandle, const VGPUSwapChainDesc* desc)
+VGPUSwapChain VulkanRenderer::CreateSwapChain(void* windowHandle, const VGPUSwapChainDesc* desc)
 {
-    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
-    VkSurfaceKHR vk_surface = vulkan_createSurface(renderer, windowHandle);
+    VkSurfaceKHR vk_surface = vulkan_createSurface(this, windowHandle);
     if (vk_surface == VK_NULL_HANDLE)
     {
         return nullptr;
     }
 
     VkBool32 supported = VK_FALSE;
-    VkResult result = vkGetPhysicalDeviceSurfaceSupportKHR(renderer->physicalDevice, renderer->graphicsQueueFamily, vk_surface, &supported);
+    VkResult result = vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, graphicsQueueFamily, vk_surface, &supported);
     if (result != VK_SUCCESS || !supported)
     {
         return nullptr;
     }
 
     VulkanSwapChain* swapChain = new VulkanSwapChain();
-    swapChain->renderer = renderer;
+    swapChain->renderer = this;
     swapChain->surface = vk_surface;
     swapChain->extent.width = desc->width;
     swapChain->extent.height = desc->height;
     swapChain->colorFormat = desc->format;
     swapChain->vsync = desc->presentMode == VGPUPresentMode_Fifo;
-    vulkan_updateSwapChain(renderer, swapChain);
+    vulkan_updateSwapChain(this, swapChain);
 
     if (desc->label)
     {
@@ -3120,8 +3116,10 @@ VulkanCommandBuffer::~VulkanCommandBuffer()
 void VulkanCommandBuffer::Reset()
 {
     hasLabel = false;
+    hasRenderPassLabel = false;
     clearValueCount = 0u;
     insideRenderPass = false;
+
     swapChains.clear();
 
     if (currentPipeline)
@@ -3158,17 +3156,17 @@ void VulkanCommandBuffer::Begin(uint32_t frameIndex, const char* label)
 
     if (label)
     {
-        pushDebugGroup(label);
+        PushDebugGroup(label);
         hasLabel = true;
     }
 }
 
-void VulkanCommandBuffer::pushDebugGroup(const char* groupLabel)
+void VulkanCommandBuffer::PushDebugGroup(const char* groupLabel)
 {
     if (!renderer->debugUtils)
         return;
 
-    VkDebugUtilsLabelEXT label;
+    VkDebugUtilsLabelEXT label{};
     label.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT;
     label.pNext = nullptr;
     label.pLabelName = groupLabel;
@@ -3179,7 +3177,7 @@ void VulkanCommandBuffer::pushDebugGroup(const char* groupLabel)
     vkCmdBeginDebugUtilsLabelEXT(commandBuffer, &label);
 }
 
-void VulkanCommandBuffer::popDebugGroup()
+void VulkanCommandBuffer::PopDebugGroup()
 {
     if (!renderer->debugUtils)
         return;
@@ -3187,12 +3185,12 @@ void VulkanCommandBuffer::popDebugGroup()
     vkCmdEndDebugUtilsLabelEXT(commandBuffer);
 }
 
-void VulkanCommandBuffer::insertDebugMarker(const char* markerLabel)
+void VulkanCommandBuffer::InsertDebugMarker(const char* markerLabel)
 {
     if (!renderer->debugUtils)
         return;
 
-    VkDebugUtilsLabelEXT label;
+    VkDebugUtilsLabelEXT label{};
     label.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT;
     label.pNext = nullptr;
     label.pLabelName = markerLabel;
@@ -3238,7 +3236,7 @@ void VulkanCommandBuffer::DispatchIndirect(VGPUBuffer buffer, uint64_t offset)
     vkCmdDispatchIndirect(commandBuffer, vulkanBuffer->handle, offset);
 }
 
-VGPUTexture VulkanCommandBuffer::acquireSwapchainTexture(VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight)
+VGPUTexture VulkanCommandBuffer::AcquireSwapchainTexture(VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight)
 {
     VulkanSwapChain* vulkanSwapChain = (VulkanSwapChain*)swapChain;
 
@@ -3258,7 +3256,7 @@ VGPUTexture VulkanCommandBuffer::acquireSwapchainTexture(VGPUSwapChain swapChain
     if (vulkanSwapChain->extent.width != surfaceProperties.currentExtent.width ||
         vulkanSwapChain->extent.height != surfaceProperties.currentExtent.height)
     {
-        vulkan_waitIdle((VGPURenderer*)renderer);
+        renderer->WaitIdle();
         vulkan_updateSwapChain(renderer, vulkanSwapChain);
     }
 
@@ -3273,9 +3271,9 @@ VGPUTexture VulkanCommandBuffer::acquireSwapchainTexture(VGPUSwapChain swapChain
         // Handle outdated error in acquire
         if (result == VK_SUBOPTIMAL_KHR || result == VK_ERROR_OUT_OF_DATE_KHR)
         {
-            vulkan_waitIdle((VGPURenderer*)renderer);
+            renderer->WaitIdle();
             vulkan_updateSwapChain(renderer, vulkanSwapChain);
-            return acquireSwapchainTexture(swapChain, pWidth, pHeight);
+            return AcquireSwapchainTexture(swapChain, pWidth, pHeight);
         }
     }
 
@@ -3312,7 +3310,7 @@ VGPUTexture VulkanCommandBuffer::acquireSwapchainTexture(VGPUSwapChain swapChain
     return swapchainTexture;
 }
 
-void VulkanCommandBuffer::beginRenderPass(const VGPURenderPassDesc* desc)
+void VulkanCommandBuffer::BeginRenderPass(const VGPURenderPassDesc* desc)
 {
     uint32_t width = renderer->properties2.properties.limits.maxFramebufferWidth;
     uint32_t height = renderer->properties2.properties.limits.maxFramebufferHeight;
@@ -3324,6 +3322,12 @@ void VulkanCommandBuffer::beginRenderPass(const VGPURenderPassDesc* desc)
     renderingInfo.renderArea.extent = { UINT32_MAX, UINT32_MAX };
     renderingInfo.layerCount = 1;
     renderingInfo.viewMask = 0;
+
+    if (desc->label)
+    {
+        PushDebugGroup(desc->label);
+        hasRenderPassLabel = true;
+    }
 
     VkRenderingAttachmentInfo colorAttachments[VGPU_MAX_COLOR_ATTACHMENTS] = {};
     for (uint32_t i = 0; i < desc->colorAttachmentCount; ++i)
@@ -3373,8 +3377,8 @@ void VulkanCommandBuffer::beginRenderPass(const VGPURenderPassDesc* desc)
         depthAttachment.imageView = vulkan_GetRTV(renderer, texture, level, slice);
         depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
         depthAttachment.resolveMode = VK_RESOLVE_MODE_NONE;
-        depthAttachment.loadOp = ToVkAttachmentLoadOp(attachment->depthLoadOp);
-        depthAttachment.storeOp = ToVkAttachmentStoreOp(attachment->depthStoreOp);
+        depthAttachment.loadOp = ToVkAttachmentLoadOp(attachment->depthLoadAction);
+        depthAttachment.storeOp = ToVkAttachmentStoreOp(attachment->depthStoreAction);
         depthAttachment.clearValue.depthStencil.depth = attachment->depthClearValue;
         depthAttachment.clearValue.depthStencil.stencil = attachment->stencilClearValue;
 
@@ -3428,14 +3432,19 @@ void VulkanCommandBuffer::beginRenderPass(const VGPURenderPassDesc* desc)
     insideRenderPass = true;
 }
 
-void VulkanCommandBuffer::endRenderPass()
+void VulkanCommandBuffer::EndRenderPass()
 {
     vkCmdEndRendering(commandBuffer);
+
+    if (hasRenderPassLabel)
+    {
+        PopDebugGroup();
+    }
 
     insideRenderPass = false;
 }
 
-void VulkanCommandBuffer::setViewport(const VGPUViewport* viewport)
+void VulkanCommandBuffer::SetViewport(const VGPUViewport* viewport)
 {
     VkViewport vkViewport;
     vkViewport.x = viewport->x;
@@ -3448,7 +3457,7 @@ void VulkanCommandBuffer::setViewport(const VGPUViewport* viewport)
     vkCmdSetViewport(commandBuffer, 0, 1, &vkViewport);
 }
 
-void VulkanCommandBuffer::setViewports(uint32_t count, const VGPUViewport* viewports)
+void VulkanCommandBuffer::SetViewports(uint32_t count, const VGPUViewport* viewports)
 {
     VGPU_ASSERT(count < renderer->properties2.properties.limits.maxViewports);
 
@@ -3478,14 +3487,14 @@ void VulkanCommandBuffer::SetScissorRects(uint32_t count, const VGPURect* rects)
     vkCmdSetScissor(commandBuffer, 0, count, (const VkRect2D*)rects);
 }
 
-void VulkanCommandBuffer::setVertexBuffer(uint32_t index, VGPUBuffer buffer, uint64_t offset)
+void VulkanCommandBuffer::SetVertexBuffer(uint32_t index, VGPUBuffer buffer, uint64_t offset)
 {
     VulkanBuffer* vulkanBuffer = (VulkanBuffer*)buffer;
 
     vkCmdBindVertexBuffers(commandBuffer, index, 1, &vulkanBuffer->handle, &offset);
 }
 
-void VulkanCommandBuffer::setIndexBuffer(VGPUBuffer buffer, VGPUIndexType type, uint64_t offset)
+void VulkanCommandBuffer::SetIndexBuffer(VGPUBuffer buffer, VGPUIndexType type, uint64_t offset)
 {
     VulkanBuffer* vulkanBuffer = (VulkanBuffer*)buffer;
 
@@ -3493,7 +3502,7 @@ void VulkanCommandBuffer::setIndexBuffer(VGPUBuffer buffer, VGPUIndexType type, 
     vkCmdBindIndexBuffer(commandBuffer, vulkanBuffer->handle, offset, vkIndexType);
 }
 
-void VulkanCommandBuffer::setStencilReference(uint32_t reference)
+void VulkanCommandBuffer::SetStencilReference(uint32_t reference)
 {
     vkCmdSetStencilReference(commandBuffer, VK_STENCIL_FRONT_AND_BACK, reference);
 }
@@ -3582,33 +3591,53 @@ void VulkanCommandBuffer::ResetQuery(VGPUQueryHeap heap, uint32_t index, uint32_
     vkCmdResetQueryPool(commandBuffer, vulkanHeap->handle, index, count);
 }
 
-void VulkanCommandBuffer::draw(uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t firstInstance)
+void VulkanCommandBuffer::PrepareDraw()
 {
     VGPU_ASSERT(insideRenderPass);
-
-    vkCmdDraw(commandBuffer, vertexCount, instanceCount, vertexStart, firstInstance);
 }
 
-void VulkanCommandBuffer::drawIndexed(uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t baseVertex, uint32_t firstInstance)
+void VulkanCommandBuffer::Draw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance)
 {
-    VGPU_ASSERT(insideRenderPass);
+    PrepareDraw();
+
+    vkCmdDraw(commandBuffer, vertexCount, instanceCount, firstVertex, firstInstance);
+}
+
+void VulkanCommandBuffer::DrawIndexed(uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t baseVertex, uint32_t firstInstance)
+{
+    PrepareDraw();
 
     vkCmdDrawIndexed(commandBuffer, indexCount, instanceCount, firstIndex, baseVertex, firstInstance);
 }
 
-
-static VGPUCommandBuffer vulkan_beginCommandBuffer(VGPURenderer* driverData, VGPUCommandQueue queueType, const char* label)
+void VulkanCommandBuffer::DrawIndirect(VGPUBuffer indirectBuffer, uint64_t indirectBufferOffset)
 {
-    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
+    VGPU_ASSERT(indirectBuffer);
+    PrepareDraw();
 
+    VulkanBuffer* backendBuffer = static_cast<VulkanBuffer*>(indirectBuffer);
+    vkCmdDrawIndirect(commandBuffer, backendBuffer->handle, indirectBufferOffset, 1, (uint32_t)sizeof(VkDrawIndirectCommand));
+}
+
+void VulkanCommandBuffer::DrawIndexedIndirect(VGPUBuffer indirectBuffer, uint64_t indirectBufferOffset)
+{
+    VGPU_ASSERT(indirectBuffer);
+    PrepareDraw();
+
+    VulkanBuffer* backendBuffer = static_cast<VulkanBuffer*>(indirectBuffer);
+    vkCmdDrawIndexedIndirect(commandBuffer, backendBuffer->handle, indirectBufferOffset, 1, sizeof(VkDrawIndexedIndirectCommand));
+}
+
+VGPUCommandBuffer VulkanRenderer::BeginCommandBuffer(VGPUCommandQueue queueType, const char* label)
+{
     VulkanCommandBuffer* commandBuffer = nullptr;
 
-    renderer->cmdBuffersLocker.lock();
-    uint32_t cmd_current = renderer->cmdBuffersCount++;
-    if (cmd_current >= renderer->commandBuffers.size())
+    cmdBuffersLocker.lock();
+    uint32_t cmd_current = cmdBuffersCount++;
+    if (cmd_current >= commandBuffersPool.size())
     {
         commandBuffer = new VulkanCommandBuffer();
-        commandBuffer->renderer = renderer;
+        commandBuffer->renderer = this;
 
         for (uint32_t i = 0; i < VGPU_MAX_INFLIGHT_FRAMES; ++i)
         {
@@ -3618,13 +3647,13 @@ static VGPUCommandBuffer vulkan_beginCommandBuffer(VGPURenderer* driverData, VGP
             switch (queueType)
             {
                 case VGPUCommandQueue_Graphics:
-                    poolInfo.queueFamilyIndex = renderer->graphicsQueueFamily;
+                    poolInfo.queueFamilyIndex = graphicsQueueFamily;
                     break;
                 case VGPUCommandQueue_Compute:
-                    poolInfo.queueFamilyIndex = renderer->computeQueueFamily;
+                    poolInfo.queueFamilyIndex = computeQueueFamily;
                     break;
                 case VGPUCommandQueue_Copy:
-                    poolInfo.queueFamilyIndex = renderer->copyQueueFamily;
+                    poolInfo.queueFamilyIndex = copyQueueFamily;
                     break;
                 default:
                     assert(0); // queue type not handled
@@ -3633,36 +3662,34 @@ static VGPUCommandBuffer vulkan_beginCommandBuffer(VGPURenderer* driverData, VGP
 
             poolInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
             //poolInfo.queueFamilyIndex = renderer->computeQueueFamily;
-            VK_CHECK(vkCreateCommandPool(renderer->device, &poolInfo, nullptr, &commandBuffer->commandPools[i]));
+            VK_CHECK(vkCreateCommandPool(device, &poolInfo, nullptr, &commandBuffer->commandPools[i]));
 
             VkCommandBufferAllocateInfo commandBufferInfo = {};
             commandBufferInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
             commandBufferInfo.commandBufferCount = 1;
             commandBufferInfo.commandPool = commandBuffer->commandPools[i];
             commandBufferInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-            VK_CHECK(vkAllocateCommandBuffers(renderer->device, &commandBufferInfo, &commandBuffer->commandBuffers[i]));
+            VK_CHECK(vkAllocateCommandBuffers(device, &commandBufferInfo, &commandBuffer->commandBuffers[i]));
             //binderPools[i].Init(device);
         }
 
-        renderer->commandBuffers.push_back(commandBuffer);
+        commandBuffersPool.push_back(commandBuffer);
     }
     else
     {
-        commandBuffer = (VulkanCommandBuffer*)renderer->commandBuffers.back();
+        commandBuffer = commandBuffersPool.back();
     }
 
-    renderer->cmdBuffersLocker.unlock();
+    cmdBuffersLocker.unlock();
 
     // Begin recording
-    commandBuffer->Begin(renderer->frameIndex, label);
+    commandBuffer->Begin(frameIndex, label);
 
-    return renderer->commandBuffers.back();
+    return commandBuffersPool.back();
 }
 
-static uint64_t vulkan_submit(VGPURenderer* driverData, VGPUCommandBuffer* commandBuffers, uint32_t count)
+uint64_t VulkanRenderer::Submit(VGPUCommandBuffer* commandBuffers, uint32_t count)
 {
-    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
-
     // Collect present swapchains
     std::vector<VkSemaphore> waitSemaphores;
     std::vector<VkPipelineStageFlags> waitStages;
@@ -3674,16 +3701,16 @@ static uint64_t vulkan_submit(VGPURenderer* driverData, VGPUCommandBuffer* comma
     std::vector<uint32_t> swapChainImageIndices;
 
     VkResult result = VK_SUCCESS;
-    renderer->initLocker.lock();
-    renderer->cmdBuffersCount = 0;
+    initLocker.lock();
+    cmdBuffersCount = 0;
 
     // Submit current frame.
     {
-        auto& frame = renderer->frames[renderer->frameIndex];
+        auto& frame = frames[frameIndex];
 
         // Transitions first.
         std::vector<VkCommandBuffer> submitCommandBuffers;
-        if (renderer->submitInits)
+        if (submitInits)
         {
             result = vkEndCommandBuffer(frame.initCommandBuffer);
             VGPU_ASSERT(result == VK_SUCCESS);
@@ -3691,11 +3718,11 @@ static uint64_t vulkan_submit(VGPURenderer* driverData, VGPUCommandBuffer* comma
         }
 
         // Sync up with copyallocator before first submit
-        uint64_t copySyncValue = vulkan_UploadFlush(renderer);
+        uint64_t copySyncValue = vulkan_UploadFlush(this);
         if (copySyncValue > 0)
         {
             waitStages.push_back(VK_PIPELINE_STAGE_TRANSFER_BIT);
-            waitSemaphores.push_back(renderer->uploadSemaphore);
+            waitSemaphores.push_back(uploadSemaphore);
             submitWaitValues.push_back(copySyncValue);
             copySyncValue = 0;
         }
@@ -3737,7 +3764,7 @@ static uint64_t vulkan_submit(VGPURenderer* driverData, VGPUCommandBuffer* comma
 
             if (commandBuffer->hasLabel)
             {
-                commandBuffer->popDebugGroup();
+                commandBuffer->PopDebugGroup();
             }
 
             result = vkEndCommandBuffer(commandBuffer->commandBuffer);
@@ -3765,7 +3792,7 @@ static uint64_t vulkan_submit(VGPURenderer* driverData, VGPUCommandBuffer* comma
         submitInfo.signalSemaphoreCount = (uint32_t)submitSignalSemaphores.size();
         submitInfo.pSignalSemaphores = submitSignalSemaphores.data();
 
-        result = vkQueueSubmit(renderer->graphicsQueue, 1, &submitInfo, frame.fence);
+        result = vkQueueSubmit(graphicsQueue, 1, &submitInfo, frame.fence);
         VGPU_ASSERT(result == VK_SUCCESS);
 
         if (!presentSwapChains.empty())
@@ -3777,7 +3804,7 @@ static uint64_t vulkan_submit(VGPURenderer* driverData, VGPUCommandBuffer* comma
             presentInfo.swapchainCount = (uint32_t)presentSwapChains.size();
             presentInfo.pSwapchains = presentVkSwapChains.data();
             presentInfo.pImageIndices = swapChainImageIndices.data();
-            result = vkQueuePresentKHR(renderer->graphicsQueue, &presentInfo);
+            result = vkQueuePresentKHR(graphicsQueue, &presentInfo);
             if (result != VK_SUCCESS)
             {
                 // Handle outdated error in present:
@@ -3786,7 +3813,7 @@ static uint64_t vulkan_submit(VGPURenderer* driverData, VGPUCommandBuffer* comma
                     for (size_t i = 0; i < presentSwapChains.size(); ++i)
                     {
                         VulkanSwapChain* vulkanSwapChain = presentSwapChains[i];
-                        vulkan_updateSwapChain(renderer, vulkanSwapChain);
+                        vulkan_updateSwapChain(this, vulkanSwapChain);
                     }
                 }
                 else
@@ -3797,28 +3824,28 @@ static uint64_t vulkan_submit(VGPURenderer* driverData, VGPUCommandBuffer* comma
         }
     }
 
-    renderer->frameCount++;
-    renderer->frameIndex = renderer->frameCount % VGPU_MAX_INFLIGHT_FRAMES;
+    frameCount++;
+    frameIndex = frameCount % VGPU_MAX_INFLIGHT_FRAMES;
 
     // Begin new frame
     {
-        auto& frame = renderer->frames[renderer->frameIndex];
+        auto& frame = frames[frameIndex];
 
         // Initiate stalling CPU when GPU is not yet finished with next frame.
-        if (renderer->frameCount >= VGPU_MAX_INFLIGHT_FRAMES)
+        if (frameCount >= VGPU_MAX_INFLIGHT_FRAMES)
         {
-            result = vkWaitForFences(renderer->device, 1, &frame.fence, VK_TRUE, 0xFFFFFFFFFFFFFFFF);
+            result = vkWaitForFences(device, 1, &frame.fence, VK_TRUE, 0xFFFFFFFFFFFFFFFF);
             VGPU_ASSERT(result == VK_SUCCESS);
 
-            result = vkResetFences(renderer->device, 1, &frame.fence);
+            result = vkResetFences(device, 1, &frame.fence);
             VGPU_ASSERT(result == VK_SUCCESS);
         }
 
         // Safe delete deferred destroys
-        vulkan_ProcessDeletionQueue(renderer);
+        vulkan_ProcessDeletionQueue(this);
 
         // Restart transition command buffers first.
-        result = vkResetCommandPool(renderer->device, frame.initCommandPool, 0);
+        result = vkResetCommandPool(device, frame.initCommandPool, 0);
         VGPU_ASSERT(result == VK_SUCCESS);
 
         VkCommandBufferBeginInfo beginInfo = {};
@@ -3828,23 +3855,11 @@ static uint64_t vulkan_submit(VGPURenderer* driverData, VGPUCommandBuffer* comma
         VGPU_ASSERT(result == VK_SUCCESS);
     }
 
-    renderer->submitInits = false;
-    renderer->initLocker.unlock();
+    submitInits = false;
+    initLocker.unlock();
 
     // Return current frame
-    return renderer->frameCount - 1;
-}
-
-static uint64_t vulkan_getFrameCount(VGPURenderer* driverData)
-{
-    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
-    return renderer->frameCount;
-}
-
-static uint32_t vulkan_getFrameIndex(VGPURenderer* driverData)
-{
-    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
-    return renderer->frameIndex;
+    return frameCount - 1;
 }
 
 static VGPUBool32 vulkan_isSupported(void)
@@ -4535,7 +4550,7 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
 #endif
         if (info->label)
         {
-            vulkan_SetObjectName(renderer, VK_OBJECT_TYPE_DEVICE, (uint64_t)renderer->device, info->label);
+            renderer->SetObjectName(VK_OBJECT_TYPE_DEVICE, (uint64_t)renderer->device, info->label);
         }
 
         if (renderer->properties2.properties.apiVersion >= VK_API_VERSION_1_3)
@@ -4861,11 +4876,7 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
     vgpu_log_info("VGPU Driver: Vulkan");
     vgpu_log_info("Vulkan Adapter: %s", renderer->properties2.properties.deviceName);
 
-    VGPUDeviceImpl* device = new VGPUDeviceImpl();
-    ASSIGN_DRIVER(vulkan);
-
-    device->driverData = (VGPURenderer*)renderer;
-    return device;
+    return renderer;
 }
 
 VGPUDriver Vulkan_Driver = {
@@ -4881,9 +4892,11 @@ uint32_t vgpuToVkFormat(VGPUTextureFormat format)
 
 #else
 
+#include "vgpu_driver.h"
+
 uint32_t vgpuToVkFormat(VGPUTextureFormat format)
 {
-    _VGPU_UNUSED(format);
+    VGPU_UNUSED(format);
     return 0;
 }
 

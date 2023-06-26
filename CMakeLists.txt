@@ -165,6 +165,7 @@ set(SOURCE_FILES
     src/vgpu_driver.h
     src/vgpu_driver_d3d.h
     src/vgpu.cpp
+    src/vgpu_check.c
     src/vgpu_driver_vulkan.cpp
     src/vgpu_driver_webgpu.cpp
     src/vgpu_driver_d3d11.cpp

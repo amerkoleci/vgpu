@@ -234,11 +234,12 @@ void draw_frame()
 
         VGPURenderPassDepthStencilAttachment depthStencilAttachment{};
         depthStencilAttachment.texture = depthStencilTexture;
-        depthStencilAttachment.depthLoadOp = VGPULoadAction_Clear;
-        depthStencilAttachment.depthStoreOp = VGPUStoreAction_Store;
+        depthStencilAttachment.depthLoadAction = VGPULoadAction_Clear;
+        depthStencilAttachment.depthStoreAction = VGPUStoreAction_Store;
         depthStencilAttachment.depthClearValue = 1.0f;
 
         VGPURenderPassDesc renderPass{};
+        renderPass.label = "RenderPass";
         renderPass.colorAttachmentCount = 1u;
         renderPass.colorAttachments = &colorAttachment;
         renderPass.depthStencilAttachment = &depthStencilAttachment;
@@ -286,7 +287,7 @@ int main()
     vgpuPipelineLayoutRelease(pipelineLayout);
     vgpuPipelineRelease(renderPipeline);
     vgpuSwapChainRelease(swapChain);
-    vgpuDestroyDevice(device);
+    vgpuDeviceRelease(device);
     glfwDestroyWindow(window);
     glfwTerminate();
     return EXIT_SUCCESS;

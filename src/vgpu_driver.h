@@ -29,6 +29,7 @@
 #if defined(__clang__)
 #define VGPU_UNREACHABLE() __builtin_unreachable()
 #define VGPU_DEBUG_BREAK() __builtin_trap()
+#define VGPU_FORCE_INLINE inline __attribute__((__always_inline__))
 
 // CLANG ENABLE/DISABLE WARNING DEFINITION
 #define VGPU_DISABLE_WARNINGS() \
@@ -41,6 +42,7 @@
 #elif defined(__GNUC__) || defined(__GNUG__)
 #define VGPU_UNREACHABLE() __builtin_unreachable()
 #define VGPU_DEBUG_BREAK() __builtin_trap()
+#define VGPU_FORCE_INLINE inline __attribute__((__always_inline__))
 // GCC ENABLE/DISABLE WARNING DEFINITION
 #	define VGPU_DISABLE_WARNINGS() \
 	_Pragma("GCC diagnostic push") \
@@ -52,6 +54,7 @@
 #elif defined(_MSC_VER)
 #define VGPU_UNREACHABLE() __assume(false)
 #define VGPU_DEBUG_BREAK() __debugbreak()
+#define VGPU_FORCE_INLINE __forceinline
 #define VGPU_DISABLE_WARNINGS() __pragma(warning(push, 0))
 #define VGPU_ENABLE_WARNINGS() __pragma(warning(pop))
 #endif
@@ -74,6 +77,12 @@ namespace
         value |= value >> 16u;
         value |= value >> 32u;
         return ++value;
+    }
+
+    template <typename T>
+    VGPU_FORCE_INLINE T DivideByMultiple(T value, size_t alignment)
+    {
+        return (T)((value + alignment - 1) / alignment);
     }
 
     template <class T>
@@ -170,9 +179,9 @@ struct VGPUCommandBufferImpl
 public:
     virtual ~VGPUCommandBufferImpl() = default;
 
-    virtual void pushDebugGroup(const char* groupLabel) = 0;
-    virtual void popDebugGroup() = 0;
-    virtual void insertDebugMarker(const char* markerLabel) = 0;
+    virtual void PushDebugGroup(const char* groupLabel) = 0;
+    virtual void PopDebugGroup() = 0;
+    virtual void InsertDebugMarker(const char* markerLabel) = 0;
 
     virtual void SetPipeline(VGPUPipeline pipeline) = 0;
     virtual void SetPushConstants(uint32_t pushConstantIndex, const void* data, uint32_t size) = 0;
@@ -180,93 +189,62 @@ public:
     virtual void Dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ) = 0;
     virtual void DispatchIndirect(VGPUBuffer buffer, uint64_t offset) = 0;
 
-    virtual VGPUTexture acquireSwapchainTexture(VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight) = 0;
-    virtual void beginRenderPass(const VGPURenderPassDesc* desc) = 0;
-    virtual void endRenderPass() = 0;
+    virtual VGPUTexture AcquireSwapchainTexture(VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight) = 0;
+    virtual void BeginRenderPass(const VGPURenderPassDesc* desc) = 0;
+    virtual void EndRenderPass() = 0;
 
-    virtual void setViewport(const VGPUViewport* viewport) = 0;
-    virtual void setViewports(uint32_t count, const VGPUViewport* viewports) = 0;
+    virtual void SetViewport(const VGPUViewport* viewport) = 0;
+    virtual void SetViewports(uint32_t count, const VGPUViewport* viewports) = 0;
     virtual void SetScissorRect(const VGPURect* rect) = 0;
     virtual void SetScissorRects(uint32_t count, const VGPURect* rects) = 0;
 
-    virtual void setVertexBuffer(uint32_t index, VGPUBuffer buffer, uint64_t offset) = 0;
-    virtual void setIndexBuffer(VGPUBuffer buffer, VGPUIndexType type, uint64_t offset) = 0;
-    virtual void setStencilReference(uint32_t reference) = 0;
+    virtual void SetVertexBuffer(uint32_t index, VGPUBuffer buffer, uint64_t offset) = 0;
+    virtual void SetIndexBuffer(VGPUBuffer buffer, VGPUIndexType type, uint64_t offset) = 0;
+    virtual void SetStencilReference(uint32_t reference) = 0;
 
     virtual void BeginQuery(VGPUQueryHeap heap, uint32_t index) = 0;
     virtual void EndQuery(VGPUQueryHeap heap, uint32_t index) = 0;
     virtual void ResolveQuery(VGPUQueryHeap heap, uint32_t index, uint32_t count, VGPUBuffer destinationBuffer, uint64_t destinationOffset) = 0;
     virtual void ResetQuery(VGPUQueryHeap heap, uint32_t index, uint32_t count) = 0;
 
-    virtual void draw(uint32_t vertexStart, uint32_t vertexCount, uint32_t instanceCount, uint32_t firstInstance) = 0;
-    virtual void drawIndexed(uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t baseVertex, uint32_t firstInstance) = 0;
+    virtual void Draw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance) = 0;
+    virtual void DrawIndexed(uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t baseVertex, uint32_t firstInstance) = 0;
+    virtual void DrawIndirect(VGPUBuffer indirectBuffer, uint64_t indirectBufferOffset) = 0;
+    virtual void DrawIndexedIndirect(VGPUBuffer indirectBuffer, uint64_t indirectBufferOffset) = 0;
 };
 
-typedef struct VGPUDeviceImpl
+struct VGPUDeviceImpl : public VGPUObject
 {
-    void (*destroyDevice)(VGPUDevice device);
-    void(*setLabel)(VGPURenderer* driverData, const char* label);
+    virtual void WaitIdle() = 0;
+    virtual VGPUBackend GetBackendType() const = 0;
+    virtual VGPUBool32 QueryFeature(VGPUFeature feature) const = 0;
+    virtual void GetAdapterProperties(VGPUAdapterProperties* properties) const = 0;
+    virtual void GetLimits(VGPULimits* limits) const = 0;
 
-    void (*waitIdle)(VGPURenderer* driverData);
-    VGPUBackend(*getBackendType)(void);
-    VGPUBool32(*queryFeature)(VGPURenderer* driverData, VGPUFeature feature);
-    void (*getAdapterProperties)(VGPURenderer* driverData, VGPUAdapterProperties* properties);
-    void (*getLimits)(VGPURenderer* driverData, VGPULimits* limits);
+    virtual VGPUBuffer CreateBuffer(const VGPUBufferDesc* desc, const void* pInitialData) = 0;
+    virtual VGPUTexture CreateTexture(const VGPUTextureDesc* desc, const void* pInitialData) = 0;
 
-    VGPUBuffer(*createBuffer)(VGPURenderer* driverData, const VGPUBufferDesc* desc, const void* pInitialData);
+    virtual VGPUSampler CreateSampler(const VGPUSamplerDesc* desc) = 0;
 
-    VGPUTexture(*createTexture)(VGPURenderer* driverData, const VGPUTextureDesc* desc, const void* pInitialData);
+    virtual VGPUShaderModule CreateShaderModule(const void* pCode, size_t codeSize) = 0;
+    virtual void DestroyShaderModule(VGPUShaderModule resource) = 0;
 
-    VGPUSampler(*createSampler)(VGPURenderer* driverData, const VGPUSamplerDesc* desc);
+    virtual VGPUPipelineLayout CreatePipelineLayout(const VGPUPipelineLayoutDesc* desc) = 0;
 
-    VGPUShaderModule(*createShaderModule)(VGPURenderer* driverData, const void* pCode, size_t codeSize);
-    void(*destroyShaderModule)(VGPURenderer* driverData, VGPUShaderModule resource);
+    virtual VGPUPipeline CreateRenderPipeline(const VGPURenderPipelineDesc* desc) = 0;
+    virtual VGPUPipeline CreateComputePipeline(const VGPUComputePipelineDesc* desc) = 0;
+    virtual VGPUPipeline CreateRayTracingPipeline(const VGPURayTracingPipelineDesc* desc) = 0;
 
-    VGPUPipelineLayout(*createPipelineLayout)(VGPURenderer* driverData, const VGPUPipelineLayoutDesc* desc);
+    virtual VGPUQueryHeap CreateQueryHeap(const VGPUQueryHeapDesc* desc) = 0;
 
-    VGPUPipeline(*createRenderPipeline)(VGPURenderer* driverData, const VGPURenderPipelineDesc* desc);
-    VGPUPipeline(*createComputePipeline)(VGPURenderer* driverData, const VGPUComputePipelineDesc* desc);
-    VGPUPipeline(*createRayTracingPipeline)(VGPURenderer* driverData, const VGPURayTracingPipelineDesc* desc);
+    virtual VGPUSwapChain CreateSwapChain(void* windowHandle, const VGPUSwapChainDesc* desc) = 0;
 
-    VGPUQueryHeap(*createQueryHeap)(VGPURenderer* driverData, const VGPUQueryHeapDesc* desc);
+    virtual VGPUCommandBuffer BeginCommandBuffer(VGPUCommandQueue queueType, const char* label) = 0;
+    virtual uint64_t Submit(VGPUCommandBuffer* commandBuffers, uint32_t count) = 0;
 
-    VGPUSwapChain(*createSwapChain)(VGPURenderer* driverData, void* windowHandle, const VGPUSwapChainDesc* desc);
-
-    VGPUCommandBuffer(*beginCommandBuffer)(VGPURenderer* driverData, VGPUCommandQueue queueType, const char* label);
-    uint64_t(*submit)(VGPURenderer* driverData, VGPUCommandBuffer* commandBuffers, uint32_t count);
-
-    uint64_t(*getFrameCount)(VGPURenderer* driverData);
-    uint32_t(*getFrameIndex)(VGPURenderer* driverData);
-
-    /* Opaque pointer for the Driver */
-    VGPURenderer* driverData;
-} VGPUDeviceImpl;
-
-#define ASSIGN_DRIVER_FUNC(func, name) device->func = name##_##func;
-
-#define ASSIGN_DRIVER(name) \
-ASSIGN_DRIVER_FUNC(destroyDevice, name) \
-ASSIGN_DRIVER_FUNC(setLabel, name) \
-ASSIGN_DRIVER_FUNC(waitIdle, name) \
-ASSIGN_DRIVER_FUNC(getBackendType, name) \
-ASSIGN_DRIVER_FUNC(queryFeature, name) \
-ASSIGN_DRIVER_FUNC(getAdapterProperties, name) \
-ASSIGN_DRIVER_FUNC(getLimits, name) \
-ASSIGN_DRIVER_FUNC(createBuffer, name) \
-ASSIGN_DRIVER_FUNC(createTexture, name) \
-ASSIGN_DRIVER_FUNC(createSampler, name) \
-ASSIGN_DRIVER_FUNC(createShaderModule, name) \
-ASSIGN_DRIVER_FUNC(destroyShaderModule, name) \
-ASSIGN_DRIVER_FUNC(createPipelineLayout, name) \
-ASSIGN_DRIVER_FUNC(createRenderPipeline, name) \
-ASSIGN_DRIVER_FUNC(createComputePipeline, name) \
-ASSIGN_DRIVER_FUNC(createRayTracingPipeline, name) \
-ASSIGN_DRIVER_FUNC(createQueryHeap, name) \
-ASSIGN_DRIVER_FUNC(createSwapChain, name) \
-ASSIGN_DRIVER_FUNC(beginCommandBuffer, name) \
-ASSIGN_DRIVER_FUNC(submit, name) \
-ASSIGN_DRIVER_FUNC(getFrameCount, name) \
-ASSIGN_DRIVER_FUNC(getFrameIndex, name) \
+    virtual uint64_t GetFrameCount() = 0;
+    virtual uint32_t GetFrameIndex() = 0;
+};
 
 typedef struct VGPUDriver
 {
