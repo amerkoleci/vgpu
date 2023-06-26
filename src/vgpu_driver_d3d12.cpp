@@ -596,12 +596,6 @@ struct D3D12Sampler final : public VGPUSamplerImpl
     void SetLabel(const char* label) override;
 };
 
-struct D3D12Shader
-{
-    void* byteCode;
-    size_t byteCodeSize;
-};
-
 struct D3D12PipelineLayout final : public VGPUPipelineLayoutImpl
 {
     D3D12_Renderer* renderer = nullptr;
@@ -829,16 +823,13 @@ public:
     void SetLabel(const char* label) override;
     void WaitIdle() override;
     VGPUBackend GetBackendType() const override { return VGPUBackend_D3D12; }
-    VGPUBool32 QueryFeature(VGPUFeature feature) const override;
+    VGPUBool32 QueryFeatureSupport(VGPUFeature feature) const override;
     void GetAdapterProperties(VGPUAdapterProperties* properties) const override;
     void GetLimits(VGPULimits* limits) const override;
 
     VGPUBuffer CreateBuffer(const VGPUBufferDesc* desc, const void* pInitialData) override;
     VGPUTexture CreateTexture(const VGPUTextureDesc* desc, const void* pInitialData) override;
     VGPUSampler CreateSampler(const VGPUSamplerDesc* desc) override;
-
-    VGPUShaderModule CreateShaderModule(const void* pCode, size_t codeSize) override;
-    void DestroyShaderModule(VGPUShaderModule resource) override;
 
     VGPUPipelineLayout CreatePipelineLayout(const VGPUPipelineLayoutDesc* desc) override;
 
@@ -856,10 +847,12 @@ public:
     uint64_t GetFrameCount() override { return frameCount; }
     uint32_t GetFrameIndex() override { return frameIndex; }
 
+    void* GetNativeObject(VGPUNativeObjectType objectType) const override;
+
     void DeferDestroy(IUnknown* resource, D3D12MA::Allocation* allocation = nullptr);
     void ProcessDeletionQueue();
 
-    ComPtr<IDXGIFactory4> factory;
+    IDXGIFactory6* factory = nullptr;
     bool tearingSupported = false;
     ID3D12Device5* device = nullptr;
     D3D_FEATURE_LEVEL featureLevel{};
@@ -904,6 +897,17 @@ public:
     std::deque<std::pair<D3D12MA::Allocation*, uint64_t>> deferredAllocations;
     std::deque<std::pair<IUnknown*, uint64_t>> deferredReleases;
 };
+
+void* D3D12_Renderer::GetNativeObject(VGPUNativeObjectType objectType) const
+{
+    switch (objectType)
+    {
+        case VGPU_NATIVE_D3D12Device:
+            return device;
+        default:
+            return 0;
+    }
+}
 
 void D3D12_Renderer::DeferDestroy(IUnknown* resource, D3D12MA::Allocation* allocation)
 {
@@ -1370,7 +1374,7 @@ D3D12_Renderer::~D3D12_Renderer()
         device = nullptr;
     }
 
-    factory.Reset();
+    SAFE_RELEASE(factory);
 
 #if defined(_DEBUG) && WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
     {
@@ -1438,7 +1442,7 @@ void D3D12_Renderer::WaitIdle()
     ProcessDeletionQueue();
 }
 
-VGPUBool32 D3D12_Renderer::QueryFeature(VGPUFeature feature) const
+VGPUBool32 D3D12_Renderer::QueryFeatureSupport(VGPUFeature feature) const
 {
     switch (feature)
     {
@@ -1939,24 +1943,6 @@ VGPUSampler D3D12_Renderer::CreateSampler(const VGPUSamplerDesc* desc)
     return sampler;
 }
 
-/* ShaderModule */
-VGPUShaderModule D3D12_Renderer::CreateShaderModule(const void* pCode, size_t codeSize)
-{
-    D3D12Shader* shader = new D3D12Shader();
-    shader->byteCode = malloc(codeSize);
-    shader->byteCodeSize = codeSize;
-
-    memcpy(shader->byteCode, pCode, codeSize);
-    return (VGPUShaderModule)shader;
-}
-
-void D3D12_Renderer::DestroyShaderModule(VGPUShaderModule resource)
-{
-    D3D12Shader* shader = (D3D12Shader*)resource;
-    free(shader->byteCode);
-    delete shader;
-}
-
 /* PipelineLayout */
 D3D12PipelineLayout::~D3D12PipelineLayout()
 {
@@ -2064,10 +2050,41 @@ VGPUPipeline D3D12_Renderer::CreateRenderPipeline(const VGPURenderPipelineDesc* 
     pipeline->pipelineLayout = (D3D12PipelineLayout*)desc->layout;
     pipeline->pipelineLayout->AddRef();
 
-    D3D12Shader* vertexShader = (D3D12Shader*)desc->vertex.module;
-    D3D12Shader* fragmentShader = (D3D12Shader*)desc->fragment;
+    // PipelineStream
+    struct PSO_STREAM
+    {
+        struct PSO_STREAM1
+        {
+            CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE        pRootSignature;
+            CD3DX12_PIPELINE_STATE_STREAM_INPUT_LAYOUT          InputLayout;
+            CD3DX12_PIPELINE_STATE_STREAM_IB_STRIP_CUT_VALUE    IBStripCutValue;
+            CD3DX12_PIPELINE_STATE_STREAM_PRIMITIVE_TOPOLOGY    PrimitiveTopologyType;
+            CD3DX12_PIPELINE_STATE_STREAM_VS                    VS;
+            CD3DX12_PIPELINE_STATE_STREAM_HS                    HS;
+            CD3DX12_PIPELINE_STATE_STREAM_DS                    DS;
+            CD3DX12_PIPELINE_STATE_STREAM_GS                    GS;
+            CD3DX12_PIPELINE_STATE_STREAM_PS                    PS;
+            CD3DX12_PIPELINE_STATE_STREAM_BLEND_DESC            BlendState;
+            CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL1        DepthStencilState;
+            CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL_FORMAT  DSVFormat;
+            CD3DX12_PIPELINE_STATE_STREAM_RASTERIZER            RasterizerState;
+            CD3DX12_PIPELINE_STATE_STREAM_RENDER_TARGET_FORMATS RTVFormats;
+            CD3DX12_PIPELINE_STATE_STREAM_SAMPLE_DESC           SampleDesc;
+            CD3DX12_PIPELINE_STATE_STREAM_SAMPLE_MASK           SampleMask;
+        } stream1 = {};
 
-    std::vector<D3D12_INPUT_ELEMENT_DESC> inputElementDescs;
+        struct PSO_STREAM2
+        {
+            CD3DX12_PIPELINE_STATE_STREAM_AS AS;
+            CD3DX12_PIPELINE_STATE_STREAM_MS MS;
+        } stream2 = {};
+    } stream = {};
+
+    stream.stream1.pRootSignature = pipeline->pipelineLayout->handle;
+
+    // InputLayout
+    UINT NumElements = 0;
+    D3D12_INPUT_ELEMENT_DESC inputElements[VGPU_MAX_VERTEX_ATTRIBUTES] = {};
 
     for (uint32_t binding = 0; binding < desc->vertex.layoutCount; ++binding)
     {
@@ -2077,7 +2094,7 @@ VGPUPipeline D3D12_Renderer::CreateRenderPipeline(const VGPURenderPipelineDesc* 
         {
             const VGPUVertexAttribute& attribute = layout.attributes[attributeIndex];
 
-            D3D12_INPUT_ELEMENT_DESC inputElement;
+            D3D12_INPUT_ELEMENT_DESC& inputElement = inputElements[NumElements++];
             inputElement.SemanticName = "ATTRIBUTE";
             inputElement.SemanticIndex = attribute.shaderLocation;
             inputElement.Format = ToDxgiFormat(attribute.format);
@@ -2097,18 +2114,63 @@ VGPUPipeline D3D12_Renderer::CreateRenderPipeline(const VGPURenderPipelineDesc* 
                 inputElement.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA;
                 inputElement.InstanceDataStepRate = 1;
             }
-
-            inputElementDescs.push_back(inputElement);
         }
     }
 
-    D3D12_GRAPHICS_PIPELINE_STATE_DESC d3dDesc = {};
-    d3dDesc.pRootSignature = pipeline->pipelineLayout->handle;
-    d3dDesc.VS = { vertexShader->byteCode, vertexShader->byteCodeSize };
-    d3dDesc.PS = { fragmentShader->byteCode, fragmentShader->byteCodeSize };
+    D3D12_INPUT_LAYOUT_DESC inputLayout = {};
+    inputLayout.pInputElementDescs = inputElements;
+    inputLayout.NumElements = NumElements;
+    stream.stream1.InputLayout = inputLayout;
+
+    // Handle index strip
+    if (desc->primitiveTopology != VGPUPrimitiveTopology_TriangleStrip &&
+        desc->primitiveTopology != VGPUPrimitiveTopology_LineStrip)
+    {
+        stream.stream1.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
+    }
+    else
+    {
+        stream.stream1.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_0xFFFF;
+    }
+
+    for (uint32_t i = 0; i < desc->shaderStageCount; i++)
+    {
+        const VGPUShaderStageDesc& shader = desc->shaderStages[i];
+        if (shader.stage == VGPUShaderStage_Vertex)
+        {
+            stream.stream1.VS = { shader.bytecode, (SIZE_T)shader.size };
+        }
+        else if (shader.stage == VGPUShaderStage_Hull)
+        {
+            stream.stream1.HS = { shader.bytecode, (SIZE_T)shader.size };
+        }
+        else if (shader.stage == VGPUShaderStage_Domain)
+        {
+            stream.stream1.DS = { shader.bytecode, (SIZE_T)shader.size };
+        }
+        else if (shader.stage == VGPUShaderStage_Geometry)
+        {
+            stream.stream1.GS = { shader.bytecode, (SIZE_T)shader.size };
+        }
+        else if (shader.stage == VGPUShaderStage_Fragment)
+        {
+            stream.stream1.PS = { shader.bytecode, (SIZE_T)shader.size };
+        }
+        else if (shader.stage == VGPUShaderStage_Amplification)
+        {
+            stream.stream2.AS = { shader.bytecode, shader.size };
+        }
+        else if (shader.stage == VGPUShaderStage_Mesh)
+        {
+            stream.stream2.MS = { shader.bytecode, shader.size };
+        }
+    }
 
     // Color Attachments + RTV
-    D3D12_BLEND_DESC blendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+    D3D12_RT_FORMAT_ARRAY RTVFormats = {};
+    RTVFormats.NumRenderTargets = 0;
+
+    CD3DX12_BLEND_DESC blendState = {};
     blendState.AlphaToCoverageEnable = desc->blendState.alphaToCoverageEnable ? TRUE : FALSE;
     blendState.IndependentBlendEnable = desc->blendState.independentBlendEnable ? TRUE : FALSE;
     for (uint32_t i = 0; i < desc->colorFormatCount; ++i)
@@ -2129,12 +2191,11 @@ VGPUPipeline D3D12_Renderer::CreateRenderPipeline(const VGPURenderPipelineDesc* 
         blendState.RenderTarget[i].RenderTargetWriteMask = D3D12RenderTargetWriteMask(attachment.colorWriteMask);
 
         // RTV
-        d3dDesc.RTVFormats[d3dDesc.NumRenderTargets] = ToDxgiFormat(desc->colorFormats[i]);
-        d3dDesc.NumRenderTargets++;
+        RTVFormats.RTFormats[RTVFormats.NumRenderTargets] = ToDxgiFormat(desc->colorFormats[i]);
+        RTVFormats.NumRenderTargets++;
     }
-
-    d3dDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
-    d3dDesc.SampleMask = UINT_MAX;
+    stream.stream1.RTVFormats = RTVFormats;
+    stream.stream1.BlendState = blendState;
 
     // RasterizerState
     CD3DX12_RASTERIZER_DESC rasterizerState{};
@@ -2149,66 +2210,91 @@ VGPUPipeline D3D12_Renderer::CreateRenderPipeline(const VGPURenderPipelineDesc* 
     rasterizerState.AntialiasedLineEnable = FALSE;
     rasterizerState.ForcedSampleCount = 0;
     rasterizerState.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
-    d3dDesc.RasterizerState = rasterizerState;
+    stream.stream1.RasterizerState = rasterizerState;
 
     // DepthStencilState
+    CD3DX12_DEPTH_STENCIL_DESC1 depthStencilState{};
     const D3D12_DEPTH_STENCILOP_DESC defaultStencilOp = { D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, D3D12_COMPARISON_FUNC_ALWAYS };
     if (desc->depthStencilFormat != VGPUTextureFormat_Undefined)
     {
-        d3dDesc.DepthStencilState.DepthEnable = desc->depthStencilState.depthCompareFunction != VGPUCompareFunction_Always || desc->depthStencilState.depthWriteEnabled;
-        d3dDesc.DepthStencilState.DepthWriteMask = desc->depthStencilState.depthWriteEnabled ? D3D12_DEPTH_WRITE_MASK_ALL : D3D12_DEPTH_WRITE_MASK_ZERO;
-        d3dDesc.DepthStencilState.DepthFunc = ToD3D12(desc->depthStencilState.depthCompareFunction);
-        d3dDesc.DepthStencilState.StencilEnable = vgpuStencilTestEnabled(&desc->depthStencilState);
-        d3dDesc.DepthStencilState.StencilReadMask = static_cast<UINT8>(desc->depthStencilState.stencilReadMask);
-        d3dDesc.DepthStencilState.StencilWriteMask = static_cast<UINT8>(desc->depthStencilState.stencilWriteMask);
-        d3dDesc.DepthStencilState.FrontFace = ToD3D12StencilOpDesc(desc->depthStencilState.stencilFront);
-        d3dDesc.DepthStencilState.BackFace = ToD3D12StencilOpDesc(desc->depthStencilState.stencilBack);
+        depthStencilState.DepthEnable = desc->depthStencilState.depthCompareFunction != VGPUCompareFunction_Always || desc->depthStencilState.depthWriteEnabled;
+        depthStencilState.DepthWriteMask = desc->depthStencilState.depthWriteEnabled ? D3D12_DEPTH_WRITE_MASK_ALL : D3D12_DEPTH_WRITE_MASK_ZERO;
+        depthStencilState.DepthFunc = ToD3D12(desc->depthStencilState.depthCompareFunction);
+        depthStencilState.StencilEnable = vgpuStencilTestEnabled(&desc->depthStencilState);
+        depthStencilState.StencilReadMask = static_cast<UINT8>(desc->depthStencilState.stencilReadMask);
+        depthStencilState.StencilWriteMask = static_cast<UINT8>(desc->depthStencilState.stencilWriteMask);
+        depthStencilState.FrontFace = ToD3D12StencilOpDesc(desc->depthStencilState.stencilFront);
+        depthStencilState.BackFace = ToD3D12StencilOpDesc(desc->depthStencilState.stencilBack);
+
+        if (d3dFeatures.DepthBoundsTestSupported() == TRUE)
+        {
+            depthStencilState.DepthBoundsTestEnable = desc->depthStencilState.depthBoundsTestEnable ? TRUE : FALSE;
+        }
+        else
+        {
+            depthStencilState.DepthBoundsTestEnable = FALSE;
+        }
     }
     else
     {
-        d3dDesc.DepthStencilState.DepthEnable = FALSE;
-        d3dDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
-        d3dDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_ALWAYS;
-        d3dDesc.DepthStencilState.StencilEnable = FALSE;
-        d3dDesc.DepthStencilState.StencilReadMask = D3D12_DEFAULT_STENCIL_READ_MASK;
-        d3dDesc.DepthStencilState.StencilWriteMask = D3D12_DEFAULT_STENCIL_WRITE_MASK;
-        d3dDesc.DepthStencilState.FrontFace = defaultStencilOp;
-        d3dDesc.DepthStencilState.BackFace = defaultStencilOp;
-        //d3dDesc.DepthStencilState.DepthBoundsTestEnable = FALSE;
+        depthStencilState.DepthEnable = FALSE;
+        depthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+        depthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+        depthStencilState.StencilEnable = FALSE;
+        depthStencilState.StencilReadMask = D3D12_DEFAULT_STENCIL_READ_MASK;
+        depthStencilState.StencilWriteMask = D3D12_DEFAULT_STENCIL_WRITE_MASK;
+        depthStencilState.FrontFace = defaultStencilOp;
+        depthStencilState.BackFace = defaultStencilOp;
+        depthStencilState.DepthBoundsTestEnable = FALSE;
     }
-    d3dDesc.InputLayout = { inputElementDescs.data(), (UINT)inputElementDescs.size() };
-    d3dDesc.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
+    stream.stream1.DepthStencilState = depthStencilState;
+    stream.stream1.DSVFormat = ToDxgiFormat(desc->depthStencilFormat);
 
     switch (desc->primitiveTopology)
     {
         case VGPUPrimitiveTopology_PointList:
-            d3dDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT;
+            stream.stream1.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT;
             break;
         case VGPUPrimitiveTopology_LineList:
         case VGPUPrimitiveTopology_LineStrip:
-            d3dDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE;
+            stream.stream1.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE;
             break;
         case VGPUPrimitiveTopology_TriangleList:
         case VGPUPrimitiveTopology_TriangleStrip:
-            d3dDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+            stream.stream1.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
             break;
         case VGPUPrimitiveTopology_PatchList:
-            d3dDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_PATCH;
+            stream.stream1.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_PATCH;
             break;
     }
+    pipeline->primitiveTopology = ToD3DPrimitiveTopology(desc->primitiveTopology, desc->patchControlPoints);
 
-    // DSV format
-    d3dDesc.DSVFormat = ToDxgiFormat(desc->depthStencilFormat);
-    d3dDesc.SampleDesc.Count = desc->sampleCount;
+    // SampleDesc and SampleMask
+    DXGI_SAMPLE_DESC sampleDesc = {};
+    sampleDesc.Count = desc->sampleCount;
+    sampleDesc.Quality = 0;
+    stream.stream1.SampleDesc = sampleDesc;
+    stream.stream1.SampleMask = UINT_MAX;
 
-    if (FAILED(device->CreateGraphicsPipelineState(&d3dDesc, IID_PPV_ARGS(&pipeline->handle))))
+    D3D12_PIPELINE_STATE_STREAM_DESC streamDesc = {};
+    streamDesc.pPipelineStateSubobjectStream = &stream;
+    streamDesc.SizeInBytes = sizeof(stream.stream1);
+    if (QueryFeatureSupport(VGPUFeature_MeshShader))
+    {
+        streamDesc.SizeInBytes += sizeof(stream.stream2);
+    }
+
+    if (FAILED(device->CreatePipelineState(&streamDesc, IID_PPV_ARGS(&pipeline->handle))))
     {
         delete pipeline;
         return nullptr;
     }
 
-    D3D12SetName(pipeline->handle, desc->label);
-    pipeline->primitiveTopology = ToD3DPrimitiveTopology(desc->primitiveTopology, desc->patchControlPoints);
+    if (desc->label)
+    {
+        pipeline->SetLabel(desc->label);
+    }
+
     return pipeline;
 }
 
@@ -2220,8 +2306,6 @@ VGPUPipeline D3D12_Renderer::CreateComputePipeline(const VGPUComputePipelineDesc
     pipeline->pipelineLayout = (D3D12PipelineLayout*)desc->layout;
     pipeline->pipelineLayout->AddRef();
 
-    D3D12Shader* shader = (D3D12Shader*)desc->shader;
-
     struct PSO_STREAM
     {
         CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE pRootSignature;
@@ -2229,7 +2313,7 @@ VGPUPipeline D3D12_Renderer::CreateComputePipeline(const VGPUComputePipelineDesc
     } stream;
 
     stream.pRootSignature = pipeline->pipelineLayout->handle;
-    stream.CS = { shader->byteCode, shader->byteCodeSize };
+    stream.CS = { desc->computeShader.bytecode, (SIZE_T)desc->computeShader.size };
 
     D3D12_PIPELINE_STATE_STREAM_DESC streamDesc = {};
     streamDesc.pPipelineStateSubobjectStream = &stream;
@@ -2241,7 +2325,11 @@ VGPUPipeline D3D12_Renderer::CreateComputePipeline(const VGPUComputePipelineDesc
         return nullptr;
     }
 
-    D3D12SetName(pipeline->handle, desc->label);
+    if (desc->label)
+    {
+        pipeline->SetLabel(desc->label);
+    }
+
     return pipeline;
 }
 
@@ -2444,6 +2532,8 @@ void D3D12CommandBuffer::Reset()
 
 void D3D12CommandBuffer::Begin(uint32_t frameIndex, const char* label)
 {
+    Reset();
+
     VHR(commandAllocators[frameIndex]->Reset());
     VHR(commandList->Reset(commandAllocators[frameIndex], nullptr));
 
@@ -2454,11 +2544,16 @@ void D3D12CommandBuffer::Begin(uint32_t frameIndex, const char* label)
             renderer->resourceDescriptorHeap.handle,
             renderer->samplerDescriptorHeap.handle
         };
-        commandList->SetDescriptorHeaps(static_cast<UINT>(std::size(heaps)), heaps);
+        commandList->SetDescriptorHeaps(2u, heaps);
     }
 
     if (queueType == VGPUCommandQueue_Graphics)
     {
+        for (uint32_t i = 0; i < D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT; ++i)
+        {
+            vboViews[i] = {};
+        }
+
         D3D12_RECT pRects[D3D12_VIEWPORT_AND_SCISSORRECT_MAX_INDEX + 1];
         for (uint32_t i = 0; i < _countof(pRects); ++i)
         {
@@ -2468,13 +2563,11 @@ void D3D12CommandBuffer::Begin(uint32_t frameIndex, const char* label)
             pRects[i].top = D3D12_VIEWPORT_BOUNDS_MIN;
         }
         commandList->RSSetScissorRects(_countof(pRects), pRects);
+
+        static constexpr float defaultBlendFactor[4] = { 0, 0, 0, 0 };
+        commandList->OMSetBlendFactor(defaultBlendFactor);
+        commandList->OMSetStencilRef(0);
     }
-
-    Reset();
-
-    static constexpr float defaultBlendFactor[4] = { 0, 0, 0, 0 };
-    commandList->OMSetBlendFactor(defaultBlendFactor);
-    commandList->OMSetStencilRef(0);
 
     if (label)
     {
@@ -3242,7 +3335,7 @@ static VGPUDeviceImpl* d3d12_createDevice(const VGPUDeviceDescriptor* info)
 #endif
     }
 
-    if (FAILED(vgpuCreateDXGIFactory2(dxgiFactoryFlags, IID_PPV_ARGS(renderer->factory.ReleaseAndGetAddressOf()))))
+    if (FAILED(vgpuCreateDXGIFactory2(dxgiFactoryFlags, IID_PPV_ARGS(&renderer->factory))))
     {
         delete renderer;
         return nullptr;
@@ -3251,13 +3344,7 @@ static VGPUDeviceImpl* d3d12_createDevice(const VGPUDeviceDescriptor* info)
     // Determines whether tearing support is available for fullscreen borderless windows.
     {
         BOOL allowTearing = FALSE;
-
-        ComPtr<IDXGIFactory5> dxgiFactory5;
-        HRESULT hr = renderer->factory.As(&dxgiFactory5);
-        if (SUCCEEDED(hr))
-        {
-            hr = dxgiFactory5->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &allowTearing, sizeof(allowTearing));
-        }
+        HRESULT hr = renderer->factory->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &allowTearing, sizeof(allowTearing));
 
         if (FAILED(hr) || !allowTearing)
         {
@@ -3273,17 +3360,7 @@ static VGPUDeviceImpl* d3d12_createDevice(const VGPUDeviceDescriptor* info)
     }
 
     {
-        ComPtr<IDXGIFactory6> dxgiFactory6;
-        const bool queryByPreference = SUCCEEDED(renderer->factory.As(&dxgiFactory6));
         const DXGI_GPU_PREFERENCE gpuPreference = (info->powerPreference == VGPUPowerPreference_LowPower) ? DXGI_GPU_PREFERENCE_MINIMUM_POWER : DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE;
-
-        auto NextAdapter = [&](uint32_t index, IDXGIAdapter1** ppAdapter)
-        {
-            if (queryByPreference)
-                return dxgiFactory6->EnumAdapterByGpuPreference(index, gpuPreference, IID_PPV_ARGS(ppAdapter));
-            else
-                return renderer->factory->EnumAdapters1(index, ppAdapter);
-        };
 
         static constexpr D3D_FEATURE_LEVEL s_featureLevels[] =
         {
@@ -3295,7 +3372,9 @@ static VGPUDeviceImpl* d3d12_createDevice(const VGPUDeviceDescriptor* info)
         };
 
         ComPtr<IDXGIAdapter1> dxgiAdapter = nullptr;
-        for (uint32_t i = 0; NextAdapter(i, dxgiAdapter.ReleaseAndGetAddressOf()) != DXGI_ERROR_NOT_FOUND; ++i)
+        for (uint32_t i = 0;
+            renderer->factory->EnumAdapterByGpuPreference(i, gpuPreference, IID_PPV_ARGS(dxgiAdapter.ReleaseAndGetAddressOf())) != DXGI_ERROR_NOT_FOUND;
+            ++i)
         {
             DXGI_ADAPTER_DESC1 adapterDesc;
             dxgiAdapter->GetDesc1(&adapterDesc);
@@ -3339,15 +3418,14 @@ static VGPUDeviceImpl* d3d12_createDevice(const VGPUDeviceDescriptor* info)
         // Assign label object.
         if (info->label)
         {
-            std::wstring wide_name = UTF8ToWStr(info->label);
-            renderer->device->SetName(wide_name.c_str());
+            renderer->SetLabel(info->label);
         }
 
         if (info->validationMode != VGPUValidationMode_Disabled)
         {
             // Configure debug device (if active).
-            ComPtr<ID3D12InfoQueue> infoQueue;
-            if (SUCCEEDED(renderer->device->QueryInterface(infoQueue.GetAddressOf())))
+            ID3D12InfoQueue* infoQueue = nullptr;
+            if (SUCCEEDED(renderer->device->QueryInterface(&infoQueue)))
             {
                 infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, TRUE);
                 infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, TRUE);
@@ -3387,12 +3465,14 @@ static VGPUDeviceImpl* d3d12_createDevice(const VGPUDeviceDescriptor* info)
                 infoQueue->PushEmptyStorageFilter();
 
                 infoQueue->AddStorageFilterEntries(&filter);
+                infoQueue->Release();
             }
 
-            ComPtr<ID3D12InfoQueue1> infoQueue1 = nullptr;
-            if (SUCCEEDED(renderer->device->QueryInterface(infoQueue1.GetAddressOf())))
+            ID3D12InfoQueue1* infoQueue1 = nullptr;
+            if (SUCCEEDED(renderer->device->QueryInterface(&infoQueue1)))
             {
                 infoQueue1->RegisterMessageCallback(_D3D12_DebugMessageCallback, D3D12_MESSAGE_CALLBACK_FLAG_NONE, renderer, &renderer->callbackCookie);
+                infoQueue1->Release();
             }
         }
 

@@ -167,26 +167,26 @@ uint32_t vgpuDeviceRelease(VGPUDevice device)
     return device->Release();
 }
 
-void vgpuWaitIdle(VGPUDevice device)
+void vgpuDeviceWaitIdle(VGPUDevice device)
 {
     device->WaitIdle();
 }
 
-VGPUBackend vgpuGetBackend(VGPUDevice device)
+VGPUBackend vgpuDeviceGetBackend(VGPUDevice device)
 {
     return device->GetBackendType();
 }
 
-VGPUBool32 vgpuQueryFeature(VGPUDevice device, VGPUFeature feature)
+VGPUBool32 vgpuDeviceQueryFeatureSupport(VGPUDevice device, VGPUFeature feature)
 {
     if (device == NULL) {
         return false;
     }
 
-    return device->QueryFeature(feature);
+    return device->QueryFeatureSupport(feature);
 }
 
-void vgpuGetAdapterProperties(VGPUDevice device, VGPUAdapterProperties* properties)
+void vgpuDeviceGetAdapterProperties(VGPUDevice device, VGPUAdapterProperties* properties)
 {
     VGPU_ASSERT(device);
     NULL_RETURN(properties);
@@ -194,7 +194,7 @@ void vgpuGetAdapterProperties(VGPUDevice device, VGPUAdapterProperties* properti
     device->GetAdapterProperties(properties);
 }
 
-void vgpuGetLimits(VGPUDevice device, VGPULimits* limits)
+void vgpuDeviceGetLimits(VGPUDevice device, VGPULimits* limits)
 {
     VGPU_ASSERT(device);
     NULL_RETURN(limits);
@@ -202,7 +202,7 @@ void vgpuGetLimits(VGPUDevice device, VGPULimits* limits)
     device->GetLimits(limits);
 }
 
-uint64_t vgpuSubmit(VGPUDevice device, VGPUCommandBuffer* commandBuffers, uint32_t count)
+uint64_t vgpuDeviceSubmit(VGPUDevice device, VGPUCommandBuffer* commandBuffers, uint32_t count)
 {
     VGPU_ASSERT(device);
     VGPU_ASSERT(commandBuffers);
@@ -211,14 +211,19 @@ uint64_t vgpuSubmit(VGPUDevice device, VGPUCommandBuffer* commandBuffers, uint32
     return device->Submit(commandBuffers, count);
 }
 
-uint64_t vgpuGetFrameCount(VGPUDevice device)
+uint64_t vgpuDeviceGetFrameCount(VGPUDevice device)
 {
     return device->GetFrameCount();
 }
 
-uint32_t vgpuGetFrameIndex(VGPUDevice device)
+uint32_t vgpuDeviceGetFrameIndex(VGPUDevice device)
 {
     return device->GetFrameIndex();
+}
+
+void* vgpuDeviceGetNativeObject(VGPUDevice device, VGPUNativeObjectType objectType)
+{
+    return device->GetNativeObject(objectType);
 }
 
 /* Buffer */
@@ -438,23 +443,6 @@ uint32_t vgpuSamplerRelease(VGPUSampler sampler)
     return sampler->Release();
 }
 
-/* Shader Module */
-VGPUShaderModule vgpuCreateShaderModule(VGPUDevice device, const void* pCode, size_t codeSize)
-{
-    VGPU_ASSERT(device);
-    NULL_RETURN_NULL(pCode);
-
-    return device->CreateShaderModule(pCode, codeSize);
-}
-
-void vgpuDestroyShaderModule(VGPUDevice device, VGPUShaderModule module)
-{
-    VGPU_ASSERT(device);
-    NULL_RETURN(module);
-
-    device->DestroyShaderModule(module);
-}
-
 /* PipelineLayout */
 static VGPUPipelineLayoutDesc _VGPUPipelineLayoutDesc_Def(const VGPUPipelineLayoutDesc* desc)
 {
@@ -522,7 +510,8 @@ VGPUPipeline vgpuCreateRenderPipeline(VGPUDevice device, const VGPURenderPipelin
     VGPU_ASSERT(device);
     NULL_RETURN_NULL(desc);
     VGPU_ASSERT(desc->layout);
-    VGPU_ASSERT(desc->vertex.module);
+    VGPU_ASSERT(desc->shaderStageCount > 0);
+    VGPU_ASSERT(desc->shaderStages != nullptr);
 
     VGPURenderPipelineDesc desc_def = _vgpuRenderPipelineDescDef(desc);
     return device->CreateRenderPipeline(&desc_def);
@@ -534,7 +523,9 @@ VGPUPipeline vgpuCreateComputePipeline(VGPUDevice device, const VGPUComputePipel
 
     NULL_RETURN_NULL(desc);
     VGPU_ASSERT(desc->layout);
-    VGPU_ASSERT(desc->shader);
+    VGPU_ASSERT(desc->computeShader.stage == VGPUShaderStage_Compute);
+    VGPU_ASSERT(desc->computeShader.bytecode != nullptr);
+    VGPU_ASSERT(desc->computeShader.size > 0);
 
     return device->CreateComputePipeline(desc);
 }

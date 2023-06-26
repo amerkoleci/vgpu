@@ -40,6 +40,7 @@
 
 #define VGPU_MAX_INFLIGHT_FRAMES (2u)
 #define VGPU_MAX_COLOR_ATTACHMENTS (8u)
+#define VGPU_MAX_VERTEX_ATTRIBUTES (16u)
 #define VGPU_WHOLE_SIZE (0xffffffffffffffffULL)
 
 typedef uint32_t VGPUBool32;
@@ -51,7 +52,6 @@ typedef struct VGPUBufferImpl* VGPUBuffer;
 typedef struct VGPUTextureImpl* VGPUTexture;
 typedef struct VGPUTextureViewImpl* VGPUTextureView;
 typedef struct VGPUSamplerImpl* VGPUSampler;
-typedef struct VGPUShaderModuleImpl* VGPUShaderModule;
 typedef struct VGPUPipelineLayoutImpl* VGPUPipelineLayout;
 typedef struct VGPUPipelineImpl* VGPUPipeline;
 typedef struct VGPUQueryHeapImpl* VGPUQueryHeap;
@@ -750,9 +750,14 @@ typedef struct VGPUPipelineLayoutDesc {
     const VGPUPushConstantRange* pushConstantRanges;
 } VGPUPipelineLayoutDesc;
 
+typedef struct VGPUShaderStageDesc {
+    VGPUShaderStage stage;
+    const void*     bytecode;
+    uint64_t        size;
+    const char*     entryPoint;
+} VGPUShaderStageDesc;
 
-typedef struct VGPURenderTargetBlendState
-{
+typedef struct VGPURenderTargetBlendState {
     VGPUBool32              blendEnabled;
     VGPUBlendFactor         srcColorBlendFactor;
     VGPUBlendFactor         dstColorBlendFactor;
@@ -763,16 +768,14 @@ typedef struct VGPURenderTargetBlendState
     VGPUColorWriteMaskFlags colorWriteMask;
 } VGPURenderTargetBlendState;
 
-typedef struct VGPUBlendState
-{
+typedef struct VGPUBlendState {
     VGPUBool32 alphaToCoverageEnable;
     VGPUBool32 independentBlendEnable;
 
     VGPURenderTargetBlendState renderTargets[VGPU_MAX_COLOR_ATTACHMENTS];
 } VGPUBlendState;
 
-typedef struct VGPURasterizerState
-{
+typedef struct VGPURasterizerState {
     VGPUFillMode fillMode;
     VGPUCullMode cullMode;
     VGPUBool32 frontFaceCounterClockwise;
@@ -796,6 +799,7 @@ typedef struct VGPUDepthStencilState {
     VGPUStencilFaceState stencilBack;
     uint32_t stencilReadMask;
     uint32_t stencilWriteMask;
+    VGPUBool32 depthBoundsTestEnable;
 } VGPUDepthStencilState;
 
 typedef struct VGPUVertexAttribute {
@@ -812,7 +816,6 @@ typedef struct VGPUVertexBufferLayout {
 } VGPUVertexBufferLayout;
 
 typedef struct VGPUVertexState {
-    VGPUShaderModule module;
     uint32_t layoutCount;
     const VGPUVertexBufferLayout* layouts;
 } VGPUVertexState;
@@ -820,8 +823,11 @@ typedef struct VGPUVertexState {
 typedef struct VGPURenderPipelineDesc {
     const char* label;
     VGPUPipelineLayout          layout;
+
+    uint32_t                    shaderStageCount;
+    const VGPUShaderStageDesc*  shaderStages;
+
     VGPUVertexState             vertex;
-    VGPUShaderModule            fragment;
 
     VGPUBlendState              blendState;
     VGPURasterizerState         rasterizerState;
@@ -837,9 +843,9 @@ typedef struct VGPURenderPipelineDesc {
 } VGPURenderPipelineDesc;
 
 typedef struct VGPUComputePipelineDesc {
-    const char* label;
-    VGPUPipelineLayout layout;
-    VGPUShaderModule shader;
+    const char*         label;
+    VGPUPipelineLayout  layout;
+    VGPUShaderStageDesc computeShader;
 } VGPUComputePipelineDesc;
 
 typedef struct VGPURayTracingPipelineDesc {
@@ -910,6 +916,14 @@ typedef struct VGPULimits {
     uint32_t rayTracingMaxGeometryCount;
 } VGPULimits;
 
+typedef uint32_t VGPUNativeObjectType;
+
+#define VGPU_NATIVE_D3D12Device (0x00020001)
+
+#define VGPU_NATIVE_VkDevice (0x00030001)
+#define VGPU_NATIVE_VkPhysicalDevice (0x00030002)
+#define VGPU_NATIVE_VkInstance (0x00030003)
+
 typedef void (*VGPULogCallback)(VGPULogLevel level, const char* message, void* userData);
 VGPU_API void vgpuSetLogCallback(VGPULogCallback func, void* userData);
 
@@ -919,14 +933,15 @@ VGPU_API void vgpuDeviceSetLabel(VGPUDevice device, const char* label);
 VGPU_API uint32_t vgpuDeviceAddRef(VGPUDevice device);
 VGPU_API uint32_t vgpuDeviceRelease(VGPUDevice device);
 
-VGPU_API void vgpuWaitIdle(VGPUDevice device);
-VGPU_API VGPUBackend vgpuGetBackend(VGPUDevice device);
-VGPU_API VGPUBool32 vgpuQueryFeature(VGPUDevice device, VGPUFeature feature);
-VGPU_API void vgpuGetAdapterProperties(VGPUDevice device, VGPUAdapterProperties* properties);
-VGPU_API void vgpuGetLimits(VGPUDevice device, VGPULimits* limits);
-VGPU_API uint64_t vgpuSubmit(VGPUDevice device, VGPUCommandBuffer* commandBuffers, uint32_t count);
-VGPU_API uint64_t vgpuGetFrameCount(VGPUDevice device);
-VGPU_API uint32_t vgpuGetFrameIndex(VGPUDevice device);
+VGPU_API void vgpuDeviceWaitIdle(VGPUDevice device);
+VGPU_API VGPUBackend vgpuDeviceGetBackend(VGPUDevice device);
+VGPU_API VGPUBool32 vgpuDeviceQueryFeatureSupport(VGPUDevice device, VGPUFeature feature);
+VGPU_API void vgpuDeviceGetAdapterProperties(VGPUDevice device, VGPUAdapterProperties* properties);
+VGPU_API void vgpuDeviceGetLimits(VGPUDevice device, VGPULimits* limits);
+VGPU_API uint64_t vgpuDeviceSubmit(VGPUDevice device, VGPUCommandBuffer* commandBuffers, uint32_t count);
+VGPU_API uint64_t vgpuDeviceGetFrameCount(VGPUDevice device);
+VGPU_API uint32_t vgpuDeviceGetFrameIndex(VGPUDevice device);
+VGPU_API void* vgpuDeviceGetNativeObject(VGPUDevice device, VGPUNativeObjectType objectType);
 
 /* Buffer */
 VGPU_API VGPUBuffer vgpuCreateBuffer(VGPUDevice device, const VGPUBufferDesc* desc, const void* pInitialData);
@@ -950,10 +965,6 @@ VGPU_API VGPUSampler vgpuCreateSampler(VGPUDevice device, const VGPUSamplerDesc*
 VGPU_API void vgpuSamplerSetLabel(VGPUSampler sampler, const char* label);
 VGPU_API uint32_t vgpuSamplerAddRef(VGPUSampler sampler);
 VGPU_API uint32_t vgpuSamplerRelease(VGPUSampler sampler);
-
-/* ShaderModule */
-VGPU_API VGPUShaderModule vgpuCreateShaderModule(VGPUDevice device, const void* pCode, size_t codeSize);
-VGPU_API void vgpuDestroyShaderModule(VGPUDevice device, VGPUShaderModule module);
 
 /* PipelineLayout */
 VGPU_API VGPUPipelineLayout vgpuCreatePipelineLayout(VGPUDevice device, const VGPUPipelineLayoutDesc* desc);

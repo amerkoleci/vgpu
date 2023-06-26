@@ -802,6 +802,9 @@ struct VulkanTexture final : public VGPUTextureImpl
 
     VGPUTextureDimension GetDimension() const override { return dimension; }
     VGPUTextureFormat GetFormat() const override { return format; }
+
+    VkImageView GetView(uint32_t baseMipLevel, uint32_t levelCount, uint32_t baseArrayLayer, uint32_t layerCount);
+    VkImageView GetRTV(uint32_t level, uint32_t slice);
 };
 
 struct VulkanSampler final : public VGPUSamplerImpl
@@ -811,11 +814,6 @@ struct VulkanSampler final : public VGPUSamplerImpl
 
     ~VulkanSampler() override;
     void SetLabel(const char* label) override;
-};
-
-struct VulkanShader
-{
-    VkShaderModule handle;
 };
 
 struct VulkanPipelineLayout final : public VGPUPipelineLayoutImpl
@@ -880,8 +878,9 @@ struct VulkanSwapChain final : public VGPUSwapChainImpl
 class VulkanCommandBuffer final : public VGPUCommandBufferImpl
 {
 public:
-    VulkanRenderer* renderer;
-    bool hasLabel;
+    VulkanRenderer* renderer = nullptr;
+    VGPUCommandQueue queueType;
+
     VkCommandPool commandPools[VGPU_MAX_INFLIGHT_FRAMES];
     VkCommandBuffer commandBuffers[VGPU_MAX_INFLIGHT_FRAMES];
     VkCommandBuffer commandBuffer;
@@ -890,6 +889,7 @@ public:
     VkClearValue clearValues[VGPU_MAX_COLOR_ATTACHMENTS + 1];
 
     VulkanPipeline* currentPipeline = nullptr;
+    bool hasLabel = false;
     bool insideRenderPass = false;
     bool hasRenderPassLabel = false;
     std::vector<VulkanSwapChain*> swapChains;
@@ -972,7 +972,7 @@ struct Vulkan_UploadContext
     uint64_t target = 0;
 
     uint64_t uploadBufferSize = 0;
-    VGPUBuffer uploadBuffer = nullptr;
+    VulkanBuffer* uploadBuffer = nullptr;
     void* uploadBufferData = nullptr;
 };
 
@@ -984,16 +984,16 @@ public:
     void SetLabel(const char* label) override;
     void WaitIdle() override;
     VGPUBackend GetBackendType() const override { return VGPUBackend_Vulkan; }
-    VGPUBool32 QueryFeature(VGPUFeature feature) const override;
+    VGPUBool32 QueryFeatureSupport(VGPUFeature feature) const override;
     void GetAdapterProperties(VGPUAdapterProperties* properties) const override;
     void GetLimits(VGPULimits* limits) const override;
+
+    uint64_t GetFrameCount() override { return frameCount; }
+    uint32_t GetFrameIndex() override { return frameIndex; }
 
     VGPUBuffer CreateBuffer(const VGPUBufferDesc* desc, const void* pInitialData) override;
     VGPUTexture CreateTexture(const VGPUTextureDesc* desc, const void* pInitialData) override;
     VGPUSampler CreateSampler(const VGPUSamplerDesc* desc) override;
-
-    VGPUShaderModule CreateShaderModule(const void* pCode, size_t codeSize) override;
-    void DestroyShaderModule(VGPUShaderModule resource) override;
 
     VGPUPipelineLayout CreatePipelineLayout(const VGPUPipelineLayoutDesc* desc) override;
 
@@ -1008,10 +1008,13 @@ public:
     VGPUCommandBuffer BeginCommandBuffer(VGPUCommandQueue queueType, const char* label) override;
     uint64_t Submit(VGPUCommandBuffer* commandBuffers, uint32_t count) override;
 
-    uint64_t GetFrameCount() override { return frameCount; }
-    uint32_t GetFrameIndex() override { return frameIndex; }
-
+    Vulkan_UploadContext Allocate(uint64_t size);
+    void UploadSubmit(Vulkan_UploadContext context);
+    uint64_t UploadFlush();
     void SetObjectName(VkObjectType type, uint64_t handle, const char* name);
+    void ProcessDeletionQueue();
+
+    void* GetNativeObject(VGPUNativeObjectType objectType) const override;
 
 public:
 #if defined(VK_USE_PLATFORM_XCB_KHR)
@@ -1071,7 +1074,6 @@ public:
 
     VkDevice device = VK_NULL_HANDLE;
     VmaAllocator allocator = VK_NULL_HANDLE;
-    VkPipelineCache pipelineCache = VK_NULL_HANDLE;
 
     uint32_t frameIndex = 0;
     uint64_t frameCount = 0;
@@ -1129,12 +1131,151 @@ public:
     std::deque<std::pair<std::pair<VkImage, VmaAllocation>, uint64_t>> destroyedImages;
     std::deque<std::pair<VkImageView, uint64_t>> destroyedImageViews;
     std::deque<std::pair<VkSampler, uint64_t>> destroyedSamplers;
-    std::deque<std::pair<VkShaderModule, uint64_t>> destroyedShaderModules;
     std::deque<std::pair<VkPipelineLayout, uint64_t>> destroyedPipelineLayouts;
     std::deque<std::pair<VkPipeline, uint64_t>> destroyedPipelines;
     std::deque<std::pair<VkDescriptorPool, uint64_t>> destroyedDescriptorPools;
     std::deque<std::pair<VkQueryPool, uint64_t>> destroyedQueryPools;
 };
+
+Vulkan_UploadContext VulkanRenderer::Allocate(uint64_t size)
+{
+    uploadLocker.lock();
+
+    // Create a new command list if there are no free ones.
+    if (uploadFreeList.empty())
+    {
+        Vulkan_UploadContext context;
+
+        VkCommandPoolCreateInfo poolInfo = {};
+        poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+        poolInfo.queueFamilyIndex = copyQueueFamily;
+        poolInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
+        VK_CHECK(vkCreateCommandPool(device, &poolInfo, nullptr, &context.commandPool));
+
+        VkCommandBufferAllocateInfo commandBufferInfo = {};
+        commandBufferInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        commandBufferInfo.commandBufferCount = 1;
+        commandBufferInfo.commandPool = context.commandPool;
+        commandBufferInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        VK_CHECK(vkAllocateCommandBuffers(device, &commandBufferInfo, &context.commandBuffer));
+
+        uploadFreeList.push_back(context);
+    }
+
+    Vulkan_UploadContext context = uploadFreeList.back();
+    if (context.uploadBufferSize < size)
+    {
+        // Try to search for a staging buffer that can fit the request:
+        for (size_t i = 0; i < uploadFreeList.size(); ++i)
+        {
+            if (uploadFreeList[i].uploadBufferSize >= size)
+            {
+                context = uploadFreeList[i];
+                std::swap(uploadFreeList[i], uploadFreeList.back());
+                break;
+            }
+        }
+    }
+    uploadFreeList.pop_back();
+    uploadLocker.unlock();
+
+    // If no buffer was found that fits the data, create one:
+    if (context.uploadBufferSize < size)
+    {
+        // Release old one first
+        if (context.uploadBuffer)
+        {
+            context.uploadBuffer->Release();
+        }
+
+        uint64_t newSize = vgpuNextPowerOfTwo(size);
+
+        VGPUBufferDesc uploadBufferDesc{};
+        uploadBufferDesc.label = "UploadBuffer";
+        uploadBufferDesc.size = newSize;
+        uploadBufferDesc.cpuAccess = VGPUCpuAccessMode_Write;
+        context.uploadBuffer = (VulkanBuffer*)CreateBuffer(&uploadBufferDesc, nullptr);
+        context.uploadBufferData = context.uploadBuffer->pMappedData;
+    }
+
+    // begin command list in valid state:
+    VK_CHECK(vkResetCommandPool(device, context.commandPool, 0));
+
+    VkCommandBufferBeginInfo beginInfo = {};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    beginInfo.pInheritanceInfo = nullptr;
+    VK_CHECK(vkBeginCommandBuffer(context.commandBuffer, &beginInfo));
+
+    return context;
+}
+
+
+void VulkanRenderer::UploadSubmit(Vulkan_UploadContext context)
+{
+    VkResult result = vkEndCommandBuffer(context.commandBuffer);
+    VGPU_UNUSED(result);
+    VGPU_ASSERT(result == VK_SUCCESS);
+
+    // It was very slow in Vulkan to submit the copies immediately
+    //	In Vulkan, the submit is not thread safe, so it had to be locked
+    //	Instead, the submits are batched and performed in flush() function
+    uploadLocker.lock();
+    context.target = ++uploadFenceValue;
+    uploadWorkList.push_back(context);
+    uploadSubmitCmds.push_back(context.commandBuffer);
+    uploadSubmitWait = _VGPU_MAX(uploadSubmitWait, context.target);
+    uploadLocker.unlock();
+}
+
+uint64_t VulkanRenderer::UploadFlush()
+{
+    uploadLocker.lock();
+    if (!uploadSubmitCmds.empty())
+    {
+        VkTimelineSemaphoreSubmitInfo timelineInfo = {};
+        timelineInfo.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO;
+        timelineInfo.pNext = nullptr;
+        timelineInfo.waitSemaphoreValueCount = 0;
+        timelineInfo.pWaitSemaphoreValues = nullptr;
+        timelineInfo.signalSemaphoreValueCount = 1;
+        timelineInfo.pSignalSemaphoreValues = &uploadSubmitWait;
+
+        VkSubmitInfo submitInfo = {};
+        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submitInfo.pNext = &timelineInfo;
+        submitInfo.commandBufferCount = (uint32_t)uploadSubmitCmds.size();
+        submitInfo.pCommandBuffers = uploadSubmitCmds.data();
+        submitInfo.pSignalSemaphores = &uploadSemaphore;
+        submitInfo.signalSemaphoreCount = 1;
+
+        VkResult res = vkQueueSubmit(copyQueue, 1, &submitInfo, VK_NULL_HANDLE);
+        VGPU_VERIFY(res == VK_SUCCESS);
+
+        uploadSubmitCmds.clear();
+    }
+
+    // free up the finished command lists:
+    uint64_t completedFenceValue;
+    VkResult res = vkGetSemaphoreCounterValue(device, uploadSemaphore, &completedFenceValue);
+    VGPU_VERIFY(res == VK_SUCCESS);
+    for (size_t i = 0; i < uploadWorkList.size(); ++i)
+    {
+        if (uploadWorkList[i].target <= completedFenceValue)
+        {
+            uploadFreeList.push_back(uploadWorkList[i]);
+            uploadWorkList[i] = uploadWorkList.back();
+            uploadWorkList.pop_back();
+            i--;
+        }
+    }
+
+    uint64_t value = uploadSubmitWait;
+    uploadSubmitWait = 0;
+    uploadLocker.unlock();
+
+    return value;
+}
 
 void VulkanRenderer::SetObjectName(VkObjectType type, uint64_t handle, const char* name)
 {
@@ -1150,6 +1291,21 @@ void VulkanRenderer::SetObjectName(VkObjectType type, uint64_t handle, const cha
     info.objectHandle = handle;
     info.pObjectName = name;
     VK_CHECK(vkSetDebugUtilsObjectNameEXT(device, &info));
+}
+
+void* VulkanRenderer::GetNativeObject(VGPUNativeObjectType objectType) const
+{
+    switch (objectType)
+    {
+        case VGPU_NATIVE_VkDevice:
+            return device;
+        case VGPU_NATIVE_VkPhysicalDevice:
+            return physicalDevice;
+        case VGPU_NATIVE_VkInstance:
+            return instance;
+        default:
+            return nullptr;
+    }
 }
 
 static VkSurfaceKHR vulkan_createSurface(VulkanRenderer* renderer, void* windowHandle)
@@ -1208,202 +1364,18 @@ static VkSurfaceKHR vulkan_createSurface(VulkanRenderer* renderer, void* windowH
     return vk_surface;
 }
 
-static Vulkan_UploadContext vulkan_AllocateUpload(VulkanRenderer* renderer, uint64_t size)
+
+void VulkanRenderer::ProcessDeletionQueue()
 {
-    renderer->uploadLocker.lock();
+    destroyMutex.lock();
 
-    // Create a new command list if there are no free ones.
-    if (renderer->uploadFreeList.empty())
+    while (!destroyedBuffers.empty())
     {
-        Vulkan_UploadContext context;
-
-        VkCommandPoolCreateInfo poolInfo = {};
-        poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-        poolInfo.queueFamilyIndex = renderer->copyQueueFamily;
-        poolInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
-        VK_CHECK(vkCreateCommandPool(renderer->device, &poolInfo, nullptr, &context.commandPool));
-
-        VkCommandBufferAllocateInfo commandBufferInfo = {};
-        commandBufferInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-        commandBufferInfo.commandBufferCount = 1;
-        commandBufferInfo.commandPool = context.commandPool;
-        commandBufferInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        VK_CHECK(vkAllocateCommandBuffers(renderer->device, &commandBufferInfo, &context.commandBuffer));
-
-        renderer->uploadFreeList.push_back(context);
-    }
-
-    Vulkan_UploadContext context = renderer->uploadFreeList.back();
-    if (context.uploadBufferSize < size)
-    {
-        // Try to search for a staging buffer that can fit the request:
-        for (size_t i = 0; i < renderer->uploadFreeList.size(); ++i)
+        if (destroyedBuffers.front().second + VGPU_MAX_INFLIGHT_FRAMES < frameCount)
         {
-            if (renderer->uploadFreeList[i].uploadBufferSize >= size)
-            {
-                context = renderer->uploadFreeList[i];
-                std::swap(renderer->uploadFreeList[i], renderer->uploadFreeList.back());
-                break;
-            }
-        }
-    }
-    renderer->uploadFreeList.pop_back();
-    renderer->uploadLocker.unlock();
-
-    // If no buffer was found that fits the data, create one:
-    if (context.uploadBufferSize < size)
-    {
-        // Release old one first
-        if (context.uploadBuffer)
-        {
-            vgpuBufferRelease(context.uploadBuffer);
-        }
-
-        uint64_t newSize = vgpuNextPowerOfTwo(size);
-
-        VGPUBufferDesc uploadBufferDesc{};
-        uploadBufferDesc.label = "UploadBuffer";
-        uploadBufferDesc.size = newSize;
-        uploadBufferDesc.cpuAccess = VGPUCpuAccessMode_Write;
-        context.uploadBuffer = renderer->CreateBuffer(&uploadBufferDesc, nullptr);
-        context.uploadBufferData = ((VulkanBuffer*)context.uploadBuffer)->pMappedData;
-    }
-
-    // begin command list in valid state:
-    VK_CHECK(vkResetCommandPool(renderer->device, context.commandPool, 0));
-
-    VkCommandBufferBeginInfo beginInfo = {};
-    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-    beginInfo.pInheritanceInfo = nullptr;
-    VK_CHECK(vkBeginCommandBuffer(context.commandBuffer, &beginInfo));
-
-    return context;
-}
-
-static void vulkan_UploadSubmit(VulkanRenderer* renderer, Vulkan_UploadContext context)
-{
-    VkResult result = vkEndCommandBuffer(context.commandBuffer);
-    VGPU_UNUSED(result);
-    VGPU_ASSERT(result == VK_SUCCESS);
-
-    // It was very slow in Vulkan to submit the copies immediately
-    //	In Vulkan, the submit is not thread safe, so it had to be locked
-    //	Instead, the submits are batched and performed in flush() function
-    renderer->uploadLocker.lock();
-    context.target = ++renderer->uploadFenceValue;
-    renderer->uploadWorkList.push_back(context);
-    renderer->uploadSubmitCmds.push_back(context.commandBuffer);
-    renderer->uploadSubmitWait = _VGPU_MAX(renderer->uploadSubmitWait, context.target);
-    renderer->uploadLocker.unlock();
-}
-
-static uint64_t vulkan_UploadFlush(VulkanRenderer* renderer)
-{
-    renderer->uploadLocker.lock();
-    if (!renderer->uploadSubmitCmds.empty())
-    {
-        VkTimelineSemaphoreSubmitInfo timelineInfo = {};
-        timelineInfo.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO;
-        timelineInfo.pNext = nullptr;
-        timelineInfo.waitSemaphoreValueCount = 0;
-        timelineInfo.pWaitSemaphoreValues = nullptr;
-        timelineInfo.signalSemaphoreValueCount = 1;
-        timelineInfo.pSignalSemaphoreValues = &renderer->uploadSubmitWait;
-
-        VkSubmitInfo submitInfo = {};
-        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        submitInfo.pNext = &timelineInfo;
-        submitInfo.commandBufferCount = (uint32_t)renderer->uploadSubmitCmds.size();
-        submitInfo.pCommandBuffers = renderer->uploadSubmitCmds.data();
-        submitInfo.pSignalSemaphores = &renderer->uploadSemaphore;
-        submitInfo.signalSemaphoreCount = 1;
-
-        VkResult res = vkQueueSubmit(renderer->copyQueue, 1, &submitInfo, VK_NULL_HANDLE);
-        VGPU_VERIFY(res == VK_SUCCESS);
-
-        renderer->uploadSubmitCmds.clear();
-    }
-
-    // free up the finished command lists:
-    uint64_t completedFenceValue;
-    VkResult res = vkGetSemaphoreCounterValue(renderer->device, renderer->uploadSemaphore, &completedFenceValue);
-    VGPU_VERIFY(res == VK_SUCCESS);
-    for (size_t i = 0; i < renderer->uploadWorkList.size(); ++i)
-    {
-        if (renderer->uploadWorkList[i].target <= completedFenceValue)
-        {
-            renderer->uploadFreeList.push_back(renderer->uploadWorkList[i]);
-            renderer->uploadWorkList[i] = renderer->uploadWorkList.back();
-            renderer->uploadWorkList.pop_back();
-            i--;
-        }
-    }
-
-    uint64_t value = renderer->uploadSubmitWait;
-    renderer->uploadSubmitWait = 0;
-    renderer->uploadLocker.unlock();
-
-    return value;
-}
-
-static VkImageView vulkan_GetView(VulkanRenderer* renderer, VulkanTexture* texture, uint32_t baseMipLevel, uint32_t levelCount, uint32_t baseArrayLayer, uint32_t layerCount)
-{
-    size_t hash = 0;
-    hash_combine(hash, baseMipLevel);
-    hash_combine(hash, levelCount);
-    hash_combine(hash, baseArrayLayer);
-    hash_combine(hash, layerCount);
-
-    auto it = texture->viewCache.find(hash);
-    if (it == texture->viewCache.end())
-    {
-        VkImageViewCreateInfo viewInfo{};
-        viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        viewInfo.image = texture->handle;
-        viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        viewInfo.format = texture->vkFormat;
-        viewInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-        viewInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-        viewInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-        viewInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-        viewInfo.subresourceRange.aspectMask = GetImageAspectFlags(viewInfo.format);
-        viewInfo.subresourceRange.baseMipLevel = baseMipLevel;
-        viewInfo.subresourceRange.levelCount = levelCount;
-        viewInfo.subresourceRange.baseArrayLayer = baseArrayLayer;
-        viewInfo.subresourceRange.layerCount = 1;
-
-        VkImageView newView;
-        const VkResult result = vkCreateImageView(renderer->device, &viewInfo, nullptr, &newView);
-        if (result != VK_SUCCESS)
-        {
-            VK_LOG_ERROR(result, "Failed to create ImageView");
-            return VK_NULL_HANDLE;
-        }
-
-        texture->viewCache[hash] = newView;
-        return newView;
-    }
-
-    return it->second;
-}
-
-static VkImageView vulkan_GetRTV(VulkanRenderer* renderer, VulkanTexture* texture, uint32_t level, uint32_t slice)
-{
-    return vulkan_GetView(renderer, texture, level, 1, slice, 1);
-}
-
-static void vulkan_ProcessDeletionQueue(VulkanRenderer* renderer)
-{
-    renderer->destroyMutex.lock();
-
-    while (!renderer->destroyedBuffers.empty())
-    {
-        if (renderer->destroyedBuffers.front().second + VGPU_MAX_INFLIGHT_FRAMES < renderer->frameCount)
-        {
-            auto item = renderer->destroyedBuffers.front();
-            renderer->destroyedBuffers.pop_front();
-            vmaDestroyBuffer(renderer->allocator, item.first.first, item.first.second);
+            auto& item = destroyedBuffers.front();
+            destroyedBuffers.pop_front();
+            vmaDestroyBuffer(allocator, item.first.first, item.first.second);
         }
         else
         {
@@ -1411,13 +1383,13 @@ static void vulkan_ProcessDeletionQueue(VulkanRenderer* renderer)
         }
     }
 
-    while (!renderer->destroyedImages.empty())
+    while (!destroyedImages.empty())
     {
-        if (renderer->destroyedImages.front().second + VGPU_MAX_INFLIGHT_FRAMES < renderer->frameCount)
+        if (destroyedImages.front().second + VGPU_MAX_INFLIGHT_FRAMES < frameCount)
         {
-            auto item = renderer->destroyedImages.front();
-            renderer->destroyedImages.pop_front();
-            vmaDestroyImage(renderer->allocator, item.first.first, item.first.second);
+            auto& item = destroyedImages.front();
+            destroyedImages.pop_front();
+            vmaDestroyImage(allocator, item.first.first, item.first.second);
         }
         else
         {
@@ -1425,13 +1397,13 @@ static void vulkan_ProcessDeletionQueue(VulkanRenderer* renderer)
         }
     }
 
-    while (!renderer->destroyedImageViews.empty())
+    while (!destroyedImageViews.empty())
     {
-        if (renderer->destroyedImageViews.front().second + VGPU_MAX_INFLIGHT_FRAMES < renderer->frameCount)
+        if (destroyedImageViews.front().second + VGPU_MAX_INFLIGHT_FRAMES < frameCount)
         {
-            auto item = renderer->destroyedImageViews.front();
-            renderer->destroyedImageViews.pop_front();
-            vkDestroyImageView(renderer->device, item.first, nullptr);
+            auto& item = destroyedImageViews.front();
+            destroyedImageViews.pop_front();
+            vkDestroyImageView(device, item.first, nullptr);
         }
         else
         {
@@ -1439,13 +1411,13 @@ static void vulkan_ProcessDeletionQueue(VulkanRenderer* renderer)
         }
     }
 
-    while (!renderer->destroyedSamplers.empty())
+    while (!destroyedSamplers.empty())
     {
-        if (renderer->destroyedSamplers.front().second + VGPU_MAX_INFLIGHT_FRAMES < renderer->frameCount)
+        if (destroyedSamplers.front().second + VGPU_MAX_INFLIGHT_FRAMES < frameCount)
         {
-            auto item = renderer->destroyedSamplers.front();
-            renderer->destroyedSamplers.pop_front();
-            vkDestroySampler(renderer->device, item.first, nullptr);
+            auto& item = destroyedSamplers.front();
+            destroyedSamplers.pop_front();
+            vkDestroySampler(device, item.first, nullptr);
         }
         else
         {
@@ -1453,13 +1425,13 @@ static void vulkan_ProcessDeletionQueue(VulkanRenderer* renderer)
         }
     }
 
-    while (!renderer->destroyedShaderModules.empty())
+    while (!destroyedPipelineLayouts.empty())
     {
-        if (renderer->destroyedShaderModules.front().second + VGPU_MAX_INFLIGHT_FRAMES < renderer->frameCount)
+        if (destroyedPipelineLayouts.front().second + VGPU_MAX_INFLIGHT_FRAMES < frameCount)
         {
-            auto item = renderer->destroyedShaderModules.front();
-            renderer->destroyedShaderModules.pop_front();
-            vkDestroyShaderModule(renderer->device, item.first, nullptr);
+            auto& item = destroyedPipelineLayouts.front();
+            destroyedPipelineLayouts.pop_front();
+            vkDestroyPipelineLayout(device, item.first, nullptr);
         }
         else
         {
@@ -1467,13 +1439,13 @@ static void vulkan_ProcessDeletionQueue(VulkanRenderer* renderer)
         }
     }
 
-    while (!renderer->destroyedPipelineLayouts.empty())
+    while (!destroyedPipelines.empty())
     {
-        if (renderer->destroyedPipelineLayouts.front().second + VGPU_MAX_INFLIGHT_FRAMES < renderer->frameCount)
+        if (destroyedPipelines.front().second + VGPU_MAX_INFLIGHT_FRAMES < frameCount)
         {
-            auto item = renderer->destroyedPipelineLayouts.front();
-            renderer->destroyedPipelineLayouts.pop_front();
-            vkDestroyPipelineLayout(renderer->device, item.first, nullptr);
+            auto item = destroyedPipelines.front();
+            destroyedPipelines.pop_front();
+            vkDestroyPipeline(device, item.first, nullptr);
         }
         else
         {
@@ -1481,13 +1453,13 @@ static void vulkan_ProcessDeletionQueue(VulkanRenderer* renderer)
         }
     }
 
-    while (!renderer->destroyedPipelines.empty())
+    while (!destroyedDescriptorPools.empty())
     {
-        if (renderer->destroyedPipelines.front().second + VGPU_MAX_INFLIGHT_FRAMES < renderer->frameCount)
+        if (destroyedDescriptorPools.front().second + VGPU_MAX_INFLIGHT_FRAMES < frameCount)
         {
-            auto item = renderer->destroyedPipelines.front();
-            renderer->destroyedPipelines.pop_front();
-            vkDestroyPipeline(renderer->device, item.first, nullptr);
+            auto item = destroyedDescriptorPools.front();
+            destroyedDescriptorPools.pop_front();
+            vkDestroyDescriptorPool(device, item.first, nullptr);
         }
         else
         {
@@ -1495,34 +1467,20 @@ static void vulkan_ProcessDeletionQueue(VulkanRenderer* renderer)
         }
     }
 
-    while (!renderer->destroyedDescriptorPools.empty())
+    while (!destroyedQueryPools.empty())
     {
-        if (renderer->destroyedDescriptorPools.front().second + VGPU_MAX_INFLIGHT_FRAMES < renderer->frameCount)
+        if (destroyedQueryPools.front().second + VGPU_MAX_INFLIGHT_FRAMES < frameCount)
         {
-            auto item = renderer->destroyedDescriptorPools.front();
-            renderer->destroyedDescriptorPools.pop_front();
-            vkDestroyDescriptorPool(renderer->device, item.first, nullptr);
+            auto item = destroyedQueryPools.front();
+            destroyedQueryPools.pop_front();
+            vkDestroyQueryPool(device, item.first, nullptr);
         }
         else
         {
             break;
         }
     }
-
-    while (!renderer->destroyedQueryPools.empty())
-    {
-        if (renderer->destroyedQueryPools.front().second + VGPU_MAX_INFLIGHT_FRAMES < renderer->frameCount)
-        {
-            auto item = renderer->destroyedQueryPools.front();
-            renderer->destroyedQueryPools.pop_front();
-            vkDestroyQueryPool(renderer->device, item.first, nullptr);
-        }
-        else
-        {
-            break;
-        }
-    }
-    renderer->destroyMutex.unlock();
+    destroyMutex.unlock();
 }
 
 /* VulkanBuffer */
@@ -1560,6 +1518,52 @@ VulkanTexture::~VulkanTexture()
 void VulkanTexture::SetLabel(const char* label)
 {
     renderer->SetObjectName(VK_OBJECT_TYPE_IMAGE, (uint64_t)handle, label);
+}
+
+VkImageView VulkanTexture::GetView(uint32_t baseMipLevel, uint32_t levelCount, uint32_t baseArrayLayer, uint32_t layerCount)
+{
+    size_t hash = 0;
+    hash_combine(hash, baseMipLevel);
+    hash_combine(hash, levelCount);
+    hash_combine(hash, baseArrayLayer);
+    hash_combine(hash, layerCount);
+
+    auto it = viewCache.find(hash);
+    if (it == viewCache.end())
+    {
+        VkImageViewCreateInfo viewInfo{};
+        viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        viewInfo.image = handle;
+        viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        viewInfo.format = vkFormat;
+        viewInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+        viewInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+        viewInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+        viewInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+        viewInfo.subresourceRange.aspectMask = GetImageAspectFlags(viewInfo.format);
+        viewInfo.subresourceRange.baseMipLevel = baseMipLevel;
+        viewInfo.subresourceRange.levelCount = levelCount;
+        viewInfo.subresourceRange.baseArrayLayer = baseArrayLayer;
+        viewInfo.subresourceRange.layerCount = 1;
+
+        VkImageView newView;
+        const VkResult result = vkCreateImageView(renderer->device, &viewInfo, nullptr, &newView);
+        if (result != VK_SUCCESS)
+        {
+            VK_LOG_ERROR(result, "Failed to create ImageView");
+            return VK_NULL_HANDLE;
+        }
+
+        viewCache[hash] = newView;
+        return newView;
+    }
+
+    return it->second;
+}
+
+VkImageView VulkanTexture::GetRTV(uint32_t level, uint32_t slice)
+{
+    return GetView(level, 1, slice, 1);
 }
 
 /* VulkanPipeline */
@@ -1605,7 +1609,7 @@ VulkanRenderer::~VulkanRenderer()
     vkDestroySemaphore(device, uploadSemaphore, nullptr);
 
     frameCount = UINT64_MAX;
-    vulkan_ProcessDeletionQueue(this);
+    ProcessDeletionQueue();
     frameCount = 0;
 
     vmaDestroyBuffer(allocator, nullBuffer, nullBufferAllocation);
@@ -1636,22 +1640,6 @@ VulkanRenderer::~VulkanRenderer()
 
         vmaDestroyAllocator(allocator);
         allocator = VK_NULL_HANDLE;
-    }
-
-    if (pipelineCache != VK_NULL_HANDLE)
-    {
-        // Get size of pipeline cache
-        //size_t size{};
-        //VK_CHECK(vkGetPipelineCacheData(renderer->device, renderer->pipelineCache, &size, nullptr));
-
-        // Get data of pipeline cache 
-        //std::vector<uint8_t> data(size);
-        //res = vkGetPipelineCacheData(device, pipelineCache, &size, data.data());
-        //assert(res == VK_SUCCESS);
-
-        // Destroy Vulkan pipeline cache 
-        vkDestroyPipelineCache(device, pipelineCache, nullptr);
-        pipelineCache = VK_NULL_HANDLE;
     }
 
     if (device != VK_NULL_HANDLE)
@@ -1691,7 +1679,7 @@ void VulkanRenderer::WaitIdle()
     VK_CHECK(vkDeviceWaitIdle(device));
 }
 
-VGPUBool32 VulkanRenderer::QueryFeature(VGPUFeature feature) const
+VGPUBool32 VulkanRenderer::QueryFeatureSupport(VGPUFeature feature) const
 {
     switch (feature)
     {
@@ -1773,7 +1761,7 @@ VGPUBool32 VulkanRenderer::QueryFeature(VGPUFeature feature) const
             return false;
 
         case VGPUFeature_RayTracingTier2:
-            return QueryFeature(VGPUFeature_RayTracing) & (raytracing_query_features.rayQuery == VK_TRUE);
+            return QueryFeatureSupport(VGPUFeature_RayTracing) & (raytracing_query_features.rayQuery == VK_TRUE);
 
 
         case VGPUFeature_MeshShader:
@@ -1860,7 +1848,7 @@ void VulkanRenderer::GetLimits(VGPULimits* limits) const
     limits->maxViewportDimensions[1] = properties2.properties.limits.maxViewportDimensions[1];
     limits->maxColorAttachments = properties2.properties.limits.maxColorAttachments;
 
-    if (QueryFeature(VGPUFeature_RayTracing))
+    if (QueryFeatureSupport(VGPUFeature_RayTracing))
     {
         limits->rayTracingShaderGroupIdentifierSize = rayTracingPipelineProperties.shaderGroupHandleSize;
         limits->rayTracingShaderTableAligment = rayTracingPipelineProperties.shaderGroupBaseAlignment;
@@ -1892,7 +1880,7 @@ VGPUBuffer VulkanRenderer::CreateBuffer(const VGPUBufferDesc* desc, const void* 
             SetObjectName(VK_OBJECT_TYPE_BUFFER, (uint64_t)buffer->handle, desc->label);
         }
 
-        return (VGPUBuffer)buffer;
+        return buffer;
     }
 
     VkBufferCreateInfo bufferInfo = {};
@@ -2038,7 +2026,7 @@ VGPUBuffer VulkanRenderer::CreateBuffer(const VGPUBufferDesc* desc, const void* 
         }
         else
         {
-            auto context = vulkan_AllocateUpload(this, desc->size);
+            auto context = Allocate(desc->size);
             memcpy(context.uploadBufferData, pInitialData, desc->size);
 
             VkBufferMemoryBarrier barrier = {};
@@ -2119,7 +2107,7 @@ VGPUBuffer VulkanRenderer::CreateBuffer(const VGPUBufferDesc* desc, const void* 
                 0, nullptr
             );
 
-            vulkan_UploadSubmit(this, context);
+            UploadSubmit(context);
         }
     }
 
@@ -2370,37 +2358,6 @@ VGPUSampler VulkanRenderer::CreateSampler(const VGPUSamplerDesc* desc)
     return sampler;
 }
 
-/* ShaderModule */
-VGPUShaderModule VulkanRenderer::CreateShaderModule(const void* pCode, size_t codeSize)
-{
-    VkShaderModuleCreateInfo createInfo = {};
-    createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-    createInfo.codeSize = codeSize;
-    createInfo.pCode = (const uint32_t*)pCode;
-
-    VkShaderModule handle;
-    VkResult result = vkCreateShaderModule(device, &createInfo, nullptr, &handle);
-    if (result != VK_SUCCESS)
-    {
-        return nullptr;
-    }
-
-    VulkanShader* shader = new VulkanShader();
-    shader->handle = handle;
-    return (VGPUShaderModule)shader;
-}
-
-void VulkanRenderer::DestroyShaderModule(VGPUShaderModule resource)
-{
-    VulkanShader* shader = (VulkanShader*)resource;
-
-    destroyMutex.lock();
-    destroyedShaderModules.push_back(std::make_pair(shader->handle, frameCount));
-    destroyMutex.unlock();
-
-    delete shader;
-}
-
 /* PipelineLayout */
 VulkanPipelineLayout::~VulkanPipelineLayout()
 {
@@ -2475,23 +2432,51 @@ VGPUPipelineLayout VulkanRenderer::CreatePipelineLayout(const VGPUPipelineLayout
 }
 
 /* Pipeline */
+VkResult SetupShaderStage(VkDevice device,
+    VkPipelineShaderStageCreateInfo& pipelineStage,
+    std::string& entryPoint,
+    const VGPUShaderStageDesc& shaderDesc)
+{
+    entryPoint = (shaderDesc.entryPoint == nullptr) ? "main" : shaderDesc.entryPoint;
+    VkShaderStageFlagBits stage = (VkShaderStageFlagBits)ToVkShaderStageFlags(shaderDesc.stage);
+
+    VkShaderModuleCreateInfo moduleInfo = {};
+    moduleInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    moduleInfo.codeSize = (size_t)shaderDesc.size;
+    moduleInfo.pCode = (const uint32_t*)shaderDesc.bytecode;
+
+    const VkResult vkResult = vkCreateShaderModule(device, &moduleInfo, nullptr, &pipelineStage.module);
+
+    if (vkResult != VK_SUCCESS)
+    {
+        VK_LOG_ERROR(vkResult, "Failed to create a pipeline shader module");
+        return vkResult;
+    }
+
+    pipelineStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    pipelineStage.stage = stage;
+    pipelineStage.pName = entryPoint.c_str();
+
+    return VK_SUCCESS;
+}
+
 VGPUPipeline VulkanRenderer::CreateRenderPipeline(const VGPURenderPipelineDesc* desc)
 {
     VulkanPipelineLayout* layout = (VulkanPipelineLayout*)desc->layout;
-    VulkanShader* vertexShader = (VulkanShader*)desc->vertex.module;
-    VulkanShader* fragmentShader = (VulkanShader*)desc->fragment;
 
-    // Stage info
-    VkPipelineShaderStageCreateInfo shaderStages[2] = {};
-    shaderStages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    shaderStages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
-    shaderStages[0].module = vertexShader->handle;
-    shaderStages[0].pName = "vertexMain";
+    // ShaderStages
+    std::vector<VkPipelineShaderStageCreateInfo> shaderStages(desc->shaderStageCount);
+    std::vector<std::string> stageEntryPoints(desc->shaderStageCount);
 
-    shaderStages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    shaderStages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-    shaderStages[1].module = fragmentShader->handle;
-    shaderStages[1].pName = "fragmentMain";
+    for (uint32_t i = 0; i < desc->shaderStageCount; i++)
+    {
+        const VGPUShaderStageDesc& shaderDesc = desc->shaderStages[i];
+        VkResult res = SetupShaderStage(device, shaderStages[i], stageEntryPoints[i], shaderDesc);
+        if (res != VK_SUCCESS)
+        {
+            return nullptr;
+        }
+    }
 
     // RenderingInfo
     VkFormat colorAttachmentFormats[VGPU_MAX_COLOR_ATTACHMENTS];
@@ -2506,7 +2491,6 @@ VGPUPipeline VulkanRenderer::CreateRenderPipeline(const VGPURenderPipelineDesc* 
         renderingInfo.colorAttachmentCount++;
     }
     renderingInfo.pColorAttachmentFormats = colorAttachmentFormats;
-
 
     // VertexInputState
     std::vector<VkVertexInputBindingDescription> vertexInputBindings;
@@ -2634,7 +2618,14 @@ VGPUPipeline VulkanRenderer::CreateRenderPipeline(const VGPURenderPipelineDesc* 
         depthStencilState.depthTestEnable = (desc->depthStencilState.depthCompareFunction != VGPUCompareFunction_Always || desc->depthStencilState.depthWriteEnabled) ? VK_TRUE : VK_FALSE;
         depthStencilState.depthWriteEnable = desc->depthStencilState.depthWriteEnabled ? VK_TRUE : VK_FALSE;
         depthStencilState.depthCompareOp = ToVk(desc->depthStencilState.depthCompareFunction);
-        depthStencilState.depthBoundsTestEnable = VK_FALSE;
+        if (features2.features.depthBounds == VK_TRUE)
+        {
+            depthStencilState.depthBoundsTestEnable = desc->depthStencilState.depthBoundsTestEnable ? VK_TRUE : VK_FALSE;
+        }
+        else
+        {
+            depthStencilState.depthBoundsTestEnable = false;
+        }
         depthStencilState.minDepthBounds = 0.0f;
         depthStencilState.maxDepthBounds = 1.0f;
 
@@ -2691,8 +2682,8 @@ VGPUPipeline VulkanRenderer::CreateRenderPipeline(const VGPURenderPipelineDesc* 
     VkGraphicsPipelineCreateInfo createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
     createInfo.pNext = &renderingInfo;
-    createInfo.stageCount = 2u;
-    createInfo.pStages = shaderStages;
+    createInfo.stageCount = desc->shaderStageCount;
+    createInfo.pStages = shaderStages.data();
     createInfo.pVertexInputState = &vertexInputState;
     createInfo.pInputAssemblyState = &inputAssemblyState;
     createInfo.pTessellationState = (inputAssemblyState.topology == VK_PRIMITIVE_TOPOLOGY_PATCH_LIST) ? &tessellationState : nullptr;
@@ -2706,7 +2697,13 @@ VGPUPipeline VulkanRenderer::CreateRenderPipeline(const VGPURenderPipelineDesc* 
     createInfo.renderPass = VK_NULL_HANDLE;
 
     VkPipeline handle = VK_NULL_HANDLE;
-    const VkResult result = vkCreateGraphicsPipelines(device, pipelineCache, 1, &createInfo, nullptr, &handle);
+    const VkResult result = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &createInfo, nullptr, &handle);
+
+    for (size_t i = 0; i < shaderStages.size(); i++)
+    {
+        vkDestroyShaderModule(device, shaderStages[i].module, nullptr);
+    }
+
     if (result != VK_SUCCESS)
     {
         return nullptr;
@@ -2729,34 +2726,36 @@ VGPUPipeline VulkanRenderer::CreateRenderPipeline(const VGPURenderPipelineDesc* 
 
 VGPUPipeline VulkanRenderer::CreateComputePipeline(const VGPUComputePipelineDesc* desc)
 {
-    VulkanPipelineLayout* layout = (VulkanPipelineLayout*)desc->layout;
-    VulkanShader* shader = (VulkanShader*)desc->shader;
+    VulkanPipeline* pipeline = new VulkanPipeline();
+    pipeline->renderer = this;
+    pipeline->type = VGPUPipelineType_Compute;
+    pipeline->pipelineLayout = (VulkanPipelineLayout*)desc->layout;
+    pipeline->pipelineLayout->AddRef();
 
-    VkComputePipelineCreateInfo createInfo = {};
-    createInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-    createInfo.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    createInfo.stage.module = shader->handle;
-    createInfo.stage.pName = "main";
-    createInfo.layout = VK_NULL_HANDLE;
+    VkPipelineShaderStageCreateInfo stage;
+    std::string entryPoint;
 
-    VkPipeline handle;
-    VkResult result = vkCreateComputePipelines(device,
-        VK_NULL_HANDLE,
-        1, &createInfo,
-        nullptr,
-        &handle);
-
+    VkResult result = SetupShaderStage(device, stage, entryPoint, desc->computeShader);
     if (result != VK_SUCCESS)
     {
         return nullptr;
     }
 
-    VulkanPipeline* pipeline = new VulkanPipeline();
-    pipeline->renderer = this;
-    pipeline->type = VGPUPipelineType_Compute;
-    pipeline->pipelineLayout = layout;
-    pipeline->pipelineLayout->AddRef();
-    pipeline->handle = handle;
+    VkComputePipelineCreateInfo createInfo = {};
+    createInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+    createInfo.stage = stage;
+    createInfo.layout = pipeline->pipelineLayout->handle;
+
+    result = vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &createInfo, nullptr, &pipeline->handle);
+
+    // Delete shader module.
+    vkDestroyShaderModule(device, stage.module, nullptr);
+
+    if (result != VK_SUCCESS)
+    {
+        delete pipeline;
+        return nullptr;
+    }
 
     if (desc->label)
     {
@@ -3131,6 +3130,8 @@ void VulkanCommandBuffer::Reset()
 
 void VulkanCommandBuffer::Begin(uint32_t frameIndex, const char* label)
 {
+    Reset();
+
     VK_CHECK(vkResetCommandPool(renderer->device, commandPools[frameIndex], 0));
 
     VkCommandBufferBeginInfo beginInfo = {};
@@ -3138,21 +3139,30 @@ void VulkanCommandBuffer::Begin(uint32_t frameIndex, const char* label)
     beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
     beginInfo.pInheritanceInfo = nullptr; // Optional
     VK_CHECK(vkBeginCommandBuffer(commandBuffers[frameIndex], &beginInfo));
-
-    Reset();
+    
     commandBuffer = commandBuffers[frameIndex];
 
-    //binderPools[frameIndex].Reset();
-    //binder.Reset();
-    //frameAllocators[frameIndex].Reset();
-    //
-    //SetStencilReference(0);
-    //SetBlendColor(Colors::Transparent);
-    //
-    //if (device->features2.features.depthBounds == VK_TRUE)
-    //{
-    //    vkCmdSetDepthBounds(commandBuffer, 0.0f, 1.0f);
-    //}
+    if (queueType == VGPUCommandQueue_Graphics)
+    {
+        VkRect2D scissors[16];
+        for (uint32_t i = 0; i < _VGPU_COUNT_OF(scissors); ++i)
+        {
+            scissors[i].offset.x = 0;
+            scissors[i].offset.y = 0;
+            scissors[i].extent.width = 65535;
+            scissors[i].extent.height = 65535;
+        }
+        vkCmdSetScissor(commandBuffer, 0, _VGPU_COUNT_OF(scissors), scissors);
+
+        const float blendConstants[] = { 1.0f, 1.0f, 1.0f, 1.0f };
+        vkCmdSetBlendConstants(commandBuffer, blendConstants);
+        vkCmdSetStencilReference(commandBuffer, VK_STENCIL_FRONT_AND_BACK, ~0u);
+
+        if (renderer->features2.features.depthBounds == VK_TRUE)
+        {
+            vkCmdSetDepthBounds(commandBuffer, 0.0f, 1.0f);
+        }
+    }
 
     if (label)
     {
@@ -3344,7 +3354,7 @@ void VulkanCommandBuffer::BeginRenderPass(const VGPURenderPassDesc* desc)
         attachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
         attachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
         attachmentInfo.pNext = nullptr;
-        attachmentInfo.imageView = vulkan_GetRTV(renderer, texture, level, slice);
+        attachmentInfo.imageView = texture->GetRTV(level, slice);
         attachmentInfo.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         attachmentInfo.resolveMode = VK_RESOLVE_MODE_NONE;
         attachmentInfo.loadOp = ToVkAttachmentLoadOp(attachment->loadAction);
@@ -3374,7 +3384,7 @@ void VulkanCommandBuffer::BeginRenderPass(const VGPURenderPassDesc* desc)
 
         depthAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
         depthAttachment.pNext = VK_NULL_HANDLE;
-        depthAttachment.imageView = vulkan_GetRTV(renderer, texture, level, slice);
+        depthAttachment.imageView = texture->GetRTV(level, slice);
         depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
         depthAttachment.resolveMode = VK_RESOLVE_MODE_NONE;
         depthAttachment.loadOp = ToVkAttachmentLoadOp(attachment->depthLoadAction);
@@ -3638,6 +3648,7 @@ VGPUCommandBuffer VulkanRenderer::BeginCommandBuffer(VGPUCommandQueue queueType,
     {
         commandBuffer = new VulkanCommandBuffer();
         commandBuffer->renderer = this;
+        commandBuffer->queueType = queueType;
 
         for (uint32_t i = 0; i < VGPU_MAX_INFLIGHT_FRAMES; ++i)
         {
@@ -3718,7 +3729,7 @@ uint64_t VulkanRenderer::Submit(VGPUCommandBuffer* commandBuffers, uint32_t coun
         }
 
         // Sync up with copyallocator before first submit
-        uint64_t copySyncValue = vulkan_UploadFlush(this);
+        uint64_t copySyncValue = UploadFlush();
         if (copySyncValue > 0)
         {
             waitStages.push_back(VK_PIPELINE_STAGE_TRANSFER_BIT);
@@ -3842,7 +3853,7 @@ uint64_t VulkanRenderer::Submit(VGPUCommandBuffer* commandBuffers, uint32_t coun
         }
 
         // Safe delete deferred destroys
-        vulkan_ProcessDeletionQueue(this);
+        ProcessDeletionQueue();
 
         // Restart transition command buffers first.
         result = vkResetCommandPool(device, frame.initCommandPool, 0);
@@ -4698,21 +4709,6 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
         }
     }
 
-    // Pipeline cache
-    {
-        VkPipelineCacheCreateInfo createInfo = {};
-        createInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
-
-        // Create Vulkan pipeline cache
-        result = vkCreatePipelineCache(renderer->device, &createInfo, nullptr, &renderer->pipelineCache);
-        if (result != VK_SUCCESS)
-        {
-            VK_LOG_ERROR(result, "Failed to create pipeline cache");
-            delete renderer;
-            return nullptr;
-        }
-    }
-
     // Create default null descriptors.
     {
         VkBufferCreateInfo bufferInfo = {};
@@ -4859,14 +4855,14 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
     renderer->psoDynamicStates.push_back(VK_DYNAMIC_STATE_SCISSOR);
     renderer->psoDynamicStates.push_back(VK_DYNAMIC_STATE_BLEND_CONSTANTS);
     renderer->psoDynamicStates.push_back(VK_DYNAMIC_STATE_STENCIL_REFERENCE);
-    //if (CheckCapability(GraphicsDeviceCapability::DEPTH_BOUNDS_TEST))
-    //{
-    //    renderer->psoDynamicStates.push_back(VK_DYNAMIC_STATE_DEPTH_BOUNDS);
-    //}
-    //if (CheckCapability(GraphicsDeviceCapability::VARIABLE_RATE_SHADING))
-    //{
-    //    renderer->psoDynamicStates.push_back(VK_DYNAMIC_STATE_FRAGMENT_SHADING_RATE_KHR);
-    //}
+    if (renderer->features2.features.depthBounds == VK_TRUE)
+    {
+        renderer->psoDynamicStates.push_back(VK_DYNAMIC_STATE_DEPTH_BOUNDS);
+    }
+    if (renderer->fragmentShadingRateFeatures.pipelineFragmentShadingRate == VK_TRUE)
+    {
+        renderer->psoDynamicStates.push_back(VK_DYNAMIC_STATE_FRAGMENT_SHADING_RATE_KHR);
+    }
 
     renderer->dynamicStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
     renderer->dynamicStateInfo.dynamicStateCount = (uint32_t)renderer->psoDynamicStates.size();

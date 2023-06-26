@@ -15,6 +15,8 @@
 #include <fstream>
 #include <array>
 #include <assert.h>
+#include <vector>
+
 #include <vgpu.h>
 
 VGPUDevice device = nullptr;
@@ -54,16 +56,17 @@ std::string getShadersPath()
     return getAssetPath() + "shaders/";
 }
 
-VGPUShaderModule LoadShader(const char* fileName)
+std::vector<uint8_t> LoadShader(const char* fileName)
 {
     std::string shaderExt = ".spv";
-    if (vgpuGetBackend(device) == VGPUBackend_D3D12)
+    if (vgpuDeviceGetBackend(device) == VGPUBackend_D3D12)
     {
         shaderExt = ".cso";
     }
 
     std::ifstream is(getShadersPath() + "/" + fileName + shaderExt, std::ios::binary | std::ios::in | std::ios::ate);
 
+    std::vector<uint8_t> bytecode{};
     if (is.is_open())
     {
         size_t size = is.tellg();
@@ -74,16 +77,17 @@ VGPUShaderModule LoadShader(const char* fileName)
 
         assert(size > 0);
 
-        VGPUShaderModule shader = vgpuCreateShaderModule(device, shaderCode, size);
+        bytecode.resize(size);
+        memcpy(bytecode.data(), shaderCode, size);
 
         delete[] shaderCode;
 
-        return shader;
+        return bytecode;
     }
     else
     {
         std::cerr << "Error: Could not open shader file \"" << fileName << "\"" << "\n";
-        return nullptr;
+        return bytecode;
     }
 }
 
@@ -104,10 +108,10 @@ void init_vgpu(GLFWwindow* window)
     assert(device != nullptr);
 
     VGPUAdapterProperties adapterProps;
-    vgpuGetAdapterProperties(device, &adapterProps);
+    vgpuDeviceGetAdapterProperties(device, &adapterProps);
 
     VGPULimits limits;
-    vgpuGetLimits(device, &limits);
+    vgpuDeviceGetLimits(device, &limits);
 
     int width = 0;
     int height = 0;
@@ -165,8 +169,20 @@ void init_vgpu(GLFWwindow* window)
     index_buffer_desc.usage = VGPUBufferUsage_Index;
     index_buffer = vgpuCreateBuffer(device, &index_buffer_desc, indices);
 
-    VGPUShaderModule vertex_shader = LoadShader("triangleVertex");
-    VGPUShaderModule fragment_shader = LoadShader("triangleFragment");
+    std::vector<uint8_t> vertexShader = LoadShader("triangleVertex");
+    std::vector<uint8_t> fragmentShader = LoadShader("triangleFragment");
+
+    // Stage info
+    VGPUShaderStageDesc shaderStages[2] = {};
+    shaderStages[0].stage = VGPUShaderStage_Vertex;
+    shaderStages[0].bytecode = vertexShader.data();
+    shaderStages[0].size = vertexShader.size();
+    shaderStages[0].entryPoint = "vertexMain";
+
+    shaderStages[1].stage = VGPUShaderStage_Fragment;
+    shaderStages[1].bytecode = fragmentShader.data();
+    shaderStages[1].size = fragmentShader.size();
+    shaderStages[1].entryPoint = "fragmentMain";
 
     VGPUPushConstantRange pushConstantRange{};
     pushConstantRange.visibility = VGPUShaderStage_Fragment;
@@ -197,11 +213,11 @@ void init_vgpu(GLFWwindow* window)
     VGPURenderPipelineDesc renderPipelineDesc{};
     renderPipelineDesc.label = "Triangle";
     renderPipelineDesc.layout = pipelineLayout;
-    renderPipelineDesc.vertex.module = vertex_shader;
+    renderPipelineDesc.shaderStageCount = 2u;
+    renderPipelineDesc.shaderStages = shaderStages;
     renderPipelineDesc.vertex.layoutCount = 1u;
     renderPipelineDesc.vertex.layouts = &vertexBufferLayout;
 
-    renderPipelineDesc.fragment = fragment_shader;
     renderPipelineDesc.colorFormatCount = 1u;
     renderPipelineDesc.colorFormats = &colorFormat;
     renderPipelineDesc.depthStencilFormat = VGPUTextureFormat_Depth32Float;
@@ -209,8 +225,6 @@ void init_vgpu(GLFWwindow* window)
     renderPipelineDesc.depthStencilState.depthCompareFunction = VGPUCompareFunction_LessEqual;
 
     renderPipeline = vgpuCreateRenderPipeline(device, &renderPipelineDesc);
-    vgpuDestroyShaderModule(device, vertex_shader);
-    vgpuDestroyShaderModule(device, fragment_shader);
 }
 
 void draw_frame()
@@ -256,7 +270,7 @@ void draw_frame()
         vgpuEndRenderPass(commandBuffer);
     }
 
-    vgpuSubmit(device, &commandBuffer, 1u);
+    vgpuDeviceSubmit(device, &commandBuffer, 1u);
 }
 
 int main()
@@ -280,7 +294,7 @@ int main()
         glfwPollEvents();
     }
 
-    vgpuWaitIdle(device);
+    vgpuDeviceWaitIdle(device);
     vgpuBufferRelease(vertexBuffer);
     vgpuBufferRelease(index_buffer);
     vgpuTextureRelease(depthStencilTexture);

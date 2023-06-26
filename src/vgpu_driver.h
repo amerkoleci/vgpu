@@ -124,6 +124,8 @@ public:
         return result;
     }
 
+    virtual void* GetNativeObject(VGPUNativeObjectType objectType) const { (void)objectType; return nullptr; }
+
     virtual void SetLabel(const char* label) = 0;
 
 private:
@@ -217,7 +219,7 @@ struct VGPUDeviceImpl : public VGPUObject
 {
     virtual void WaitIdle() = 0;
     virtual VGPUBackend GetBackendType() const = 0;
-    virtual VGPUBool32 QueryFeature(VGPUFeature feature) const = 0;
+    virtual VGPUBool32 QueryFeatureSupport(VGPUFeature feature) const = 0;
     virtual void GetAdapterProperties(VGPUAdapterProperties* properties) const = 0;
     virtual void GetLimits(VGPULimits* limits) const = 0;
 
@@ -225,9 +227,6 @@ struct VGPUDeviceImpl : public VGPUObject
     virtual VGPUTexture CreateTexture(const VGPUTextureDesc* desc, const void* pInitialData) = 0;
 
     virtual VGPUSampler CreateSampler(const VGPUSamplerDesc* desc) = 0;
-
-    virtual VGPUShaderModule CreateShaderModule(const void* pCode, size_t codeSize) = 0;
-    virtual void DestroyShaderModule(VGPUShaderModule resource) = 0;
 
     virtual VGPUPipelineLayout CreatePipelineLayout(const VGPUPipelineLayoutDesc* desc) = 0;
 
