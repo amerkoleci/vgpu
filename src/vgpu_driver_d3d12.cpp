@@ -637,7 +637,7 @@ struct D3D12QueryHeap final : public VGPUQueryHeapImpl
     uint32_t GetCount() const override { return count; }
 };
 
-struct D3D12_SwapChain final : public VGPUSwapChainImpl
+struct D3D12SwapChain final : public VGPUSwapChainImpl
 {
     D3D12_Renderer* renderer = nullptr;
 #if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
@@ -647,13 +647,17 @@ struct D3D12_SwapChain final : public VGPUSwapChainImpl
 #endif
     IDXGISwapChain3* handle = nullptr;
     VGPUTextureFormat colorFormat;
+    uint32_t width = 0;
+    uint32_t height = 0;
     uint32_t backBufferCount;
     uint32_t syncInterval;
     std::vector<D3D12Texture*> backbufferTextures;
 
-    ~D3D12_SwapChain() override;
+    ~D3D12SwapChain() override;
     void SetLabel(const char* label) override;
     VGPUTextureFormat GetFormat() const override { return colorFormat; }
+    uint32_t GetWidth() const override { return width; }
+    uint32_t GetHeight() const override { return height; }
 };
 
 struct D3D12_UploadContext
@@ -689,7 +693,7 @@ public:
     bool hasRenderPassLabel = false;
     D3D12Pipeline* currentPipeline = nullptr;
 
-    std::vector<D3D12_SwapChain*> swapChains;
+    std::vector<D3D12SwapChain*> swapChains;
 
 private:
     D3D12_VERTEX_BUFFER_VIEW vboViews[D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT] = {};
@@ -781,7 +785,7 @@ public:
     void Dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ) override;
     void DispatchIndirect(VGPUBuffer buffer, uint64_t offset) override;
 
-    VGPUTexture AcquireSwapchainTexture(VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight) override;
+    VGPUTexture AcquireSwapchainTexture(VGPUSwapChain swapChain) override;
 
     void BeginRenderPass(const VGPURenderPassDesc* desc) override;
     void EndRenderPass() override;
@@ -826,6 +830,7 @@ public:
     VGPUBool32 QueryFeatureSupport(VGPUFeature feature) const override;
     void GetAdapterProperties(VGPUAdapterProperties* properties) const override;
     void GetLimits(VGPULimits* limits) const override;
+    uint64_t GetTimestampFrequency() const  override { return timestampFrequency; }
 
     VGPUBuffer CreateBuffer(const VGPUBufferDesc* desc, const void* pInitialData) override;
     VGPUTexture CreateTexture(const VGPUTextureDesc* desc, const void* pInitialData) override;
@@ -840,6 +845,7 @@ public:
     VGPUQueryHeap CreateQueryHeap(const VGPUQueryHeapDesc* desc) override;
 
     VGPUSwapChain CreateSwapChain(void* windowHandle, const VGPUSwapChainDesc* desc) override;
+    void UpdateSwapChain(D3D12SwapChain* swapChain);
 
     VGPUCommandBuffer BeginCommandBuffer(VGPUCommandQueue queueType, const char* label) override;
     uint64_t Submit(VGPUCommandBuffer* commandBuffers, uint32_t count) override;
@@ -863,6 +869,7 @@ public:
     std::string adapterName;
     std::string driverDescription;
     VGPUAdapterType adapterType;
+    uint64_t timestampFrequency = 0;
 
     D3D12MA::Allocator* allocator = nullptr;
     CD3DX12FeatureSupport d3dFeatures;
@@ -1117,7 +1124,7 @@ static D3D12_CPU_DESCRIPTOR_HANDLE d3d12_GetRTV(D3D12_Renderer* renderer, D3D12T
             break;
 
             default:
-                vgpu_log_error("D3D12: Invalid texture dimension");
+                vgpuLogError("D3D12: Invalid texture dimension");
                 return {};
         }
 
@@ -1198,11 +1205,11 @@ static D3D12_CPU_DESCRIPTOR_HANDLE d3d12_GetDSV(D3D12_Renderer* renderer, D3D12T
             break;
 
             case D3D12_RESOURCE_DIMENSION_TEXTURE3D:
-                vgpu_log_error("D3D12: Cannot create 3D texture DSV");
+                vgpuLogError("D3D12: Cannot create 3D texture DSV");
                 return {};
 
             default:
-                vgpu_log_error("D3D12: Invalid texture dimension");
+                vgpuLogError("D3D12: Invalid texture dimension");
                 return {};
         }
 
@@ -1389,21 +1396,21 @@ D3D12_Renderer::~D3D12_Renderer()
 #endif
 }
 
-static void d3d12_updateSwapChain(D3D12_Renderer* renderer, D3D12_SwapChain* swapChain)
+void D3D12_Renderer::UpdateSwapChain(D3D12SwapChain* swapChain)
 {
-    VGPU_UNUSED(renderer);
-
     HRESULT hr = S_OK;
 
     DXGI_SWAP_CHAIN_DESC1 swapChainDesc;
     hr = swapChain->handle->GetDesc1(&swapChainDesc);
     VGPU_ASSERT(SUCCEEDED(hr));
 
+    swapChain->width = swapChainDesc.Width;
+    swapChain->height = swapChainDesc.Height;
     swapChain->backbufferTextures.resize(swapChainDesc.BufferCount);
     for (uint32_t i = 0; i < swapChainDesc.BufferCount; ++i)
     {
         D3D12Texture* texture = new D3D12Texture();
-        texture->renderer = renderer;
+        texture->renderer = this;
         texture->dimension = VGPUTextureDimension_2D;
         texture->format = swapChain->colorFormat;
         texture->state = D3D12_RESOURCE_STATE_PRESENT;
@@ -1659,7 +1666,7 @@ VGPUBuffer D3D12_Renderer::CreateBuffer(const VGPUBufferDesc* desc, const void* 
 
     if (FAILED(hr))
     {
-        vgpu_log_error("D3D12: Failed to create buffer");
+        vgpuLogError("D3D12: Failed to create buffer");
         delete buffer;
         return nullptr;
     }
@@ -1868,7 +1875,7 @@ VGPUTexture D3D12_Renderer::CreateTexture(const VGPUTextureDesc* desc, const voi
 
     if (FAILED(hr))
     {
-        vgpu_log_error("D3D12: Failed to create texture");
+        vgpuLogError("D3D12: Failed to create texture");
         delete texture;
         return nullptr;
     }
@@ -1967,7 +1974,7 @@ static HRESULT d3d12_CreateRootSignature(ID3D12Device* device, ID3D12RootSignatu
     {
         const char* errString = error ? reinterpret_cast<const char*>(error->GetBufferPointer()) : "";
 
-        vgpu_log_error("Failed to create root signature: %S", errString);
+        vgpuLogError("Failed to create root signature: %S", errString);
     }
 
     return device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(rootSignature));
@@ -2385,7 +2392,7 @@ VGPUQueryHeap D3D12_Renderer::CreateQueryHeap(const VGPUQueryHeapDesc* desc)
 }
 
 /* SwapChain */
-D3D12_SwapChain::~D3D12_SwapChain()
+D3D12SwapChain::~D3D12SwapChain()
 {
     for (size_t i = 0, count = backbufferTextures.size(); i < count; ++i)
     {
@@ -2395,7 +2402,7 @@ D3D12_SwapChain::~D3D12_SwapChain()
     handle->Release();
 }
 
-void D3D12_SwapChain::SetLabel(const char* label)
+void D3D12SwapChain::SetLabel(const char* label)
 {
     VGPU_UNUSED(label);
 }
@@ -2493,14 +2500,14 @@ VGPUSwapChain D3D12_Renderer::CreateSwapChain(void* windowHandle, const VGPUSwap
     }
     SAFE_RELEASE(tempSwapChain);
 
-    D3D12_SwapChain* swapChain = new D3D12_SwapChain();
+    D3D12SwapChain* swapChain = new D3D12SwapChain();
     swapChain->renderer = this;
     swapChain->window = window;
     swapChain->handle = handle;
     swapChain->colorFormat = desc->format;
     swapChain->backBufferCount = swapChainDesc.BufferCount;
     swapChain->syncInterval = PresentModeToSwapInterval(desc->presentMode);
-    d3d12_updateSwapChain(this, swapChain);
+    UpdateSwapChain(swapChain);
     return swapChain;
 }
 
@@ -2665,9 +2672,9 @@ void D3D12CommandBuffer::DispatchIndirect(VGPUBuffer buffer, uint64_t offset)
         0);
 }
 
-VGPUTexture D3D12CommandBuffer::AcquireSwapchainTexture(VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight)
+VGPUTexture D3D12CommandBuffer::AcquireSwapchainTexture(VGPUSwapChain swapChain)
 {
-    D3D12_SwapChain* d3d12SwapChain = (D3D12_SwapChain*)swapChain;
+    D3D12SwapChain* d3d12SwapChain = (D3D12SwapChain*)swapChain;
 
     HRESULT hr = S_OK;
 
@@ -2732,11 +2739,11 @@ VGPUTexture D3D12CommandBuffer::AcquireSwapchainTexture(VGPUSwapChain swapChain,
         {
             if (FAILED(hr))
             {
-                vgpu_log_error("Could not resize swapchain");
+                vgpuLogError("Could not resize swapchain");
                 return nullptr;
             }
 
-            d3d12_updateSwapChain(renderer, d3d12SwapChain);
+            renderer->UpdateSwapChain(d3d12SwapChain);
         }
     }
 
@@ -2745,14 +2752,6 @@ VGPUTexture D3D12CommandBuffer::AcquireSwapchainTexture(VGPUSwapChain swapChain,
 
     // Transition to RenderTarget state
     TransitionResource(swapChainTexture, D3D12_RESOURCE_STATE_RENDER_TARGET, true);
-
-    if (pWidth) {
-        *pWidth = swapChainTexture->width;
-    }
-
-    if (pHeight) {
-        *pHeight = swapChainTexture->height;
-    }
 
     swapChains.push_back(d3d12SwapChain);
     return swapChainTexture;
@@ -3052,7 +3051,7 @@ VGPUCommandBuffer D3D12_Renderer::BeginCommandBuffer(VGPUCommandQueue queueType,
 uint64_t D3D12_Renderer::Submit(VGPUCommandBuffer* commandBuffers, uint32_t count)
 {
     HRESULT hr = S_OK;
-    std::vector<D3D12_SwapChain*> presentSwapChains;
+    std::vector<D3D12SwapChain*> presentSwapChains;
     for (uint32_t i = 0; i < count; i += 1)
     {
         D3D12CommandBuffer* commandBuffer = static_cast<D3D12CommandBuffer*>(commandBuffers[i]);
@@ -3060,7 +3059,7 @@ uint64_t D3D12_Renderer::Submit(VGPUCommandBuffer* commandBuffers, uint32_t coun
         // Present acquired SwapChains
         for (size_t swapChainIndex = 0; swapChainIndex < commandBuffer->swapChains.size(); ++swapChainIndex)
         {
-            D3D12_SwapChain* swapChain = commandBuffer->swapChains[swapChainIndex];
+            D3D12SwapChain* swapChain = commandBuffer->swapChains[swapChainIndex];
 
             /* Transition SwapChain textures to present */
             D3D12Resource* texture = (D3D12Resource*)swapChain->backbufferTextures[swapChain->handle->GetCurrentBackBufferIndex()];
@@ -3083,7 +3082,7 @@ uint64_t D3D12_Renderer::Submit(VGPUCommandBuffer* commandBuffers, uint32_t coun
         hr = commandBuffer->commandList->Close();
         if (FAILED(hr))
         {
-            vgpu_log_error("Failed to close command list");
+            vgpuLogError("Failed to close command list");
             return 0;
         }
 
@@ -3112,7 +3111,7 @@ uint64_t D3D12_Renderer::Submit(VGPUCommandBuffer* commandBuffers, uint32_t coun
     // Present acquired SwapChains
     for (size_t i = 0; i < presentSwapChains.size() && SUCCEEDED(hr); ++i)
     {
-        D3D12_SwapChain* swapChain = presentSwapChains[i];
+        D3D12SwapChain* swapChain = presentSwapChains[i];
 
         UINT presentFlags = 0;
         BOOL fullscreen = FALSE;
@@ -3260,12 +3259,12 @@ inline void __stdcall _D3D12_DebugMessageCallback(
 
     if (Severity == D3D12_MESSAGE_SEVERITY_CORRUPTION || Severity == D3D12_MESSAGE_SEVERITY_ERROR)
     {
-        vgpu_log_error("%s", pDescription);
+        vgpuLogError("%s", pDescription);
         VGPU_UNREACHABLE();
     }
     else if (Severity == D3D12_MESSAGE_SEVERITY_WARNING)
     {
-        vgpu_log_warn("%s", pDescription);
+        vgpuLogWarn("%s", pDescription);
     }
     else
     {
@@ -3400,7 +3399,7 @@ static VGPUDeviceImpl* d3d12_createDevice(const VGPUDeviceDescriptor* info)
         VGPU_ASSERT(dxgiAdapter != nullptr);
         if (dxgiAdapter == nullptr)
         {
-            vgpu_log_error("DXGI: No capable adapter found!");
+            vgpuLogError("DXGI: No capable adapter found!");
             delete renderer;
             return nullptr;
         }
@@ -3410,7 +3409,7 @@ static VGPUDeviceImpl* d3d12_createDevice(const VGPUDeviceDescriptor* info)
 
         if (renderer->d3dFeatures.HighestRootSignatureVersion() < D3D_ROOT_SIGNATURE_VERSION_1_1)
         {
-            vgpu_log_error("Direct3D12: Root signature version 1.1 not supported!");
+            vgpuLogError("Direct3D12: Root signature version 1.1 not supported!");
             delete renderer;
             return nullptr;
         }
@@ -3487,7 +3486,7 @@ static VGPUDeviceImpl* d3d12_createDevice(const VGPUDeviceDescriptor* info)
             return nullptr;
         }
 
-        // Init capabilities.
+        // Init adapter info.
         DXGI_ADAPTER_DESC1 adapterDesc;
         dxgiAdapter->GetDesc1(&adapterDesc);
 
@@ -3520,12 +3519,6 @@ static VGPUDeviceImpl* d3d12_createDevice(const VGPUDeviceDescriptor* info)
 
             renderer->driverDescription = o.str();
         }
-
-        renderer->featureLevel = renderer->d3dFeatures.MaxSupportedFeatureLevel();
-
-        // Log some info
-        vgpu_log_info("VGPU Driver: D3D12");
-        vgpu_log_info("D3D12 Adapter: %S", adapterDesc.Description);
     }
 
     // Create command queues
@@ -3678,6 +3671,14 @@ static VGPUDeviceImpl* d3d12_createDevice(const VGPUDeviceDescriptor* info)
             VHR(renderer->device->CreateCommandSignature(&cmdSignatureDesc, nullptr, IID_PPV_ARGS(&renderer->dispatchMeshIndirectCommandSignature)));
         }
     }
+
+    // Init features
+    renderer->featureLevel = renderer->d3dFeatures.MaxSupportedFeatureLevel();
+    VHR(renderer->queues[VGPUCommandQueue_Graphics].handle->GetTimestampFrequency(&renderer->timestampFrequency));
+
+    // Log some info
+    vgpu_log_info("VGPU Driver: D3D12");
+    vgpu_log_info("D3D12 Adapter: %s", renderer->adapterName.c_str());
 
     return renderer;
 }

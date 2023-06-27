@@ -941,6 +941,7 @@ VGPU_API void vgpuDeviceGetLimits(VGPUDevice device, VGPULimits* limits);
 VGPU_API uint64_t vgpuDeviceSubmit(VGPUDevice device, VGPUCommandBuffer* commandBuffers, uint32_t count);
 VGPU_API uint64_t vgpuDeviceGetFrameCount(VGPUDevice device);
 VGPU_API uint32_t vgpuDeviceGetFrameIndex(VGPUDevice device);
+VGPU_API uint64_t vgpuDeviceGetTimestampFrequency(VGPUDevice device);
 VGPU_API void* vgpuDeviceGetNativeObject(VGPUDevice device, VGPUNativeObjectType objectType);
 
 /* Buffer */
@@ -992,6 +993,7 @@ VGPU_API uint32_t vgpuQueryHeapRelease(VGPUQueryHeap queryHeap);
 /* SwapChain */
 VGPU_API VGPUSwapChain vgpuCreateSwapChain(VGPUDevice device, void* window, const VGPUSwapChainDesc* desc);
 VGPU_API VGPUTextureFormat vgpuSwapChainGetFormat(VGPUSwapChain swapChain);
+VGPU_API void vgpuSwapChainGetSize(VGPUSwapChain swapChain, uint32_t* width, uint32_t* height);
 VGPU_API uint32_t vgpuSwapChainAddRef(VGPUSwapChain swapChain);
 VGPU_API uint32_t vgpuSwapChainRelease(VGPUSwapChain swapChain);
 
@@ -1011,7 +1013,7 @@ VGPU_API void vgpuDispatch3D(VGPUCommandBuffer commandBuffer, uint32_t threadCou
 VGPU_API void vgpuDispatchIndirect(VGPUCommandBuffer commandBuffer, VGPUBuffer buffer, uint64_t offset);
 
 /* Render commands */
-VGPU_API VGPUTexture vgpuAcquireSwapchainTexture(VGPUCommandBuffer commandBuffer, VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight);
+VGPU_API VGPUTexture vgpuAcquireSwapchainTexture(VGPUCommandBuffer commandBuffer, VGPUSwapChain swapChain);
 VGPU_API void vgpuBeginRenderPass(VGPUCommandBuffer commandBuffer, const VGPURenderPassDesc* desc);
 VGPU_API void vgpuEndRenderPass(VGPUCommandBuffer commandBuffer);
 VGPU_API void vgpuSetViewport(VGPUCommandBuffer commandBuffer, const VGPUViewport* viewport);

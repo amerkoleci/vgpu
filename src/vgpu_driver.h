@@ -60,8 +60,8 @@
 #endif
 
 _VGPU_EXTERN void vgpu_log_info(const char* format, ...);
-_VGPU_EXTERN void vgpu_log_warn(const char* format, ...);
-_VGPU_EXTERN void vgpu_log_error(const char* format, ...);
+_VGPU_EXTERN void vgpuLogWarn(const char* format, ...);
+_VGPU_EXTERN void vgpuLogError(const char* format, ...);
 
 namespace
 {
@@ -174,6 +174,8 @@ struct VGPUSwapChainImpl : public VGPUObject
 {
 public:
     virtual VGPUTextureFormat GetFormat() const = 0;
+    virtual uint32_t GetWidth() const = 0;
+    virtual uint32_t GetHeight() const = 0;
 };
 
 struct VGPUCommandBufferImpl
@@ -191,7 +193,7 @@ public:
     virtual void Dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ) = 0;
     virtual void DispatchIndirect(VGPUBuffer buffer, uint64_t offset) = 0;
 
-    virtual VGPUTexture AcquireSwapchainTexture(VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight) = 0;
+    virtual VGPUTexture AcquireSwapchainTexture(VGPUSwapChain swapChain) = 0;
     virtual void BeginRenderPass(const VGPURenderPassDesc* desc) = 0;
     virtual void EndRenderPass() = 0;
 
@@ -222,6 +224,7 @@ struct VGPUDeviceImpl : public VGPUObject
     virtual VGPUBool32 QueryFeatureSupport(VGPUFeature feature) const = 0;
     virtual void GetAdapterProperties(VGPUAdapterProperties* properties) const = 0;
     virtual void GetLimits(VGPULimits* limits) const = 0;
+    virtual uint64_t GetTimestampFrequency() const = 0;
 
     virtual VGPUBuffer CreateBuffer(const VGPUBufferDesc* desc, const void* pInitialData) = 0;
     virtual VGPUTexture CreateTexture(const VGPUTextureDesc* desc, const void* pInitialData) = 0;

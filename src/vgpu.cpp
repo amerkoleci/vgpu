@@ -30,7 +30,7 @@ void vgpu_log_info(const char* format, ...) {
     s_LogFunc(VGPULogLevel_Info, msg, s_userData);
 }
 
-void vgpu_log_warn(const char* format, ...) {
+void vgpuLogWarn(const char* format, ...) {
     if (!s_LogFunc)
         return;
 
@@ -42,7 +42,7 @@ void vgpu_log_warn(const char* format, ...) {
     s_LogFunc(VGPULogLevel_Warning, msg, s_userData);
 }
 
-void vgpu_log_error(const char* format, ...) {
+void vgpuLogError(const char* format, ...) {
     if (!s_LogFunc)
         return;
 
@@ -97,7 +97,7 @@ VGPUBool32 vgpuIsBackendSupported(VGPUBackend backend)
 VGPUDevice vgpuCreateDevice(const VGPUDeviceDescriptor* desc)
 {
     if (!desc) {
-        vgpu_log_warn("vgpu_init: Invalid config");
+        vgpuLogWarn("vgpu_init: Invalid config");
         return nullptr;
     }
 
@@ -135,7 +135,7 @@ retry:
                 }
                 else
                 {
-                    vgpu_log_warn("Wanted API not supported, fallback to default");
+                    vgpuLogWarn("Wanted API not supported, fallback to default");
                     backend = _VGPUBackend_Default;
                     goto retry;
                 }
@@ -219,6 +219,13 @@ uint64_t vgpuDeviceGetFrameCount(VGPUDevice device)
 uint32_t vgpuDeviceGetFrameIndex(VGPUDevice device)
 {
     return device->GetFrameIndex();
+}
+
+uint64_t vgpuDeviceGetTimestampFrequency(VGPUDevice device)
+{
+    VGPU_ASSERT(device);
+
+    return device->GetTimestampFrequency();
 }
 
 void* vgpuDeviceGetNativeObject(VGPUDevice device, VGPUNativeObjectType objectType)
@@ -324,26 +331,26 @@ VGPUTexture vgpuCreateTexture(VGPUDevice device, const VGPUTextureDesc* desc, co
     {
         if (isCube)
         {
-            vgpu_log_warn("Cubemap texture cannot be multisample");
+            vgpuLogWarn("Cubemap texture cannot be multisample");
             return NULL;
         }
 
         if (is3D)
         {
-            vgpu_log_warn("3D texture cannot be multisample");
+            vgpuLogWarn("3D texture cannot be multisample");
             return NULL;
         }
 
         if (desc_def.mipLevelCount > 1)
         {
-            vgpu_log_warn("Multisample texture cannot have mipmaps");
+            vgpuLogWarn("Multisample texture cannot have mipmaps");
             return NULL;
         }
     }
 
     if (isDepthStencil && desc_def.mipLevelCount > 1)
     {
-        vgpu_log_warn("Depth texture cannot have mipmaps");
+        vgpuLogWarn("Depth texture cannot have mipmaps");
         return NULL;
     }
 
@@ -363,7 +370,7 @@ VGPUTexture vgpuCreateTexture(VGPUDevice device, const VGPUTextureDesc* desc, co
     // Check if depth texture and ShaderWrite
     if (isDepthStencil && (desc_def.usage & VGPUTextureUsage_ShaderWrite))
     {
-        vgpu_log_warn("Cannot create Depth texture with ShaderWrite usage");
+        vgpuLogWarn("Cannot create Depth texture with ShaderWrite usage");
         return NULL;
     }
 
@@ -636,6 +643,17 @@ VGPUTextureFormat vgpuSwapChainGetFormat(VGPUSwapChain swapChain)
     return swapChain->GetFormat();
 }
 
+void vgpuSwapChainGetSize(VGPUSwapChain swapChain, uint32_t* width, uint32_t* height)
+{
+    VGPU_ASSERT(swapChain);
+
+    if (width)
+        *width = swapChain->GetWidth();
+    if (height)
+        *height = swapChain->GetHeight();
+
+}
+
 uint32_t vgpuSwapChainAddRef(VGPUSwapChain swapChain)
 {
     VGPU_ASSERT(swapChain);
@@ -725,9 +743,9 @@ void vgpuDispatchIndirect(VGPUCommandBuffer commandBuffer, VGPUBuffer buffer, ui
     commandBuffer->DispatchIndirect(buffer, offset);
 }
 
-VGPUTexture vgpuAcquireSwapchainTexture(VGPUCommandBuffer commandBuffer, VGPUSwapChain swapChain, uint32_t* pWidth, uint32_t* pHeight)
+VGPUTexture vgpuAcquireSwapchainTexture(VGPUCommandBuffer commandBuffer, VGPUSwapChain swapChain)
 {
-    return commandBuffer->AcquireSwapchainTexture(swapChain, pWidth, pHeight);
+    return commandBuffer->AcquireSwapchainTexture(swapChain);
 }
 
 void vgpuBeginRenderPass(VGPUCommandBuffer commandBuffer, const VGPURenderPassDesc* desc)

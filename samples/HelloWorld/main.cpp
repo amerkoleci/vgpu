@@ -232,9 +232,7 @@ void draw_frame()
     VGPUCommandBuffer commandBuffer = vgpuBeginCommandBuffer(device, VGPUCommandQueue_Graphics, "Frame");
 
     // When window minimized texture is null
-    uint32_t width;
-    uint32_t height;
-    VGPUTexture swapChainTexture = vgpuAcquireSwapchainTexture(commandBuffer, swapChain, &width, &height);
+    VGPUTexture swapChainTexture = vgpuAcquireSwapchainTexture(commandBuffer, swapChain);
     if (swapChainTexture != nullptr)
     {
         VGPURenderPassColorAttachment colorAttachment = {};
