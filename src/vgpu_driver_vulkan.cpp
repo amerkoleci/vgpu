@@ -27,6 +27,7 @@ VGPU_ENABLE_WARNINGS()
 #undef Bool
 #endif
 
+#include <mutex>
 #include <string>
 #include <vector>
 #include <deque>
@@ -174,7 +175,18 @@ namespace
 #endif
     }
 
-    struct PhysicalDeviceExtensions
+    struct PhysicalDeviceVideoExtensions final
+    {
+        bool queue;
+        bool decode_queue;
+        bool decode_h264;
+        bool decode_h265;
+        bool encode_queue;
+        bool encode_h264;
+        bool encode_h265;
+    };
+
+    struct PhysicalDeviceExtensions final
     {
         bool swapchain;
         bool depth_clip_enable;
@@ -193,9 +205,12 @@ namespace
         bool NV_mesh_shader;
         bool EXT_conditional_rendering;
         bool win32_full_screen_exclusive;
+        bool dynamicRendering;
         bool extended_dynamic_state;
         bool extended_dynamic_state2;
-        bool dynamicRendering;
+        bool pipeline_creation_cache_control;
+        bool format_feature_flags2;
+        PhysicalDeviceVideoExtensions video{};
     };
 
     inline PhysicalDeviceExtensions QueryPhysicalDeviceExtensions(VkPhysicalDevice physicalDevice)
@@ -269,6 +284,24 @@ namespace
             else if (strcmp(vk_extensions[i].extensionName, VK_EXT_EXTENDED_DYNAMIC_STATE_2_EXTENSION_NAME) == 0) {
                 extensions.extended_dynamic_state2 = true;
             }
+            else if (strcmp(vk_extensions[i].extensionName, VK_EXT_PIPELINE_CREATION_CACHE_CONTROL_EXTENSION_NAME) == 0) {
+                extensions.pipeline_creation_cache_control = true;
+            }
+            else if (strcmp(vk_extensions[i].extensionName, VK_KHR_FORMAT_FEATURE_FLAGS_2_EXTENSION_NAME) == 0) {
+                extensions.format_feature_flags2 = true;
+            }
+            else if (strcmp(vk_extensions[i].extensionName, VK_KHR_VIDEO_QUEUE_EXTENSION_NAME) == 0) {
+                extensions.video.queue = true;
+            }
+            else if (strcmp(vk_extensions[i].extensionName, VK_KHR_VIDEO_DECODE_QUEUE_EXTENSION_NAME) == 0) {
+                extensions.video.decode_queue = true;
+            }
+            else if (strcmp(vk_extensions[i].extensionName, VK_KHR_VIDEO_DECODE_H264_EXTENSION_NAME) == 0) {
+                extensions.video.decode_h264 = true;
+            }
+            else if (strcmp(vk_extensions[i].extensionName, VK_KHR_VIDEO_DECODE_H265_EXTENSION_NAME) == 0) {
+                extensions.video.decode_h265 = true;
+            }
 #if defined(VK_USE_PLATFORM_WIN32_KHR)
             else if (strcmp(vk_extensions[i].extensionName, VK_EXT_FULL_SCREEN_EXCLUSIVE_EXTENSION_NAME) == 0) {
                 extensions.win32_full_screen_exclusive = true;
@@ -292,6 +325,8 @@ namespace
             extensions.dynamicRendering = true;
             extensions.extended_dynamic_state = true;
             extensions.extended_dynamic_state2 = true;
+            extensions.pipeline_creation_cache_control = true;
+            extensions.format_feature_flags2 = true;
         }
 
         return extensions;
@@ -509,6 +544,67 @@ namespace
             case VGPUCullMode_Front:
                 return VK_CULL_MODE_FRONT_BIT;
         }
+    }
+
+    constexpr VkBlendFactor ToVk(VGPUBlendFactor value)
+    {
+        switch (value)
+        {
+            case VGPUBlendFactor_Zero:                          return VK_BLEND_FACTOR_ZERO;
+            case VGPUBlendFactor_One:                           return VK_BLEND_FACTOR_ONE;
+            case VGPUBlendFactor_SourceColor:                   return VK_BLEND_FACTOR_SRC_COLOR;
+            case VGPUBlendFactor_OneMinusSourceColor:           return VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR;
+            case VGPUBlendFactor_SourceAlpha:                   return VK_BLEND_FACTOR_SRC_ALPHA;
+            case VGPUBlendFactor_OneMinusSourceAlpha:           return VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+            case VGPUBlendFactor_DestinationColor:              return VK_BLEND_FACTOR_DST_COLOR;
+            case VGPUBlendFactor_OneMinusDestinationColor:      return VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR;
+            case VGPUBlendFactor_DestinationAlpha:              return VK_BLEND_FACTOR_DST_ALPHA;
+            case VGPUBlendFactor_OneMinusDestinationAlpha:      return VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
+            case VGPUBlendFactor_SourceAlphaSaturated:          return VK_BLEND_FACTOR_SRC_ALPHA_SATURATE;
+            case VGPUBlendFactor_BlendColor:                    return VK_BLEND_FACTOR_CONSTANT_COLOR;
+            case VGPUBlendFactor_OneMinusBlendColor:            return VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_COLOR;
+            case VGPUBlendFactor_BlendAlpha:                    return VK_BLEND_FACTOR_CONSTANT_ALPHA;
+            case VGPUBlendFactor_OneMinusBlendAlpha:            return VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_ALPHA;
+            case VGPUBlendFactor_Source1Color:                  return VK_BLEND_FACTOR_SRC1_COLOR;
+            case VGPUBlendFactor_OneMinusSource1Color:          return VK_BLEND_FACTOR_ONE_MINUS_SRC1_COLOR;
+            case VGPUBlendFactor_Source1Alpha:                  return VK_BLEND_FACTOR_SRC1_ALPHA;
+            case VGPUBlendFactor_OneMinusSource1Alpha:          return VK_BLEND_FACTOR_ONE_MINUS_SRC1_ALPHA;
+            default:
+                VGPU_UNREACHABLE();
+        }
+    }
+
+    constexpr VkBlendOp ToVk(VGPUBlendOperation value)
+    {
+        switch (value)
+        {
+            case VGPUBlendOperation_Add:              return VK_BLEND_OP_ADD;
+            case VGPUBlendOperation_Subtract:         return VK_BLEND_OP_SUBTRACT;
+            case VGPUBlendOperation_ReverseSubtract:  return VK_BLEND_OP_REVERSE_SUBTRACT;
+            case VGPUBlendOperation_Min:              return VK_BLEND_OP_MIN;
+            case VGPUBlendOperation_Max:              return VK_BLEND_OP_MAX;
+            default:
+                VGPU_UNREACHABLE();
+        }
+    }
+
+    constexpr VkColorComponentFlags ToVk(VGPUColorWriteMaskFlags writeMask)
+    {
+        VkColorComponentFlags result = 0;
+        if (writeMask & VGPUColorWriteMask_Red) {
+            result |= VK_COLOR_COMPONENT_R_BIT;
+        }
+        if (writeMask & VGPUColorWriteMask_Green) {
+            result |= VK_COLOR_COMPONENT_G_BIT;
+        }
+        if (writeMask & VGPUColorWriteMask_Blue) {
+            result |= VK_COLOR_COMPONENT_B_BIT;
+        }
+        if (writeMask & VGPUColorWriteMask_Alpha) {
+            result |= VK_COLOR_COMPONENT_A_BIT;
+        }
+
+        return result;
     }
 
     constexpr VkImageAspectFlags GetImageAspectFlags(VkFormat format)
@@ -894,7 +990,7 @@ public:
     bool hasLabel = false;
     bool insideRenderPass = false;
     bool hasRenderPassLabel = false;
-    std::vector<VulkanSwapChain*> swapChains;
+    std::vector<VulkanSwapChain*> presentSwapChains;
 
     ~VulkanCommandBuffer() override;
 
@@ -967,15 +1063,48 @@ public:
     void DrawIndexedIndirect(VGPUBuffer indirectBuffer, uint64_t indirectBufferOffset) override;
 };
 
-struct Vulkan_UploadContext
+struct VulkanUploadContext final
 {
-    VkCommandPool commandPool = VK_NULL_HANDLE;
-    VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
-    uint64_t target = 0;
+    VkCommandPool transferCommandPool = VK_NULL_HANDLE;
+    VkCommandBuffer transferCommandBuffer = VK_NULL_HANDLE;
+    VkCommandPool transitionCommandPool = VK_NULL_HANDLE;
+    VkCommandBuffer transitionCommandBuffer = VK_NULL_HANDLE;
+    VkFence fence = VK_NULL_HANDLE;
+    VkSemaphore semaphores[3] = { VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE }; // graphics, compute, video
 
     uint64_t uploadBufferSize = 0;
     VulkanBuffer* uploadBuffer = nullptr;
     void* uploadBufferData = nullptr;
+
+    inline bool IsValid() const { return transferCommandBuffer != VK_NULL_HANDLE; }
+};
+
+struct VulkanQueue final
+{
+    VkQueue queue = VK_NULL_HANDLE;
+    VkSemaphore semaphore = VK_NULL_HANDLE;
+
+    std::vector<VulkanSwapChain*> swapchainUpdates;
+    std::vector<VkSwapchainKHR> submitSwapchains;
+    std::vector<uint32_t> submitSwapchainImageIndices;
+
+    std::vector<VkSemaphore> submitWaitSemaphores;
+    std::vector<VkPipelineStageFlags> submitWaitStages;
+    std::vector<uint64_t> submitWaitValues;
+    std::vector<VkCommandBuffer> submitCommandBuffers;
+    std::vector<VkSemaphore> submitSignalSemaphores;
+    std::vector<uint64_t> submitSignalValues;
+    // KHR_synchronization2
+    std::vector<VkSemaphoreSubmitInfo> submitWaitSemaphoreInfos;
+    std::vector<VkSemaphoreSubmitInfo> submitSignalSemaphoreInfos;
+    std::vector<VkCommandBufferSubmitInfo> submitCommandBufferInfos;
+
+    bool sparseBindingSupported = false;
+    std::mutex locker;
+
+    VkFence frameFences[VGPU_MAX_INFLIGHT_FRAMES] = {};
+
+    void Submit(VulkanRenderer* device, VkFence fence);
 };
 
 struct VulkanRenderer final : public VGPUDeviceImpl
@@ -998,6 +1127,7 @@ public:
     VGPUTexture CreateTexture(const VGPUTextureDesc* desc, const void* pInitialData) override;
     VGPUSampler CreateSampler(const VGPUSamplerDesc* desc) override;
 
+    VGPUBindGroupLayout CreateBindGroupLayout(const VGPUBindGroupLayoutDesc* desc) override;
     VGPUPipelineLayout CreatePipelineLayout(const VGPUPipelineLayoutDesc* desc) override;
 
     VGPUPipeline CreateRenderPipeline(const VGPURenderPipelineDesc* desc) override;
@@ -1011,9 +1141,8 @@ public:
     VGPUCommandBuffer BeginCommandBuffer(VGPUCommandQueue queueType, const char* label) override;
     uint64_t Submit(VGPUCommandBuffer* commandBuffers, uint32_t count) override;
 
-    Vulkan_UploadContext Allocate(uint64_t size);
-    void UploadSubmit(Vulkan_UploadContext context);
-    uint64_t UploadFlush();
+    VulkanUploadContext Allocate(uint64_t size);
+    void UploadSubmit(VulkanUploadContext context);
     void SetObjectName(VkObjectType type, uint64_t handle, const char* name);
     void ProcessDeletionQueue();
 
@@ -1068,32 +1197,34 @@ public:
     std::string driverDescription;
 
     VkPhysicalDevice physicalDevice;
-    uint32_t graphicsQueueFamily = VK_QUEUE_FAMILY_IGNORED;
-    uint32_t computeQueueFamily = VK_QUEUE_FAMILY_IGNORED;
-    uint32_t copyQueueFamily = VK_QUEUE_FAMILY_IGNORED;
-    VkQueue graphicsQueue = VK_NULL_HANDLE;
-    VkQueue computeQueue = VK_NULL_HANDLE;
-    VkQueue copyQueue = VK_NULL_HANDLE;
+    struct QueueFamilyIndices {
+        uint32_t queueFamilyCount = 0;
+
+        uint32_t familyIndices[_VGPUCommandQueue_Count];
+        uint32_t queueIndices[_VGPUCommandQueue_Count] = {};
+        uint32_t counts[_VGPUCommandQueue_Count] = {};
+
+        uint32_t timestampValidBits = 0;
+
+        std::vector<uint32_t> queueOffsets;
+        std::vector<std::vector<float>> queuePriorities;
+
+        QueueFamilyIndices()
+        {
+            for (auto& index : familyIndices)
+            {
+                index = VK_QUEUE_FAMILY_IGNORED;
+            }
+        }
+    } queueFamilyIndices{};
 
     VkDevice device = VK_NULL_HANDLE;
+    VulkanQueue queues[_VGPUCommandQueue_Count];
     VmaAllocator allocator = VK_NULL_HANDLE;
     uint64_t timestampFrequency = 0;
 
     uint32_t frameIndex = 0;
     uint64_t frameCount = 0;
-
-    struct FrameResources
-    {
-        VkFence fence = VK_NULL_HANDLE;
-        VkCommandPool initCommandPool = VK_NULL_HANDLE;
-        VkCommandBuffer initCommandBuffer = VK_NULL_HANDLE;
-    };
-    FrameResources frames[VGPU_MAX_INFLIGHT_FRAMES];
-    std::mutex initLocker;
-    bool submitInits = false;
-
-    const FrameResources& GetFrameResources() const { return frames[frameIndex]; }
-    FrameResources& GetFrameResources() { return frames[frameIndex]; }
 
     /* Command contexts */
     std::mutex cmdBuffersLocker;
@@ -1101,12 +1232,7 @@ public:
     std::vector<VulkanCommandBuffer*> commandBuffersPool;
 
     std::mutex uploadLocker;
-    VkSemaphore uploadSemaphore = VK_NULL_HANDLE;
-    std::vector<Vulkan_UploadContext> uploadFreeList;
-    std::vector<Vulkan_UploadContext> uploadWorkList; // In progress
-    uint64_t uploadFenceValue = 0;
-    std::vector<VkCommandBuffer> uploadSubmitCmds; // for next submit
-    uint64_t uploadSubmitWait = 0; // last submit wait value
+    std::vector<VulkanUploadContext> uploadFreeList;
 
     VkBuffer		nullBuffer = VK_NULL_HANDLE;
     VmaAllocation	nullBufferAllocation = VK_NULL_HANDLE;
@@ -1141,144 +1267,193 @@ public:
     std::deque<std::pair<VkQueryPool, uint64_t>> destroyedQueryPools;
 };
 
-Vulkan_UploadContext VulkanRenderer::Allocate(uint64_t size)
+VulkanUploadContext VulkanRenderer::Allocate(uint64_t size)
 {
+    VulkanUploadContext context;
+
     uploadLocker.lock();
-
-    // Create a new command list if there are no free ones.
-    if (uploadFreeList.empty())
+    // Try to search for a staging buffer that can fit the request:
+    for (size_t i = 0; i < uploadFreeList.size(); ++i)
     {
-        Vulkan_UploadContext context;
-
-        VkCommandPoolCreateInfo poolInfo = {};
-        poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-        poolInfo.queueFamilyIndex = copyQueueFamily;
-        poolInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
-        VK_CHECK(vkCreateCommandPool(device, &poolInfo, nullptr, &context.commandPool));
-
-        VkCommandBufferAllocateInfo commandBufferInfo = {};
-        commandBufferInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-        commandBufferInfo.commandBufferCount = 1;
-        commandBufferInfo.commandPool = context.commandPool;
-        commandBufferInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        VK_CHECK(vkAllocateCommandBuffers(device, &commandBufferInfo, &context.commandBuffer));
-
-        uploadFreeList.push_back(context);
-    }
-
-    Vulkan_UploadContext context = uploadFreeList.back();
-    if (context.uploadBufferSize < size)
-    {
-        // Try to search for a staging buffer that can fit the request:
-        for (size_t i = 0; i < uploadFreeList.size(); ++i)
+        if (uploadFreeList[i].uploadBufferSize >= size)
         {
-            if (uploadFreeList[i].uploadBufferSize >= size)
+            if (vkGetFenceStatus(device, uploadFreeList[i].fence) == VK_SUCCESS)
             {
-                context = uploadFreeList[i];
+                context = std::move(uploadFreeList[i]);
                 std::swap(uploadFreeList[i], uploadFreeList.back());
+                uploadFreeList.pop_back();
                 break;
             }
         }
     }
-    uploadFreeList.pop_back();
     uploadLocker.unlock();
 
-    // If no buffer was found that fits the data, create one:
-    if (context.uploadBufferSize < size)
+    // If no buffer was found that fits the data then create new one.
+    if (!context.IsValid())
     {
-        // Release old one first
-        if (context.uploadBuffer)
-        {
-            context.uploadBuffer->Release();
-        }
+        VkCommandPoolCreateInfo poolCreateInfo = {};
+        poolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+        poolCreateInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
+        poolCreateInfo.queueFamilyIndex = queueFamilyIndices.familyIndices[VGPUCommandQueue_Copy];
+        VK_CHECK(vkCreateCommandPool(device, &poolCreateInfo, nullptr, &context.transferCommandPool));
 
-        uint64_t newSize = vgpuNextPowerOfTwo(size);
+        poolCreateInfo.queueFamilyIndex = queueFamilyIndices.familyIndices[VGPUCommandQueue_Graphics];
+        VK_CHECK(vkCreateCommandPool(device, &poolCreateInfo, nullptr, &context.transitionCommandPool));
+
+        VkCommandBufferAllocateInfo commandBufferInfo = {};
+        commandBufferInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        commandBufferInfo.commandPool = context.transferCommandPool;
+        commandBufferInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        commandBufferInfo.commandBufferCount = 1u;
+        VK_CHECK(vkAllocateCommandBuffers(device, &commandBufferInfo, &context.transferCommandBuffer));
+
+        commandBufferInfo.commandPool = context.transitionCommandPool;
+        VK_CHECK(vkAllocateCommandBuffers(device, &commandBufferInfo, &context.transitionCommandBuffer));
+
+        VkFenceCreateInfo fenceInfo = {};
+        fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        VK_CHECK(vkCreateFence(device, &fenceInfo, nullptr, &context.fence));
+
+        VkSemaphoreCreateInfo semaphoreInfo = {};
+        semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+        VK_CHECK(vkCreateSemaphore(device, &semaphoreInfo, nullptr, &context.semaphores[0]));
+        VK_CHECK(vkCreateSemaphore(device, &semaphoreInfo, nullptr, &context.semaphores[1]));
+        VK_CHECK(vkCreateSemaphore(device, &semaphoreInfo, nullptr, &context.semaphores[2]));
+
+        context.uploadBufferSize = vgpuNextPowerOfTwo(size);
+        context.uploadBufferSize = _VGPU_MAX(context.uploadBufferSize, uint64_t(65536));
 
         VGPUBufferDesc uploadBufferDesc{};
         uploadBufferDesc.label = "UploadBuffer";
-        uploadBufferDesc.size = newSize;
+        uploadBufferDesc.size = context.uploadBufferSize;
         uploadBufferDesc.cpuAccess = VGPUCpuAccessMode_Write;
         context.uploadBuffer = (VulkanBuffer*)CreateBuffer(&uploadBufferDesc, nullptr);
         context.uploadBufferData = context.uploadBuffer->pMappedData;
     }
 
-    // begin command list in valid state:
-    VK_CHECK(vkResetCommandPool(device, context.commandPool, 0));
+    // Begin command list in valid state.
+    VK_CHECK(vkResetCommandPool(device, context.transferCommandPool, 0));
+    VK_CHECK(vkResetCommandPool(device, context.transitionCommandPool, 0));
 
     VkCommandBufferBeginInfo beginInfo = {};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
     beginInfo.pInheritanceInfo = nullptr;
-    VK_CHECK(vkBeginCommandBuffer(context.commandBuffer, &beginInfo));
+    VK_CHECK(vkBeginCommandBuffer(context.transferCommandBuffer, &beginInfo));
+    VK_CHECK(vkBeginCommandBuffer(context.transitionCommandBuffer, &beginInfo));
+    VK_CHECK(vkResetFences(device, 1, &context.fence));
 
     return context;
 }
 
-
-void VulkanRenderer::UploadSubmit(Vulkan_UploadContext context)
+void VulkanRenderer::UploadSubmit(VulkanUploadContext context)
 {
-    VkResult result = vkEndCommandBuffer(context.commandBuffer);
-    VGPU_UNUSED(result);
-    VGPU_ASSERT(result == VK_SUCCESS);
+    VK_CHECK(vkEndCommandBuffer(context.transferCommandBuffer));
+    VK_CHECK(vkEndCommandBuffer(context.transitionCommandBuffer));
 
-    // It was very slow in Vulkan to submit the copies immediately
-    //	In Vulkan, the submit is not thread safe, so it had to be locked
-    //	Instead, the submits are batched and performed in flush() function
-    uploadLocker.lock();
-    context.target = ++uploadFenceValue;
-    uploadWorkList.push_back(context);
-    uploadSubmitCmds.push_back(context.commandBuffer);
-    uploadSubmitWait = _VGPU_MAX(uploadSubmitWait, context.target);
-    uploadLocker.unlock();
-}
+    VkSemaphoreSubmitInfo waitSemaphoreInfo{};
+    waitSemaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
 
-uint64_t VulkanRenderer::UploadFlush()
-{
-    uploadLocker.lock();
-    if (!uploadSubmitCmds.empty())
+    // Copy queue first
     {
-        VkTimelineSemaphoreSubmitInfo timelineInfo = {};
-        timelineInfo.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO;
-        timelineInfo.pNext = nullptr;
-        timelineInfo.waitSemaphoreValueCount = 0;
-        timelineInfo.pWaitSemaphoreValues = nullptr;
-        timelineInfo.signalSemaphoreValueCount = 1;
-        timelineInfo.pSignalSemaphoreValues = &uploadSubmitWait;
+        VkCommandBufferSubmitInfo commandBufferInfo{};
+        commandBufferInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
+        commandBufferInfo.commandBuffer = context.transferCommandBuffer;
 
-        VkSubmitInfo submitInfo = {};
-        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        submitInfo.pNext = &timelineInfo;
-        submitInfo.commandBufferCount = (uint32_t)uploadSubmitCmds.size();
-        submitInfo.pCommandBuffers = uploadSubmitCmds.data();
-        submitInfo.pSignalSemaphores = &uploadSemaphore;
-        submitInfo.signalSemaphoreCount = 1;
+        VkSemaphoreSubmitInfo signalSemaphoreInfo = {};
+        signalSemaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
+        signalSemaphoreInfo.semaphore = context.semaphores[0]; // Signal for graphics queue
+        signalSemaphoreInfo.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
 
-        VkResult res = vkQueueSubmit(copyQueue, 1, &submitInfo, VK_NULL_HANDLE);
-        VGPU_VERIFY(res == VK_SUCCESS);
+        VkSubmitInfo2 submitInfo = {};
+        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
+        submitInfo.waitSemaphoreInfoCount = 0;
+        submitInfo.pWaitSemaphoreInfos = nullptr;
+        submitInfo.commandBufferInfoCount = 1;
+        submitInfo.pCommandBufferInfos = &commandBufferInfo;
+        submitInfo.signalSemaphoreInfoCount = 1;
+        submitInfo.pSignalSemaphoreInfos = &signalSemaphoreInfo;
 
-        uploadSubmitCmds.clear();
+        std::scoped_lock lock(queues[VGPUCommandQueue_Copy].locker);
+        VK_CHECK(vkQueueSubmit2(queues[VGPUCommandQueue_Copy].queue, 1, &submitInfo, VK_NULL_HANDLE));
     }
 
-    // free up the finished command lists:
-    uint64_t completedFenceValue;
-    VkResult res = vkGetSemaphoreCounterValue(device, uploadSemaphore, &completedFenceValue);
-    VGPU_VERIFY(res == VK_SUCCESS);
-    for (size_t i = 0; i < uploadWorkList.size(); ++i)
+    // Graphics queue
     {
-        if (uploadWorkList[i].target <= completedFenceValue)
+        waitSemaphoreInfo.semaphore = context.semaphores[0]; // Wait for copy queue
+        waitSemaphoreInfo.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+
+        VkCommandBufferSubmitInfo commandBufferInfo{};
+        commandBufferInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
+        commandBufferInfo.commandBuffer = context.transitionCommandBuffer;
+
+        VkSemaphoreSubmitInfo signalSemaphoreInfos[2] = {};
+        signalSemaphoreInfos[0].sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
+        signalSemaphoreInfos[0].semaphore = context.semaphores[1]; // Signal for compute queue
+        signalSemaphoreInfos[0].stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT; // Signal for compute queue
+
+        VkSubmitInfo2 submitInfo = {};
+        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
+        submitInfo.waitSemaphoreInfoCount = 1;
+        submitInfo.pWaitSemaphoreInfos = &waitSemaphoreInfo;
+        submitInfo.commandBufferInfoCount = 1;
+        submitInfo.pCommandBufferInfos = &commandBufferInfo;
+
+        //if (device->queues[QUEUE_VIDEO_DECODE].queue != VK_NULL_HANDLE)
+        //{
+        //    signalSemaphoreInfos[1].sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
+        //    signalSemaphoreInfos[1].semaphore = cmd.semaphores[2]; // signal for video decode queue
+        //    signalSemaphoreInfos[1].stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT; // signal for video decode queue
+        //    submitInfo.signalSemaphoreInfoCount = 2;
+        //}
+        //else
         {
-            uploadFreeList.push_back(uploadWorkList[i]);
-            uploadWorkList[i] = uploadWorkList.back();
-            uploadWorkList.pop_back();
-            i--;
+            submitInfo.signalSemaphoreInfoCount = 1;
         }
+        submitInfo.pSignalSemaphoreInfos = signalSemaphoreInfos;
+
+        std::scoped_lock lock(queues[VGPUCommandQueue_Graphics].locker);
+        VK_CHECK(vkQueueSubmit2(queues[VGPUCommandQueue_Graphics].queue, 1, &submitInfo, VK_NULL_HANDLE));
     }
 
-    uint64_t value = uploadSubmitWait;
-    uploadSubmitWait = 0;
-    uploadLocker.unlock();
+    //if (device->queues[QUEUE_VIDEO_DECODE].queue != VK_NULL_HANDLE)
+    //{
+    //    waitSemaphoreInfo.semaphore = cmd.semaphores[2]; // wait for graphics queue
+    //    waitSemaphoreInfo.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+    //
+    //    submitInfo.waitSemaphoreInfoCount = 1;
+    //    submitInfo.pWaitSemaphoreInfos = &waitSemaphoreInfo;
+    //    submitInfo.commandBufferInfoCount = 0;
+    //    submitInfo.pCommandBufferInfos = nullptr;
+    //    submitInfo.signalSemaphoreInfoCount = 0;
+    //    submitInfo.pSignalSemaphoreInfos = nullptr;
+    //
+    //    std::scoped_lock lock(device->queues[QUEUE_VIDEO_DECODE].locker);
+    //    res = vkQueueSubmit2(device->queues[QUEUE_VIDEO_DECODE].queue, 1, &submitInfo, VK_NULL_HANDLE);
+    //    assert(res == VK_SUCCESS);
+    //}
 
-    return value;
+    // This must be final submit in this function because it will also signal a fence for state tracking by CPU!
+    {
+        waitSemaphoreInfo.semaphore = context.semaphores[1]; // wait for graphics queue
+        waitSemaphoreInfo.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+
+        VkSubmitInfo2 submitInfo = {};
+        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
+        submitInfo.waitSemaphoreInfoCount = 1;
+        submitInfo.pWaitSemaphoreInfos = &waitSemaphoreInfo;
+        submitInfo.commandBufferInfoCount = 0;
+        submitInfo.pCommandBufferInfos = nullptr;
+        submitInfo.signalSemaphoreInfoCount = 0;
+        submitInfo.pSignalSemaphoreInfos = nullptr;
+
+        // Final submit also signals fence!
+        std::scoped_lock lock(queues[VGPUCommandQueue_Compute].locker);
+        VK_CHECK(vkQueueSubmit2(queues[VGPUCommandQueue_Compute].queue, 1, &submitInfo, context.fence));
+    }
+
+    std::scoped_lock lock(uploadLocker);
+    uploadFreeList.push_back(context);
 }
 
 void VulkanRenderer::SetObjectName(VkObjectType type, uint64_t handle, const char* name)
@@ -1590,12 +1765,6 @@ VulkanRenderer::~VulkanRenderer()
 {
     VK_CHECK(vkDeviceWaitIdle(device));
 
-    for (auto& frame : frames)
-    {
-        vkDestroyFence(device, frame.fence, nullptr);
-        vkDestroyCommandPool(device, frame.initCommandPool, nullptr);
-    }
-
     for (size_t i = 0; i < commandBuffersPool.size(); ++i)
     {
         VulkanCommandBuffer* commandBuffer = commandBuffersPool[i];
@@ -1603,14 +1772,34 @@ VulkanRenderer::~VulkanRenderer()
     }
     commandBuffersPool.clear();
 
-    // Destroy upload stuff
-    vkQueueWaitIdle(copyQueue);
-    for (auto& x : uploadFreeList)
+    for (uint8_t i = 0; i < _VGPUCommandQueue_Count; ++i)
     {
-        vgpuBufferRelease(x.uploadBuffer);
-        vkDestroyCommandPool(device, x.commandPool, nullptr);
+        if (queues[i].queue == VK_NULL_HANDLE)
+            continue;
+
+        vkDestroySemaphore(device, queues[i].semaphore, nullptr);
+
+        for (uint32_t j = 0; j < VGPU_MAX_INFLIGHT_FRAMES; ++j)
+        {
+            vkDestroyFence(device, queues[i].frameFences[j], nullptr);
+        }
     }
-    vkDestroySemaphore(device, uploadSemaphore, nullptr);
+
+    // Destroy upload stuff
+    vkQueueWaitIdle(queues[VGPUCommandQueue_Copy].queue);
+    for (auto& context : uploadFreeList)
+    {
+        vkDestroyCommandPool(device, context.transferCommandPool, nullptr);
+        vkDestroyCommandPool(device, context.transitionCommandPool, nullptr);
+        vkDestroySemaphore(device, context.semaphores[0], nullptr);
+        vkDestroySemaphore(device, context.semaphores[1], nullptr);
+        vkDestroySemaphore(device, context.semaphores[2], nullptr);
+        vkDestroyFence(device, context.fence, nullptr);
+
+        uint32_t count = context.uploadBuffer->Release();
+        VGPU_UNUSED(count);
+        context.uploadBufferData = nullptr;
+    }
 
     frameCount = UINT64_MAX;
     ProcessDeletionQueue();
@@ -1864,6 +2053,19 @@ void VulkanRenderer::GetLimits(VGPULimits* limits) const
 #undef SET_LIMIT_FROM_VULKAN
 }
 
+static void AddUniqueFamily(uint32_t* sharing_indices, uint32_t& count, uint32_t family)
+{
+    if (family == VK_QUEUE_FAMILY_IGNORED)
+        return;
+
+    for (uint32_t i = 0; i < count; i++)
+    {
+        if (sharing_indices[i] == family)
+            return;
+    }
+
+    sharing_indices[count++] = family;
+}
 
 /* Buffer */
 VGPUBuffer VulkanRenderer::CreateBuffer(const VGPUBufferDesc* desc, const void* pInitialData)
@@ -1945,25 +2147,16 @@ VGPUBuffer VulkanRenderer::CreateBuffer(const VGPUBufferDesc* desc, const void* 
     bufferInfo.usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 
     uint32_t sharingIndices[3] = {};
-    if (graphicsQueueFamily != computeQueueFamily ||
-        graphicsQueueFamily != copyQueueFamily)
+    for (auto& i : queueFamilyIndices.familyIndices)
+    {
+        AddUniqueFamily(sharingIndices, bufferInfo.queueFamilyIndexCount, i);
+    }
+
+    if (bufferInfo.queueFamilyIndexCount > 1)
     {
         // For buffers, always just use CONCURRENT access modes,
         // so we don't have to deal with acquire/release barriers in async compute.
         bufferInfo.sharingMode = VK_SHARING_MODE_CONCURRENT;
-
-        sharingIndices[bufferInfo.queueFamilyIndexCount++] = graphicsQueueFamily;
-
-        if (graphicsQueueFamily != computeQueueFamily)
-        {
-            sharingIndices[bufferInfo.queueFamilyIndexCount++] = computeQueueFamily;
-        }
-
-        if (graphicsQueueFamily != copyQueueFamily
-            && computeQueueFamily != copyQueueFamily)
-        {
-            sharingIndices[bufferInfo.queueFamilyIndexCount++] = copyQueueFamily;
-        }
 
         bufferInfo.pQueueFamilyIndices = sharingIndices;
     }
@@ -2024,15 +2217,22 @@ VGPUBuffer VulkanRenderer::CreateBuffer(const VGPUBufferDesc* desc, const void* 
     // Issue data copy.
     if (pInitialData != nullptr)
     {
+        VulkanUploadContext uploadContext;
+        void* pMappedData = nullptr;
         if (desc->cpuAccess == VGPUCpuAccessMode_Write)
         {
-            memcpy(buffer->pMappedData, pInitialData, desc->size);
+            pMappedData = buffer->pMappedData;
         }
         else
         {
-            auto context = Allocate(desc->size);
-            memcpy(context.uploadBufferData, pInitialData, desc->size);
+            uploadContext = Allocate(desc->size);
+            pMappedData = uploadContext.uploadBufferData;
+        }
 
+        memcpy(pMappedData, pInitialData, desc->size);
+
+        if (uploadContext.IsValid())
+        {
             VkBufferMemoryBarrier barrier = {};
             barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
             barrier.buffer = buffer->handle;
@@ -2044,7 +2244,7 @@ VGPUBuffer VulkanRenderer::CreateBuffer(const VGPUBufferDesc* desc, const void* 
             barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 
             vkCmdPipelineBarrier(
-                context.commandBuffer,
+                uploadContext.transferCommandBuffer,
                 VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
                 VK_PIPELINE_STAGE_TRANSFER_BIT,
                 0,
@@ -2059,8 +2259,8 @@ VGPUBuffer VulkanRenderer::CreateBuffer(const VGPUBufferDesc* desc, const void* 
             copyRegion.dstOffset = 0;
 
             vkCmdCopyBuffer(
-                context.commandBuffer,
-                ((VulkanBuffer*)context.uploadBuffer)->handle,
+                uploadContext.transferCommandBuffer,
+                uploadContext.uploadBuffer->handle,
                 buffer->handle,
                 1,
                 &copyRegion
@@ -2102,7 +2302,7 @@ VGPUBuffer VulkanRenderer::CreateBuffer(const VGPUBufferDesc* desc, const void* 
             }
 
             vkCmdPipelineBarrier(
-                context.commandBuffer,
+                uploadContext.transferCommandBuffer,
                 VK_PIPELINE_STAGE_TRANSFER_BIT,
                 VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
                 0,
@@ -2111,7 +2311,7 @@ VGPUBuffer VulkanRenderer::CreateBuffer(const VGPUBufferDesc* desc, const void* 
                 0, nullptr
             );
 
-            UploadSubmit(context);
+            UploadSubmit(uploadContext);
         }
     }
 
@@ -2198,25 +2398,16 @@ VGPUTexture VulkanRenderer::CreateTexture(const VGPUTextureDesc* desc, const voi
     }
 
     uint32_t sharingIndices[3] = {};
-    if (graphicsQueueFamily != computeQueueFamily ||
-        graphicsQueueFamily != copyQueueFamily)
+    for (auto& i : queueFamilyIndices.familyIndices)
+    {
+        AddUniqueFamily(sharingIndices, createInfo.queueFamilyIndexCount, i);
+    }
+
+    if (createInfo.queueFamilyIndexCount > 1)
     {
         // For buffers, always just use CONCURRENT access modes,
         // so we don't have to deal with acquire/release barriers in async compute.
         createInfo.sharingMode = VK_SHARING_MODE_CONCURRENT;
-
-        sharingIndices[createInfo.queueFamilyIndexCount++] = graphicsQueueFamily;
-
-        if (graphicsQueueFamily != computeQueueFamily)
-        {
-            sharingIndices[createInfo.queueFamilyIndexCount++] = computeQueueFamily;
-        }
-
-        if (graphicsQueueFamily != copyQueueFamily
-            && computeQueueFamily != copyQueueFamily)
-        {
-            sharingIndices[createInfo.queueFamilyIndexCount++] = copyQueueFamily;
-        }
 
         createInfo.pQueueFamilyIndices = sharingIndices;
     }
@@ -2259,34 +2450,40 @@ VGPUTexture VulkanRenderer::CreateTexture(const VGPUTextureDesc* desc, const voi
     if (pInitialData != nullptr)
     {
     }
+    else
+    {
+        VulkanUploadContext uploadContext = Allocate(0);
 
-    // Barrier
-    VkImageMemoryBarrier2 barrier = {};
-    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-    barrier.image = texture->handle;
-    barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    barrier.newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-    barrier.srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
-    barrier.dstStageMask = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
-    barrier.srcAccessMask = 0;
-    barrier.dstAccessMask = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
-    barrier.subresourceRange.aspectMask = GetImageAspectFlags(createInfo.format);
-    barrier.subresourceRange.baseArrayLayer = 0;
-    barrier.subresourceRange.layerCount = createInfo.arrayLayers;
-    barrier.subresourceRange.baseMipLevel = 0;
-    barrier.subresourceRange.levelCount = createInfo.mipLevels;
-    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        // Barrier
+        if (features1_3.synchronization2)
+        {
+            VkImageMemoryBarrier2 barrier = {};
+            barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+            barrier.image = texture->handle;
+            barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            barrier.newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+            barrier.srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+            barrier.dstStageMask = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
+            barrier.srcAccessMask = 0;
+            barrier.dstAccessMask = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+            barrier.subresourceRange.aspectMask = GetImageAspectFlags(createInfo.format);
+            barrier.subresourceRange.baseArrayLayer = 0;
+            barrier.subresourceRange.layerCount = createInfo.arrayLayers;
+            barrier.subresourceRange.baseMipLevel = 0;
+            barrier.subresourceRange.levelCount = createInfo.mipLevels;
+            barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 
-    VkDependencyInfo dependencyInfo = {};
-    dependencyInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    dependencyInfo.imageMemoryBarrierCount = 1;
-    dependencyInfo.pImageMemoryBarriers = &barrier;
+            VkDependencyInfo dependencyInfo = {};
+            dependencyInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+            dependencyInfo.imageMemoryBarrierCount = 1;
+            dependencyInfo.pImageMemoryBarriers = &barrier;
 
-    initLocker.lock();
-    vkCmdPipelineBarrier2(GetFrameResources().initCommandBuffer, &dependencyInfo);
-    submitInits = true;
-    initLocker.unlock();
+            vkCmdPipelineBarrier2(uploadContext.transitionCommandBuffer, &dependencyInfo);
+        }
+
+        UploadSubmit(uploadContext);
+    }
 
     return texture;
 }
@@ -2360,6 +2557,14 @@ VGPUSampler VulkanRenderer::CreateSampler(const VGPUSamplerDesc* desc)
     }
 
     return sampler;
+}
+
+/* BindGroupLayout */
+VGPUBindGroupLayout VulkanRenderer::CreateBindGroupLayout(const VGPUBindGroupLayoutDesc* desc)
+{
+    VGPU_UNUSED(desc);
+
+    return nullptr;
 }
 
 /* PipelineLayout */
@@ -2675,14 +2880,40 @@ VGPUPipeline VulkanRenderer::CreateRenderPipeline(const VGPURenderPipelineDesc* 
     }
 
     // Color blend state
-    VkPipelineColorBlendAttachmentState blendAttachmentState[1] = {};
-    blendAttachmentState[0].colorWriteMask = 0xf;
-    blendAttachmentState[0].blendEnable = VK_FALSE;
-    VkPipelineColorBlendStateCreateInfo colorBlendState = {};
-    colorBlendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-    colorBlendState.attachmentCount = 1;
-    colorBlendState.pAttachments = blendAttachmentState;
+    VkPipelineColorBlendStateCreateInfo blendState = {};
+    blendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+    blendState.attachmentCount = 0;
 
+    VkPipelineColorBlendAttachmentState blendAttachmentStates[VGPU_MAX_COLOR_ATTACHMENTS] = {};
+
+    for (uint32_t i = 0; i < desc->colorFormatCount; ++i)
+    {
+        VGPU_ASSERT(desc->colorFormats[i] != VGPUTextureFormat_Undefined);
+
+        uint32_t attachmentIndex = 0;
+        if (desc->blendState.independentBlendEnable)
+            attachmentIndex = i;
+
+        const VGPURenderTargetBlendState& attachment = desc->blendState.renderTargets[attachmentIndex];
+        blendAttachmentStates[blendState.attachmentCount].blendEnable = attachment.blendEnabled ? VK_TRUE : VK_FALSE; // BlendEnabled(&attachment) ? VK_TRUE : VK_FALSE;
+        blendAttachmentStates[blendState.attachmentCount].srcColorBlendFactor = ToVk(attachment.srcColorBlendFactor);
+        blendAttachmentStates[blendState.attachmentCount].dstColorBlendFactor = ToVk(attachment.dstColorBlendFactor);
+        blendAttachmentStates[blendState.attachmentCount].colorBlendOp = ToVk(attachment.colorBlendOperation);
+        blendAttachmentStates[blendState.attachmentCount].srcAlphaBlendFactor = ToVk(attachment.srcAlphaBlendFactor);
+        blendAttachmentStates[blendState.attachmentCount].dstAlphaBlendFactor = ToVk(attachment.dstAlphaBlendFactor);
+        blendAttachmentStates[blendState.attachmentCount].alphaBlendOp = ToVk(attachment.alphaBlendOperation);
+        blendAttachmentStates[blendState.attachmentCount].colorWriteMask = ToVk(attachment.colorWriteMask);
+        blendState.attachmentCount++;
+    }
+    blendState.logicOpEnable = VK_FALSE;
+    blendState.logicOp = VK_LOGIC_OP_CLEAR;
+    blendState.pAttachments = blendAttachmentStates;
+    blendState.blendConstants[0] = 0.0f;
+    blendState.blendConstants[1] = 0.0f;
+    blendState.blendConstants[2] = 0.0f;
+    blendState.blendConstants[3] = 0.0f;
+
+    // 
     VkGraphicsPipelineCreateInfo createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
     createInfo.pNext = &renderingInfo;
@@ -2695,7 +2926,7 @@ VGPUPipeline VulkanRenderer::CreateRenderPipeline(const VGPURenderPipelineDesc* 
     createInfo.pRasterizationState = &rasterizationState;
     createInfo.pMultisampleState = &multisampleState;
     createInfo.pDepthStencilState = &depthStencilState;
-    createInfo.pColorBlendState = &colorBlendState;
+    createInfo.pColorBlendState = &blendState;
     createInfo.pDynamicState = &dynamicStateInfo;
     createInfo.layout = layout->handle;
     createInfo.renderPass = VK_NULL_HANDLE;
@@ -3080,7 +3311,7 @@ VGPUSwapChain VulkanRenderer::CreateSwapChain(void* windowHandle, const VGPUSwap
     }
 
     VkBool32 supported = VK_FALSE;
-    VkResult result = vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, graphicsQueueFamily, vk_surface, &supported);
+    VkResult result = vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, queueFamilyIndices.familyIndices[VGPUCommandQueue_Graphics], vk_surface, &supported);
     if (result != VK_SUCCESS || !supported)
     {
         return nullptr;
@@ -3123,7 +3354,7 @@ void VulkanCommandBuffer::Reset()
     clearValueCount = 0u;
     insideRenderPass = false;
 
-    swapChains.clear();
+    presentSwapChains.clear();
 
     if (currentPipeline)
     {
@@ -3311,7 +3542,7 @@ VGPUTexture VulkanCommandBuffer::AcquireSwapchainTexture(VGPUSwapChain swapChain
         range
     );
 
-    swapChains.push_back(vulkanSwapChain);
+    presentSwapChains.push_back(vulkanSwapChain);
 
     return swapchainTexture;
 }
@@ -3687,22 +3918,7 @@ VGPUCommandBuffer VulkanRenderer::BeginCommandBuffer(VGPUCommandQueue queueType,
         {
             VkCommandPoolCreateInfo poolInfo = {};
             poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-
-            switch (queueType)
-            {
-                case VGPUCommandQueue_Graphics:
-                    poolInfo.queueFamilyIndex = graphicsQueueFamily;
-                    break;
-                case VGPUCommandQueue_Compute:
-                    poolInfo.queueFamilyIndex = computeQueueFamily;
-                    break;
-                case VGPUCommandQueue_Copy:
-                    poolInfo.queueFamilyIndex = copyQueueFamily;
-                    break;
-                default:
-                    assert(0); // queue type not handled
-                    break;
-            }
+            poolInfo.queueFamilyIndex = queueFamilyIndices.familyIndices[queueType];
 
             poolInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
             //poolInfo.queueFamilyIndex = renderer->computeQueueFamily;
@@ -3732,62 +3948,142 @@ VGPUCommandBuffer VulkanRenderer::BeginCommandBuffer(VGPUCommandQueue queueType,
     return commandBuffersPool.back();
 }
 
+void VulkanQueue::Submit(VulkanRenderer* device, VkFence fence)
+{
+    if (queue == VK_NULL_HANDLE)
+        return;
+
+    std::scoped_lock lock(locker);
+
+    if (device->features1_3.synchronization2 == VK_TRUE)
+    {
+        VGPU_ASSERT(submitSignalSemaphores.size() == submitSignalSemaphoreInfos.size());
+        VkSubmitInfo2 submitInfo = {};
+        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
+        submitInfo.waitSemaphoreInfoCount = (uint32_t)submitWaitSemaphoreInfos.size();
+        submitInfo.pWaitSemaphoreInfos = submitWaitSemaphoreInfos.data();
+        submitInfo.commandBufferInfoCount = (uint32_t)submitCommandBufferInfos.size();
+        submitInfo.pCommandBufferInfos = submitCommandBufferInfos.data();
+        submitInfo.signalSemaphoreInfoCount = (uint32_t)submitSignalSemaphoreInfos.size();
+        submitInfo.pSignalSemaphoreInfos = submitSignalSemaphoreInfos.data();
+
+        VK_CHECK(vkQueueSubmit2(queue, 1, &submitInfo, fence));
+    }
+    else
+    {
+        VkTimelineSemaphoreSubmitInfo timelineInfo = {};
+        timelineInfo.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO;
+        timelineInfo.pNext = nullptr;
+        timelineInfo.waitSemaphoreValueCount = (uint32_t)submitWaitValues.size();
+        timelineInfo.pWaitSemaphoreValues = submitWaitValues.data();
+        timelineInfo.signalSemaphoreValueCount = (uint32_t)submitSignalValues.size();
+        timelineInfo.pSignalSemaphoreValues = submitSignalValues.data();
+
+        VkSubmitInfo submitInfo = {};
+        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submitInfo.pNext = &timelineInfo;
+        submitInfo.waitSemaphoreCount = (uint32_t)submitWaitSemaphores.size();
+        submitInfo.pWaitSemaphores = submitWaitSemaphores.data();
+        submitInfo.pWaitDstStageMask = submitWaitStages.data();
+        submitInfo.commandBufferCount = (uint32_t)submitCommandBuffers.size();
+        submitInfo.pCommandBuffers = submitCommandBuffers.data();
+        submitInfo.signalSemaphoreCount = (uint32_t)submitSignalSemaphores.size();
+        submitInfo.pSignalSemaphores = submitSignalSemaphores.data();
+
+        VK_CHECK(vkQueueSubmit(queue, 1, &submitInfo, fence));
+    }
+
+    if (!submitSwapchains.empty())
+    {
+        VkPresentInfoKHR presentInfo = {};
+        presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+        presentInfo.waitSemaphoreCount = (uint32_t)submitSignalSemaphores.size();
+        presentInfo.pWaitSemaphores = submitSignalSemaphores.data();
+        presentInfo.swapchainCount = (uint32_t)submitSwapchains.size();
+        presentInfo.pSwapchains = submitSwapchains.data();
+        presentInfo.pImageIndices = submitSwapchainImageIndices.data();
+
+        VkResult result = vkQueuePresentKHR(queue, &presentInfo);
+        if (result != VK_SUCCESS)
+        {
+            // Handle outdated error in present
+            if (result == VK_SUBOPTIMAL_KHR || result == VK_ERROR_OUT_OF_DATE_KHR)
+            {
+                for (auto& swapchain : swapchainUpdates)
+                {
+                    vulkan_updateSwapChain(device, swapchain);
+                }
+            }
+            else
+            {
+                VGPU_UNREACHABLE();
+            }
+        }
+    }
+
+    swapchainUpdates.clear();
+    submitSwapchains.clear();
+    submitSwapchainImageIndices.clear();
+    submitWaitSemaphores.clear();
+    submitWaitStages.clear();
+    submitWaitValues.clear();
+    submitCommandBuffers.clear();
+    submitSignalSemaphores.clear();
+    // KHR_synchronization2
+    submitWaitSemaphoreInfos.clear();
+    submitSignalSemaphoreInfos.clear();
+    submitSignalValues.clear();
+    submitCommandBufferInfos.clear();
+}
+
+
 uint64_t VulkanRenderer::Submit(VGPUCommandBuffer* commandBuffers, uint32_t count)
 {
-    // Collect present swapchains
-    std::vector<VkSemaphore> waitSemaphores;
-    std::vector<VkPipelineStageFlags> waitStages;
-    std::vector<uint64_t> submitWaitValues;
-    std::vector<VkSemaphore> submitSignalSemaphores;
-    std::vector<uint64_t> submitSignalValues;
-    std::vector<VulkanSwapChain*> presentSwapChains;
-    std::vector<VkSwapchainKHR> presentVkSwapChains;
-    std::vector<uint32_t> swapChainImageIndices;
-
     VkResult result = VK_SUCCESS;
-    initLocker.lock();
     cmdBuffersCount = 0;
 
     // Submit current frame.
     {
-        auto& frame = frames[frameIndex];
-
-        // Transitions first.
-        std::vector<VkCommandBuffer> submitCommandBuffers;
-        if (submitInits)
-        {
-            result = vkEndCommandBuffer(frame.initCommandBuffer);
-            VGPU_ASSERT(result == VK_SUCCESS);
-            submitCommandBuffers.push_back(frame.initCommandBuffer);
-        }
-
-        // Sync up with copyallocator before first submit
-        uint64_t copySyncValue = UploadFlush();
-        if (copySyncValue > 0)
-        {
-            waitStages.push_back(VK_PIPELINE_STAGE_TRANSFER_BIT);
-            waitSemaphores.push_back(uploadSemaphore);
-            submitWaitValues.push_back(copySyncValue);
-            copySyncValue = 0;
-        }
-
         for (uint32_t i = 0; i < count; i += 1)
         {
             VulkanCommandBuffer* commandBuffer = static_cast<VulkanCommandBuffer*>(commandBuffers[i]);
+            VulkanQueue& queue = queues[commandBuffer->queueType];
 
-            for (size_t j = 0; j < commandBuffer->swapChains.size(); ++j)
+            VkCommandBufferSubmitInfo& commandBufferSubmitInfo = queue.submitCommandBufferInfos.emplace_back();
+            commandBufferSubmitInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
+            commandBufferSubmitInfo.commandBuffer = commandBuffer->commandBuffer;
+
+            queue.swapchainUpdates = commandBuffer->presentSwapChains;
+            for (size_t j = 0; j < commandBuffer->presentSwapChains.size(); ++j)
             {
-                VulkanSwapChain* swapChain = commandBuffer->swapChains[j];
-                presentSwapChains.push_back(swapChain);
+                VulkanSwapChain* swapChain = commandBuffer->presentSwapChains[j];
 
-                waitSemaphores.push_back(swapChain->acquireSemaphore);
-                waitStages.push_back(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
-                submitWaitValues.push_back(0); // not a timeline semaphore
-                submitSignalSemaphores.push_back(swapChain->releaseSemaphore);
-                submitSignalValues.push_back(0); // not a timeline semaphore
+                queue.submitSwapchains.push_back(swapChain->handle);
+                queue.submitSwapchainImageIndices.push_back(swapChain->imageIndex);
 
-                presentVkSwapChains.push_back(swapChain->handle);
-                swapChainImageIndices.push_back(swapChain->imageIndex);
+                if (features1_3.synchronization2)
+                {
+                    VkSemaphoreSubmitInfo& waitSemaphore = queue.submitWaitSemaphoreInfos.emplace_back();
+                    waitSemaphore.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
+                    waitSemaphore.semaphore = swapChain->acquireSemaphore;
+                    waitSemaphore.value = 0; // not a timeline semaphore
+                    waitSemaphore.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+
+                    VkSemaphoreSubmitInfo& signalSemaphore = queue.submitSignalSemaphoreInfos.emplace_back();
+                    signalSemaphore.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
+                    signalSemaphore.semaphore = swapChain->releaseSemaphore;
+                    signalSemaphore.value = 0; // not a timeline semaphore
+
+                    queue.submitSignalSemaphores.push_back(swapChain->releaseSemaphore);
+                }
+                else
+                {
+                    queue.submitWaitStages.push_back(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
+                    queue.submitWaitSemaphores.push_back(swapChain->acquireSemaphore);
+                    queue.submitWaitValues.push_back(0); // not a timeline semaphore
+                    queue.submitSignalSemaphores.push_back(swapChain->releaseSemaphore);
+                    queue.submitSignalValues.push_back(0); // not a timeline semaphore
+                }
 
                 VkImageSubresourceRange range{};
                 range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -3813,58 +4109,13 @@ uint64_t VulkanRenderer::Submit(VGPUCommandBuffer* commandBuffers, uint32_t coun
 
             result = vkEndCommandBuffer(commandBuffer->commandBuffer);
             VGPU_ASSERT(result == VK_SUCCESS);
-            submitCommandBuffers.push_back(commandBuffer->commandBuffer);
+            queue.submitCommandBuffers.push_back(commandBuffer->commandBuffer);
         }
 
-        // Submit now
-        VkTimelineSemaphoreSubmitInfo timelineInfo = {};
-        timelineInfo.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO;
-        timelineInfo.pNext = nullptr;
-        timelineInfo.waitSemaphoreValueCount = (uint32_t)submitWaitValues.size();
-        timelineInfo.pWaitSemaphoreValues = submitWaitValues.data();
-        timelineInfo.signalSemaphoreValueCount = (uint32_t)submitSignalValues.size();
-        timelineInfo.pSignalSemaphoreValues = submitSignalValues.data();
-
-        VkSubmitInfo submitInfo = {};
-        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        submitInfo.pNext = &timelineInfo;
-        submitInfo.waitSemaphoreCount = (uint32_t)waitSemaphores.size();
-        submitInfo.pWaitSemaphores = waitSemaphores.data();
-        submitInfo.pWaitDstStageMask = waitStages.data();
-        submitInfo.commandBufferCount = (uint32_t)submitCommandBuffers.size();
-        submitInfo.pCommandBuffers = submitCommandBuffers.data();
-        submitInfo.signalSemaphoreCount = (uint32_t)submitSignalSemaphores.size();
-        submitInfo.pSignalSemaphores = submitSignalSemaphores.data();
-
-        result = vkQueueSubmit(graphicsQueue, 1, &submitInfo, frame.fence);
-        VGPU_ASSERT(result == VK_SUCCESS);
-
-        if (!presentSwapChains.empty())
+        // Final submits with fences.
+        for (uint8_t i = 0; i < _VGPUCommandQueue_Count; ++i)
         {
-            VkPresentInfoKHR presentInfo = {};
-            presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-            presentInfo.waitSemaphoreCount = (uint32_t)submitSignalSemaphores.size();
-            presentInfo.pWaitSemaphores = submitSignalSemaphores.data();
-            presentInfo.swapchainCount = (uint32_t)presentSwapChains.size();
-            presentInfo.pSwapchains = presentVkSwapChains.data();
-            presentInfo.pImageIndices = swapChainImageIndices.data();
-            result = vkQueuePresentKHR(graphicsQueue, &presentInfo);
-            if (result != VK_SUCCESS)
-            {
-                // Handle outdated error in present:
-                if (result == VK_SUBOPTIMAL_KHR || result == VK_ERROR_OUT_OF_DATE_KHR)
-                {
-                    for (size_t i = 0; i < presentSwapChains.size(); ++i)
-                    {
-                        VulkanSwapChain* vulkanSwapChain = presentSwapChains[i];
-                        vulkan_updateSwapChain(this, vulkanSwapChain);
-                    }
-                }
-                else
-                {
-                    VGPU_ASSERT(false);
-                }
-            }
+            queues[i].Submit(this, queues[i].frameFences[frameIndex]);
         }
     }
 
@@ -3872,35 +4123,21 @@ uint64_t VulkanRenderer::Submit(VGPUCommandBuffer* commandBuffers, uint32_t coun
     frameIndex = frameCount % VGPU_MAX_INFLIGHT_FRAMES;
 
     // Begin new frame
+    // Initiate stalling CPU when GPU is not yet finished with next frame
+    if (frameCount >= VGPU_MAX_INFLIGHT_FRAMES)
     {
-        auto& frame = frames[frameIndex];
-
-        // Initiate stalling CPU when GPU is not yet finished with next frame.
-        if (frameCount >= VGPU_MAX_INFLIGHT_FRAMES)
+        for (uint8_t i = 0; i < _VGPUCommandQueue_Count; ++i)
         {
-            result = vkWaitForFences(device, 1, &frame.fence, VK_TRUE, 0xFFFFFFFFFFFFFFFF);
-            VGPU_ASSERT(result == VK_SUCCESS);
+            if (queues[i].queue == VK_NULL_HANDLE)
+                continue;
 
-            result = vkResetFences(device, 1, &frame.fence);
-            VGPU_ASSERT(result == VK_SUCCESS);
+            VK_CHECK(vkWaitForFences(device, 1, &queues[i].frameFences[frameIndex], true, 0xFFFFFFFFFFFFFFFF));
+            VK_CHECK(vkResetFences(device, 1, &queues[i].frameFences[frameIndex]));
         }
-
-        // Safe delete deferred destroys
-        ProcessDeletionQueue();
-
-        // Restart transition command buffers first.
-        result = vkResetCommandPool(device, frame.initCommandPool, 0);
-        VGPU_ASSERT(result == VK_SUCCESS);
-
-        VkCommandBufferBeginInfo beginInfo = {};
-        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-        result = vkBeginCommandBuffer(frame.initCommandBuffer, &beginInfo);
-        VGPU_ASSERT(result == VK_SUCCESS);
     }
 
-    submitInits = false;
-    initLocker.unlock();
+    // Safe delete deferred destroys
+    ProcessDeletionQueue();
 
     // Return current frame
     return frameCount - 1;
@@ -3949,7 +4186,7 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
     if (renderer->x11xcb.handle)
     {
         renderer->x11xcb.GetXCBConnection = (PFN_XGetXCBConnection)dlsym(renderer->x11xcb.handle, "XGetXCBConnection");
-}
+    }
 #endif
 
     VkResult result = VK_SUCCESS;
@@ -4122,7 +4359,7 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
         }
 
 #ifdef _DEBUG
-        vgpu_log_info("Created VkInstance with version: %d.%d.%d",
+        vgpuLogInfo("Created VkInstance with version: %d.%d.%d",
             VK_VERSION_MAJOR(appInfo.apiVersion),
             VK_VERSION_MINOR(appInfo.apiVersion),
             VK_VERSION_PATCH(appInfo.apiVersion)
@@ -4130,18 +4367,18 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
 
         if (createInfo.enabledLayerCount)
         {
-            vgpu_log_info("Enabled %d Validation Layers:", createInfo.enabledLayerCount);
+            vgpuLogInfo("Enabled %d Validation Layers:", createInfo.enabledLayerCount);
 
             for (uint32_t i = 0; i < createInfo.enabledLayerCount; ++i)
             {
-                vgpu_log_info("	\t%s", createInfo.ppEnabledLayerNames[i]);
+                vgpuLogInfo("	\t%s", createInfo.ppEnabledLayerNames[i]);
             }
         }
 
-        vgpu_log_info("Enabled %d Instance Extensions:", createInfo.enabledExtensionCount);
+        vgpuLogInfo("Enabled %d Instance Extensions:", createInfo.enabledExtensionCount);
         for (uint32_t i = 0; i < createInfo.enabledExtensionCount; ++i)
         {
-            vgpu_log_info("	\t%s", createInfo.ppEnabledExtensionNames[i]);
+            vgpuLogInfo("	\t%s", createInfo.ppEnabledExtensionNames[i]);
         }
 #endif
     }
@@ -4476,15 +4713,25 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
         // Find queue families:
         uint32_t queueFamilyCount = 0;
         vkGetPhysicalDeviceQueueFamilyProperties(renderer->physicalDevice, &queueFamilyCount, nullptr);
-        std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
-        vkGetPhysicalDeviceQueueFamilyProperties(renderer->physicalDevice, &queueFamilyCount, queueFamilies.data());
 
-        std::vector<uint32_t> queueOffsets(queueFamilyCount);
-        std::vector<std::vector<float>> queuePriorities(queueFamilyCount);
+        std::vector<VkQueueFamilyProperties2> queueFamilies(queueFamilyCount);
+        std::vector<VkQueueFamilyVideoPropertiesKHR> queueFamiliesVideo(queueFamilyCount);
+        for (uint32_t i = 0; i < queueFamilyCount; ++i)
+        {
+            queueFamilies[i].sType = VK_STRUCTURE_TYPE_QUEUE_FAMILY_PROPERTIES_2;
 
-        uint32_t graphicsQueueIndex = 0;
-        uint32_t computeQueueIndex = 0;
-        uint32_t copyQueueIndex = 0;
+            if (renderer->supportedExtensions.video.queue)
+            {
+                queueFamilies[i].pNext = &queueFamiliesVideo[i];
+                queueFamiliesVideo[i].sType = VK_STRUCTURE_TYPE_QUEUE_FAMILY_VIDEO_PROPERTIES_KHR;
+            }
+        }
+
+        vkGetPhysicalDeviceQueueFamilyProperties2(renderer->physicalDevice, &queueFamilyCount, queueFamilies.data());
+
+        renderer->queueFamilyIndices.queueFamilyCount = queueFamilyCount;
+        renderer->queueFamilyIndices.queueOffsets.resize(queueFamilyCount);
+        renderer->queueFamilyIndices.queuePriorities.resize(queueFamilyCount);
 
         const auto FindVacantQueue = [&](uint32_t& family, uint32_t& index,
             VkQueueFlags required, VkQueueFlags ignore_flags,
@@ -4492,7 +4739,7 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
         {
             for (uint32_t familyIndex = 0; familyIndex < queueFamilyCount; familyIndex++)
             {
-                if ((queueFamilies[familyIndex].queueFlags & ignore_flags) != 0)
+                if ((queueFamilies[familyIndex].queueFamilyProperties.queueFlags & ignore_flags) != 0)
                     continue;
 
                 // A graphics queue candidate must support present for us to select it.
@@ -4505,13 +4752,25 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
                     //    continue;
                 }
 
-                if (queueFamilies[familyIndex].queueCount &&
-                    (queueFamilies[familyIndex].queueFlags & required) == required)
+                // A video decode queue candidate must support VK_VIDEO_CODEC_OPERATION_DECODE_H264_BIT_KHR or VK_VIDEO_CODEC_OPERATION_DECODE_H265_BIT_KHR
+                if ((required & VK_QUEUE_VIDEO_DECODE_BIT_KHR) != 0)
+                {
+                    VkVideoCodecOperationFlagsKHR videoCodecOperations = queueFamiliesVideo[familyIndex].videoCodecOperations;
+
+                    if ((videoCodecOperations & VK_VIDEO_CODEC_OPERATION_DECODE_H264_BIT_KHR) == 0 &&
+                        (videoCodecOperations & VK_VIDEO_CODEC_OPERATION_DECODE_H265_BIT_KHR) == 0)
+                    {
+                        continue;
+                    }
+                }
+
+                if (queueFamilies[familyIndex].queueFamilyProperties.queueCount &&
+                    (queueFamilies[familyIndex].queueFamilyProperties.queueFlags & required) == required)
                 {
                     family = familyIndex;
-                    queueFamilies[familyIndex].queueCount--;
-                    index = queueOffsets[familyIndex]++;
-                    queuePriorities[familyIndex].push_back(priority);
+                    queueFamilies[familyIndex].queueFamilyProperties.queueCount--;
+                    index = renderer->queueFamilyIndices.queueOffsets[familyIndex]++;
+                    renderer->queueFamilyIndices.queuePriorities[familyIndex].push_back(priority);
                     return true;
                 }
             }
@@ -4519,7 +4778,7 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
             return false;
         };
 
-        if (!FindVacantQueue(renderer->graphicsQueueFamily, graphicsQueueIndex,
+        if (!FindVacantQueue(renderer->queueFamilyIndices.familyIndices[VGPUCommandQueue_Graphics], renderer->queueFamilyIndices.queueIndices[VGPUCommandQueue_Graphics],
             VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT, 0, 0.5f))
         {
             vgpuLogError("Vulkan: Could not find suitable graphics queue.");
@@ -4527,38 +4786,42 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
             return nullptr;
         }
 
+        // XXX: This assumes timestamp valid bits is the same for all queue types.
+        renderer->queueFamilyIndices.timestampValidBits = queueFamilies[renderer->queueFamilyIndices.familyIndices[VGPUCommandQueue_Graphics]].queueFamilyProperties.timestampValidBits;
+
         // Prefer another graphics queue since we can do async graphics that way.
         // The compute queue is to be treated as high priority since we also do async graphics on it.
-        if (!FindVacantQueue(renderer->computeQueueFamily, computeQueueIndex, VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT, 0, 1.0f) &&
-            !FindVacantQueue(renderer->computeQueueFamily, computeQueueIndex, VK_QUEUE_COMPUTE_BIT, 0, 1.0f))
+        if (!FindVacantQueue(renderer->queueFamilyIndices.familyIndices[VGPUCommandQueue_Compute], renderer->queueFamilyIndices.queueIndices[VGPUCommandQueue_Compute], VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT, 0, 1.0f) &&
+            !FindVacantQueue(renderer->queueFamilyIndices.familyIndices[VGPUCommandQueue_Compute], renderer->queueFamilyIndices.queueIndices[VGPUCommandQueue_Compute], VK_QUEUE_COMPUTE_BIT, 0, 1.0f))
         {
             // Fallback to the graphics queue if we must.
-            renderer->computeQueueFamily = renderer->graphicsQueueFamily;
-            computeQueueIndex = graphicsQueueIndex;
+            renderer->queueFamilyIndices.familyIndices[VGPUCommandQueue_Compute] = renderer->queueFamilyIndices.familyIndices[VGPUCommandQueue_Graphics];
+            renderer->queueFamilyIndices.queueIndices[VGPUCommandQueue_Compute] = renderer->queueFamilyIndices.queueIndices[VGPUCommandQueue_Graphics];
         }
 
         // For transfer, try to find a queue which only supports transfer, e.g. DMA queue.
         // If not, fallback to a dedicated compute queue.
         // Finally, fallback to same queue as compute.
-        if (!FindVacantQueue(renderer->copyQueueFamily, copyQueueIndex, VK_QUEUE_TRANSFER_BIT, VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT, 0.5f) &&
-            !FindVacantQueue(renderer->copyQueueFamily, copyQueueIndex, VK_QUEUE_COMPUTE_BIT, VK_QUEUE_GRAPHICS_BIT, 0.5f))
+        if (!FindVacantQueue(renderer->queueFamilyIndices.familyIndices[VGPUCommandQueue_Copy], renderer->queueFamilyIndices.queueIndices[VGPUCommandQueue_Copy], VK_QUEUE_TRANSFER_BIT, VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT, 0.5f) &&
+            !FindVacantQueue(renderer->queueFamilyIndices.familyIndices[VGPUCommandQueue_Copy], renderer->queueFamilyIndices.queueIndices[VGPUCommandQueue_Copy], VK_QUEUE_COMPUTE_BIT, VK_QUEUE_GRAPHICS_BIT, 0.5f))
         {
-            renderer->copyQueueFamily = renderer->computeQueueFamily;
-            copyQueueIndex = computeQueueIndex;
+            renderer->queueFamilyIndices.familyIndices[VGPUCommandQueue_Copy] = renderer->queueFamilyIndices.familyIndices[VGPUCommandQueue_Compute];
+            renderer->queueFamilyIndices.queueIndices[VGPUCommandQueue_Copy] = renderer->queueFamilyIndices.queueIndices[VGPUCommandQueue_Compute];
         }
 
-        VkDeviceCreateInfo createInfo{ VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO };
+        VkDeviceCreateInfo createInfo{};
+        createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
 
         std::vector<VkDeviceQueueCreateInfo> queueInfos;
         for (uint32_t familyIndex = 0; familyIndex < queueFamilyCount; familyIndex++)
         {
-            if (queueOffsets[familyIndex] == 0)
+            if (renderer->queueFamilyIndices.queueOffsets[familyIndex] == 0)
                 continue;
 
             VkDeviceQueueCreateInfo queueInfo = { VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO };
             queueInfo.queueFamilyIndex = familyIndex;
-            queueInfo.queueCount = queueOffsets[familyIndex];
-            queueInfo.pQueuePriorities = queuePriorities[familyIndex].data();
+            queueInfo.queueCount = renderer->queueFamilyIndices.queueOffsets[familyIndex];
+            queueInfo.pQueuePriorities = renderer->queueFamilyIndices.queuePriorities[familyIndex].data();
             queueInfos.push_back(queueInfo);
         }
 
@@ -4581,15 +4844,46 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
 
         volkLoadDevice(renderer->device);
 
-        vkGetDeviceQueue(renderer->device, renderer->graphicsQueueFamily, graphicsQueueIndex, &renderer->graphicsQueue);
-        vkGetDeviceQueue(renderer->device, renderer->computeQueueFamily, computeQueueIndex, &renderer->computeQueue);
-        vkGetDeviceQueue(renderer->device, renderer->copyQueueFamily, copyQueueIndex, &renderer->copyQueue);
+        // Queues
+        VkSemaphoreTypeCreateInfo timelineCreateInfo = {};
+        timelineCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO;
+        timelineCreateInfo.pNext = nullptr;
+        timelineCreateInfo.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE;
+        timelineCreateInfo.initialValue = 0;
+
+        VkSemaphoreCreateInfo semaphoreInfo = {};
+        semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+        semaphoreInfo.pNext = &timelineCreateInfo;
+
+        VkFenceCreateInfo fenceInfo = {};
+        fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+
+        for (uint8_t i = 0; i < _VGPUCommandQueue_Count; i++)
+        {
+            if (renderer->queueFamilyIndices.familyIndices[i] != VK_QUEUE_FAMILY_IGNORED)
+            {
+                vkGetDeviceQueue(renderer->device, renderer->queueFamilyIndices.familyIndices[i], renderer->queueFamilyIndices.queueIndices[i], &renderer->queues[i].queue);
+
+                renderer->queueFamilyIndices.counts[i] = renderer->queueFamilyIndices.queueOffsets[renderer->queueFamilyIndices.familyIndices[i]];
+
+                VK_CHECK(vkCreateSemaphore(renderer->device, &semaphoreInfo, nullptr, &renderer->queues[i].semaphore));
+
+                for (uint32_t frameIndex = 0; frameIndex < VGPU_MAX_INFLIGHT_FRAMES; ++frameIndex)
+                {
+                    VK_CHECK(vkCreateFence(renderer->device, &fenceInfo, nullptr, &renderer->queues[i].frameFences[frameIndex]));
+                }
+            }
+            else
+            {
+                renderer->queues[i].queue = VK_NULL_HANDLE;
+            }
+        }
 
 #ifdef _DEBUG
-        vgpu_log_info("Enabled %d Device Extensions:", createInfo.enabledExtensionCount);
+        vgpuLogInfo("Enabled %d Device Extensions:", createInfo.enabledExtensionCount);
         for (uint32_t i = 0; i < createInfo.enabledExtensionCount; ++i)
         {
-            vgpu_log_info("	\t%s", createInfo.ppEnabledExtensionNames[i]);
+            vgpuLogInfo("	\t%s", createInfo.ppEnabledExtensionNames[i]);
         }
 #endif
         if (info->label)
@@ -4667,82 +4961,6 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
         }
     }
 
-    // Upload 
-    {
-        VkSemaphoreTypeCreateInfo timelineCreateInfo = {};
-        timelineCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO;
-        timelineCreateInfo.pNext = nullptr;
-        timelineCreateInfo.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE;
-        timelineCreateInfo.initialValue = 0;
-
-        VkSemaphoreCreateInfo createInfo = {};
-        createInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-        createInfo.pNext = &timelineCreateInfo;
-        createInfo.flags = 0;
-
-        result = vkCreateSemaphore(renderer->device, &createInfo, nullptr, &renderer->uploadSemaphore);
-        if (result != VK_SUCCESS)
-        {
-            VK_LOG_ERROR(result, "Cannot create upload semaphore");
-            delete renderer;
-            return nullptr;
-        }
-    }
-
-    // Create frame resources
-    for (uint32_t i = 0; i < VGPU_MAX_INFLIGHT_FRAMES; ++i)
-    {
-        VkFenceCreateInfo fenceInfo = {};
-        fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-        result = vkCreateFence(renderer->device, &fenceInfo, nullptr, &renderer->frames[i].fence);
-        if (result != VK_SUCCESS)
-        {
-            VK_LOG_ERROR(result, "Cannot create frame fence");
-            delete renderer;
-            return nullptr;
-        }
-
-        // Create resources for transition command buffer.
-        {
-            VkCommandPoolCreateInfo poolInfo = {};
-            poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-            poolInfo.queueFamilyIndex = renderer->graphicsQueueFamily;
-            poolInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
-            result = vkCreateCommandPool(renderer->device, &poolInfo, nullptr, &renderer->frames[i].initCommandPool);
-            if (result != VK_SUCCESS)
-            {
-                VK_LOG_ERROR(result, "Cannot create frame command pool");
-                delete renderer;
-                return nullptr;
-            }
-
-            VkCommandBufferAllocateInfo commandBufferInfo = {};
-            commandBufferInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-            commandBufferInfo.commandBufferCount = 1;
-            commandBufferInfo.commandPool = renderer->frames[i].initCommandPool;
-            commandBufferInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-
-            result = vkAllocateCommandBuffers(renderer->device, &commandBufferInfo, &renderer->frames[i].initCommandBuffer);
-            if (result != VK_SUCCESS)
-            {
-                VK_LOG_ERROR(result, "vkAllocateCommandBuffers failed");
-                delete renderer;
-                return nullptr;
-            }
-
-            VkCommandBufferBeginInfo beginInfo = {};
-            beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-            beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-            result = vkBeginCommandBuffer(renderer->frames[i].initCommandBuffer, &beginInfo);
-            if (result != VK_SUCCESS)
-            {
-                VK_LOG_ERROR(result, "vkBeginCommandBuffer failed");
-                delete renderer;
-                return nullptr;
-            }
-        }
-    }
-
     // Create default null descriptors.
     {
         VkBufferCreateInfo bufferInfo = {};
@@ -4762,7 +4980,8 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
         bufferViewInfo.buffer = renderer->nullBuffer;
         result = vkCreateBufferView(renderer->device, &bufferViewInfo, nullptr, &renderer->nullBufferView);
         VGPU_ASSERT(result == VK_SUCCESS);
-
+    }
+    {
         VkImageCreateInfo imageInfo = {};
         imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
         imageInfo.extent.width = 1;
@@ -4796,8 +5015,8 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
         VGPU_ASSERT(result == VK_SUCCESS);
 
         // Transitions:
-        renderer->initLocker.lock();
         {
+            VulkanUploadContext  context = renderer->Allocate(0);
             VkImageMemoryBarrier2 barrier = {};
             barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
             barrier.oldLayout = imageInfo.initialLayout;
@@ -4820,17 +5039,17 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
             dependencyInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
             dependencyInfo.imageMemoryBarrierCount = 1;
             dependencyInfo.pImageMemoryBarriers = &barrier;
-            vkCmdPipelineBarrier2(renderer->frames[renderer->frameIndex].initCommandBuffer, &dependencyInfo);
+            vkCmdPipelineBarrier2(context.transitionCommandBuffer, &dependencyInfo);
 
             barrier.image = renderer->nullImage2D;
             barrier.subresourceRange.layerCount = 6;
-            vkCmdPipelineBarrier2(renderer->frames[renderer->frameIndex].initCommandBuffer, &dependencyInfo);
+            vkCmdPipelineBarrier2(context.transitionCommandBuffer, &dependencyInfo);
             barrier.image = renderer->nullImage3D;
             barrier.subresourceRange.layerCount = 1;
-            vkCmdPipelineBarrier2(renderer->frames[renderer->frameIndex].initCommandBuffer, &dependencyInfo);
+            vkCmdPipelineBarrier2(context.transitionCommandBuffer, &dependencyInfo);
+
+            renderer->UploadSubmit(context);
         }
-        renderer->submitInits = true;
-        renderer->initLocker.unlock();
 
         VkImageViewCreateInfo imageViewInfo = {};
         imageViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -4877,7 +5096,8 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
         imageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_3D;
         result = vkCreateImageView(renderer->device, &imageViewInfo, nullptr, &renderer->nullImageView3D);
         VGPU_ASSERT(result == VK_SUCCESS);
-
+    }
+    {
         VkSamplerCreateInfo samplerInfo = {};
         samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
         result = vkCreateSampler(renderer->device, &samplerInfo, nullptr, &renderer->nullSampler);
@@ -4906,8 +5126,8 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
     renderer->timestampFrequency = uint64_t(1.0 / double(renderer->properties2.properties.limits.timestampPeriod) * 1000 * 1000 * 1000);
 
     // Log some info
-    vgpu_log_info("VGPU Driver: Vulkan");
-    vgpu_log_info("Vulkan Adapter: %s", renderer->properties2.properties.deviceName);
+    vgpuLogInfo("VGPU Driver: Vulkan");
+    vgpuLogInfo("Vulkan Adapter: %s", renderer->properties2.properties.deviceName);
 
     return renderer;
 }

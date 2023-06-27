@@ -23,7 +23,7 @@ VGPUDevice device = nullptr;
 VGPUSwapChain swapChain = nullptr;
 VGPUTexture depthStencilTexture = nullptr;
 VGPUBuffer vertexBuffer = nullptr;
-VGPUBuffer index_buffer = nullptr;
+VGPUBuffer indexBuffer = nullptr;
 VGPUPipelineLayout pipelineLayout = nullptr;
 VGPUPipeline renderPipeline = nullptr;
 
@@ -163,11 +163,11 @@ void init_vgpu(GLFWwindow* window)
         0, 1, 2,    // first triangle
         0, 2, 3,    // second triangle
     };
-    VGPUBufferDesc index_buffer_desc{};
-    index_buffer_desc.label = "Vertex Buffer";
-    index_buffer_desc.size = sizeof(indices);
-    index_buffer_desc.usage = VGPUBufferUsage_Index;
-    index_buffer = vgpuCreateBuffer(device, &index_buffer_desc, indices);
+    VGPUBufferDesc indexBufferDesc{};
+    indexBufferDesc.label = "Index Buffer";
+    indexBufferDesc.size = sizeof(indices);
+    indexBufferDesc.usage = VGPUBufferUsage_Index;
+    indexBuffer = vgpuCreateBuffer(device, &indexBufferDesc, indices);
 
     std::vector<uint8_t> vertexShader = LoadShader("triangleVertex");
     std::vector<uint8_t> fragmentShader = LoadShader("triangleFragment");
@@ -223,7 +223,7 @@ void init_vgpu(GLFWwindow* window)
     renderPipelineDesc.depthStencilFormat = VGPUTextureFormat_Depth32Float;
     renderPipelineDesc.depthStencilState.depthWriteEnabled = true;
     renderPipelineDesc.depthStencilState.depthCompareFunction = VGPUCompareFunction_LessEqual;
-
+    renderPipelineDesc.blendState.renderTargets[0].colorWriteMask = VGPUColorWriteMask_All;
     renderPipeline = vgpuCreateRenderPipeline(device, &renderPipelineDesc);
 }
 
@@ -263,7 +263,7 @@ void draw_frame()
         vgpuSetPushConstants(commandBuffer, 0, &pushData, sizeof(pushData));
 
         vgpuSetVertexBuffer(commandBuffer, 0, vertexBuffer, 0);
-        vgpuSetIndexBuffer(commandBuffer, index_buffer, VGPUIndexType_Uint16, 0);
+        vgpuSetIndexBuffer(commandBuffer, indexBuffer, VGPUIndexType_Uint16, 0);
         vgpuDrawIndexed(commandBuffer, 6, 1, 0, 0, 0);
         vgpuEndRenderPass(commandBuffer);
     }
@@ -294,7 +294,7 @@ int main()
 
     vgpuDeviceWaitIdle(device);
     vgpuBufferRelease(vertexBuffer);
-    vgpuBufferRelease(index_buffer);
+    vgpuBufferRelease(indexBuffer);
     vgpuTextureRelease(depthStencilTexture);
     vgpuPipelineLayoutRelease(pipelineLayout);
     vgpuPipelineRelease(renderPipeline);

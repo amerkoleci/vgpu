@@ -267,7 +267,7 @@ namespace
         }
     }
 
-    constexpr D3D12_BLEND D3D12Blend(VGPUBlendFactor factor)
+    constexpr D3D12_BLEND D3D12Blend(VGPUBlendFactor factor, bool alphaBlendFactorSupported)
     {
         switch (factor)
         {
@@ -284,18 +284,18 @@ namespace
             case VGPUBlendFactor_SourceAlphaSaturated:      return D3D12_BLEND_SRC_ALPHA_SAT;
             case VGPUBlendFactor_BlendColor:                return D3D12_BLEND_BLEND_FACTOR;
             case VGPUBlendFactor_OneMinusBlendColor:        return D3D12_BLEND_INV_BLEND_FACTOR;
-                //case VGPUBlendFactor_BlendAlpha:                return D3D12_BLEND_ALPHA_FACTOR;
-                //case VGPUBlendFactor_OneMinusBlendAlpha:        return D3D12_BLEND_INV_ALPHA_FACTOR;
-                //case VGPUBlendFactor_Source1Color:              return D3D12_BLEND_SRC1_COLOR;
-                //case VGPUBlendFactor_OneMinusSource1Color:      return D3D12_BLEND_INV_SRC1_COLOR;
-                //case VGPUBlendFactor_Source1Alpha:              return D3D12_BLEND_SRC1_ALPHA;
-                //case VGPUBlendFactor_OneMinusSource1Alpha:      return D3D12_BLEND_INV_SRC1_ALPHA;
+            case VGPUBlendFactor_BlendAlpha:                return alphaBlendFactorSupported ? D3D12_BLEND_ALPHA_FACTOR : D3D12_BLEND_BLEND_FACTOR;
+            case VGPUBlendFactor_OneMinusBlendAlpha:        return alphaBlendFactorSupported ? D3D12_BLEND_INV_ALPHA_FACTOR : D3D12_BLEND_INV_BLEND_FACTOR;
+            case VGPUBlendFactor_Source1Color:              return D3D12_BLEND_SRC1_COLOR;
+            case VGPUBlendFactor_OneMinusSource1Color:      return D3D12_BLEND_INV_SRC1_COLOR;
+            case VGPUBlendFactor_Source1Alpha:              return D3D12_BLEND_SRC1_ALPHA;
+            case VGPUBlendFactor_OneMinusSource1Alpha:      return D3D12_BLEND_INV_SRC1_ALPHA;
             default:
                 return D3D12_BLEND_ZERO;
         }
     }
 
-    constexpr D3D12_BLEND D3D12AlphaBlend(VGPUBlendFactor factor)
+    constexpr D3D12_BLEND D3D12AlphaBlend(VGPUBlendFactor factor, bool alphaBlendFactorSupported)
     {
         switch (factor)
         {
@@ -313,7 +313,7 @@ namespace
                 //    return D3D12_BLEND_INV_SRC1_ALPHA;
                     // Other blend factors translate to the same D3D12 enum as the color blend factors.
             default:
-                return D3D12Blend(factor);
+                return D3D12Blend(factor, alphaBlendFactorSupported);
         }
     }
 
@@ -330,14 +330,23 @@ namespace
         }
     }
 
-    constexpr uint8_t D3D12RenderTargetWriteMask(VGPUColorWriteMaskFlags writeMask)
+    constexpr UINT8 D3D12RenderTargetWriteMask(VGPUColorWriteMaskFlags writeMask)
     {
-        static_assert(static_cast<UINT>(VGPUColorWriteMask_Red) == D3D12_COLOR_WRITE_ENABLE_RED);
-        static_assert(static_cast<UINT>(VGPUColorWriteMask_Green) == D3D12_COLOR_WRITE_ENABLE_GREEN);
-        static_assert(static_cast<UINT>(VGPUColorWriteMask_Blue) == D3D12_COLOR_WRITE_ENABLE_BLUE);
-        static_assert(static_cast<UINT>(VGPUColorWriteMask_Alpha) == D3D12_COLOR_WRITE_ENABLE_ALPHA);
+        UINT8 result = 0;
+        if (writeMask & VGPUColorWriteMask_Red) {
+            result |= D3D12_COLOR_WRITE_ENABLE_RED;
+        }
+        if (writeMask & VGPUColorWriteMask_Green) {
+            result |= D3D12_COLOR_WRITE_ENABLE_GREEN;
+        }
+        if (writeMask & VGPUColorWriteMask_Blue) {
+            result |= D3D12_COLOR_WRITE_ENABLE_BLUE;
+        }
+        if (writeMask & VGPUColorWriteMask_Alpha) {
+            result |= D3D12_COLOR_WRITE_ENABLE_ALPHA;
+        }
 
-        return static_cast<uint8_t>(writeMask);
+        return result;
     }
 
     constexpr D3D12_SHADER_VISIBILITY ToD3D12(VGPUShaderStageFlags stage)
@@ -541,11 +550,11 @@ struct D3D12GpuDescriptorHeap final
     }
 };
 
-class D3D12_Renderer;
+class D3D12Device;
 
 struct D3D12Resource
 {
-    D3D12_Renderer* renderer = nullptr;
+    D3D12Device* renderer = nullptr;
     ID3D12Resource* handle = nullptr;
     D3D12MA::Allocation* allocation = nullptr;
     D3D12_RESOURCE_STATES state = D3D12_RESOURCE_STATE_COMMON;
@@ -589,7 +598,7 @@ struct D3D12Texture final : public VGPUTextureImpl, public D3D12Resource
 
 struct D3D12Sampler final : public VGPUSamplerImpl
 {
-    D3D12_Renderer* renderer = nullptr;
+    D3D12Device* renderer = nullptr;
     D3D12_CPU_DESCRIPTOR_HANDLE handle{};
 
     ~D3D12Sampler() override;
@@ -598,7 +607,7 @@ struct D3D12Sampler final : public VGPUSamplerImpl
 
 struct D3D12PipelineLayout final : public VGPUPipelineLayoutImpl
 {
-    D3D12_Renderer* renderer = nullptr;
+    D3D12Device* renderer = nullptr;
     ID3D12RootSignature* handle = nullptr;
 
     uint32_t pushConstantsBaseIndex = 0;
@@ -609,7 +618,7 @@ struct D3D12PipelineLayout final : public VGPUPipelineLayoutImpl
 
 struct D3D12Pipeline final : public VGPUPipelineImpl
 {
-    D3D12_Renderer* renderer = nullptr;
+    D3D12Device* renderer = nullptr;
     VGPUPipelineType type = VGPUPipelineType_Render;
     D3D12PipelineLayout* pipelineLayout = nullptr;
     ID3D12PipelineState* handle = nullptr;
@@ -624,7 +633,7 @@ struct D3D12Pipeline final : public VGPUPipelineImpl
 
 struct D3D12QueryHeap final : public VGPUQueryHeapImpl
 {
-    D3D12_Renderer* renderer = nullptr;
+    D3D12Device* renderer = nullptr;
     VGPUQueryType type;
     uint32_t count;
     ID3D12QueryHeap* handle = nullptr;
@@ -639,7 +648,7 @@ struct D3D12QueryHeap final : public VGPUQueryHeapImpl
 
 struct D3D12SwapChain final : public VGPUSwapChainImpl
 {
-    D3D12_Renderer* renderer = nullptr;
+    D3D12Device* renderer = nullptr;
 #if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
     HWND window = nullptr;
 #else
@@ -679,7 +688,7 @@ static constexpr UINT PIX_EVENT_UNICODE_VERSION = 0;
 class D3D12CommandBuffer final : public VGPUCommandBufferImpl
 {
 public:
-    D3D12_Renderer* renderer;
+    D3D12Device* renderer;
     VGPUCommandQueue queueType;
     bool hasLabel = false;
 
@@ -819,10 +828,10 @@ struct D3D12Queue final
     std::vector<ID3D12CommandList*> submitCommandLists;
 };
 
-class D3D12_Renderer final : public VGPUDeviceImpl
+class D3D12Device final : public VGPUDeviceImpl
 {
 public:
-    ~D3D12_Renderer() override;
+    ~D3D12Device() override;
 
     void SetLabel(const char* label) override;
     void WaitIdle() override;
@@ -836,6 +845,7 @@ public:
     VGPUTexture CreateTexture(const VGPUTextureDesc* desc, const void* pInitialData) override;
     VGPUSampler CreateSampler(const VGPUSamplerDesc* desc) override;
 
+    VGPUBindGroupLayout CreateBindGroupLayout(const VGPUBindGroupLayoutDesc* desc) override;
     VGPUPipelineLayout CreatePipelineLayout(const VGPUPipelineLayoutDesc* desc) override;
 
     VGPUPipeline CreateRenderPipeline(const VGPURenderPipelineDesc* desc) override;
@@ -905,7 +915,7 @@ public:
     std::deque<std::pair<IUnknown*, uint64_t>> deferredReleases;
 };
 
-void* D3D12_Renderer::GetNativeObject(VGPUNativeObjectType objectType) const
+void* D3D12Device::GetNativeObject(VGPUNativeObjectType objectType) const
 {
     switch (objectType)
     {
@@ -916,7 +926,7 @@ void* D3D12_Renderer::GetNativeObject(VGPUNativeObjectType objectType) const
     }
 }
 
-void D3D12_Renderer::DeferDestroy(IUnknown* resource, D3D12MA::Allocation* allocation)
+void D3D12Device::DeferDestroy(IUnknown* resource, D3D12MA::Allocation* allocation)
 {
     if (resource == nullptr)
     {
@@ -942,7 +952,7 @@ void D3D12_Renderer::DeferDestroy(IUnknown* resource, D3D12MA::Allocation* alloc
     destroyMutex.unlock();
 }
 
-void D3D12_Renderer::ProcessDeletionQueue()
+void D3D12Device::ProcessDeletionQueue()
 {
     destroyMutex.lock();
 
@@ -977,7 +987,7 @@ void D3D12_Renderer::ProcessDeletionQueue()
     destroyMutex.unlock();
 }
 
-static D3D12_UploadContext d3d12_AllocateUpload(D3D12_Renderer* renderer, uint64_t size)
+static D3D12_UploadContext d3d12_AllocateUpload(D3D12Device* renderer, uint64_t size)
 {
     D3D12_UploadContext context;
 
@@ -1046,7 +1056,7 @@ static D3D12_UploadContext d3d12_AllocateUpload(D3D12_Renderer* renderer, uint64
     return context;
 }
 
-static D3D12_CPU_DESCRIPTOR_HANDLE d3d12_GetRTV(D3D12_Renderer* renderer, D3D12Texture* texture, uint32_t mipLevel, uint32_t slice)
+static D3D12_CPU_DESCRIPTOR_HANDLE d3d12_GetRTV(D3D12Device* renderer, D3D12Texture* texture, uint32_t mipLevel, uint32_t slice)
 {
     size_t hash = 0;
     //hash_combine(hash, format);
@@ -1137,7 +1147,7 @@ static D3D12_CPU_DESCRIPTOR_HANDLE d3d12_GetRTV(D3D12_Renderer* renderer, D3D12T
     return it->second;
 }
 
-static D3D12_CPU_DESCRIPTOR_HANDLE d3d12_GetDSV(D3D12_Renderer* renderer, D3D12Texture* texture, uint32_t mipLevel, uint32_t slice)
+static D3D12_CPU_DESCRIPTOR_HANDLE d3d12_GetDSV(D3D12Device* renderer, D3D12Texture* texture, uint32_t mipLevel, uint32_t slice)
 {
     size_t hash = 0;
     hash_combine(hash, mipLevel);
@@ -1222,7 +1232,7 @@ static D3D12_CPU_DESCRIPTOR_HANDLE d3d12_GetDSV(D3D12_Renderer* renderer, D3D12T
     return it->second;
 }
 
-static void d3d12_UploadSubmit(D3D12_Renderer* renderer, D3D12_UploadContext context)
+static void d3d12_UploadSubmit(D3D12Device* renderer, D3D12_UploadContext context)
 {
     VHR(context.commandList->Close());
 
@@ -1283,8 +1293,8 @@ void D3D12Sampler::SetLabel(const char*/* label*/)
 {
 }
 
-/* D3D12_Renderer */
-D3D12_Renderer::~D3D12_Renderer()
+/* D3D12Device */
+D3D12Device::~D3D12Device()
 {
     // Wait idle
     WaitIdle();
@@ -1396,7 +1406,7 @@ D3D12_Renderer::~D3D12_Renderer()
 #endif
 }
 
-void D3D12_Renderer::UpdateSwapChain(D3D12SwapChain* swapChain)
+void D3D12Device::UpdateSwapChain(D3D12SwapChain* swapChain)
 {
     HRESULT hr = S_OK;
 
@@ -1427,7 +1437,7 @@ void D3D12_Renderer::UpdateSwapChain(D3D12SwapChain* swapChain)
     }
 }
 
-void D3D12_Renderer::WaitIdle()
+void D3D12Device::WaitIdle()
 {
     ComPtr<ID3D12Fence> fence;
     VHR(device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence)));
@@ -1449,7 +1459,7 @@ void D3D12_Renderer::WaitIdle()
     ProcessDeletionQueue();
 }
 
-VGPUBool32 D3D12_Renderer::QueryFeatureSupport(VGPUFeature feature) const
+VGPUBool32 D3D12Device::QueryFeatureSupport(VGPUFeature feature) const
 {
     switch (feature)
     {
@@ -1512,7 +1522,7 @@ VGPUBool32 D3D12_Renderer::QueryFeatureSupport(VGPUFeature feature) const
     }
 }
 
-void D3D12_Renderer::GetAdapterProperties(VGPUAdapterProperties* properties) const
+void D3D12Device::GetAdapterProperties(VGPUAdapterProperties* properties) const
 {
     properties->vendorId = vendorID;
     properties->deviceId = deviceID;
@@ -1521,7 +1531,7 @@ void D3D12_Renderer::GetAdapterProperties(VGPUAdapterProperties* properties) con
     properties->adapterType = adapterType;
 }
 
-void D3D12_Renderer::GetLimits(VGPULimits* limits) const
+void D3D12Device::GetLimits(VGPULimits* limits) const
 {
     D3D12_FEATURE_DATA_D3D12_OPTIONS featureData = {};
     HRESULT hr = device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &featureData, sizeof(featureData));
@@ -1573,13 +1583,13 @@ void D3D12_Renderer::GetLimits(VGPULimits* limits) const
 
 }
 
-void D3D12_Renderer::SetLabel(const char* label)
+void D3D12Device::SetLabel(const char* label)
 {
     D3D12SetName(device, label);
 }
 
 /* Buffer */
-VGPUBuffer D3D12_Renderer::CreateBuffer(const VGPUBufferDesc* desc, const void* pInitialData)
+VGPUBuffer D3D12Device::CreateBuffer(const VGPUBufferDesc* desc, const void* pInitialData)
 {
     if (desc->handle)
     {
@@ -1757,7 +1767,7 @@ VGPUBuffer D3D12_Renderer::CreateBuffer(const VGPUBufferDesc* desc, const void* 
 }
 
 /* Texture */
-VGPUTexture D3D12_Renderer::CreateTexture(const VGPUTextureDesc* desc, const void* pInitialData)
+VGPUTexture D3D12Device::CreateTexture(const VGPUTextureDesc* desc, const void* pInitialData)
 {
     D3D12MA::ALLOCATION_DESC allocationDesc = {};
     allocationDesc.HeapType = D3D12_HEAP_TYPE_DEFAULT;
@@ -1888,9 +1898,8 @@ VGPUTexture D3D12_Renderer::CreateTexture(const VGPUTextureDesc* desc, const voi
     return texture;
 }
 
-
 /* Sampler */
-VGPUSampler D3D12_Renderer::CreateSampler(const VGPUSamplerDesc* desc)
+VGPUSampler D3D12Device::CreateSampler(const VGPUSamplerDesc* desc)
 {
     const D3D12_FILTER_REDUCTION_TYPE d3dReductionType = desc->compareFunction != VGPUCompareFunction_Never ? D3D12_FILTER_REDUCTION_TYPE_COMPARISON : D3D12_FILTER_REDUCTION_TYPE_STANDARD;
     const D3D12_FILTER_TYPE d3dMinFilter = ToD3D12FilterType(desc->minFilter);
@@ -1950,6 +1959,14 @@ VGPUSampler D3D12_Renderer::CreateSampler(const VGPUSamplerDesc* desc)
     return sampler;
 }
 
+/* BindGroupLayout */
+VGPUBindGroupLayout D3D12Device::CreateBindGroupLayout(const VGPUBindGroupLayoutDesc* desc)
+{
+    VGPU_UNUSED(desc);
+
+    return nullptr;
+}
+
 /* PipelineLayout */
 D3D12PipelineLayout::~D3D12PipelineLayout()
 {
@@ -1980,7 +1997,7 @@ static HRESULT d3d12_CreateRootSignature(ID3D12Device* device, ID3D12RootSignatu
     return device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(rootSignature));
 }
 
-VGPUPipelineLayout D3D12_Renderer::CreatePipelineLayout(const VGPUPipelineLayoutDesc* desc)
+VGPUPipelineLayout D3D12Device::CreatePipelineLayout(const VGPUPipelineLayoutDesc* desc)
 {
     D3D12PipelineLayout* layout = new D3D12PipelineLayout();
     layout->renderer = this;
@@ -2049,7 +2066,7 @@ void D3D12Pipeline::SetLabel(const char* label)
     D3D12SetName(handle, label);
 }
 
-VGPUPipeline D3D12_Renderer::CreateRenderPipeline(const VGPURenderPipelineDesc* desc)
+VGPUPipeline D3D12Device::CreateRenderPipeline(const VGPURenderPipelineDesc* desc)
 {
     D3D12Pipeline* pipeline = new D3D12Pipeline();
     pipeline->renderer = this;
@@ -2174,6 +2191,7 @@ VGPUPipeline D3D12_Renderer::CreateRenderPipeline(const VGPURenderPipelineDesc* 
     }
 
     // Color Attachments + RTV
+    const bool alphaBlendFactorSupported = d3dFeatures.AlphaBlendFactorSupported();
     D3D12_RT_FORMAT_ARRAY RTVFormats = {};
     RTVFormats.NumRenderTargets = 0;
 
@@ -2188,11 +2206,11 @@ VGPUPipeline D3D12_Renderer::CreateRenderPipeline(const VGPURenderPipelineDesc* 
 
         blendState.RenderTarget[i].BlendEnable = attachment.blendEnabled;
         blendState.RenderTarget[i].LogicOpEnable = FALSE;
-        blendState.RenderTarget[i].SrcBlend = D3D12Blend(attachment.srcColorBlendFactor);
-        blendState.RenderTarget[i].DestBlend = D3D12Blend(attachment.dstColorBlendFactor);
+        blendState.RenderTarget[i].SrcBlend = D3D12Blend(attachment.srcColorBlendFactor, alphaBlendFactorSupported);
+        blendState.RenderTarget[i].DestBlend = D3D12Blend(attachment.dstColorBlendFactor, alphaBlendFactorSupported);
         blendState.RenderTarget[i].BlendOp = D3D12BlendOperation(attachment.colorBlendOperation);
-        blendState.RenderTarget[i].SrcBlendAlpha = D3D12AlphaBlend(attachment.srcAlphaBlendFactor);
-        blendState.RenderTarget[i].DestBlendAlpha = D3D12AlphaBlend(attachment.dstAlphaBlendFactor);
+        blendState.RenderTarget[i].SrcBlendAlpha = D3D12AlphaBlend(attachment.srcAlphaBlendFactor, alphaBlendFactorSupported);
+        blendState.RenderTarget[i].DestBlendAlpha = D3D12AlphaBlend(attachment.dstAlphaBlendFactor, alphaBlendFactorSupported);
         blendState.RenderTarget[i].BlendOpAlpha = D3D12BlendOperation(attachment.alphaBlendOperation);
         blendState.RenderTarget[i].LogicOp = D3D12_LOGIC_OP_NOOP;
         blendState.RenderTarget[i].RenderTargetWriteMask = D3D12RenderTargetWriteMask(attachment.colorWriteMask);
@@ -2305,7 +2323,7 @@ VGPUPipeline D3D12_Renderer::CreateRenderPipeline(const VGPURenderPipelineDesc* 
     return pipeline;
 }
 
-VGPUPipeline D3D12_Renderer::CreateComputePipeline(const VGPUComputePipelineDesc* desc)
+VGPUPipeline D3D12Device::CreateComputePipeline(const VGPUComputePipelineDesc* desc)
 {
     D3D12Pipeline* pipeline = new D3D12Pipeline();
     pipeline->renderer = this;
@@ -2340,7 +2358,7 @@ VGPUPipeline D3D12_Renderer::CreateComputePipeline(const VGPUComputePipelineDesc
     return pipeline;
 }
 
-VGPUPipeline D3D12_Renderer::CreateRayTracingPipeline(const VGPURayTracingPipelineDesc* desc)
+VGPUPipeline D3D12Device::CreateRayTracingPipeline(const VGPURayTracingPipelineDesc* desc)
 {
     VGPU_UNUSED(desc);
 
@@ -2364,7 +2382,7 @@ void D3D12QueryHeap::SetLabel(const char* label)
     D3D12SetName(handle, label);
 }
 
-VGPUQueryHeap D3D12_Renderer::CreateQueryHeap(const VGPUQueryHeapDesc* desc)
+VGPUQueryHeap D3D12Device::CreateQueryHeap(const VGPUQueryHeapDesc* desc)
 {
     D3D12QueryHeap* heap = new D3D12QueryHeap();
     heap->renderer = this;
@@ -2407,7 +2425,7 @@ void D3D12SwapChain::SetLabel(const char* label)
     VGPU_UNUSED(label);
 }
 
-VGPUSwapChain D3D12_Renderer::CreateSwapChain(void* windowHandle, const VGPUSwapChainDesc* desc)
+VGPUSwapChain D3D12Device::CreateSwapChain(void* windowHandle, const VGPUSwapChainDesc* desc)
 {
     DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
     swapChainDesc.Width = desc->width;
@@ -3008,7 +3026,7 @@ void D3D12CommandBuffer::DrawIndexedIndirect(VGPUBuffer indirectBuffer, uint64_t
         0);
 }
 
-VGPUCommandBuffer D3D12_Renderer::BeginCommandBuffer(VGPUCommandQueue queueType, const char* label)
+VGPUCommandBuffer D3D12Device::BeginCommandBuffer(VGPUCommandQueue queueType, const char* label)
 {
     HRESULT hr = S_OK;
     D3D12CommandBuffer* commandBuffer = nullptr;
@@ -3048,7 +3066,7 @@ VGPUCommandBuffer D3D12_Renderer::BeginCommandBuffer(VGPUCommandQueue queueType,
     return commandBuffersPool.back();
 }
 
-uint64_t D3D12_Renderer::Submit(VGPUCommandBuffer* commandBuffers, uint32_t count)
+uint64_t D3D12Device::Submit(VGPUCommandBuffer* commandBuffers, uint32_t count)
 {
     HRESULT hr = S_OK;
     std::vector<D3D12SwapChain*> presentSwapChains;
@@ -3268,7 +3286,7 @@ inline void __stdcall _D3D12_DebugMessageCallback(
     }
     else
     {
-        vgpu_log_info("%s", pDescription);
+        vgpuLogInfo("%s", pDescription);
     }
 }
 
@@ -3276,7 +3294,7 @@ static VGPUDeviceImpl* d3d12_createDevice(const VGPUDeviceDescriptor* info)
 {
     VGPU_ASSERT(info);
 
-    D3D12_Renderer* renderer = new D3D12_Renderer();
+    D3D12Device* renderer = new D3D12Device();
 
     DWORD dxgiFactoryFlags = 0;
     if (info->validationMode != VGPUValidationMode_Disabled)
@@ -3677,8 +3695,8 @@ static VGPUDeviceImpl* d3d12_createDevice(const VGPUDeviceDescriptor* info)
     VHR(renderer->queues[VGPUCommandQueue_Graphics].handle->GetTimestampFrequency(&renderer->timestampFrequency));
 
     // Log some info
-    vgpu_log_info("VGPU Driver: D3D12");
-    vgpu_log_info("D3D12 Adapter: %s", renderer->adapterName.c_str());
+    vgpuLogInfo("VGPU Driver: D3D12");
+    vgpuLogInfo("D3D12 Adapter: %s", renderer->adapterName.c_str());
 
     return renderer;
 }

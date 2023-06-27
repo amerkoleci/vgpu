@@ -59,7 +59,7 @@
 #define VGPU_ENABLE_WARNINGS() __pragma(warning(pop))
 #endif
 
-_VGPU_EXTERN void vgpu_log_info(const char* format, ...);
+_VGPU_EXTERN void vgpuLogInfo(const char* format, ...);
 _VGPU_EXTERN void vgpuLogWarn(const char* format, ...);
 _VGPU_EXTERN void vgpuLogError(const char* format, ...);
 
@@ -152,6 +152,11 @@ struct VGPUSamplerImpl : public VGPUObject
 public:
 };
 
+struct VGPUBindGroupLayoutImpl : public VGPUObject
+{
+public:
+};
+
 struct VGPUPipelineLayoutImpl : public VGPUObject
 {
 public:
@@ -231,6 +236,7 @@ struct VGPUDeviceImpl : public VGPUObject
 
     virtual VGPUSampler CreateSampler(const VGPUSamplerDesc* desc) = 0;
 
+    virtual VGPUBindGroupLayout CreateBindGroupLayout(const VGPUBindGroupLayoutDesc* desc) = 0;
     virtual VGPUPipelineLayout CreatePipelineLayout(const VGPUPipelineLayoutDesc* desc) = 0;
 
     virtual VGPUPipeline CreateRenderPipeline(const VGPURenderPipelineDesc* desc) = 0;

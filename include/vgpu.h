@@ -47,16 +47,18 @@ typedef uint32_t VGPUBool32;
 typedef uint32_t VGPUFlags;
 typedef uint64_t VGPUDeviceAddress;
 
-typedef struct VGPUDeviceImpl* VGPUDevice;
-typedef struct VGPUBufferImpl* VGPUBuffer;
-typedef struct VGPUTextureImpl* VGPUTexture;
-typedef struct VGPUTextureViewImpl* VGPUTextureView;
-typedef struct VGPUSamplerImpl* VGPUSampler;
-typedef struct VGPUPipelineLayoutImpl* VGPUPipelineLayout;
-typedef struct VGPUPipelineImpl* VGPUPipeline;
-typedef struct VGPUQueryHeapImpl* VGPUQueryHeap;
-typedef struct VGPUSwapChainImpl* VGPUSwapChain;
-typedef struct VGPUCommandBufferImpl* VGPUCommandBuffer;
+typedef struct VGPUDeviceImpl*          VGPUDevice;
+typedef struct VGPUBufferImpl*          VGPUBuffer;
+typedef struct VGPUTextureImpl*         VGPUTexture;
+typedef struct VGPUTextureViewImpl*     VGPUTextureView;
+typedef struct VGPUSamplerImpl*         VGPUSampler;
+typedef struct VGPUBindGroupLayoutImpl* VGPUBindGroupLayout;
+typedef struct VGPUPipelineLayoutImpl*  VGPUPipelineLayout;
+typedef struct VGPUPipelineImpl*        VGPUPipeline;
+typedef struct VGPUQueryHeapImpl*       VGPUQueryHeap;
+typedef struct VGPUSurfaceImpl*         VGPUSurface;
+typedef struct VGPUSwapChainImpl*       VGPUSwapChain;
+typedef struct VGPUCommandBufferImpl*   VGPUCommandBuffer;
 
 typedef enum VGPULogLevel {
     VGPULogLevel_Error = 0,
@@ -461,41 +463,45 @@ typedef enum VGPUPrimitiveTopology {
 } VGPUPrimitiveTopology;
 
 typedef enum VGPUBlendFactor {
-    VGPUBlendFactor_Zero = 0,
-    VGPUBlendFactor_One = 1,
-    VGPUBlendFactor_SourceColor = 2,
-    VGPUBlendFactor_OneMinusSourceColor = 3,
-    VGPUBlendFactor_SourceAlpha = 4,
-    VGPUBlendFactor_OneMinusSourceAlpha = 5,
-    VGPUBlendFactor_DestinationColor = 6,
-    VGPUBlendFactor_OneMinusDestinationColor = 7,
-    VGPUBlendFactor_DestinationAlpha = 8,
-    VGPUBlendFactor_OneMinusDestinationAlpha = 9,
-    VGPUBlendFactor_SourceAlphaSaturated = 10,
-    VGPUBlendFactor_BlendColor = 11,
-    VGPUBlendFactor_OneMinusBlendColor = 12,
-    //VGPUBlendFactor_BlendAlpha = 13,
-    //VGPUBlendFactor_OneMinusBlendAlpha = 14,
-    //VGPUBlendFactor_Source1Color = 15,
-    //VGPUBlendFactor_OneMinusSource1Color = 16,
-    //VGPUBlendFactor_Source1Alpha = 17,
-    //VGPUBlendFactor_OneMinusSource1Alpha = 18,
+    _VGPUBlendFactor_Default = 0,
+    VGPUBlendFactor_Zero,
+    VGPUBlendFactor_One,
+    VGPUBlendFactor_SourceColor,
+    VGPUBlendFactor_OneMinusSourceColor,
+    VGPUBlendFactor_SourceAlpha,
+    VGPUBlendFactor_OneMinusSourceAlpha,
+    VGPUBlendFactor_DestinationColor,
+    VGPUBlendFactor_OneMinusDestinationColor,
+    VGPUBlendFactor_DestinationAlpha,
+    VGPUBlendFactor_OneMinusDestinationAlpha,
+    VGPUBlendFactor_SourceAlphaSaturated,
+    VGPUBlendFactor_BlendColor,
+    VGPUBlendFactor_OneMinusBlendColor,
+    VGPUBlendFactor_BlendAlpha,
+    VGPUBlendFactor_OneMinusBlendAlpha,
+    VGPUBlendFactor_Source1Color,
+    VGPUBlendFactor_OneMinusSource1Color,
+    VGPUBlendFactor_Source1Alpha,
+    VGPUBlendFactor_OneMinusSource1Alpha,
 
+    _VGPUBlendFactor_Count,
     _VGPUBlendFactor_Force32 = 0x7FFFFFFF
 } VGPUBlendFactor;
 
 typedef enum VGPUBlendOperation {
-    VGPUBlendOperation_Add = 0,
-    VGPUBlendOperation_Subtract = 1,
-    VGPUBlendOperation_ReverseSubtract = 2,
-    VGPUBlendOperation_Min = 3,
-    VGPUBlendOperation_Max = 4,
+    _VGPUBlendOperation_Default = 0,
+    VGPUBlendOperation_Add,
+    VGPUBlendOperation_Subtract,
+    VGPUBlendOperation_ReverseSubtract,
+    VGPUBlendOperation_Min,
+    VGPUBlendOperation_Max,
 
     _VGPUBlendOperation_Force32 = 0x7FFFFFFF
 } VGPUBlendOperation;
 
 typedef enum VGPUColorWriteMask {
-    VGPUColorWriteMask_None = 0,
+    _VGPUColorWriteMask_Default = 0,
+    VGPUColorWriteMask_None = 0x10, 
     VGPUColorWriteMask_Red = 0x01,
     VGPUColorWriteMask_Green = 0x02,
     VGPUColorWriteMask_Blue = 0x04,
@@ -733,6 +739,10 @@ typedef struct VGPUDescriptorSetDesc {
     const VGPUDescriptorRangeDesc* ranges;
 } VGPUDescriptorSetDesc;
 
+typedef struct VGPUBindGroupLayoutDesc {
+    const char* label;
+} VGPUBindGroupLayoutDesc;
+
 typedef struct VGPUPushConstantRange {
     /// Register index to bind to (supplied in shader).
     uint32_t shaderRegister;
@@ -837,7 +847,7 @@ typedef struct VGPURenderPipelineDesc {
     uint32_t                    patchControlPoints;
 
     uint32_t                    colorFormatCount;
-    const VGPUTextureFormat* colorFormats;
+    const VGPUTextureFormat*    colorFormats;
     VGPUTextureFormat           depthStencilFormat;
     uint32_t                    sampleCount;
 } VGPURenderPipelineDesc;
@@ -966,6 +976,12 @@ VGPU_API VGPUSampler vgpuCreateSampler(VGPUDevice device, const VGPUSamplerDesc*
 VGPU_API void vgpuSamplerSetLabel(VGPUSampler sampler, const char* label);
 VGPU_API uint32_t vgpuSamplerAddRef(VGPUSampler sampler);
 VGPU_API uint32_t vgpuSamplerRelease(VGPUSampler sampler);
+
+/* BindGroupLayout */
+VGPU_API VGPUBindGroupLayout vgpuCreateBindGroupLayout(VGPUDevice device, const VGPUBindGroupLayoutDesc* desc);
+VGPU_API void vgpuBindGroupLayoutSetLabel(VGPUBindGroupLayout bindGroupLayout, const char* label);
+VGPU_API uint32_t vgpuBindGroupLayoutAddRef(VGPUPipelineLayout bindGroupLayout);
+VGPU_API uint32_t vgpuBindGroupLayoutRelease(VGPUPipelineLayout bindGroupLayout);
 
 /* PipelineLayout */
 VGPU_API VGPUPipelineLayout vgpuCreatePipelineLayout(VGPUDevice device, const VGPUPipelineLayoutDesc* desc);

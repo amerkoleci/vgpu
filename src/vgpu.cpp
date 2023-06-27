@@ -18,7 +18,7 @@
 static VGPULogCallback s_LogFunc = NULL;
 static void* s_userData = NULL;
 
-void vgpu_log_info(const char* format, ...) {
+void vgpuLogInfo(const char* format, ...) {
     if (!s_LogFunc)
         return;
 
@@ -450,6 +450,43 @@ uint32_t vgpuSamplerRelease(VGPUSampler sampler)
     return sampler->Release();
 }
 
+/* BindGroupLayout */
+static VGPUBindGroupLayoutDesc _VGPUBindGroupLayoutDesc_Def(const VGPUBindGroupLayoutDesc* desc)
+{
+    VGPUBindGroupLayoutDesc def = *desc;
+    return def;
+}
+
+VGPUBindGroupLayout vgpuCreateBindGroupLayout(VGPUDevice device, const VGPUBindGroupLayoutDesc* desc)
+{
+    VGPU_ASSERT(device);
+    NULL_RETURN_NULL(desc);
+
+    VGPUBindGroupLayoutDesc desc_def = _VGPUBindGroupLayoutDesc_Def(desc);
+    return device->CreateBindGroupLayout(&desc_def);
+}
+
+void vgpuBindGroupLayoutSetLabel(VGPUBindGroupLayout bindGroupLayout, const char* label)
+{
+    VGPU_ASSERT(bindGroupLayout);
+
+    bindGroupLayout->SetLabel(label);
+}
+
+uint32_t vgpuBindGroupLayoutAddRef(VGPUPipelineLayout bindGroupLayout)
+{
+    VGPU_ASSERT(bindGroupLayout);
+
+    return bindGroupLayout->AddRef();
+}
+
+uint32_t vgpuBindGroupLayoutRelease(VGPUPipelineLayout bindGroupLayout)
+{
+    VGPU_ASSERT(bindGroupLayout);
+
+    return bindGroupLayout->Release();
+}
+
 /* PipelineLayout */
 static VGPUPipelineLayoutDesc _VGPUPipelineLayoutDesc_Def(const VGPUPipelineLayoutDesc* desc)
 {
@@ -492,9 +529,19 @@ static VGPURenderPipelineDesc _vgpuRenderPipelineDescDef(const VGPURenderPipelin
 {
     VGPURenderPipelineDesc def = *desc;
 
-    def.primitiveTopology = _VGPU_DEF(def.primitiveTopology, VGPUPrimitiveTopology_TriangleList);
-    def.patchControlPoints = _VGPU_DEF(def.patchControlPoints, 1);
+    // BlendState
+    for (uint32_t i = 0; i < VGPU_MAX_COLOR_ATTACHMENTS; ++i)
+    {
+        def.blendState.renderTargets[i].srcColorBlendFactor = _VGPU_DEF(def.blendState.renderTargets[0].srcColorBlendFactor, VGPUBlendFactor_One);
+        def.blendState.renderTargets[i].dstColorBlendFactor = _VGPU_DEF(def.blendState.renderTargets[0].dstColorBlendFactor, VGPUBlendFactor_Zero);
+        def.blendState.renderTargets[i].colorBlendOperation = _VGPU_DEF(def.blendState.renderTargets[0].colorBlendOperation, VGPUBlendOperation_Add);
+        def.blendState.renderTargets[i].srcAlphaBlendFactor = _VGPU_DEF(def.blendState.renderTargets[0].srcAlphaBlendFactor, VGPUBlendFactor_One);
+        def.blendState.renderTargets[i].dstAlphaBlendFactor = _VGPU_DEF(def.blendState.renderTargets[0].dstAlphaBlendFactor, VGPUBlendFactor_Zero);
+        def.blendState.renderTargets[i].alphaBlendOperation = _VGPU_DEF(def.blendState.renderTargets[0].alphaBlendOperation, VGPUBlendOperation_Add);
+        def.blendState.renderTargets[i].colorWriteMask = _VGPU_DEF(def.blendState.renderTargets[0].colorWriteMask, VGPUColorWriteMask_All);
+    }
 
+    // DepthStencilState
     def.depthStencilState.depthCompareFunction = _VGPU_DEF(def.depthStencilState.depthCompareFunction, VGPUCompareFunction_Always);
     def.depthStencilState.stencilFront.compareFunction = _VGPU_DEF(def.depthStencilState.stencilFront.compareFunction, VGPUCompareFunction_Always);
     def.depthStencilState.stencilFront.failOperation = _VGPU_DEF(def.depthStencilState.stencilFront.failOperation, VGPUStencilOperation_Keep);
@@ -505,6 +552,9 @@ static VGPURenderPipelineDesc _vgpuRenderPipelineDescDef(const VGPURenderPipelin
     def.depthStencilState.stencilBack.failOperation = _VGPU_DEF(def.depthStencilState.stencilBack.failOperation, VGPUStencilOperation_Keep);
     def.depthStencilState.stencilBack.depthFailOperation = _VGPU_DEF(def.depthStencilState.stencilBack.depthFailOperation, VGPUStencilOperation_Keep);
     def.depthStencilState.stencilBack.passOperation = _VGPU_DEF(def.depthStencilState.stencilBack.passOperation, VGPUStencilOperation_Keep);
+
+    def.primitiveTopology = _VGPU_DEF(def.primitiveTopology, VGPUPrimitiveTopology_TriangleList);
+    def.patchControlPoints = _VGPU_DEF(def.patchControlPoints, 1);
 
     //def.depthStencilState.stencilReadMask = _VGPU_DEF(def.depthStencilState.stencilReadMask, 0xFF);
     //def.depthStencilState.stencilWriteMask = _VGPU_DEF(def.depthStencilState.stencilWriteMask, 0xFF);
