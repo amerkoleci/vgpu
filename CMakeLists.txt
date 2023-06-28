@@ -188,7 +188,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 )
 
 set_target_properties(${PROJECT_NAME} PROPERTIES
-    CXX_STANDARD 11
+    CXX_STANDARD 17
     COMPILE_WARNING_AS_ERROR ON
 )
 

@@ -75,17 +75,6 @@ if(VGPU_VULKAN_DRIVER)
     target_sources(vma INTERFACE ${VMA_DIR}/vk_mem_alloc.h)
     target_include_directories(vma INTERFACE ${VMA_DIR})
     target_link_libraries(vma INTERFACE vulkan)
-
-     # spirv-reflect
-    set(SPIRV_REFLECT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/spirv-reflect")
-    set(SPIRV_REFLECT_FILES
-        "${SPIRV_REFLECT_DIR}/spirv_reflect.c"
-        "${SPIRV_REFLECT_DIR}/spirv_reflect.h"
-    )
- 
-    add_library(spirv-reflect STATIC ${SPIRV_REFLECT_FILES})
-    target_include_directories(spirv-reflect PUBLIC ${SPIRV_REFLECT_DIR})
-    set_property(TARGET spirv-reflect PROPERTY FOLDER "ThirdParty")
 endif()
 
 if (VGPU_D3D12_DRIVER)
