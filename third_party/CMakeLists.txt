@@ -1,15 +1,3 @@
-if (VGPU_D3D12_DRIVER)
-    # DirectX-Headers
-    add_library(DirectX-Headers INTERFACE)
-    set(DIRECTX_HEADERS_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/DirectX-Headers/include)
-    target_sources(DirectX-Headers INTERFACE 
-        ${DIRECTX_HEADERS_INCLUDE_DIR}/directx/d3d12.h
-        ${DIRECTX_HEADERS_INCLUDE_DIR}/directx/d3dx12.h
-        ${DIRECTX_HEADERS_INCLUDE_DIR}/directx/d3d12shader.h
-    )
-    target_include_directories(DirectX-Headers INTERFACE ${DIRECTX_HEADERS_INCLUDE_DIR})
-endif ()
-
 # GLFW
 if(NOT (ANDROID OR EMSCRIPTEN OR WINDOWS_STORE))
     set(GLFW_BUILD_DOCS OFF CACHE BOOL "")

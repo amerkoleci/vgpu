@@ -301,7 +301,6 @@ if (VGPU_D3D12_DRIVER)
     )
 
     target_compile_definitions(${PROJECT_NAME} PRIVATE VGPU_D3D12_DRIVER)
-    target_link_libraries(${PROJECT_NAME} PRIVATE DirectX-Headers)
 
     if(WINDOWS_STORE)
         target_link_libraries(${PROJECT_NAME} PRIVATE d3d12 dxgi)

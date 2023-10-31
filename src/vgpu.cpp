@@ -324,7 +324,7 @@ static VGPUTextureDesc _vgpuTextureDescDef(const VGPUTextureDesc* desc)
     return def;
 }
 
-VGPUTexture vgpuCreateTexture(VGPUDevice device, const VGPUTextureDesc* desc, const void* pInitialData)
+VGPUTexture vgpuCreateTexture(VGPUDevice device, const VGPUTextureDesc* desc, const VGPUTextureData* pInitialData)
 {
     VGPU_ASSERT(device);
     NULL_RETURN_NULL(desc);
@@ -541,6 +541,36 @@ uint32_t vgpuPipelineLayoutRelease(VGPUPipelineLayout pipelineLayout)
     return pipelineLayout->Release();
 }
 
+/* ShaderModule */
+VGPUShaderModule vgpuCreateShaderModule(VGPUDevice device, const VGPUShaderModuleDesc* desc)
+{
+    VGPU_ASSERT(device);
+    NULL_RETURN_NULL(desc);
+
+    return device->CreateShaderModule(desc);
+}
+
+void vgpuShaderModuleSetLabel(VGPUShaderModule shaderModule, const char* label)
+{
+    NULL_RETURN(shaderModule);
+
+    shaderModule->SetLabel(label);
+}
+
+uint32_t vgpuShaderModuleAddRef(VGPUShaderModule shaderModule)
+{
+    VGPU_ASSERT(shaderModule);
+
+    return shaderModule->AddRef();
+}
+
+uint32_t vgpuShaderModuleRelease(VGPUShaderModule shaderModule)
+{
+    VGPU_ASSERT(shaderModule);
+
+    return shaderModule->Release();
+}
+
 /* Pipeline */
 static VGPURenderPipelineDesc _vgpuRenderPipelineDescDef(const VGPURenderPipelineDesc* desc)
 {
@@ -598,8 +628,7 @@ VGPUPipeline vgpuCreateComputePipeline(VGPUDevice device, const VGPUComputePipel
     NULL_RETURN_NULL(desc);
     VGPU_ASSERT(desc->layout);
     VGPU_ASSERT(desc->computeShader.stage == VGPUShaderStage_Compute);
-    VGPU_ASSERT(desc->computeShader.bytecode != nullptr);
-    VGPU_ASSERT(desc->computeShader.size > 0);
+    VGPU_ASSERT(desc->computeShader.module != nullptr);
 
     return device->CreateComputePipeline(desc);
 }

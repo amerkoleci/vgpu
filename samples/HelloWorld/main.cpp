@@ -57,7 +57,7 @@ std::string getShadersPath()
     return getAssetPath() + "shaders/";
 }
 
-std::vector<uint8_t> LoadShader(const char* fileName)
+VGPUShaderModule LoadShader(const char* fileName)
 {
     std::string shaderExt = ".spv";
     if (vgpuDeviceGetBackend(device) == VGPUBackend_D3D12)
@@ -72,23 +72,20 @@ std::vector<uint8_t> LoadShader(const char* fileName)
     {
         size_t size = is.tellg();
         is.seekg(0, std::ios::beg);
-        char* shaderCode = new char[size];
-        is.read(shaderCode, size);
-        is.close();
-
-        assert(size > 0);
 
         bytecode.resize(size);
-        memcpy(bytecode.data(), shaderCode, size);
+        is.read((char*)bytecode.data(), size);
+        is.close();
 
-        delete[] shaderCode;
-
-        return bytecode;
+        VGPUShaderModuleDesc desc{};
+        desc.codeSize = bytecode.size();
+        desc.pCode = bytecode.data();
+        return vgpuCreateShaderModule(device, &desc);
     }
     else
     {
         std::cerr << "Error: Could not open shader file \"" << fileName << "\"" << "\n";
-        return bytecode;
+        return nullptr;
     }
 }
 
@@ -106,7 +103,9 @@ void init_vgpu(GLFWwindow* window)
     deviceDesc.validationMode = VGPUValidationMode_Enabled;
 #endif
 
-    if (vgpuIsBackendSupported(VGPUBackend_Vulkan))
+    //deviceDesc.preferredBackend = VGPUBackend_D3D12;
+    if (deviceDesc.preferredBackend == _VGPUBackend_Default
+        && vgpuIsBackendSupported(VGPUBackend_Vulkan))
     {
         deviceDesc.preferredBackend = VGPUBackend_Vulkan;
     }
@@ -175,19 +174,14 @@ void init_vgpu(GLFWwindow* window)
     indexBufferDesc.usage = VGPUBufferUsage_Index;
     indexBuffer = vgpuCreateBuffer(device, &indexBufferDesc, indices);
 
-    std::vector<uint8_t> vertexShader = LoadShader("triangleVertex");
-    std::vector<uint8_t> fragmentShader = LoadShader("triangleFragment");
-
     // Stage info
     VGPUShaderStageDesc shaderStages[2] = {};
+    shaderStages[0].module = LoadShader("triangleVertex");
     shaderStages[0].stage = VGPUShaderStage_Vertex;
-    shaderStages[0].bytecode = vertexShader.data();
-    shaderStages[0].size = vertexShader.size();
     shaderStages[0].entryPoint = "vertexMain";
 
+    shaderStages[1].module = LoadShader("triangleFragment");
     shaderStages[1].stage = VGPUShaderStage_Fragment;
-    shaderStages[1].bytecode = fragmentShader.data();
-    shaderStages[1].size = fragmentShader.size();
     shaderStages[1].entryPoint = "fragmentMain";
 
     VGPUPushConstantRange pushConstantRange{};
@@ -231,6 +225,9 @@ void init_vgpu(GLFWwindow* window)
     renderPipelineDesc.depthStencilState.depthCompareFunction = VGPUCompareFunction_LessEqual;
     renderPipelineDesc.blendState.renderTargets[0].colorWriteMask = VGPUColorWriteMask_All;
     renderPipeline = vgpuCreateRenderPipeline(device, &renderPipelineDesc);
+
+    vgpuShaderModuleRelease(shaderStages[0].module);
+    vgpuShaderModuleRelease(shaderStages[1].module);
 }
 
 void draw_frame()

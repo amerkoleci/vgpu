@@ -699,7 +699,7 @@ namespace
                 return D3D12_SHADER_VISIBILITY_MESH;
 
             default:
-                // catch-all case - actually some of the bitfield combinations are unrepresentable in DX12
+            case VGPUShaderStage_All:
                 return D3D12_SHADER_VISIBILITY_ALL;
         }
     }
@@ -754,8 +754,8 @@ namespace
             case VGPUQueryType_Timestamp:
                 return D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
 
-            case VGPUQueryType_PipelineStatistics:
-                return D3D12_QUERY_HEAP_TYPE_PIPELINE_STATISTICS;
+            //case VGPUQueryType_PipelineStatistics:
+            //    return D3D12_QUERY_HEAP_TYPE_PIPELINE_STATISTICS;
 
             default:
                 VGPU_UNREACHABLE();
@@ -775,8 +775,8 @@ namespace
             case VGPUQueryType_Timestamp:
                 return D3D12_QUERY_TYPE_TIMESTAMP;
 
-            case VGPUQueryType_PipelineStatistics:
-                return D3D12_QUERY_TYPE_PIPELINE_STATISTICS;
+            //case VGPUQueryType_PipelineStatistics:
+            //    return D3D12_QUERY_TYPE_PIPELINE_STATISTICS;
 
             default:
                 VGPU_UNREACHABLE();
@@ -790,6 +790,10 @@ namespace
 #define vgpuD3D12GetDebugInterface D3D12GetDebugInterface
 #define vgpuD3D12SerializeVersionedRootSignature D3D12SerializeVersionedRootSignature
 #endif
+
+
+using DescriptorIndex = uint32_t;
+using RootParameterIndex = uint32_t;
 
 struct D3D12DescriptorAllocator final
 {
@@ -940,9 +944,19 @@ struct D3D12PipelineLayout final : public VGPUPipelineLayoutImpl
     D3D12Device* renderer = nullptr;
     ID3D12RootSignature* handle = nullptr;
 
-    uint32_t pushConstantsBaseIndex = 0;
+    RootParameterIndex pushConstantsBaseIndex = ~0u;
 
     ~D3D12PipelineLayout() override;
+    void SetLabel(const char* label) override;
+};
+
+struct D3D12ShaderModule final : public VGPUShaderModuleImpl
+{
+    D3D12Device* renderer = nullptr;
+    void* pByteCode = nullptr;
+    D3D12_SHADER_BYTECODE handle = {};
+
+    ~D3D12ShaderModule() override;
     void SetLabel(const char* label) override;
 };
 
@@ -1172,11 +1186,13 @@ public:
     uint64_t GetTimestampFrequency() const  override { return timestampFrequency; }
 
     VGPUBuffer CreateBuffer(const VGPUBufferDesc* desc, const void* pInitialData) override;
-    VGPUTexture CreateTexture(const VGPUTextureDesc* desc, const void* pInitialData) override;
+    VGPUTexture CreateTexture(const VGPUTextureDesc* desc, const VGPUTextureData* pInitialData) override;
     VGPUSampler CreateSampler(const VGPUSamplerDesc* desc) override;
 
     VGPUBindGroupLayout CreateBindGroupLayout(const VGPUBindGroupLayoutDesc* desc) override;
     VGPUPipelineLayout CreatePipelineLayout(const VGPUPipelineLayoutDesc* desc) override;
+
+    VGPUShaderModule CreateShaderModule(const VGPUShaderModuleDesc* desc) override;
 
     VGPUPipeline CreateRenderPipeline(const VGPURenderPipelineDesc* desc) override;
     VGPUPipeline CreateComputePipeline(const VGPUComputePipelineDesc* desc) override;
@@ -1813,11 +1829,11 @@ VGPUBool32 D3D12Device::QueryFeatureSupport(VGPUFeature feature) const
             //const bool supportsDP4a = d3dFeatures.HighestShaderModel() >= D3D_SHADER_MODEL_6_4;
             return d3dFeatures.HighestShaderModel() >= D3D_SHADER_MODEL_6_2 && d3dFeatures.Native16BitShaderOpsSupported();
 
+        case VGPUFeature_CacheCoherentUMA:
+            return (d3dFeatures.CacheCoherentUMA() == TRUE);
+
         case VGPUFeature_DepthBoundsTest:
             return (d3dFeatures.DepthBoundsTestSupported() == TRUE);
-
-        case VGPUFeature_SamplerAnisotropy:
-            return true;
 
             // https://docs.microsoft.com/en-us/windows/win32/direct3d11/tiled-resources-texture-sampling-features
         case VGPUFeature_SamplerMinMax:
@@ -2097,7 +2113,7 @@ VGPUBuffer D3D12Device::CreateBuffer(const VGPUBufferDesc* desc, const void* pIn
 }
 
 /* Texture */
-VGPUTexture D3D12Device::CreateTexture(const VGPUTextureDesc* desc, const void* pInitialData)
+VGPUTexture D3D12Device::CreateTexture(const VGPUTextureDesc* desc, const VGPUTextureData* pInitialData)
 {
     D3D12MA::ALLOCATION_DESC allocationDesc = {};
     allocationDesc.HeapType = D3D12_HEAP_TYPE_DEFAULT;
@@ -2345,7 +2361,7 @@ VGPUPipelineLayout D3D12Device::CreatePipelineLayout(const VGPUPipelineLayoutDes
 
     if (desc->pushConstantRangeCount > 0)
     {
-        layout->pushConstantsBaseIndex = (uint32_t)rootParameters.size();
+        layout->pushConstantsBaseIndex = RootParameterIndex(rootParameters.size());
 
         for (uint32_t i = 0; i < desc->pushConstantRangeCount; i++)
         {
@@ -2382,6 +2398,30 @@ VGPUPipelineLayout D3D12Device::CreatePipelineLayout(const VGPUPipelineLayoutDes
     }
 
     return layout;
+}
+
+/* ShaderModule */
+D3D12ShaderModule::~D3D12ShaderModule()
+{
+    ::free(pByteCode);
+    handle = {};
+    pByteCode = nullptr;
+}
+
+void D3D12ShaderModule::SetLabel(const char* label)
+{
+    VGPU_UNUSED(label);
+}
+
+VGPUShaderModule D3D12Device::CreateShaderModule(const VGPUShaderModuleDesc* desc)
+{
+    D3D12ShaderModule* shaderModule = new D3D12ShaderModule();
+    shaderModule->renderer = this;
+    shaderModule->pByteCode = malloc(desc->codeSize);
+    memcpy(shaderModule->pByteCode, desc->pCode, desc->codeSize);
+    shaderModule->handle.pShaderBytecode = shaderModule->pByteCode;
+    shaderModule->handle.BytecodeLength = desc->codeSize;
+    return shaderModule;
 }
 
 /* Pipeline */
@@ -2490,33 +2530,35 @@ VGPUPipeline D3D12Device::CreateRenderPipeline(const VGPURenderPipelineDesc* des
     for (uint32_t i = 0; i < desc->shaderStageCount; i++)
     {
         const VGPUShaderStageDesc& shader = desc->shaderStages[i];
+        const D3D12_SHADER_BYTECODE& bytecode = static_cast<D3D12ShaderModule*>(desc->shaderStages[i].module)->handle;
+
         if (shader.stage == VGPUShaderStage_Vertex)
         {
-            stream.stream1.VS = { shader.bytecode, (SIZE_T)shader.size };
+            stream.stream1.VS = bytecode;
         }
         else if (shader.stage == VGPUShaderStage_Hull)
         {
-            stream.stream1.HS = { shader.bytecode, (SIZE_T)shader.size };
+            stream.stream1.HS = bytecode;
         }
         else if (shader.stage == VGPUShaderStage_Domain)
         {
-            stream.stream1.DS = { shader.bytecode, (SIZE_T)shader.size };
+            stream.stream1.DS = bytecode;
         }
         else if (shader.stage == VGPUShaderStage_Geometry)
         {
-            stream.stream1.GS = { shader.bytecode, (SIZE_T)shader.size };
+            stream.stream1.GS = bytecode;
         }
         else if (shader.stage == VGPUShaderStage_Fragment)
         {
-            stream.stream1.PS = { shader.bytecode, (SIZE_T)shader.size };
+            stream.stream1.PS = bytecode;
         }
         else if (shader.stage == VGPUShaderStage_Amplification)
         {
-            stream.stream2.AS = { shader.bytecode, shader.size };
+            stream.stream2.AS = bytecode;
         }
         else if (shader.stage == VGPUShaderStage_Mesh)
         {
-            stream.stream2.MS = { shader.bytecode, shader.size };
+            stream.stream2.MS = bytecode;
         }
     }
 
@@ -2668,7 +2710,7 @@ VGPUPipeline D3D12Device::CreateComputePipeline(const VGPUComputePipelineDesc* d
     } stream;
 
     stream.pRootSignature = pipeline->pipelineLayout->handle;
-    stream.CS = { desc->computeShader.bytecode, (SIZE_T)desc->computeShader.size };
+    stream.CS = static_cast<D3D12ShaderModule*>(desc->computeShader.module)->handle;
 
     D3D12_PIPELINE_STATE_STREAM_DESC streamDesc = {};
     streamDesc.pPipelineStateSubobjectStream = &stream;
@@ -2978,8 +3020,8 @@ void D3D12CommandBuffer::SetPushConstants(uint32_t pushConstantIndex, const void
     //VGPU_ASSERT(size <= device->limits.pushConstantsMaxSize);
     VGPU_ASSERT(size % 4 == 0);
 
-    uint32_t rootParameterIndex = currentPipeline->pipelineLayout->pushConstantsBaseIndex + pushConstantIndex;
-    uint32_t num32BitValuesToSet = size / 4;
+    const uint32_t rootParameterIndex = currentPipeline->pipelineLayout->pushConstantsBaseIndex + pushConstantIndex;
+    const uint32_t num32BitValuesToSet = size / 4;
 
     if (currentPipeline->type == VGPUPipelineType_Render)
     {

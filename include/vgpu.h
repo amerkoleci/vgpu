@@ -54,6 +54,7 @@ typedef struct VGPUTextureViewImpl*     VGPUTextureView;
 typedef struct VGPUSamplerImpl*         VGPUSampler;
 typedef struct VGPUBindGroupLayoutImpl* VGPUBindGroupLayout;
 typedef struct VGPUPipelineLayoutImpl*  VGPUPipelineLayout;
+typedef struct VGPUShaderModuleImpl*    VGPUShaderModule;
 typedef struct VGPUPipelineImpl*        VGPUPipeline;
 typedef struct VGPUQueryHeapImpl*       VGPUQueryHeap;
 typedef struct VGPUSurfaceImpl*         VGPUSurface;
@@ -76,7 +77,6 @@ typedef enum VGPUBackend {
     _VGPUBackend_Default = 0,
     VGPUBackend_Vulkan,
     VGPUBackend_D3D12,
-    VGPUBackend_D3D11,
 
     _VGPUBackend_Count,
     _VGPUBackend_Force32 = 0x7FFFFFFF
@@ -161,6 +161,7 @@ typedef enum VGPUTextureUsage {
     VGPUTextureUsage_RenderTarget = (1 << 2),
     VGPUTextureUsage_Transient = (1 << 3),
     VGPUTextureUsage_ShadingRate = (1 << 4),
+    VGPUTextureUsage_Shared = (1 << 5),
 
     _VGPUTextureUsage_Force32 = 0x7FFFFFFF
 } VGPUTextureUsage;
@@ -309,7 +310,7 @@ typedef enum VGPUPresentMode {
 } VGPUPresentMode;
 
 typedef enum VGPUShaderStage {
-    VGPUShaderStage_None = 0,
+    VGPUShaderStage_All = 0,
     VGPUShaderStage_Vertex = (1 << 0),
     VGPUShaderStage_Hull = (1 << 1),
     VGPUShaderStage_Domain = (1 << 2),
@@ -331,16 +332,16 @@ typedef enum VGPUFeature {
     VGPUFeature_TextureCompressionASTC,
     VGPUFeature_IndirectFirstInstance,
     VGPUFeature_ShaderFloat16,
+    VGPUFeature_CacheCoherentUMA,
 
     VGPUFeature_GeometryShader,
     VGPUFeature_TessellationShader,
     VGPUFeature_DepthBoundsTest,
-    VGPUFeature_SamplerAnisotropy,
     VGPUFeature_SamplerMinMax,
 
+    VGPUFeature_ShaderOutputViewportIndex,
     VGPUFeature_DescriptorIndexing,
     VGPUFeature_Predication,
-    VGPUFeature_ShaderOutputViewportIndex,
     VGPUFeature_VariableRateShading,
     VGPUFeature_VariableRateShadingTier2,
     VGPUFeature_RayTracing,
@@ -576,26 +577,10 @@ typedef enum VGPUQueryType {
     /// Create a heap to contain timestamp queries
     VGPUQueryType_Timestamp = 2,
     /// Create a heap to contain a structure of `PipelineStatistics`
-    VGPUQueryType_PipelineStatistics = 3,
+    //VGPUQueryType_PipelineStatistics = 3,
 
     _VGPUQueryType_Force32 = 0x7FFFFFFF
 } VGPUQueryType;
-
-typedef enum VGPUQueryPipelineStatistic {
-    VGPUQueryPipelineStatistic_None = 0,
-    VGPUQueryPipelineStatistic_InputAssemblyVertices = (1 << 0),
-    VGPUQueryPipelineStatistic_InputAssemblyPrimitives = (1 << 1),
-    VGPUQueryPipelineStatistic_VertexShaderInvocations = (1 << 2),
-    VGPUQueryPipelineStatistic_ClipperInvocations = (1 << 3),
-    VGPUQueryPipelineStatistic_ClipperPrimitives = (1 << 4),
-    VGPUQueryPipelineStatistic_FragmentShaderInvocations = (1 << 5),
-    VGPUQueryPipelineStatistic_HullShaderInvocations = (1 << 6),
-    VGPUQueryPipelineStatistic_DomainShaderInvocations = (1 << 7),
-    VGPUQueryPipelineStatistic_ComputeShaderInvocations = (1 << 8),
-
-    _VGPUQueryPipelineStatistic_Force32 = 0x7FFFFFFF
-} VGPUQueryPipelineStatistic;
-typedef VGPUFlags VGPUQueryPipelineStatisticFlags;
 
 typedef struct VGPUColor {
     float r;
@@ -704,6 +689,13 @@ typedef struct VGPUTextureDesc {
     VGPUCpuAccessMode cpuAccess;
 } VGPUTextureDesc;
 
+typedef struct VGPUTextureData
+{
+    const void* pData;
+    uint32_t rowPitch;
+    uint32_t slicePitch;
+} VGPUTextureData;
+
 typedef struct VGPUSamplerDesc {
     const char*             label;
     VGPUSamplerFilter       minFilter;
@@ -752,7 +744,7 @@ typedef struct VGPUPushConstantRange {
     /// Size in bytes.
     uint32_t size;
     /// The shader stage the constants will be accessible to.
-    VGPUShaderStage visibility;
+    VGPUShaderStageFlags visibility;
 } VGPUPushConstantRange;
 
 typedef struct VGPUPipelineLayoutDesc {
@@ -763,10 +755,15 @@ typedef struct VGPUPipelineLayoutDesc {
     const VGPUPushConstantRange* pushConstantRanges;
 } VGPUPipelineLayoutDesc;
 
+typedef struct VGPUShaderModuleDesc {
+    const char*     label;
+    const void*     pCode;
+    size_t          codeSize;
+} VGPUShaderModuleDesc;
+
 typedef struct VGPUShaderStageDesc {
+    VGPUShaderModule module;
     VGPUShaderStage stage;
-    const void*     bytecode;
-    uint64_t        size;
     const char*     entryPoint;
 } VGPUShaderStageDesc;
 
@@ -870,7 +867,7 @@ typedef struct VGPUQueryHeapDesc {
     const char* label;
     VGPUQueryType type;
     uint32_t count;
-    VGPUQueryPipelineStatisticFlags pipelineStatistics;
+    //VGPUQueryPipelineStatisticFlags pipelineStatistics;
 } VGPUQueryHeapDesc;
 
 typedef struct VGPUSwapChainDesc {
@@ -971,7 +968,7 @@ VGPU_API uint32_t vgpuBufferAddRef(VGPUBuffer buffer);
 VGPU_API uint32_t vgpuBufferRelease(VGPUBuffer buffer);
 
 /* Texture methods */
-VGPU_API VGPUTexture vgpuCreateTexture(VGPUDevice device, const VGPUTextureDesc* desc, const void* pInitialData);
+VGPU_API VGPUTexture vgpuCreateTexture(VGPUDevice device, const VGPUTextureDesc* desc, const VGPUTextureData* pInitialData);
 VGPU_API VGPUTextureDimension vgpuTextureGetDimension(VGPUTexture texture);
 VGPU_API VGPUTextureFormat vgpuTextureGetFormat(VGPUTexture texture);
 VGPU_API void vgpuTextureSetLabel(VGPUTexture texture, const char* label);
@@ -995,6 +992,12 @@ VGPU_API VGPUPipelineLayout vgpuCreatePipelineLayout(VGPUDevice device, const VG
 VGPU_API void vgpuPipelineLayoutSetLabel(VGPUPipelineLayout pipelineLayout, const char* label);
 VGPU_API uint32_t vgpuPipelineLayoutAddRef(VGPUPipelineLayout pipelineLayout);
 VGPU_API uint32_t vgpuPipelineLayoutRelease(VGPUPipelineLayout pipelineLayout);
+
+/* ShaderModule */
+VGPU_API VGPUShaderModule vgpuCreateShaderModule(VGPUDevice device, const VGPUShaderModuleDesc* desc);
+VGPU_API void vgpuShaderModuleSetLabel(VGPUShaderModule shaderModule, const char* label);
+VGPU_API uint32_t vgpuShaderModuleAddRef(VGPUShaderModule shaderModule);
+VGPU_API uint32_t vgpuShaderModuleRelease(VGPUShaderModule shaderModule);
 
 /* Pipeline */
 VGPU_API VGPUPipeline vgpuCreateRenderPipeline(VGPUDevice device, const VGPURenderPipelineDesc* desc);

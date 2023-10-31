@@ -20,7 +20,7 @@ VGPU_ENABLE_WARNINGS()
 #include <xcb/xcb.h>
 #include <X11/Xlib.h>
 
-typedef xcb_connection_t*(*PFN_XGetXCBConnection)(Display* dpy);
+typedef xcb_connection_t* (*PFN_XGetXCBConnection)(Display* dpy);
 #endif
 
 #include <mutex>
@@ -201,8 +201,8 @@ namespace
         bool raytracingPipeline;
         bool rayQuery;
         bool fragment_shading_rate;
-        bool NV_mesh_shader;
-        bool EXT_conditional_rendering;
+        bool meshShader;
+        bool conditionalRendering;
         bool win32_full_screen_exclusive;
         bool dynamicRendering;
         bool extended_dynamic_state;
@@ -268,11 +268,11 @@ namespace
             else if (strcmp(vk_extensions[i].extensionName, VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME) == 0) {
                 extensions.fragment_shading_rate = true;
             }
-            else if (strcmp(vk_extensions[i].extensionName, VK_NV_MESH_SHADER_EXTENSION_NAME) == 0) {
-                extensions.NV_mesh_shader = true;
+            else if (strcmp(vk_extensions[i].extensionName, VK_EXT_MESH_SHADER_EXTENSION_NAME) == 0) {
+                extensions.meshShader = true;
             }
             else if (strcmp(vk_extensions[i].extensionName, VK_EXT_CONDITIONAL_RENDERING_EXTENSION_NAME) == 0) {
-                extensions.EXT_conditional_rendering = true;
+                extensions.conditionalRendering = true;
             }
             else if (strcmp(vk_extensions[i].extensionName, VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME) == 0) {
                 extensions.dynamicRendering = true;
@@ -731,8 +731,8 @@ namespace
             case VGPUQueryType_Timestamp:
                 return VK_QUERY_TYPE_TIMESTAMP;
 
-            case VGPUQueryType_PipelineStatistics:
-                return VK_QUERY_TYPE_PIPELINE_STATISTICS;
+                //case VGPUQueryType_PipelineStatistics:
+                //    return VK_QUERY_TYPE_PIPELINE_STATISTICS;
 
             default:
                 VGPU_UNREACHABLE();
@@ -799,15 +799,28 @@ namespace
         }
     }
 
-    constexpr VkShaderStageFlags ToVkShaderStageFlags(VGPUShaderStage stage)
+    constexpr VkShaderStageFlags ToVkShaderStageFlags(VGPUShaderStageFlags stage)
     {
+        if (stage & VGPUShaderStage_All)
+            return VK_SHADER_STAGE_ALL;
+
         VkShaderStageFlags flags = 0;
         if (stage & VGPUShaderStage_Vertex)
             flags |= VK_SHADER_STAGE_VERTEX_BIT;
+        if (stage & VGPUShaderStage_Hull)
+            flags |= VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;
+        if (stage & VGPUShaderStage_Domain)
+            flags |= VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;
+        if (stage & VGPUShaderStage_Geometry)
+            flags |= VK_SHADER_STAGE_GEOMETRY_BIT;
         if (stage & VGPUShaderStage_Fragment)
             flags |= VK_SHADER_STAGE_FRAGMENT_BIT;
         if (stage & VGPUShaderStage_Compute)
             flags |= VK_SHADER_STAGE_COMPUTE_BIT;
+        if (stage & VGPUShaderStage_Amplification)
+            flags |= VK_SHADER_STAGE_TASK_BIT_EXT;
+        if (stage & VGPUShaderStage_Mesh)
+            flags |= VK_SHADER_STAGE_MESH_BIT_EXT;
         return flags;
     }
 
@@ -924,6 +937,15 @@ struct VulkanPipelineLayout final : public VGPUPipelineLayoutImpl
     void SetLabel(const char* label) override;
 };
 
+struct VulkanShaderModule final : public VGPUShaderModuleImpl
+{
+    VulkanRenderer* renderer = nullptr;
+    VkShaderModule handle = VK_NULL_HANDLE;
+
+    ~VulkanShaderModule() override;
+    void SetLabel(const char* label) override;
+};
+
 struct VulkanPipeline final : public VGPUPipelineImpl
 {
     VulkanRenderer* renderer = nullptr;
@@ -981,6 +1003,7 @@ public:
     VkCommandPool commandPools[VGPU_MAX_INFLIGHT_FRAMES];
     VkCommandBuffer commandBuffers[VGPU_MAX_INFLIGHT_FRAMES];
     VkCommandBuffer commandBuffer;
+    VkSemaphore semaphore = VK_NULL_HANDLE;
 
     uint32_t clearValueCount = 0;
     VkClearValue clearValues[VGPU_MAX_COLOR_ATTACHMENTS + 1];
@@ -1081,7 +1104,6 @@ struct VulkanUploadContext final
 struct VulkanQueue final
 {
     VkQueue queue = VK_NULL_HANDLE;
-    VkSemaphore semaphore = VK_NULL_HANDLE;
 
     std::vector<VulkanSwapChain*> swapchainUpdates;
     std::vector<VkSwapchainKHR> submitSwapchains;
@@ -1089,10 +1111,8 @@ struct VulkanQueue final
 
     std::vector<VkSemaphore> submitWaitSemaphores;
     std::vector<VkPipelineStageFlags> submitWaitStages;
-    std::vector<uint64_t> submitWaitValues;
     std::vector<VkCommandBuffer> submitCommandBuffers;
     std::vector<VkSemaphore> submitSignalSemaphores;
-    std::vector<uint64_t> submitSignalValues;
     // KHR_synchronization2
     std::vector<VkSemaphoreSubmitInfo> submitWaitSemaphoreInfos;
     std::vector<VkSemaphoreSubmitInfo> submitSignalSemaphoreInfos;
@@ -1123,11 +1143,13 @@ public:
     uint32_t GetFrameIndex() override { return frameIndex; }
 
     VGPUBuffer CreateBuffer(const VGPUBufferDesc* desc, const void* pInitialData) override;
-    VGPUTexture CreateTexture(const VGPUTextureDesc* desc, const void* pInitialData) override;
+    VGPUTexture CreateTexture(const VGPUTextureDesc* desc, const VGPUTextureData* pInitialData) override;
     VGPUSampler CreateSampler(const VGPUSamplerDesc* desc) override;
 
     VGPUBindGroupLayout CreateBindGroupLayout(const VGPUBindGroupLayoutDesc* desc) override;
     VGPUPipelineLayout CreatePipelineLayout(const VGPUPipelineLayoutDesc* desc) override;
+
+    VGPUShaderModule CreateShaderModule(const VGPUShaderModuleDesc* desc) override;
 
     VGPUPipeline CreateRenderPipeline(const VGPURenderPipelineDesc* desc) override;
     VGPUPipeline CreateComputePipeline(const VGPUComputePipelineDesc* desc) override;
@@ -1156,6 +1178,7 @@ public:
 #endif
 
     bool debugUtils;
+    bool portability;
     bool xlib_surface;
     bool xcb_surface;
     VkInstance instance;
@@ -1174,10 +1197,10 @@ public:
     VkPhysicalDeviceHostQueryResetFeatures host_query_reset_features = {};
     VkPhysicalDeviceAccelerationStructureFeaturesKHR acceleration_structure_features = {};
     VkPhysicalDeviceRayTracingPipelineFeaturesKHR raytracing_features = {};
-    VkPhysicalDeviceRayQueryFeaturesKHR raytracing_query_features = {};
+    VkPhysicalDeviceRayQueryFeaturesKHR rayQueryFeatures = {};
     VkPhysicalDeviceFragmentShadingRateFeaturesKHR fragmentShadingRateFeatures = {};
-    VkPhysicalDeviceMeshShaderFeaturesNV mesh_shader_features = {};
-    VkPhysicalDeviceConditionalRenderingFeaturesEXT conditional_rendering_features = {};
+    VkPhysicalDeviceMeshShaderFeaturesEXT meshShaderFeatures = {};
+    VkPhysicalDeviceConditionalRenderingFeaturesEXT conditionalRenderingFeatures = {};
     VkPhysicalDeviceExtendedDynamicStateFeaturesEXT extendedDynamicStateFeatures = {};
     VkPhysicalDeviceExtendedDynamicState2FeaturesEXT extendedDynamicState2Features = {};
 
@@ -1192,10 +1215,13 @@ public:
     VkPhysicalDeviceAccelerationStructurePropertiesKHR accelerationStructureProperties = {};
     VkPhysicalDeviceRayTracingPipelinePropertiesKHR rayTracingPipelineProperties = {};
     VkPhysicalDeviceFragmentShadingRatePropertiesKHR fragmentShadingRateProperties = {};
-    VkPhysicalDeviceMeshShaderPropertiesNV mesh_shader_properties = {};
+    VkPhysicalDeviceMeshShaderPropertiesEXT meshShaderProperties = {};
+    VkPhysicalDeviceMemoryProperties2 memoryProperties2 = {};
 
     VkDeviceSize minAllocationAlignment{ 0 };
     std::string driverDescription;
+    bool synchronization2{ false };
+    bool dynamicRendering{ false };
 
     VkPhysicalDevice physicalDevice;
     struct QueueFamilyIndices {
@@ -1258,11 +1284,13 @@ public:
 
     // Deletion queue objects
     std::mutex destroyMutex;
+    std::deque<std::pair<VmaAllocation, uint64_t>> destroyedAllocations;
     std::deque<std::pair<std::pair<VkBuffer, VmaAllocation>, uint64_t>> destroyedBuffers;
     std::deque<std::pair<std::pair<VkImage, VmaAllocation>, uint64_t>> destroyedImages;
     std::deque<std::pair<VkImageView, uint64_t>> destroyedImageViews;
     std::deque<std::pair<VkSampler, uint64_t>> destroyedSamplers;
     std::deque<std::pair<VkPipelineLayout, uint64_t>> destroyedPipelineLayouts;
+    std::deque<std::pair<VkShaderModule, uint64_t>> destroyedShaderModules;
     std::deque<std::pair<VkPipeline, uint64_t>> destroyedPipelines;
     std::deque<std::pair<VkDescriptorPool, uint64_t>> destroyedDescriptorPools;
     std::deque<std::pair<VkQueryPool, uint64_t>> destroyedQueryPools;
@@ -1325,7 +1353,7 @@ VulkanUploadContext VulkanRenderer::Allocate(uint64_t size)
         context.uploadBufferSize = _VGPU_MAX(context.uploadBufferSize, uint64_t(65536));
 
         VGPUBufferDesc uploadBufferDesc{};
-        uploadBufferDesc.label = "UploadBuffer";
+        uploadBufferDesc.label = "CopyAllocator::UploadBuffer";
         uploadBufferDesc.size = context.uploadBufferSize;
         uploadBufferDesc.cpuAccess = VGPUCpuAccessMode_Write;
         context.uploadBuffer = (VulkanBuffer*)CreateBuffer(&uploadBufferDesc, nullptr);
@@ -1340,6 +1368,7 @@ VulkanUploadContext VulkanRenderer::Allocate(uint64_t size)
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
     beginInfo.pInheritanceInfo = nullptr;
+
     VK_CHECK(vkBeginCommandBuffer(context.transferCommandBuffer, &beginInfo));
     VK_CHECK(vkBeginCommandBuffer(context.transitionCommandBuffer, &beginInfo));
     VK_CHECK(vkResetFences(device, 1, &context.fence));
@@ -1556,119 +1585,33 @@ static VkSurfaceKHR vulkan_createSurface(VulkanRenderer* renderer, const VGPUSwa
 
 void VulkanRenderer::ProcessDeletionQueue()
 {
+    const auto destroy = [&](auto&& queue, auto&& handler) {
+        while (!queue.empty()) {
+            if (queue.front().second + VGPU_MAX_INFLIGHT_FRAMES < frameCount)
+            {
+                auto item = queue.front();
+                queue.pop_front();
+                handler(item.first);
+            }
+            else
+            {
+                break;
+            }
+        }
+        };
+
     destroyMutex.lock();
+    destroy(destroyedAllocations, [&](auto& item) { vmaFreeMemory(allocator, item); });
+    destroy(destroyedBuffers, [&](auto& item) { vmaDestroyBuffer(allocator, item.first, item.second); });
+    destroy(destroyedImages, [&](auto& item) { vmaDestroyImage(allocator, item.first, item.second); });
+    destroy(destroyedImageViews, [&](auto& item) { vkDestroyImageView(device, item, nullptr); });
+    destroy(destroyedSamplers, [&](auto& item) { vkDestroySampler(device, item, nullptr); });
+    destroy(destroyedPipelineLayouts, [&](auto& item) { vkDestroyPipelineLayout(device, item, nullptr); });
+    destroy(destroyedShaderModules, [&](auto& item) { vkDestroyShaderModule(device, item, nullptr); });
+    destroy(destroyedPipelines, [&](auto& item) { vkDestroyPipeline(device, item, nullptr); });
+    destroy(destroyedDescriptorPools, [&](auto& item) { vkDestroyDescriptorPool(device, item, nullptr); });
+    destroy(destroyedQueryPools, [&](auto& item) { vkDestroyQueryPool(device, item, nullptr); });
 
-    while (!destroyedBuffers.empty())
-    {
-        if (destroyedBuffers.front().second + VGPU_MAX_INFLIGHT_FRAMES < frameCount)
-        {
-            auto& item = destroyedBuffers.front();
-            destroyedBuffers.pop_front();
-            vmaDestroyBuffer(allocator, item.first.first, item.first.second);
-        }
-        else
-        {
-            break;
-        }
-    }
-
-    while (!destroyedImages.empty())
-    {
-        if (destroyedImages.front().second + VGPU_MAX_INFLIGHT_FRAMES < frameCount)
-        {
-            auto& item = destroyedImages.front();
-            destroyedImages.pop_front();
-            vmaDestroyImage(allocator, item.first.first, item.first.second);
-        }
-        else
-        {
-            break;
-        }
-    }
-
-    while (!destroyedImageViews.empty())
-    {
-        if (destroyedImageViews.front().second + VGPU_MAX_INFLIGHT_FRAMES < frameCount)
-        {
-            auto& item = destroyedImageViews.front();
-            destroyedImageViews.pop_front();
-            vkDestroyImageView(device, item.first, nullptr);
-        }
-        else
-        {
-            break;
-        }
-    }
-
-    while (!destroyedSamplers.empty())
-    {
-        if (destroyedSamplers.front().second + VGPU_MAX_INFLIGHT_FRAMES < frameCount)
-        {
-            auto& item = destroyedSamplers.front();
-            destroyedSamplers.pop_front();
-            vkDestroySampler(device, item.first, nullptr);
-        }
-        else
-        {
-            break;
-        }
-    }
-
-    while (!destroyedPipelineLayouts.empty())
-    {
-        if (destroyedPipelineLayouts.front().second + VGPU_MAX_INFLIGHT_FRAMES < frameCount)
-        {
-            auto& item = destroyedPipelineLayouts.front();
-            destroyedPipelineLayouts.pop_front();
-            vkDestroyPipelineLayout(device, item.first, nullptr);
-        }
-        else
-        {
-            break;
-        }
-    }
-
-    while (!destroyedPipelines.empty())
-    {
-        if (destroyedPipelines.front().second + VGPU_MAX_INFLIGHT_FRAMES < frameCount)
-        {
-            auto item = destroyedPipelines.front();
-            destroyedPipelines.pop_front();
-            vkDestroyPipeline(device, item.first, nullptr);
-        }
-        else
-        {
-            break;
-        }
-    }
-
-    while (!destroyedDescriptorPools.empty())
-    {
-        if (destroyedDescriptorPools.front().second + VGPU_MAX_INFLIGHT_FRAMES < frameCount)
-        {
-            auto item = destroyedDescriptorPools.front();
-            destroyedDescriptorPools.pop_front();
-            vkDestroyDescriptorPool(device, item.first, nullptr);
-        }
-        else
-        {
-            break;
-        }
-    }
-
-    while (!destroyedQueryPools.empty())
-    {
-        if (destroyedQueryPools.front().second + VGPU_MAX_INFLIGHT_FRAMES < frameCount)
-        {
-            auto item = destroyedQueryPools.front();
-            destroyedQueryPools.pop_front();
-            vkDestroyQueryPool(device, item.first, nullptr);
-        }
-        else
-        {
-            break;
-        }
-    }
     destroyMutex.unlock();
 }
 
@@ -1676,9 +1619,13 @@ void VulkanRenderer::ProcessDeletionQueue()
 VulkanBuffer::~VulkanBuffer()
 {
     renderer->destroyMutex.lock();
-    if (allocation)
+    if (handle)
     {
         renderer->destroyedBuffers.push_back(std::make_pair(std::make_pair(handle, allocation), renderer->frameCount));
+    }
+    else if (allocation)
+    {
+        renderer->destroyedAllocations.push_back(std::make_pair(allocation, renderer->frameCount));
     }
     renderer->destroyMutex.unlock();
 }
@@ -1706,7 +1653,7 @@ VulkanTexture::~VulkanTexture()
 
 void VulkanTexture::SetLabel(const char* label)
 {
-    renderer->SetObjectName(VK_OBJECT_TYPE_IMAGE, (uint64_t)handle, label);
+    renderer->SetObjectName(VK_OBJECT_TYPE_IMAGE, reinterpret_cast<uint64_t>(handle), label);
 }
 
 VkImageView VulkanTexture::GetView(uint32_t baseMipLevel, uint32_t levelCount, uint32_t baseArrayLayer, uint32_t layerCount)
@@ -1786,8 +1733,6 @@ VulkanRenderer::~VulkanRenderer()
     {
         if (queues[i].queue == VK_NULL_HANDLE)
             continue;
-
-        vkDestroySemaphore(device, queues[i].semaphore, nullptr);
 
         for (uint32_t j = 0; j < VGPU_MAX_INFLIGHT_FRAMES; ++j)
         {
@@ -1917,6 +1862,15 @@ VGPUBool32 VulkanRenderer::QueryFeatureSupport(VGPUFeature feature) const
             // VK_KHR_shader_float16_int8 core in 1.2
             return features1_2.shaderFloat16 == VK_TRUE;
 
+        case VGPUFeature_CacheCoherentUMA:
+            if (memoryProperties2.memoryProperties.memoryHeapCount == 1 &&
+                memoryProperties2.memoryProperties.memoryHeaps[0].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT)
+            {
+                return true;
+            }
+
+            return false;
+
         case VGPUFeature_GeometryShader:
             return features2.features.geometryShader == VK_TRUE;
 
@@ -1926,11 +1880,11 @@ VGPUBool32 VulkanRenderer::QueryFeatureSupport(VGPUFeature feature) const
         case VGPUFeature_DepthBoundsTest:
             return features2.features.depthBounds == VK_TRUE;
 
-        case VGPUFeature_SamplerAnisotropy:
-            return features2.features.samplerAnisotropy == VK_TRUE;
-
         case VGPUFeature_SamplerMinMax:
             return features1_2.samplerFilterMinmax == VK_TRUE;
+
+        case VGPUFeature_ShaderOutputViewportIndex:
+            return features1_2.shaderOutputLayer == VK_TRUE && features1_2.shaderOutputViewportIndex == VK_TRUE;
 
         case VGPUFeature_DescriptorIndexing:
             //VGPU_ASSERT(renderer->features1_2.descriptorIndexing == VK_TRUE);
@@ -1941,10 +1895,7 @@ VGPUBool32 VulkanRenderer::QueryFeatureSupport(VGPUFeature feature) const
             return features1_2.descriptorIndexing == VK_TRUE;
 
         case VGPUFeature_Predication:
-            return conditional_rendering_features.conditionalRendering == VK_TRUE;
-
-        case VGPUFeature_ShaderOutputViewportIndex:
-            return features1_2.shaderOutputLayer == VK_TRUE && features1_2.shaderOutputViewportIndex == VK_TRUE;
+            return conditionalRenderingFeatures.conditionalRendering == VK_TRUE;
 
         case VGPUFeature_VariableRateShading:
             return (fragmentShadingRateFeatures.pipelineFragmentShadingRate == VK_TRUE);
@@ -1964,11 +1915,11 @@ VGPUBool32 VulkanRenderer::QueryFeatureSupport(VGPUFeature feature) const
             return false;
 
         case VGPUFeature_RayTracingTier2:
-            return QueryFeatureSupport(VGPUFeature_RayTracing) & (raytracing_query_features.rayQuery == VK_TRUE);
+            return QueryFeatureSupport(VGPUFeature_RayTracing) & (rayQueryFeatures.rayQuery == VK_TRUE);
 
 
         case VGPUFeature_MeshShader:
-            return mesh_shader_features.meshShader == VK_TRUE && mesh_shader_features.taskShader == VK_TRUE;
+            return meshShaderFeatures.meshShader == VK_TRUE && meshShaderFeatures.taskShader == VK_TRUE;
 
 
         default:
@@ -2138,7 +2089,7 @@ VGPUBuffer VulkanRenderer::CreateBuffer(const VGPUBufferDesc* desc, const void* 
     }
 
     if (desc->usage & VGPUBufferUsage_Predication &&
-        conditional_rendering_features.conditionalRendering == VK_TRUE)
+        conditionalRenderingFeatures.conditionalRendering == VK_TRUE)
     {
         bufferInfo.usage |= VK_BUFFER_USAGE_CONDITIONAL_RENDERING_BIT_EXT;
     }
@@ -2243,26 +2194,6 @@ VGPUBuffer VulkanRenderer::CreateBuffer(const VGPUBufferDesc* desc, const void* 
 
         if (uploadContext.IsValid())
         {
-            VkBufferMemoryBarrier barrier = {};
-            barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-            barrier.buffer = buffer->handle;
-            barrier.srcAccessMask = 0;
-            barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-            barrier.size = VK_WHOLE_SIZE;
-
-            barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-
-            vkCmdPipelineBarrier(
-                uploadContext.transferCommandBuffer,
-                VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                VK_PIPELINE_STAGE_TRANSFER_BIT,
-                0,
-                0, nullptr,
-                1, &barrier,
-                0, nullptr
-            );
-
             VkBufferCopy copyRegion = {};
             copyRegion.size = buffer->size;
             copyRegion.srcOffset = 0;
@@ -2276,50 +2207,144 @@ VGPUBuffer VulkanRenderer::CreateBuffer(const VGPUBufferDesc* desc, const void* 
                 &copyRegion
             );
 
-            std::swap(barrier.srcAccessMask, barrier.dstAccessMask);
+            if (synchronization2)
+            {
+                VkBufferMemoryBarrier2 barrier = {};
+                barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
+                barrier.srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+                barrier.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+                barrier.dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+                barrier.dstAccessMask = VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT;
+                barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                barrier.buffer = buffer->handle;
+                barrier.size = VK_WHOLE_SIZE;
 
-            if (desc->usage & VGPUBufferUsage_Vertex)
-            {
-                barrier.dstAccessMask |= VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
-            }
-            if (desc->usage & VGPUBufferUsage_Index)
-            {
-                barrier.dstAccessMask |= VK_ACCESS_INDEX_READ_BIT;
-            }
-            if (desc->usage & VGPUBufferUsage_Constant)
-            {
-                barrier.dstAccessMask |= VK_ACCESS_UNIFORM_READ_BIT;
-            }
-            if (desc->usage & VGPUBufferUsage_ShaderRead)
-            {
-                barrier.dstAccessMask |= VK_ACCESS_SHADER_READ_BIT;
-            }
-            if (desc->usage & VGPUBufferUsage_ShaderWrite)
-            {
-                barrier.dstAccessMask |= VK_ACCESS_SHADER_WRITE_BIT;
-            }
-            if (desc->usage & VGPUBufferUsage_Indirect)
-            {
-                barrier.dstAccessMask |= VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
-            }
-            if (desc->usage & VGPUBufferUsage_Predication)
-            {
-                barrier.dstAccessMask |= VK_ACCESS_CONDITIONAL_RENDERING_READ_BIT_EXT;
-            }
-            if (desc->usage & VGPUBufferUsage_RayTracing)
-            {
-                barrier.dstAccessMask |= VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
-            }
+#if TODO
+                if (CheckBitsAny(desc.usage, BufferUsage::Vertex))
+                {
+                    barrier.dstStageMask |= VK_PIPELINE_STAGE_2_VERTEX_ATTRIBUTE_INPUT_BIT;
+                    barrier.dstAccessMask |= VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT;
+                }
 
-            vkCmdPipelineBarrier(
-                uploadContext.transferCommandBuffer,
-                VK_PIPELINE_STAGE_TRANSFER_BIT,
-                VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                0,
-                0, nullptr,
-                1, &barrier,
-                0, nullptr
-            );
+                if (CheckBitsAny(desc.usage, BufferUsage::Index))
+                {
+                    barrier.dstStageMask |= VK_PIPELINE_STAGE_2_INDEX_INPUT_BIT;
+                    barrier.dstAccessMask |= VK_ACCESS_2_INDEX_READ_BIT;
+                }
+
+                if (CheckBitsAny(desc.usage, BufferUsage::Constant))
+                {
+                    barrier.dstAccessMask |= VK_ACCESS_2_UNIFORM_READ_BIT;
+                }
+
+                if (CheckBitsAny(desc.usage, BufferUsage::ShaderRead))
+                {
+                    barrier.dstAccessMask |= VK_ACCESS_2_SHADER_READ_BIT;
+                }
+
+                if (CheckBitsAny(desc.usage, BufferUsage::ShaderWrite))
+                {
+                    barrier.dstAccessMask |= VK_ACCESS_2_SHADER_READ_BIT;
+                    barrier.dstAccessMask |= VK_ACCESS_2_SHADER_WRITE_BIT;
+                }
+
+                if (CheckBitsAny(desc.usage, BufferUsage::Indirect))
+                {
+                    barrier.dstAccessMask |= VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT;
+                }
+
+                if (CheckBitsAny(desc.usage, BufferUsage::Predication))
+                {
+                    barrier.dstAccessMask |= VK_ACCESS_2_CONDITIONAL_RENDERING_READ_BIT_EXT;
+                }
+
+                if (CheckBitsAny(desc.usage, BufferUsage::RayTracing))
+                {
+                    barrier.dstAccessMask |= VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+                }
+
+                //if (CheckBitsAny(desc.usage, BufferUsage::VideoDecode))
+                //{
+                //    barrier.dstAccessMask |= VK_ACCESS_2_VIDEO_DECODE_READ_BIT_KHR;
+                //}
+
+                VkDependencyInfo dependencyInfo = {};
+                dependencyInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+                dependencyInfo.bufferMemoryBarrierCount = 1;
+                dependencyInfo.pBufferMemoryBarriers = &barrier;
+
+                vkCmdPipelineBarrier2(context.transitionCommandBuffer, &dependencyInfo);
+#endif // TODO
+
+            }
+            else
+            {
+                VkBufferMemoryBarrier barrier = {};
+                barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+                barrier.buffer = buffer->handle;
+                barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+                barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+                barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                barrier.offset = 0;
+                barrier.size = VK_WHOLE_SIZE;
+
+                vkCmdPipelineBarrier(
+                    uploadContext.transferCommandBuffer,
+                    VK_PIPELINE_STAGE_TRANSFER_BIT,
+                    VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                    0,
+                    0, nullptr,
+                    1, &barrier,
+                    0, nullptr
+                );
+
+                std::swap(barrier.srcAccessMask, barrier.dstAccessMask);
+
+                if (desc->usage & VGPUBufferUsage_Vertex)
+                {
+                    barrier.dstAccessMask |= VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
+                }
+                if (desc->usage & VGPUBufferUsage_Index)
+                {
+                    barrier.dstAccessMask |= VK_ACCESS_INDEX_READ_BIT;
+                }
+                if (desc->usage & VGPUBufferUsage_Constant)
+                {
+                    barrier.dstAccessMask |= VK_ACCESS_UNIFORM_READ_BIT;
+                }
+                if (desc->usage & VGPUBufferUsage_ShaderRead)
+                {
+                    barrier.dstAccessMask |= VK_ACCESS_SHADER_READ_BIT;
+                }
+                if (desc->usage & VGPUBufferUsage_ShaderWrite)
+                {
+                    barrier.dstAccessMask |= VK_ACCESS_SHADER_WRITE_BIT;
+                }
+                if (desc->usage & VGPUBufferUsage_Indirect)
+                {
+                    barrier.dstAccessMask |= VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
+                }
+                if (desc->usage & VGPUBufferUsage_Predication)
+                {
+                    barrier.dstAccessMask |= VK_ACCESS_CONDITIONAL_RENDERING_READ_BIT_EXT;
+                }
+                if (desc->usage & VGPUBufferUsage_RayTracing)
+                {
+                    barrier.dstAccessMask |= VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+                }
+
+                vkCmdPipelineBarrier(
+                    uploadContext.transferCommandBuffer,
+                    VK_PIPELINE_STAGE_TRANSFER_BIT,
+                    VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                    0,
+                    0, nullptr,
+                    1, &barrier,
+                    0, nullptr
+                );
+            }
 
             UploadSubmit(uploadContext);
         }
@@ -2329,10 +2354,9 @@ VGPUBuffer VulkanRenderer::CreateBuffer(const VGPUBufferDesc* desc, const void* 
 }
 
 /* Texture */
-VGPUTexture VulkanRenderer::CreateTexture(const VGPUTextureDesc* desc, const void* pInitialData)
+VGPUTexture VulkanRenderer::CreateTexture(const VGPUTextureDesc* desc, const VGPUTextureData* pInitialData)
 {
-    VmaAllocationCreateInfo memoryInfo = {};
-    memoryInfo.usage = VMA_MEMORY_USAGE_AUTO;
+    const bool isDepthStencilFormat = vgpuIsDepthStencilFormat(desc->format);
 
     VkImageCreateInfo createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -2340,37 +2364,43 @@ VGPUTexture VulkanRenderer::CreateTexture(const VGPUTextureDesc* desc, const voi
     createInfo.flags = 0;
     createInfo.format = ToVkFormat(desc->format);
     createInfo.extent.width = desc->width;
-    createInfo.extent.height = 1;
-    createInfo.extent.depth = 1;
 
-    if (desc->dimension == VGPUTextureDimension_1D)
+    switch (desc->dimension)
     {
-        createInfo.imageType = VK_IMAGE_TYPE_1D;
-        createInfo.arrayLayers = desc->depthOrArrayLayers;
-    }
-    else if (desc->dimension == VGPUTextureDimension_3D)
-    {
-        createInfo.imageType = VK_IMAGE_TYPE_3D;
-        createInfo.flags |= VK_IMAGE_CREATE_2D_ARRAY_COMPATIBLE_BIT;
-        createInfo.extent.height = desc->height;
-        createInfo.extent.depth = desc->depthOrArrayLayers;
-        createInfo.arrayLayers = 1;
-        createInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-    }
-    else
-    {
-        createInfo.imageType = VK_IMAGE_TYPE_2D;
-        createInfo.extent.height = desc->height;
-        createInfo.extent.depth = 1;
-        createInfo.arrayLayers = desc->depthOrArrayLayers;
-        createInfo.samples = (VkSampleCountFlagBits)desc->sampleCount;
+        case VGPUTextureDimension_1D:
+            createInfo.imageType = VK_IMAGE_TYPE_1D;
+            createInfo.extent.height = 1;
+            createInfo.extent.depth = 1;
+            createInfo.arrayLayers = desc->depthOrArrayLayers;
+            break;
 
-        if (createInfo.extent.width == createInfo.extent.height &&
-            createInfo.arrayLayers >= 6)
-        {
-            createInfo.flags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
-        }
+        case VGPUTextureDimension_2D:
+            createInfo.imageType = VK_IMAGE_TYPE_2D;
+            createInfo.extent.height = desc->height;
+            createInfo.extent.depth = 1;
+            createInfo.arrayLayers = desc->depthOrArrayLayers;
+            createInfo.samples = (VkSampleCountFlagBits)desc->sampleCount;
+
+            if (createInfo.extent.width == createInfo.extent.height &&
+                createInfo.arrayLayers >= 6)
+            {
+                createInfo.flags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+            }
+            break;
+
+        case VGPUTextureDimension_3D:
+            createInfo.imageType = VK_IMAGE_TYPE_3D;
+            createInfo.flags |= VK_IMAGE_CREATE_2D_ARRAY_COMPATIBLE_BIT;
+            createInfo.extent.height = desc->height;
+            createInfo.extent.depth = desc->depthOrArrayLayers;
+            createInfo.arrayLayers = 1;
+            createInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+            break;
+
+        default:
+            return nullptr;
     }
+
     createInfo.mipLevels = desc->mipLevelCount;
     createInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     createInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
@@ -2397,7 +2427,7 @@ VGPUTexture VulkanRenderer::CreateTexture(const VGPUTextureDesc* desc, const voi
 
     if (desc->usage & VGPUTextureUsage_RenderTarget)
     {
-        if (vgpuIsDepthStencilFormat(desc->format))
+        if (isDepthStencilFormat)
         {
             createInfo.usage |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
         }
@@ -2405,6 +2435,18 @@ VGPUTexture VulkanRenderer::CreateTexture(const VGPUTextureDesc* desc, const voi
         {
             createInfo.usage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
         }
+    }
+
+    if (desc->usage & VGPUTextureUsage_ShadingRate)
+    {
+        createInfo.usage |= VK_IMAGE_USAGE_FRAGMENT_SHADING_RATE_ATTACHMENT_BIT_KHR;
+    }
+
+    // If ShaderRead and RenderTarget add input attachment
+    if (!isDepthStencilFormat &&
+        (desc->usage & VGPUTextureUsage_RenderTarget | VGPUTextureUsage_ShaderRead))
+    {
+        createInfo.usage |= VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
     }
 
     uint32_t sharingIndices[3] = {};
@@ -2428,7 +2470,32 @@ VGPUTexture VulkanRenderer::CreateTexture(const VGPUTextureDesc* desc, const voi
         createInfo.pQueueFamilyIndices = nullptr;
     }
 
-    // TODO: Handle readback texture
+    bool isShared = false;
+    VkExternalMemoryImageCreateInfo externalMemoryImageCreateInfo = {};
+    if (desc->usage, VGPUTextureUsage_Shared)
+    {
+        externalMemoryImageCreateInfo.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO;
+#if defined(VK_USE_PLATFORM_WIN32_KHR)
+        externalMemoryImageCreateInfo.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT;
+#endif
+
+        createInfo.pNext = &externalMemoryImageCreateInfo;
+
+        // We have to use a dedicated allocator for external handles that has been created with VkExportMemoryAllocateInfo
+        //allocator = externalAllocator;
+
+        isShared = true;
+    }
+
+    VmaAllocationCreateInfo memoryInfo = {};
+    memoryInfo.usage = VMA_MEMORY_USAGE_AUTO;
+    VmaAllocationInfo allocationInfo{};
+
+    if (desc->cpuAccess == VGPUCpuAccessMode_Write
+        || desc->cpuAccess == VGPUCpuAccessMode_Read)
+    {
+        // TODO: Handle readback texture
+    }
 
     VulkanTexture* texture = new VulkanTexture();
     texture->renderer = this;
@@ -2437,13 +2504,12 @@ VGPUTexture VulkanRenderer::CreateTexture(const VGPUTextureDesc* desc, const voi
     texture->width = createInfo.extent.width;
     texture->height = createInfo.extent.height;
     texture->vkFormat = createInfo.format;
-    texture->viewCache.clear();
 
     VkResult result = vmaCreateImage(allocator,
         &createInfo, &memoryInfo,
         &texture->handle,
         &texture->allocation,
-        nullptr);
+        &allocationInfo);
 
     if (result != VK_SUCCESS)
     {
@@ -2457,32 +2523,209 @@ VGPUTexture VulkanRenderer::CreateTexture(const VGPUTextureDesc* desc, const voi
         texture->SetLabel(desc->label);
     }
 
+    VkImageSubresourceRange subresourceRange{};
+    subresourceRange.aspectMask = GetImageAspectFlags(createInfo.format);
+    subresourceRange.baseMipLevel = 0;
+    subresourceRange.levelCount = createInfo.mipLevels;
+    subresourceRange.baseArrayLayer = 0;
+    subresourceRange.layerCount = createInfo.arrayLayers;
+
     if (pInitialData != nullptr)
     {
+        VulkanUploadContext uploadContext;
+        void* pMappedData = nullptr;
+        if (desc->cpuAccess == VGPUCpuAccessMode_Write)
+        {
+            //pMappedData = texture->pMappedData;
+        }
+        else
+        {
+            uploadContext = Allocate(allocationInfo.size);
+            pMappedData = uploadContext.uploadBuffer->pMappedData;
+        }
+
+        std::vector<VkBufferImageCopy> copyRegions;
+
+        VGPUPixelFormatInfo formatInfo;
+        vgpuGetPixelFormatInfo(desc->format, &formatInfo);
+        const uint32_t blockSize = formatInfo.blockWidth;
+
+        VkDeviceSize copyOffset = 0;
+        uint32_t initDataIndex = 0;
+        for (uint32_t arrayIndex = 0; arrayIndex < createInfo.arrayLayers; ++arrayIndex)
+        {
+            uint32_t levelWidth = createInfo.extent.width;
+            uint32_t levelHeight = createInfo.extent.height;
+            uint32_t levelDepth = createInfo.extent.depth;
+
+            for (uint32_t mipIndex = 0; mipIndex < createInfo.mipLevels; ++mipIndex)
+            {
+                const VGPUTextureData& subresourceData = pInitialData[initDataIndex++];
+                const uint32_t numBlocksX = _VGPU_MAX(1u, levelWidth / blockSize);
+                const uint32_t numBlocksY = _VGPU_MAX(1u, levelHeight / blockSize);
+                const uint32_t dstRowPitch = numBlocksX * formatInfo.bytesPerBlock;
+                const uint32_t dstSlicePitch = dstRowPitch * numBlocksY;
+
+                uint32_t srcRowPitch = subresourceData.rowPitch;
+                uint32_t srcSlicePitch = subresourceData.slicePitch;
+                //GetSurfaceInfo(desc.format, levelWidth, levelHeight, &srcRowPitch, &srcSlicePitch);
+
+                for (uint32_t z = 0; z < levelDepth; ++z)
+                {
+                    uint8_t* dstSlice = (uint8_t*)uploadContext.uploadBufferData + copyOffset + dstSlicePitch * z;
+                    uint8_t* srcSlice = (uint8_t*)subresourceData.pData + srcSlicePitch * z;
+                    for (uint32_t y = 0; y < numBlocksY; ++y)
+                    {
+                        std::memcpy(
+                            dstSlice + dstRowPitch * y,
+                            srcSlice + srcRowPitch * y,
+                            dstRowPitch
+                        );
+                    }
+                }
+
+                if (uploadContext.IsValid())
+                {
+                    VkBufferImageCopy copyRegion = {};
+                    copyRegion.bufferOffset = copyOffset;
+                    copyRegion.bufferRowLength = 0;
+                    copyRegion.bufferImageHeight = 0;
+
+                    copyRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                    copyRegion.imageSubresource.mipLevel = mipIndex;
+                    copyRegion.imageSubresource.baseArrayLayer = arrayIndex;
+                    copyRegion.imageSubresource.layerCount = 1;
+
+                    copyRegion.imageOffset = { 0, 0, 0 };
+                    copyRegion.imageExtent.width = levelWidth;
+                    copyRegion.imageExtent.height = levelHeight;
+                    copyRegion.imageExtent.depth = levelDepth;
+
+                    copyRegions.push_back(copyRegion);
+                }
+
+                copyOffset += dstSlicePitch * levelDepth;
+
+                levelWidth = _VGPU_MAX(1u, levelWidth / 2);
+                levelHeight = _VGPU_MAX(1u, levelHeight / 2);
+                levelDepth = _VGPU_MAX(1u, levelDepth / 2);
+            }
+        }
+
+        if (uploadContext.IsValid())
+        {
+            if (synchronization2)
+            {
+                VkImageMemoryBarrier2 barrier = {};
+                barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+                barrier.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+                barrier.srcAccessMask = 0;
+                barrier.dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+                barrier.dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+                barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+                barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+                barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                barrier.image = texture->handle;
+                barrier.subresourceRange = subresourceRange;
+
+                VkDependencyInfo dependencyInfo = {};
+                dependencyInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+                dependencyInfo.imageMemoryBarrierCount = 1;
+                dependencyInfo.pImageMemoryBarriers = &barrier;
+                vkCmdPipelineBarrier2(uploadContext.transferCommandBuffer, &dependencyInfo);
+
+                vkCmdCopyBufferToImage(
+                    uploadContext.transferCommandBuffer,
+                    uploadContext.uploadBuffer->handle,
+                    texture->handle,
+                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                    (uint32_t)copyRegions.size(),
+                    copyRegions.data()
+                );
+
+                //const ResourceStateMapping2 mappingAfter = ConvertResourceState2(initialState);
+                //ALIMER_ASSERT(mappingAfter.imageLayout != VK_IMAGE_LAYOUT_UNDEFINED);
+                //
+                //std::swap(barrier.srcStageMask, barrier.dstStageMask);
+                //barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+                //barrier.newLayout = mappingAfter.imageLayout;
+                //barrier.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+                //barrier.dstAccessMask = mappingAfter.accessMask;
+                //
+                //vkCmdPipelineBarrier2(uploadContext.transitionCommandBuffer, &dependencyInfo);
+            }
+            else
+            {
+                VkImageMemoryBarrier barrier = {};
+                barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+                barrier.srcAccessMask = 0;
+                barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+                barrier.oldLayout = createInfo.initialLayout;
+                barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+                barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                barrier.image = texture->handle;
+                barrier.subresourceRange = subresourceRange;
+
+                vkCmdPipelineBarrier(uploadContext.transferCommandBuffer,
+                    VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                    VK_PIPELINE_STAGE_TRANSFER_BIT,
+                    0,
+                    0, nullptr,
+                    0, nullptr,
+                    1, &barrier
+                );
+
+                vkCmdCopyBufferToImage(
+                    uploadContext.transferCommandBuffer,
+                    uploadContext.uploadBuffer->handle,
+                    texture->handle,
+                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                    (uint32_t)copyRegions.size(),
+                    copyRegions.data()
+                );
+
+                //const ResourceStateMapping mappingAfter = ConvertResourceState(initialState);
+                //ALIMER_ASSERT(mappingAfter.imageLayout != VK_IMAGE_LAYOUT_UNDEFINED);
+                //
+                //barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+                //barrier.dstAccessMask = mappingAfter.accessMask;
+                //barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+                //barrier.newLayout = mappingAfter.imageLayout;
+                //
+                //vkCmdPipelineBarrier(uploadContext.transitionCommandBuffer,
+                //    VK_PIPELINE_STAGE_TRANSFER_BIT,
+                //    VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                //    0,
+                //    0, nullptr,
+                //    0, nullptr,
+                //    1, &barrier
+                //);
+            }
+
+            UploadSubmit(uploadContext);
+        }
     }
     else
     {
         VulkanUploadContext uploadContext = Allocate(0);
 
         // Barrier
-        if (features1_3.synchronization2)
+        if (synchronization2)
         {
             VkImageMemoryBarrier2 barrier = {};
             barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-            barrier.image = texture->handle;
-            barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-            barrier.newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
             barrier.srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
-            barrier.dstStageMask = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
             barrier.srcAccessMask = 0;
+            barrier.dstStageMask = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
             barrier.dstAccessMask = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
-            barrier.subresourceRange.aspectMask = GetImageAspectFlags(createInfo.format);
-            barrier.subresourceRange.baseArrayLayer = 0;
-            barrier.subresourceRange.layerCount = createInfo.arrayLayers;
-            barrier.subresourceRange.baseMipLevel = 0;
-            barrier.subresourceRange.levelCount = createInfo.mipLevels;
+            barrier.oldLayout = createInfo.initialLayout;
+            barrier.newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
             barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
             barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrier.image = texture->handle;
+            barrier.subresourceRange = subresourceRange;
 
             VkDependencyInfo dependencyInfo = {};
             dependencyInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
@@ -2490,6 +2733,27 @@ VGPUTexture VulkanRenderer::CreateTexture(const VGPUTextureDesc* desc, const voi
             dependencyInfo.pImageMemoryBarriers = &barrier;
 
             vkCmdPipelineBarrier2(uploadContext.transitionCommandBuffer, &dependencyInfo);
+        }
+        else
+        {
+            VkImageMemoryBarrier barrier{};
+            barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            barrier.srcAccessMask = 0u;
+            barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+            barrier.oldLayout = createInfo.initialLayout;
+            barrier.newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+            barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrier.image = texture->handle;
+            barrier.subresourceRange = subresourceRange;
+
+            vkCmdPipelineBarrier(uploadContext.transitionCommandBuffer,
+                VK_PIPELINE_STAGE_TRANSFER_BIT,
+                VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+                0,
+                0, nullptr,
+                0, nullptr,
+                1, &barrier);
         }
 
         UploadSubmit(uploadContext);
@@ -2587,7 +2851,7 @@ VulkanPipelineLayout::~VulkanPipelineLayout()
 
 void VulkanPipelineLayout::SetLabel(const char* label)
 {
-    renderer->SetObjectName(VK_OBJECT_TYPE_PIPELINE_LAYOUT, (uint64_t)handle, label);
+    renderer->SetObjectName(VK_OBJECT_TYPE_PIPELINE_LAYOUT, reinterpret_cast<uint64_t>(handle), label);
 }
 
 VGPUPipelineLayout VulkanRenderer::CreatePipelineLayout(const VGPUPipelineLayoutDesc* descriptor)
@@ -2650,6 +2914,43 @@ VGPUPipelineLayout VulkanRenderer::CreatePipelineLayout(const VGPUPipelineLayout
     return layout;
 }
 
+/* ShaderModule */
+VulkanShaderModule::~VulkanShaderModule()
+{
+    renderer->destroyMutex.lock();
+    renderer->destroyedShaderModules.push_back(std::make_pair(handle, renderer->frameCount));
+    renderer->destroyMutex.unlock();
+
+    handle = VK_NULL_HANDLE;
+}
+
+void VulkanShaderModule::SetLabel(const char* label)
+{
+    renderer->SetObjectName(VK_OBJECT_TYPE_SHADER_MODULE, reinterpret_cast<uint64_t>(handle), label);
+}
+
+VGPUShaderModule VulkanRenderer::CreateShaderModule(const VGPUShaderModuleDesc* desc)
+{
+    VkShaderModuleCreateInfo createInfo = {};
+    createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    createInfo.codeSize = desc->codeSize;
+    createInfo.pCode = (const uint32_t*)desc->pCode;
+
+    VkShaderModule handle = VK_NULL_HANDLE;
+    const VkResult vkResult = vkCreateShaderModule(device, &createInfo, nullptr, &handle);
+
+    if (vkResult != VK_SUCCESS)
+    {
+        VK_LOG_ERROR(vkResult, "Failed to create shader module");
+        return nullptr;
+    }
+
+    VulkanShaderModule* shaderModule = new VulkanShaderModule();
+    shaderModule->renderer = this;
+    shaderModule->handle = handle;
+    return shaderModule;
+}
+
 /* Pipeline */
 VkResult SetupShaderStage(VkDevice device,
     VkPipelineShaderStageCreateInfo& pipelineStage,
@@ -2657,23 +2958,10 @@ VkResult SetupShaderStage(VkDevice device,
     const VGPUShaderStageDesc& shaderDesc)
 {
     entryPoint = (shaderDesc.entryPoint == nullptr) ? "main" : shaderDesc.entryPoint;
-    VkShaderStageFlagBits stage = (VkShaderStageFlagBits)ToVkShaderStageFlags(shaderDesc.stage);
-
-    VkShaderModuleCreateInfo moduleInfo = {};
-    moduleInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-    moduleInfo.codeSize = (size_t)shaderDesc.size;
-    moduleInfo.pCode = (const uint32_t*)shaderDesc.bytecode;
-
-    const VkResult vkResult = vkCreateShaderModule(device, &moduleInfo, nullptr, &pipelineStage.module);
-
-    if (vkResult != VK_SUCCESS)
-    {
-        VK_LOG_ERROR(vkResult, "Failed to create a pipeline shader module");
-        return vkResult;
-    }
 
     pipelineStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    pipelineStage.stage = stage;
+    pipelineStage.stage = (VkShaderStageFlagBits)ToVkShaderStageFlags(shaderDesc.stage);
+    pipelineStage.module = static_cast<VulkanShaderModule*>(shaderDesc.module)->handle;
     pipelineStage.pName = entryPoint.c_str();
 
     return VK_SUCCESS;
@@ -2944,11 +3232,6 @@ VGPUPipeline VulkanRenderer::CreateRenderPipeline(const VGPURenderPipelineDesc* 
     VkPipeline handle = VK_NULL_HANDLE;
     const VkResult result = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &createInfo, nullptr, &handle);
 
-    for (size_t i = 0; i < shaderStages.size(); i++)
-    {
-        vkDestroyShaderModule(device, shaderStages[i].module, nullptr);
-    }
-
     if (result != VK_SUCCESS)
     {
         return nullptr;
@@ -3036,7 +3319,7 @@ VulkanQueryHeap::~VulkanQueryHeap()
 
 void VulkanQueryHeap::SetLabel(const char* label)
 {
-    renderer->SetObjectName(VK_OBJECT_TYPE_QUERY_POOL, (uint64_t)handle, label);
+    renderer->SetObjectName(VK_OBJECT_TYPE_QUERY_POOL, reinterpret_cast<uint64_t>(handle), label);
 }
 
 VGPUQueryHeap VulkanRenderer::CreateQueryHeap(const VGPUQueryHeapDesc* desc)
@@ -3051,6 +3334,7 @@ VGPUQueryHeap VulkanRenderer::CreateQueryHeap(const VGPUQueryHeapDesc* desc)
     createInfo.queryType = ToVk(desc->type);
     createInfo.queryCount = desc->count;
 
+#if TODO
     if (desc->type == VGPUQueryType_PipelineStatistics)
     {
         if (desc->pipelineStatistics & VGPUQueryPipelineStatistic_InputAssemblyVertices)
@@ -3080,6 +3364,8 @@ VGPUQueryHeap VulkanRenderer::CreateQueryHeap(const VGPUQueryHeapDesc* desc)
         if (desc->pipelineStatistics & VGPUQueryPipelineStatistic_ComputeShaderInvocations)
             createInfo.pipelineStatistics |= VK_QUERY_PIPELINE_STATISTIC_COMPUTE_SHADER_INVOCATIONS_BIT;
     }
+#endif // TODO
+
 
     VkResult result = vkCreateQueryPool(device, &createInfo, nullptr, &heap->handle);
     if (result != VK_SUCCESS)
@@ -3173,7 +3459,8 @@ static void vulkan_updateSwapChain(VulkanRenderer* renderer, VulkanSwapChain* sw
         surfaceFormat.colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
     }
 
-    if (caps.currentExtent.width != 0xFFFFFFFF && caps.currentExtent.width != 0xFFFFFFFF)
+    if (caps.currentExtent.width != 0xFFFFFFFF
+        && caps.currentExtent.height != 0xFFFFFFFF)
     {
         swapChain->extent = caps.currentExtent;
     }
@@ -3350,8 +3637,9 @@ VulkanCommandBuffer::~VulkanCommandBuffer()
     {
         //vkFreeCommandBuffers(renderer->device, commandPools[j], 1, &commandBuffers[j]);
         vkDestroyCommandPool(renderer->device, commandPools[j], nullptr);
-        //binderPools[i].Shutdown();
     }
+
+    vkDestroySemaphore(renderer->device, semaphore, nullptr);
 }
 
 void VulkanCommandBuffer::Reset()
@@ -3467,7 +3755,7 @@ void VulkanCommandBuffer::SetPipeline(VGPUPipeline pipeline)
 
 void VulkanCommandBuffer::SetPushConstants(uint32_t pushConstantIndex, const void* data, uint32_t size)
 {
-    //VGPU_ASSERT(size <= renderer->limits.pushConstantsMaxSize);
+    VGPU_ASSERT(size <= renderer->properties2.properties.limits.maxPushConstantsSize);
     VGPU_ASSERT(currentPipeline);
 
     const VkPushConstantRange& range = currentPipeline->pipelineLayout->pushConstantRanges[pushConstantIndex];
@@ -3807,9 +4095,10 @@ void VulkanCommandBuffer::BeginQuery(VGPUQueryHeap heap, uint32_t index)
         case VGPUQueryType_BinaryOcclusion:
             vkCmdBeginQuery(commandBuffer, vulkanHeap->handle, index, 0);
             break;
+
         default:
         case VGPUQueryType_Timestamp:
-        case VGPUQueryType_PipelineStatistics:
+            //case VGPUQueryType_PipelineStatistics:
             break;
     }
 }
@@ -3821,7 +4110,7 @@ void VulkanCommandBuffer::EndQuery(VGPUQueryHeap heap, uint32_t index)
     switch (vulkanHeap->type)
     {
         case VGPUQueryType_Timestamp:
-            if (renderer->features1_3.synchronization2 == VK_TRUE)
+            if (renderer->synchronization2)
             {
                 vkCmdWriteTimestamp2(commandBuffer, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, vulkanHeap->handle, index);
             }
@@ -3939,8 +4228,11 @@ VGPUCommandBuffer VulkanRenderer::BeginCommandBuffer(VGPUCommandQueue queueType,
             commandBufferInfo.commandPool = commandBuffer->commandPools[i];
             commandBufferInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
             VK_CHECK(vkAllocateCommandBuffers(device, &commandBufferInfo, &commandBuffer->commandBuffers[i]));
-            //binderPools[i].Init(device);
         }
+
+        VkSemaphoreCreateInfo semaphoreInfo = {};
+        semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+        VK_CHECK(vkCreateSemaphore(device, &semaphoreInfo, nullptr, &commandBuffer->semaphore));
 
         commandBuffersPool.push_back(commandBuffer);
     }
@@ -3964,7 +4256,7 @@ void VulkanQueue::Submit(VulkanRenderer* device, VkFence fence)
 
     std::scoped_lock lock(locker);
 
-    if (device->features1_3.synchronization2 == VK_TRUE)
+    if (device->synchronization2)
     {
         VGPU_ASSERT(submitSignalSemaphores.size() == submitSignalSemaphoreInfos.size());
         VkSubmitInfo2 submitInfo = {};
@@ -3980,17 +4272,8 @@ void VulkanQueue::Submit(VulkanRenderer* device, VkFence fence)
     }
     else
     {
-        VkTimelineSemaphoreSubmitInfo timelineInfo = {};
-        timelineInfo.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO;
-        timelineInfo.pNext = nullptr;
-        timelineInfo.waitSemaphoreValueCount = (uint32_t)submitWaitValues.size();
-        timelineInfo.pWaitSemaphoreValues = submitWaitValues.data();
-        timelineInfo.signalSemaphoreValueCount = (uint32_t)submitSignalValues.size();
-        timelineInfo.pSignalSemaphoreValues = submitSignalValues.data();
-
         VkSubmitInfo submitInfo = {};
         submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        submitInfo.pNext = &timelineInfo;
         submitInfo.waitSemaphoreCount = (uint32_t)submitWaitSemaphores.size();
         submitInfo.pWaitSemaphores = submitWaitSemaphores.data();
         submitInfo.pWaitDstStageMask = submitWaitStages.data();
@@ -4035,13 +4318,11 @@ void VulkanQueue::Submit(VulkanRenderer* device, VkFence fence)
     submitSwapchainImageIndices.clear();
     submitWaitSemaphores.clear();
     submitWaitStages.clear();
-    submitWaitValues.clear();
     submitCommandBuffers.clear();
     submitSignalSemaphores.clear();
     // KHR_synchronization2
     submitWaitSemaphoreInfos.clear();
     submitSignalSemaphoreInfos.clear();
-    submitSignalValues.clear();
     submitCommandBufferInfos.clear();
 }
 
@@ -4069,7 +4350,7 @@ uint64_t VulkanRenderer::Submit(VGPUCommandBuffer* commandBuffers, uint32_t coun
                 queue.submitSwapchains.push_back(swapChain->handle);
                 queue.submitSwapchainImageIndices.push_back(swapChain->imageIndex);
 
-                if (features1_3.synchronization2)
+                if (synchronization2)
                 {
                     VkSemaphoreSubmitInfo& waitSemaphore = queue.submitWaitSemaphoreInfos.emplace_back();
                     waitSemaphore.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
@@ -4088,9 +4369,7 @@ uint64_t VulkanRenderer::Submit(VGPUCommandBuffer* commandBuffers, uint32_t coun
                 {
                     queue.submitWaitStages.push_back(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
                     queue.submitWaitSemaphores.push_back(swapChain->acquireSemaphore);
-                    queue.submitWaitValues.push_back(0); // not a timeline semaphore
                     queue.submitSignalSemaphores.push_back(swapChain->releaseSemaphore);
-                    queue.submitSignalValues.push_back(0); // not a timeline semaphore
                 }
 
                 VkImageSubresourceRange range{};
@@ -4221,10 +4500,25 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
                 renderer->debugUtils = true;
                 instanceExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
             }
-            else if (strcmp(availableExtension.extensionName, "VK_EXT_swapchain_colorspace") == 0)
+            else if (strcmp(availableExtension.extensionName, VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME) == 0)
             {
-                instanceExtensions.push_back("VK_EXT_swapchain_colorspace");
+                instanceExtensions.push_back(VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME);
             }
+            else if (strcmp(availableExtension.extensionName, VK_EXT_SAMPLER_FILTER_MINMAX_EXTENSION_NAME) == 0)
+            {
+                instanceExtensions.push_back(VK_EXT_SAMPLER_FILTER_MINMAX_EXTENSION_NAME);
+            }
+#if defined(__APPLE__)
+            else if (strcmp(availableExtension.extensionName, VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME) == 0)
+            {
+                instanceExtensions.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
+            }
+            else if (strcmp(availableExtension.extensionName, VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME) == 0)
+            {
+                renderer->portability = true;
+                instanceExtensions.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+            }
+#endif
             else if (strcmp(availableExtension.extensionName, "VK_KHR_xlib_surface") == 0)
             {
                 renderer->xlib_surface = true;
@@ -4234,23 +4528,6 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
             {
                 renderer->xcb_surface = true;
                 instanceExtensions.push_back("VK_KHR_xcb_surface");
-            }
-
-            /* Core 1.1 */
-            if (apiVersion < VK_API_VERSION_1_1)
-            {
-                if (strcmp(availableExtension.extensionName, "VK_KHR_get_physical_device_properties2") == 0)
-                {
-                    instanceExtensions.push_back("VK_KHR_get_physical_device_properties2");
-                }
-                else if (strcmp(availableExtension.extensionName, "VK_KHR_external_memory_capabilities") == 0)
-                {
-                    instanceExtensions.push_back("VK_KHR_external_memory_capabilities");
-                }
-                else if (strcmp(availableExtension.extensionName, "VK_KHR_external_semaphore_capabilities") == 0)
-                {
-                    instanceExtensions.push_back("VK_KHR_external_semaphore_capabilities");
-                }
             }
         }
 
@@ -4311,10 +4588,8 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
         appInfo.engineVersion = VK_MAKE_VERSION(VGPU_VERSION_MAJOR, VGPU_VERSION_MINOR, VGPU_VERSION_PATCH);
         appInfo.apiVersion = VK_API_VERSION_1_3;
 
-        VkInstanceCreateInfo createInfo;
+        VkInstanceCreateInfo createInfo = {};
         createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-        createInfo.pNext = NULL;
-        createInfo.flags = 0;
         createInfo.pApplicationInfo = &appInfo;
         createInfo.enabledLayerCount = static_cast<uint32_t>(instanceLayers.size());
         createInfo.ppEnabledLayerNames = instanceLayers.data();
@@ -4341,7 +4616,8 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
         }
 
 #if defined(_DEBUG)
-        VkValidationFeaturesEXT validationFeaturesInfo = { VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT };
+        VkValidationFeaturesEXT validationFeaturesInfo = {};
+        validationFeaturesInfo.sType = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT;
         if (validationFeatures)
         {
             static const VkValidationFeatureEnableEXT enable_features[2] = {
@@ -4354,6 +4630,11 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
             createInfo.pNext = &validationFeaturesInfo;
         }
 #endif
+
+        if (renderer->portability)
+        {
+            createInfo.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+        }
 
         result = vkCreateInstance(&createInfo, nullptr, &renderer->instance);
         if (result != VK_SUCCESS)
@@ -4445,9 +4726,10 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
             renderer->depthClipEnableFeatures = {};
             renderer->acceleration_structure_features = {};
             renderer->raytracing_features = {};
-            renderer->raytracing_query_features = {};
+            renderer->rayQueryFeatures = {};
             renderer->fragmentShadingRateFeatures = {};
-            renderer->mesh_shader_features = {};
+            renderer->meshShaderFeatures = {};
+            renderer->conditionalRenderingFeatures = {};
 
             renderer->features2.pNext = &renderer->features1_1;
             if (gpuProps.apiVersion >= VK_API_VERSION_1_3)
@@ -4477,7 +4759,7 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
             renderer->accelerationStructureProperties = {};
             renderer->rayTracingPipelineProperties = {};
             renderer->fragmentShadingRateProperties = {};
-            renderer->mesh_shader_properties = {};
+            renderer->meshShaderProperties = {};
 
             renderer->properties2.pNext = &renderer->properties_1_1;
             if (gpuProps.apiVersion >= VK_API_VERSION_1_3)
@@ -4619,9 +4901,10 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
                 if (physicalDeviceExt.rayQuery)
                 {
                     enabledDeviceExtensions.push_back(VK_KHR_RAY_QUERY_EXTENSION_NAME);
-                    renderer->raytracing_query_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR;
-                    *features_chain = &renderer->raytracing_query_features;
-                    features_chain = &renderer->raytracing_query_features.pNext;
+
+                    renderer->rayQueryFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR;
+                    *features_chain = &renderer->rayQueryFeatures;
+                    features_chain = &renderer->rayQueryFeatures.pNext;
                 }
             }
 
@@ -4639,23 +4922,26 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
                 propertiesChain = &renderer->fragmentShadingRateProperties.pNext;
             }
 
-            if (physicalDeviceExt.NV_mesh_shader)
+            if (physicalDeviceExt.meshShader)
             {
-                enabledDeviceExtensions.push_back(VK_NV_MESH_SHADER_EXTENSION_NAME);
-                renderer->mesh_shader_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_NV;
-                *features_chain = &renderer->mesh_shader_features;
-                features_chain = &renderer->mesh_shader_features.pNext;
-                renderer->mesh_shader_properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_PROPERTIES_NV;
-                *propertiesChain = &renderer->mesh_shader_properties;
-                propertiesChain = &renderer->mesh_shader_properties.pNext;
+                enabledDeviceExtensions.push_back(VK_EXT_MESH_SHADER_EXTENSION_NAME);
+
+                renderer->meshShaderFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT;
+                *features_chain = &renderer->meshShaderFeatures;
+                features_chain = &renderer->meshShaderFeatures.pNext;
+
+                renderer->meshShaderProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_PROPERTIES_EXT;
+                *propertiesChain = &renderer->meshShaderProperties;
+                propertiesChain = &renderer->meshShaderProperties.pNext;
             }
 
-            if (physicalDeviceExt.EXT_conditional_rendering)
+            if (physicalDeviceExt.conditionalRendering)
             {
                 enabledDeviceExtensions.push_back(VK_EXT_CONDITIONAL_RENDERING_EXTENSION_NAME);
-                renderer->conditional_rendering_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_CONDITIONAL_RENDERING_FEATURES_EXT;
-                *features_chain = &renderer->conditional_rendering_features;
-                features_chain = &renderer->conditional_rendering_features.pNext;
+
+                renderer->conditionalRenderingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_CONDITIONAL_RENDERING_FEATURES_EXT;
+                *features_chain = &renderer->conditionalRenderingFeatures;
+                features_chain = &renderer->conditionalRenderingFeatures.pNext;
             }
 
             if (physicalDeviceExt.extended_dynamic_state)
@@ -4704,6 +4990,8 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
 
         vkGetPhysicalDeviceFeatures2(renderer->physicalDevice, &renderer->features2);
         vkGetPhysicalDeviceProperties2(renderer->physicalDevice, &renderer->properties2);
+        renderer->memoryProperties2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2;
+        vkGetPhysicalDeviceMemoryProperties2(renderer->physicalDevice, &renderer->memoryProperties2);
 
         VGPU_VERIFY(renderer->features2.features.robustBufferAccess == VK_TRUE);
         VGPU_VERIFY(renderer->features2.features.depthBiasClamp == VK_TRUE);
@@ -4713,10 +5001,12 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
         VGPU_VERIFY(renderer->features2.features.fullDrawIndexUint32 == VK_TRUE);
         VGPU_VERIFY(renderer->features2.features.sampleRateShading == VK_TRUE);
         VGPU_VERIFY(renderer->features2.features.shaderClipDistance == VK_TRUE);
+        VGPU_VERIFY(renderer->features2.features.samplerAnisotropy == VK_TRUE);
 
-        VGPU_ASSERT(renderer->features1_2.timelineSemaphore == VK_TRUE);
-        VGPU_ASSERT(renderer->features1_3.synchronization2 == VK_TRUE);
         VGPU_ASSERT(renderer->features1_3.dynamicRendering == VK_TRUE);
+
+        //renderer->synchronization2 = renderer->features1_3.synchronization2 == VK_TRUE;
+        renderer->dynamicRendering = renderer->features1_3.dynamicRendering == VK_TRUE;
 
         if (!renderer->features2.features.textureCompressionBC &&
             !(renderer->features2.features.textureCompressionETC2 && renderer->features2.features.textureCompressionASTC_LDR))
@@ -4752,47 +5042,47 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
         const auto FindVacantQueue = [&](uint32_t& family, uint32_t& index,
             VkQueueFlags required, VkQueueFlags ignore_flags,
             float priority) -> bool
-        {
-            for (uint32_t familyIndex = 0; familyIndex < queueFamilyCount; familyIndex++)
             {
-                if ((queueFamilies[familyIndex].queueFamilyProperties.queueFlags & ignore_flags) != 0)
-                    continue;
-
-                // A graphics queue candidate must support present for us to select it.
-                if ((required & VK_QUEUE_GRAPHICS_BIT) != 0)
+                for (uint32_t familyIndex = 0; familyIndex < queueFamilyCount; familyIndex++)
                 {
-                    VkBool32 supported = vulkan_queryPresentationSupport(renderer->physicalDevice, familyIndex);
-                    if (!supported)
+                    if ((queueFamilies[familyIndex].queueFamilyProperties.queueFlags & ignore_flags) != 0)
                         continue;
-                    //if (vkGetPhysicalDeviceSurfaceSupportKHR(renderer->physicalDevice, familyIndex, vk_surface, &supported) != VK_SUCCESS || !supported)
-                    //    continue;
-                }
 
-                // A video decode queue candidate must support VK_VIDEO_CODEC_OPERATION_DECODE_H264_BIT_KHR or VK_VIDEO_CODEC_OPERATION_DECODE_H265_BIT_KHR
-                if ((required & VK_QUEUE_VIDEO_DECODE_BIT_KHR) != 0)
-                {
-                    VkVideoCodecOperationFlagsKHR videoCodecOperations = queueFamiliesVideo[familyIndex].videoCodecOperations;
-
-                    if ((videoCodecOperations & VK_VIDEO_CODEC_OPERATION_DECODE_H264_BIT_KHR) == 0 &&
-                        (videoCodecOperations & VK_VIDEO_CODEC_OPERATION_DECODE_H265_BIT_KHR) == 0)
+                    // A graphics queue candidate must support present for us to select it.
+                    if ((required & VK_QUEUE_GRAPHICS_BIT) != 0)
                     {
-                        continue;
+                        VkBool32 supported = vulkan_queryPresentationSupport(renderer->physicalDevice, familyIndex);
+                        if (!supported)
+                            continue;
+                        //if (vkGetPhysicalDeviceSurfaceSupportKHR(renderer->physicalDevice, familyIndex, vk_surface, &supported) != VK_SUCCESS || !supported)
+                        //    continue;
+                    }
+
+                    // A video decode queue candidate must support VK_VIDEO_CODEC_OPERATION_DECODE_H264_BIT_KHR or VK_VIDEO_CODEC_OPERATION_DECODE_H265_BIT_KHR
+                    if ((required & VK_QUEUE_VIDEO_DECODE_BIT_KHR) != 0)
+                    {
+                        VkVideoCodecOperationFlagsKHR videoCodecOperations = queueFamiliesVideo[familyIndex].videoCodecOperations;
+
+                        if ((videoCodecOperations & VK_VIDEO_CODEC_OPERATION_DECODE_H264_BIT_KHR) == 0 &&
+                            (videoCodecOperations & VK_VIDEO_CODEC_OPERATION_DECODE_H265_BIT_KHR) == 0)
+                        {
+                            continue;
+                        }
+                    }
+
+                    if (queueFamilies[familyIndex].queueFamilyProperties.queueCount &&
+                        (queueFamilies[familyIndex].queueFamilyProperties.queueFlags & required) == required)
+                    {
+                        family = familyIndex;
+                        queueFamilies[familyIndex].queueFamilyProperties.queueCount--;
+                        index = renderer->queueFamilyIndices.queueOffsets[familyIndex]++;
+                        renderer->queueFamilyIndices.queuePriorities[familyIndex].push_back(priority);
+                        return true;
                     }
                 }
 
-                if (queueFamilies[familyIndex].queueFamilyProperties.queueCount &&
-                    (queueFamilies[familyIndex].queueFamilyProperties.queueFlags & required) == required)
-                {
-                    family = familyIndex;
-                    queueFamilies[familyIndex].queueFamilyProperties.queueCount--;
-                    index = renderer->queueFamilyIndices.queueOffsets[familyIndex]++;
-                    renderer->queueFamilyIndices.queuePriorities[familyIndex].push_back(priority);
-                    return true;
-                }
-            }
-
-            return false;
-        };
+                return false;
+            };
 
         if (!FindVacantQueue(renderer->queueFamilyIndices.familyIndices[VGPUCommandQueue_Graphics], renderer->queueFamilyIndices.queueIndices[VGPUCommandQueue_Graphics],
             VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT, 0, 0.5f))
@@ -4862,16 +5152,6 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
         volkLoadDevice(renderer->device);
 
         // Queues
-        VkSemaphoreTypeCreateInfo timelineCreateInfo = {};
-        timelineCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO;
-        timelineCreateInfo.pNext = nullptr;
-        timelineCreateInfo.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE;
-        timelineCreateInfo.initialValue = 0;
-
-        VkSemaphoreCreateInfo semaphoreInfo = {};
-        semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-        semaphoreInfo.pNext = &timelineCreateInfo;
-
         VkFenceCreateInfo fenceInfo = {};
         fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
 
@@ -4882,8 +5162,6 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
                 vkGetDeviceQueue(renderer->device, renderer->queueFamilyIndices.familyIndices[i], renderer->queueFamilyIndices.queueIndices[i], &renderer->queues[i].queue);
 
                 renderer->queueFamilyIndices.counts[i] = renderer->queueFamilyIndices.queueOffsets[renderer->queueFamilyIndices.familyIndices[i]];
-
-                VK_CHECK(vkCreateSemaphore(renderer->device, &semaphoreInfo, nullptr, &renderer->queues[i].semaphore));
 
                 for (uint32_t frameIndex = 0; frameIndex < VGPU_MAX_INFLIGHT_FRAMES; ++frameIndex)
                 {
@@ -5031,41 +5309,86 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
         result = vmaCreateImage(renderer->allocator, &imageInfo, &allocInfo, &renderer->nullImage3D, &renderer->nullImageAllocation3D, nullptr);
         VGPU_ASSERT(result == VK_SUCCESS);
 
-        // Transitions:
+        // Transitions
         {
-            VulkanUploadContext  context = renderer->Allocate(0);
-            VkImageMemoryBarrier2 barrier = {};
-            barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-            barrier.oldLayout = imageInfo.initialLayout;
-            barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
-            barrier.srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
-            barrier.dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
-            barrier.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT;
-            barrier.srcAccessMask = 0;
-            barrier.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT;
-            barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            barrier.subresourceRange.baseArrayLayer = 0;
-            barrier.subresourceRange.baseMipLevel = 0;
-            barrier.subresourceRange.levelCount = 1;
-            barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            barrier.image = renderer->nullImage1D;
-            barrier.subresourceRange.layerCount = 1;
+            VulkanUploadContext  uploadContext = renderer->Allocate(0);
+            if (renderer->synchronization2)
+            {
+                VkImageMemoryBarrier2 barrier = {};
+                barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+                barrier.oldLayout = imageInfo.initialLayout;
+                barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+                barrier.srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+                barrier.dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+                barrier.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT;
+                barrier.srcAccessMask = 0;
+                barrier.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT;
+                barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                barrier.subresourceRange.baseArrayLayer = 0;
+                barrier.subresourceRange.baseMipLevel = 0;
+                barrier.subresourceRange.levelCount = 1;
+                barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                barrier.image = renderer->nullImage1D;
+                barrier.subresourceRange.layerCount = 1;
 
-            VkDependencyInfo dependencyInfo = {};
-            dependencyInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-            dependencyInfo.imageMemoryBarrierCount = 1;
-            dependencyInfo.pImageMemoryBarriers = &barrier;
-            vkCmdPipelineBarrier2(context.transitionCommandBuffer, &dependencyInfo);
+                VkDependencyInfo dependencyInfo = {};
+                dependencyInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+                dependencyInfo.imageMemoryBarrierCount = 1;
+                dependencyInfo.pImageMemoryBarriers = &barrier;
+                vkCmdPipelineBarrier2(uploadContext.transitionCommandBuffer, &dependencyInfo);
 
-            barrier.image = renderer->nullImage2D;
-            barrier.subresourceRange.layerCount = 6;
-            vkCmdPipelineBarrier2(context.transitionCommandBuffer, &dependencyInfo);
-            barrier.image = renderer->nullImage3D;
-            barrier.subresourceRange.layerCount = 1;
-            vkCmdPipelineBarrier2(context.transitionCommandBuffer, &dependencyInfo);
+                barrier.image = renderer->nullImage2D;
+                barrier.subresourceRange.layerCount = 6;
+                vkCmdPipelineBarrier2(uploadContext.transitionCommandBuffer, &dependencyInfo);
+                barrier.image = renderer->nullImage3D;
+                barrier.subresourceRange.layerCount = 1;
+                vkCmdPipelineBarrier2(uploadContext.transitionCommandBuffer, &dependencyInfo);
+            }
+            else
+            {
+                VkImageMemoryBarrier barrier = {};
+                barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+                barrier.oldLayout = imageInfo.initialLayout;
+                barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+                barrier.srcAccessMask = 0;
+                barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+                barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                barrier.image = renderer->nullImage1D;
+                barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                barrier.subresourceRange.baseArrayLayer = 0;
+                barrier.subresourceRange.baseMipLevel = 0;
+                barrier.subresourceRange.levelCount = 1;
+                barrier.subresourceRange.layerCount = 1;
 
-            renderer->UploadSubmit(context);
+                vkCmdPipelineBarrier(uploadContext.transitionCommandBuffer,
+                    VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                    0,
+                    0, nullptr,
+                    0, nullptr,
+                    1, &barrier);
+
+                barrier.image = renderer->nullImage2D;
+                barrier.subresourceRange.layerCount = 6;
+                vkCmdPipelineBarrier(uploadContext.transitionCommandBuffer,
+                    VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                    0,
+                    0, nullptr,
+                    0, nullptr,
+                    1, &barrier);
+
+                barrier.image = renderer->nullImage3D;
+                barrier.subresourceRange.layerCount = 1;
+                vkCmdPipelineBarrier(uploadContext.transitionCommandBuffer,
+                    VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                    0,
+                    0, nullptr,
+                    0, nullptr,
+                    1, &barrier);
+            }
+
+            renderer->UploadSubmit(uploadContext);
         }
 
         VkImageViewCreateInfo imageViewInfo = {};

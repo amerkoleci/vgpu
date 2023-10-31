@@ -173,6 +173,11 @@ struct VGPUPipelineLayoutImpl : public VGPUObject
 public:
 };
 
+struct VGPUShaderModuleImpl : public VGPUObject
+{
+public:
+};
+
 struct VGPUPipelineImpl : public VGPUObject
 {
 public:
@@ -243,12 +248,14 @@ struct VGPUDeviceImpl : public VGPUObject
     virtual uint64_t GetTimestampFrequency() const = 0;
 
     virtual VGPUBuffer CreateBuffer(const VGPUBufferDesc* desc, const void* pInitialData) = 0;
-    virtual VGPUTexture CreateTexture(const VGPUTextureDesc* desc, const void* pInitialData) = 0;
+    virtual VGPUTexture CreateTexture(const VGPUTextureDesc* desc, const VGPUTextureData* pInitialData) = 0;
 
     virtual VGPUSampler CreateSampler(const VGPUSamplerDesc* desc) = 0;
 
     virtual VGPUBindGroupLayout CreateBindGroupLayout(const VGPUBindGroupLayoutDesc* desc) = 0;
     virtual VGPUPipelineLayout CreatePipelineLayout(const VGPUPipelineLayoutDesc* desc) = 0;
+
+    virtual VGPUShaderModule CreateShaderModule(const VGPUShaderModuleDesc* desc) = 0;
 
     virtual VGPUPipeline CreateRenderPipeline(const VGPURenderPipelineDesc* desc) = 0;
     virtual VGPUPipeline CreateComputePipeline(const VGPUComputePipelineDesc* desc) = 0;
