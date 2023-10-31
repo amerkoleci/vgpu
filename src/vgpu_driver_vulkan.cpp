@@ -1,4 +1,4 @@
-// Copyright © Amer Koleci and Contributors.
+// Copyright (c) Amer Koleci and Contributors.
 // Licensed under the MIT License (MIT). See LICENSE in the repository root for more information.
 
 #if defined(VGPU_VULKAN_DRIVER)
@@ -1318,7 +1318,7 @@ VulkanUploadContext VulkanRenderer::Allocate(uint64_t size)
         VK_CHECK(vkCreateSemaphore(device, &semaphoreInfo, nullptr, &context.semaphores[1]));
         VK_CHECK(vkCreateSemaphore(device, &semaphoreInfo, nullptr, &context.semaphores[2]));
 
-        context.uploadBufferSize = vgpuNextPowerOfTwo(size);
+        context.uploadBufferSize = VmaNextPow2(size);
         context.uploadBufferSize = _VGPU_MAX(context.uploadBufferSize, uint64_t(65536));
 
         VGPUBufferDesc uploadBufferDesc{};

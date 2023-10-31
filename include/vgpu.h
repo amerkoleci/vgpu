@@ -1,8 +1,8 @@
-// Copyright © Amer Koleci and Contributors.
+// Copyright (c) Amer Koleci and Contributors.
 // Licensed under the MIT License (MIT). See LICENSE in the repository root for more information.
 
-#ifndef _VGPU_H_
-#define _VGPU_H_ 1
+#ifndef VGPU_H_
+#define VGPU_H_
 
 #if defined(VGPU_SHARED_LIBRARY)
 #    if defined(_WIN32)
@@ -61,9 +61,12 @@ typedef struct VGPUSwapChainImpl*       VGPUSwapChain;
 typedef struct VGPUCommandBufferImpl*   VGPUCommandBuffer;
 
 typedef enum VGPULogLevel {
-    VGPULogLevel_Error = 0,
-    VGPULogLevel_Warning = 1,
-    VGPULogLevel_Info = 2,
+    VGPULogLevel_Off = 0,
+    VGPULogLevel_Error = 1,
+    VGPULogLevel_Warn = 2,
+    VGPULogLevel_Info = 3,
+    VGPULogLevel_Debug = 4,
+    VGPULogLevel_Trace = 5,
 
     _VGPULogLevel_Count,
     _VGPULogLevel_Force32 = 0x7FFFFFFF
@@ -935,6 +938,8 @@ typedef uint32_t VGPUNativeObjectType;
 #define VGPU_NATIVE_VkInstance (0x00030003)
 
 typedef void (*VGPULogCallback)(VGPULogLevel level, const char* message, void* userData);
+VGPU_API VGPULogLevel vgpuGetLogLevel(void);
+VGPU_API void vgpuSetLogLevel(VGPULogLevel level);
 VGPU_API void vgpuSetLogCallback(VGPULogCallback func, void* userData);
 
 VGPU_API VGPUBool32 vgpuIsBackendSupported(VGPUBackend backend);
@@ -1085,4 +1090,4 @@ VGPU_API uint32_t vgpuToVkFormat(VGPUTextureFormat format);
 
 VGPU_API VGPUBool32 vgpuStencilTestEnabled(const VGPUDepthStencilState* depthStencil);
 
-#endif /* _VGPU_H_ */
+#endif /* VGPU_H_ */

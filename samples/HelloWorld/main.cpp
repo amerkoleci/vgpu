@@ -93,6 +93,12 @@ std::vector<uint8_t> LoadShader(const char* fileName)
 
 void init_vgpu(GLFWwindow* window)
 {
+#ifdef _DEBUG
+    vgpuSetLogLevel(VGPULogLevel_Debug);
+#else
+    vgpuSetLogLevel(VGPULogLevel_Info);
+#endif
+
     VGPUDeviceDescriptor deviceDesc{};
     deviceDesc.label = "test device";
 #ifdef _DEBUG

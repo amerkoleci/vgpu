@@ -100,7 +100,6 @@ endif ()
 
 # Graphics backends
 if(EMSCRIPTEN)
-    option(VGPU_GL_DRIVER "Enable OpenGL (WebGL 2.0) backend" ON)
     option(VGPU_WEBGPU_DRIVER "Enable WebGPU backend" ON)
 elseif(IOS OR APPLE)
     set(VGPU_METAL_DRIVER ON CACHE BOOL "Use Metal backend" FORCE)
@@ -175,7 +174,7 @@ else ()
 endif ()
 
 if (GPU_LINUX_WSI_SELECTION)
-    message(STATUS "  WSI Backend:  ${GPU_LINUX_WSI_SELECTION}")
+    message(STATUS "  WSI Backend:    ${GPU_LINUX_WSI_SELECTION}")
 endif ()
 
 message(STATUS "  Samples         ${VGPU_SAMPLES}")
@@ -194,18 +193,24 @@ add_subdirectory(third_party)
 set(SOURCE_FILES
     include/vgpu.h
     src/vgpu_driver.h
-    src/vgpu_driver_d3d.h
     src/vgpu.cpp
     src/vgpu_check.c
-    src/vgpu_driver_webgpu.cpp
 )
 
-add_library(${PROJECT_NAME} ${SOURCE_FILES})
-if (BUILD_SHARED_LIBS)
-    target_compile_definitions(${PROJECT_NAME}
-        PUBLIC VGPU_SHARED_LIBRARY=1
-        PRIVATE VGPU_IMPLEMENTATION=1
-    )
+if (GPU_BUILD_SHARED)
+    set(LIBRARY_TYPE SHARED)
+else ()
+    set(LIBRARY_TYPE STATIC)
+endif ()
+
+
+add_library(${PROJECT_NAME} ${LIBRARY_TYPE} ${SOURCE_FILES})
+target_compile_definitions(${PROJECT_NAME} PRIVATE VGPU_IMPLEMENTATION)
+
+if (GPU_BUILD_SHARED)
+    target_compile_definitions(${PROJECT_NAME} PUBLIC VGPU_SHARED_LIBRARY)
+else()
+    target_compile_definitions(${PROJECT_NAME} PUBLIC VGPU_STATIC_LIBRARY)
 endif ()
 
 # Include directories
@@ -262,7 +267,7 @@ if (VGPU_VULKAN_DRIVER)
         src/third_party/vk_mem_alloc.h
     )
 
-    target_compile_definitions(${PROJECT_NAME} PRIVATE VGPU_VULKAN_DRIVER=1)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE VGPU_VULKAN_DRIVER)
     target_link_libraries(${PROJECT_NAME} PRIVATE volk)
 endif ()
 
@@ -272,7 +277,7 @@ if (VGPU_D3D12_DRIVER)
         src/third_party/D3D12MemAlloc.cpp
     )
 
-    target_compile_definitions(${PROJECT_NAME} PRIVATE VGPU_D3D12_DRIVER=1)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE VGPU_D3D12_DRIVER)
     target_link_libraries(${PROJECT_NAME} PRIVATE DirectX-Headers)
 
     if(WINDOWS_STORE)
@@ -281,7 +286,11 @@ if (VGPU_D3D12_DRIVER)
 endif ()
 
 if (VGPU_WEBGPU_DRIVER)
-    target_compile_definitions(${PROJECT_NAME} PRIVATE VGPU_WEBGPU_DRIVER=1)
+    target_sources(${PROJECT_NAME} PRIVATE
+        src/vgpu_driver_webgpu.cpp
+    )
+
+    target_compile_definitions(${PROJECT_NAME} PRIVATE VGPU_WEBGPU_DRIVER)
 endif ()
 
 if(WIN32)

@@ -52,6 +52,11 @@ jobs:
     - name: Get CMake
       uses: lukka/get-cmake@v3.27.7
 
+    - name: Install dependencies
+      run: |
+          sudo apt update
+          sudo apt install libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev
+
     - name: Configure linux-x64
       run: cmake S . -B build_linux_64 -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="linux-x64-sdk"
     - name: Build linux-x64

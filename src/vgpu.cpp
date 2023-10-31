@@ -1,25 +1,27 @@
-// Copyright © Amer Koleci and Contributors.
+// Copyright (c) Amer Koleci and Contributors.
 // Licensed under the MIT License (MIT). See LICENSE in the repository root for more information.
 
 #include "vgpu_driver.h"
-
-#if defined(__EMSCRIPTEN__)
-#   include <emscripten.h>
-#elif defined(_WIN32)
-#   include <Windows.h>
-#endif
-
-#include <stdbool.h>
 #include <stdio.h>
 #include <stdarg.h>
 
 #define MAX_MESSAGE_SIZE 1024
 
-static VGPULogCallback s_LogFunc = NULL;
-static void* s_userData = NULL;
+static VGPULogLevel s_LogLevel = VGPULogLevel_Off;
+static VGPULogCallback s_LogFunc = nullptr;
+static void* s_userData = nullptr;
 
-void vgpuLogInfo(const char* format, ...) {
-    if (!s_LogFunc)
+bool vgpuShouldLog(VGPULogLevel level)
+{
+    if (s_LogLevel == VGPULogLevel_Off || s_LogFunc == nullptr)
+        return false;
+
+    return level <= s_LogLevel;
+}
+
+void vgpuLogInfo(const char* format, ...)
+{
+    if (!vgpuShouldLog(VGPULogLevel_Info))
         return;
 
     char msg[MAX_MESSAGE_SIZE];
@@ -27,11 +29,13 @@ void vgpuLogInfo(const char* format, ...) {
     va_start(args, format);
     vsnprintf(msg, MAX_MESSAGE_SIZE, format, args);
     va_end(args);
+
     s_LogFunc(VGPULogLevel_Info, msg, s_userData);
 }
 
-void vgpuLogWarn(const char* format, ...) {
-    if (!s_LogFunc)
+void vgpuLogWarn(const char* format, ...)
+{
+    if (!vgpuShouldLog(VGPULogLevel_Warn))
         return;
 
     char msg[MAX_MESSAGE_SIZE];
@@ -39,11 +43,12 @@ void vgpuLogWarn(const char* format, ...) {
     va_start(args, format);
     vsnprintf(msg, MAX_MESSAGE_SIZE, format, args);
     va_end(args);
-    s_LogFunc(VGPULogLevel_Warning, msg, s_userData);
+    s_LogFunc(VGPULogLevel_Warn, msg, s_userData);
 }
 
-void vgpuLogError(const char* format, ...) {
-    if (!s_LogFunc)
+void vgpuLogError(const char* format, ...)
+{
+    if (!vgpuShouldLog(VGPULogLevel_Error))
         return;
 
     char msg[MAX_MESSAGE_SIZE];
@@ -51,10 +56,22 @@ void vgpuLogError(const char* format, ...) {
     va_start(args, format);
     vsnprintf(msg, MAX_MESSAGE_SIZE, format, args);
     va_end(args);
+
     s_LogFunc(VGPULogLevel_Error, msg, s_userData);
 }
 
-void vgpuSetLogCallback(VGPULogCallback func, void* userData) {
+VGPULogLevel vgpuGetLogLevel(void)
+{
+    return s_LogLevel;
+}
+
+void vgpuSetLogLevel(VGPULogLevel level)
+{
+    s_LogLevel = level;
+}
+
+void vgpuSetLogCallback(VGPULogCallback func, void* userData)
+{
     s_LogFunc = func;
     s_userData = userData;
 }

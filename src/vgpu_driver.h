@@ -1,11 +1,12 @@
-// Copyright © Amer Koleci and Contributors.
+// Copyright (c) Amer Koleci and Contributors.
 // Licensed under the MIT License (MIT). See LICENSE in the repository root for more information.
 
 #ifndef _VGPU_DRIVER_H_
-#define _VGPU_DRIVER_H_ 1
+#define _VGPU_DRIVER_H_
 
 #include "vgpu.h"
-#include <assert.h>
+#include <stdbool.h>
+#include <string.h> 
 #include <atomic>
 
 #ifndef VGPU_ASSERT
@@ -36,7 +37,11 @@
     _Pragma("clang diagnostic push")\
 	_Pragma("clang diagnostic ignored \"-Wall\"") \
 	_Pragma("clang diagnostic ignored \"-Wextra\"") \
-	_Pragma("clang diagnostic ignored \"-Wtautological-compare\"")
+	_Pragma("clang diagnostic ignored \"-Wtautological-compare\"") \
+    _Pragma("clang diagnostic ignored \"-Wnullability-completeness\"") \
+    _Pragma("clang diagnostic ignored \"-Wnullability-extension\"") \
+    _Pragma("clang diagnostic ignored \"-Wunused-parameter\"") \
+    _Pragma("clang diagnostic ignored \"-Wunused-function\"")
 
 #define VGPU_ENABLE_WARNINGS() _Pragma("clang diagnostic pop")
 #elif defined(__GNUC__) || defined(__GNUG__)
@@ -48,7 +53,9 @@
 	_Pragma("GCC diagnostic push") \
 	_Pragma("GCC diagnostic ignored \"-Wall\"") \
 	_Pragma("GCC diagnostic ignored \"-Wextra\"") \
-	_Pragma("GCC diagnostic ignored \"-Wtautological-compare\"")
+	_Pragma("GCC diagnostic ignored \"-Wtautological-compare\"") \
+    _Pragma("GCC diagnostic ignored \"-Wunused-parameter\"") \
+    _Pragma("GCC diagnostic ignored \"-Wunused-function\"")
 
 #define VGPU_ENABLE_WARNINGS() _Pragma("GCC diagnostic pop")
 #elif defined(_MSC_VER)
@@ -59,6 +66,7 @@
 #define VGPU_ENABLE_WARNINGS() __pragma(warning(pop))
 #endif
 
+_VGPU_EXTERN bool vgpuShouldLog(VGPULogLevel level);
 _VGPU_EXTERN void vgpuLogInfo(const char* format, ...);
 _VGPU_EXTERN void vgpuLogWarn(const char* format, ...);
 _VGPU_EXTERN void vgpuLogError(const char* format, ...);
