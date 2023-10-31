@@ -6,7 +6,8 @@
 #include "vgpu_driver.h"
 
 VGPU_DISABLE_WARNINGS()
-#include "volk.h"
+#define VK_NO_PROTOTYPES
+#include "third_party/volk.h"
 #define VMA_STATS_STRING_ENABLED 0
 #define VMA_STATIC_VULKAN_FUNCTIONS 0
 #define VMA_DYNAMIC_VULKAN_FUNCTIONS 1
@@ -1508,13 +1509,12 @@ static VkSurfaceKHR vulkan_createSurface(VulkanRenderer* renderer, const VGPUSwa
     createInfo.sType = VK_STRUCTURE_TYPE_METAL_SURFACE_CREATE_INFO_EXT;
     createInfo.pLayer = (const CAMetalLayer*)desc->windowHandle;
     result = vkCreateMetalSurfaceEXT(instance, &createInfo, nullptr, &vk_surface);
-#elif defined(VK_USE_PLATFORM_XCB_KHR)
+#elif defined(VK_USE_PLATFORM_XCB_KHR) || defined(VK_USE_PLATFORM_XLIB_KHR)
     VkXcbSurfaceCreateInfoKHR createInfo = fXlib};
     createInfo.sType = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR;
     createInfo.connection = renderer->GetXCBConnection(static_cast<Display*>(desc->displayHandle));
     createInfo.window = (uint32_t)desc->windowHandle;
     result = vkCreateXcbSurfaceKHR(instance, &createInfo, nullptr, &vk_surface);
-#elif defined(VK_USE_PLATFORM_XLIB_KHR)
     VkXlibSurfaceCreateInfoKHR createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR;
     createInfo.dpy = static_cast<Display*>(desc->displayHandle);
@@ -4244,18 +4244,17 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
         instanceExtensions.push_back(VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
 #elif defined(VK_USE_PLATFORM_METAL_EXT)
         instanceExtensions.push_back(VK_EXT_METAL_SURFACE_EXTENSION_NAME);
-#elif defined(VK_USE_PLATFORM_XCB_KHR)
-        instanceExtensions.push_back(VK_KHR_XCB_SURFACE_EXTENSION_NAME);
-#elif defined(VK_USE_PLATFORM_XLIB_KHR)
-        instanceExtensions.push_back(VK_KHR_XLIB_SURFACE_EXTENSION_NAME);
-#elif defined(VK_USE_PLATFORM_WAYLAND_KHR)
+#endif
+
+#if defined(VK_USE_PLATFORM_WAYLAND_KHR)
         instanceExtensions.push_back(VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME);
-#elif defined(VK_USE_PLATFORM_DISPLAY_KHR)
-        instanceExtensions.push_back(VK_KHR_DISPLAY_EXTENSION_NAME);
-#elif defined(VK_USE_PLATFORM_HEADLESS_EXT)
-        instanceExtensions.push_back(VK_EXT_HEADLESS_SURFACE_EXTENSION_NAME);
-#else
-#   pragma error Platform not supported
+#endif
+
+#if defined(VK_USE_PLATFORM_XLIB_KHR)
+        instanceExtensions.push_back(VK_KHR_XLIB_SURFACE_EXTENSION_NAME);
+#endif
+#if defined(VK_USE_PLATFORM_XCB_KHR)
+        instanceExtensions.push_back(VK_KHR_XCB_SURFACE_EXTENSION_NAME);
 #endif
 
         if (info->validationMode != VGPUValidationMode_Disabled)

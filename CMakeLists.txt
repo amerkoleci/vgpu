@@ -71,7 +71,7 @@ elseif(WIN32)
     set(GPU_PLATFORM_NAME "Win32")
 elseif(UNIX)
     set(GPU_PLATFORM_NAME "Unix")
-    set(GPU_LINUX_WSI_SELECTION "XLIB" CACHE STRING "Select WSI target (XCB, XLIB, WAYLAND, D2D)")
+    option(VGPU_USE_WAYLAND "Enable support for Wayland surface" OFF)
 else()
     message(FATAL_ERROR "Unrecognized platform: ${CMAKE_SYSTEM_NAME}")
 endif()
@@ -173,8 +173,8 @@ else ()
     message(STATUS "  Library         STATIC")
 endif ()
 
-if (GPU_LINUX_WSI_SELECTION)
-    message(STATUS "  WSI Backend:    ${GPU_LINUX_WSI_SELECTION}")
+if (VGPU_USE_WAYLAND)
+    message(STATUS "  Wayland:    ${VGPU_USE_WAYLAND}")
 endif ()
 
 message(STATUS "  Samples         ${VGPU_SAMPLES}")
@@ -265,10 +265,33 @@ if (VGPU_VULKAN_DRIVER)
     target_sources(${PROJECT_NAME} PRIVATE
         src/vgpu_driver_vulkan.cpp
         src/third_party/vk_mem_alloc.h
+        src/third_party/volk.h
+        src/third_party/volk.c
     )
 
     target_compile_definitions(${PROJECT_NAME} PRIVATE VGPU_VULKAN_DRIVER)
-    target_link_libraries(${PROJECT_NAME} PRIVATE volk)
+
+    if (ANDROID)
+        target_compile_definitions(${PROJECT_NAME} PRIVATE VK_USE_PLATFORM_ANDROID_KHR)
+    elseif(WIN32)
+        target_compile_definitions(${PROJECT_NAME} PRIVATE VK_USE_PLATFORM_WIN32_KHR)
+    elseif(APPLE)
+        target_compile_definitions(${PROJECT_NAME} PRIVATE VK_USE_PLATFORM_METAL_EXT)
+    elseif(UNIX)
+        find_package(PkgConfig REQUIRED)
+        if (VGPU_USE_WAYLAND)
+            pkg_check_modules(WAYLAND wayland-client REQUIRED)
+            target_include_directories(${PROJECT_NAME} PRIVATE ${WAYLAND_INCLUDE_DIRS})
+            target_compile_definitions(${PROJECT_NAME} PRIVATE VK_USE_PLATFORM_WAYLAND_KHR)
+        else()
+            pkg_check_modules(XCB xcb REQUIRED)
+            pkg_check_modules(X11 x11 REQUIRED)
+
+            target_include_directories(${PROJECT_NAME} PRIVATE ${XCB_INCLUDE_DIRS} ${X11_INCLUDE_DIRS})
+            target_compile_definitions(${PROJECT_NAME} PRIVATE VK_USE_PLATFORM_XCB_KHR)
+            target_compile_definitions(${PROJECT_NAME} PRIVATE VK_USE_PLATFORM_XLIB_KHR)
+        endif ()
+    endif()
 endif ()
 
 if (VGPU_D3D12_DRIVER)
