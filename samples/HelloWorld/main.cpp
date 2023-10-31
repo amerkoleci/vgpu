@@ -16,6 +16,7 @@
 #include <array>
 #include <assert.h>
 #include <vector>
+#include <cstring>
 
 #include <vgpu.h>
 

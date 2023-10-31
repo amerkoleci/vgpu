@@ -62,7 +62,6 @@ jobs:
     - name: Build linux-x64
       run: cmake --build build_linux_64 --config Release --verbose --parallel
 
-    # Linux artifact 
     - name: package_linux
       run: |
         mkdir -p bin/linux-x64/native
@@ -72,10 +71,32 @@ jobs:
         name: libs_linux
         path: bin
 
+  macos:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Get CMake
+      uses: lukka/get-cmake@v3.27.7
+
+    - name: CMake Configure osx-universal
+      run: cmake -S . -B build_osx -G Ninja -DCMAKE_BUILD_TYPE:String=Release -DCMAKE_INSTALL_PREFIX="osx-universal-sdk"
+    - name: CMake Build osx-universal
+      run: cmake --build build_osx --target install --config Release --verbose --parallel
+
+    - name: Package macos
+      run: |
+        mkdir -p bin/osx-universal
+        mv osx-universal-sdk/lib/*.dylib bin/osx-universal
+    - uses: actions/upload-artifact@v3
+      with:
+        name: libs_osx
+        path: bin
+
   combine:
     name: combine artifacts
     runs-on: ubuntu-latest
-    needs:  [windows, linux]
+    needs:  [windows, linux, macos]
     steps:
       - name: download artifacts
         uses: actions/download-artifact@v3
@@ -89,6 +110,7 @@ jobs:
           mkdir vgpu_libs
           cp -r artifacts/libs_windows/* vgpu_libs
           cp -r artifacts/libs_linux/* vgpu_libs
+          cp -r artifacts/libs_osx/* vgpu_libs
       - uses: edgarrc/action-7z@v1
         with:
           args: 7z a -t7z vgpu_libs.7z ./vgpu_libs/
@@ -106,3 +128,4 @@ jobs:
           name: |
             libs_windows
             libs_linux
+            libs_osx
