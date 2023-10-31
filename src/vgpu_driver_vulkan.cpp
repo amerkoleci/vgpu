@@ -3139,7 +3139,6 @@ void VulkanSwapChain::SetLabel(const char* label)
 
 static void vulkan_updateSwapChain(VulkanRenderer* renderer, VulkanSwapChain* swapChain)
 {
-    VkResult result = VK_SUCCESS;
     VkSurfaceCapabilitiesKHR caps;
     VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(renderer->physicalDevice, swapChain->surface, &caps));
 
@@ -3294,14 +3293,12 @@ static void vulkan_updateSwapChain(VulkanRenderer* renderer, VulkanSwapChain* sw
     semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
     if (swapChain->acquireSemaphore == VK_NULL_HANDLE)
     {
-        result = vkCreateSemaphore(renderer->device, &semaphoreInfo, nullptr, &swapChain->acquireSemaphore);
-        VGPU_ASSERT(result == VK_SUCCESS);
+        VK_CHECK(vkCreateSemaphore(renderer->device, &semaphoreInfo, nullptr, &swapChain->acquireSemaphore));
     }
 
     if (swapChain->releaseSemaphore == VK_NULL_HANDLE)
     {
-        result = vkCreateSemaphore(renderer->device, &semaphoreInfo, nullptr, &swapChain->releaseSemaphore);
-        VGPU_ASSERT(result == VK_SUCCESS);
+        VK_CHECK(vkCreateSemaphore(renderer->device, &semaphoreInfo, nullptr, &swapChain->releaseSemaphore));
     }
 
     if (createInfo.imageFormat == VK_FORMAT_B8G8R8A8_UNORM)
@@ -4055,7 +4052,6 @@ void VulkanQueue::Submit(VulkanRenderer* device, VkFence fence)
 
 uint64_t VulkanRenderer::Submit(VGPUCommandBuffer* commandBuffers, uint32_t count)
 {
-    VkResult result = VK_SUCCESS;
     cmdBuffersCount = 0;
 
     // Submit current frame.
@@ -4123,8 +4119,7 @@ uint64_t VulkanRenderer::Submit(VGPUCommandBuffer* commandBuffers, uint32_t coun
                 commandBuffer->PopDebugGroup();
             }
 
-            result = vkEndCommandBuffer(commandBuffer->commandBuffer);
-            VGPU_ASSERT(result == VK_SUCCESS);
+            VK_CHECK(vkEndCommandBuffer(commandBuffer->commandBuffer));
             queue.submitCommandBuffers.push_back(commandBuffer->commandBuffer);
         }
 
@@ -4201,7 +4196,7 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
 
     if (renderer->x11xcb.handle)
     {
-        renderer->x11xcb.GetXCBConnection = (PFN_XGetXCBConnection)dlsym(renderer->x11xcb.handle, "XGetXCBConnection");
+        renderer->x11xcb.GetXCBConnection = (XGetXCBConnection)dlsym(renderer->x11xcb.handle, "XGetXCBConnection");
     }
 #endif
 
