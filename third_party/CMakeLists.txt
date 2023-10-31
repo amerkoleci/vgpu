@@ -14,7 +14,7 @@ elseif(WIN32)
 elseif(APPLE)
     target_compile_definitions(vulkan INTERFACE VK_USE_PLATFORM_METAL_EXT)
 elseif(UNIX)
-    # Choose WSI based on ALIMER_LINUX_WSI_SELECTION
+    # Choose WSI based on GPU_LINUX_WSI_SELECTION
     if (GPU_LINUX_WSI_SELECTION STREQUAL XCB OR GPU_LINUX_WSI_SELECTION STREQUAL XLIB OR GPU_LINUX_WSI_SELECTION STREQUAL WAYLAND)
         find_package(PkgConfig REQUIRED)
     endif()
@@ -54,11 +54,11 @@ if(VGPU_VULKAN_DRIVER)
     target_link_libraries(volk PUBLIC vulkan)
 
     target_include_directories(volk PUBLIC ${VOLK_DIR})
-    if (ALIMER_LINUX_WSI_SELECTION STREQUAL XCB)
+    if (GPU_LINUX_WSI_SELECTION STREQUAL XCB)
         target_include_directories(volk PUBLIC ${XCB_INCLUDE_DIRS})
-    elseif (ALIMER_LINUX_WSI_SELECTION STREQUAL XLIB)
+    elseif (GPU_LINUX_WSI_SELECTION STREQUAL XLIB)
         target_include_directories(volk PUBLIC ${X11_INCLUDE_DIRS})
-    elseif (ALIMER_LINUX_WSI_SELECTION STREQUAL WAYLAND)
+    elseif (GPU_LINUX_WSI_SELECTION STREQUAL WAYLAND)
         target_include_directories(volk PUBLIC ${WAYLAND_INCLUDE_DIRS})
     endif()
 
