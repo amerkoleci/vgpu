@@ -93,7 +93,7 @@ static const VGPUDriver* drivers[] = {
 };
 
 #define NULL_RETURN(name) if (name == NULL) { return; }
-#define NULL_RETURN_NULL(name) if (name == NULL) { return NULL; }
+#define NULL_RETURN_NULL(name) if (name == NULL) { return nullptr; }
 
 VGPUBool32 vgpuIsBackendSupported(VGPUBackend backend)
 {
@@ -697,7 +697,8 @@ VGPUSwapChain vgpuCreateSwapChain(VGPUDevice device, const VGPUSwapChainDesc* de
 {
     VGPU_ASSERT(device);
     NULL_RETURN_NULL(desc);
-    NULL_RETURN_NULL(desc->windowHandle);
+    if (!desc->windowHandle)
+        return nullptr;
 
     VGPUSwapChainDesc def = _vgpuSwapChainDescDef(desc);
     return device->CreateSwapChain(&def);

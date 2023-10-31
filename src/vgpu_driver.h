@@ -56,7 +56,9 @@
 	_Pragma("GCC diagnostic ignored \"-Wextra\"") \
 	_Pragma("GCC diagnostic ignored \"-Wtautological-compare\"") \
     _Pragma("GCC diagnostic ignored \"-Wunused-parameter\"") \
-    _Pragma("GCC diagnostic ignored \"-Wunused-function\"")
+    _Pragma("GCC diagnostic ignored \"-Wunused-function\"") \
+    _Pragma("GCC diagnostic ignored \"-Wunused-variable\"") \
+    _Pragma("GCC diagnostic ignored \"-Wmissing-field-initializers\"")
 
 #define VGPU_ENABLE_WARNINGS() _Pragma("GCC diagnostic pop")
 #elif defined(_MSC_VER)

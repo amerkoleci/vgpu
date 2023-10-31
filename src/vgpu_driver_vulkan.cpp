@@ -162,6 +162,9 @@ namespace
 
     inline VkBool32 vulkan_queryPresentationSupport(VkPhysicalDevice physicalDevice, uint32_t queueFamilyIndex)
     {
+        VGPU_UNUSED(physicalDevice);
+        VGPU_UNUSED(queueFamilyIndex);
+
 #if defined(VK_USE_PLATFORM_ANDROID_KHR)
         // All Android queues surfaces support present.
         return true;
@@ -1157,6 +1160,8 @@ public:
 #endif
 
     bool debugUtils;
+    bool xlib_surface;
+    bool xcb_surface;
     VkInstance instance;
     VkDebugUtilsMessengerEXT debugUtilsMessenger;
 
@@ -1511,16 +1516,26 @@ static VkSurfaceKHR vulkan_createSurface(VulkanRenderer* renderer, const VGPUSwa
     createInfo.pLayer = (const CAMetalLayer*)desc->windowHandle;
     result = vkCreateMetalSurfaceEXT(instance, &createInfo, nullptr, &vk_surface);
 #elif defined(VK_USE_PLATFORM_XCB_KHR) || defined(VK_USE_PLATFORM_XLIB_KHR)
-    VkXcbSurfaceCreateInfoKHR createInfo = fXlib};
-    createInfo.sType = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR;
-    createInfo.connection = renderer->GetXCBConnection(static_cast<Display*>(desc->displayHandle));
-    createInfo.window = (uint32_t)desc->windowHandle;
-    result = vkCreateXcbSurfaceKHR(instance, &createInfo, nullptr, &vk_surface);
-    VkXlibSurfaceCreateInfoKHR createInfo = {};
-    createInfo.sType = VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR;
-    createInfo.dpy = static_cast<Display*>(desc->displayHandle);
-    createInfo.window = (uint32_t)desc->windowHandle;
-    result = vkCreateXlibSurfaceKHR(instance, &createInfo, nullptr, &vk_surface);
+    if (renderer->xlib_surface)
+    {
+        VkXlibSurfaceCreateInfoKHR createInfo = {};
+        createInfo.sType = VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR;
+        createInfo.dpy = static_cast<Display*>(desc->displayHandle);
+        createInfo.window = (uint32_t)desc->windowHandle;
+        result = vkCreateXlibSurfaceKHR(instance, &createInfo, nullptr, &vk_surface);
+    }
+    else if (renderer->xcb_surface)
+    {
+        VkXcbSurfaceCreateInfoKHR createInfo = {};
+        createInfo.sType = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR;
+        createInfo.connection = renderer->GetXCBConnection(static_cast<Display*>(desc->displayHandle));
+        createInfo.window = (uint32_t)desc->windowHandle;
+        result = vkCreateXcbSurfaceKHR(instance, &createInfo, nullptr, &vk_surface);
+    }
+    else
+    {
+        VK_LOG_ERROR(result, "Vulkan: Both VK_KHR_xlib_surface and VK_KHR_xcb_surface are not supported");
+    }
 #elif defined(VK_USE_PLATFORM_WAYLAND_KHR)
     VkWaylandSurfaceCreateInfoKHR createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR;
@@ -4216,6 +4231,16 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
             else if (strcmp(availableExtension.extensionName, "VK_EXT_swapchain_colorspace") == 0)
             {
                 instanceExtensions.push_back("VK_EXT_swapchain_colorspace");
+            }
+            else if (strcmp(availableExtension.extensionName, "VK_KHR_xlib_surface") == 0)
+            {
+                renderer->xlib_surface = true;
+                instanceExtensions.push_back("VK_KHR_xlib_surface");
+            }
+            else if (strcmp(availableExtension.extensionName, "VK_KHR_xcb_surface") == 0)
+            {
+                renderer->xcb_surface = true;
+                instanceExtensions.push_back("VK_KHR_xcb_surface");
             }
 
             /* Core 1.1 */
