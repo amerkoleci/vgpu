@@ -322,13 +322,6 @@ if(WIN32)
     target_compile_definitions(${PROJECT_NAME} PRIVATE WIN32_LEAN_AND_MEAN)
 endif ()
 
-# Soname
-set_target_properties(${PROJECT_NAME} PROPERTIES
-    OUTPUT_NAME "${PROJECT_NAME}"
-	VERSION ${VGPU_VERSION}
-	SOVERSION ${VGPU_VERSION_MAJOR}
-)
-
 # Samples
 if (VGPU_SAMPLES)
     add_subdirectory(samples)

@@ -1171,3 +1171,18 @@ VGPUBool32 vgpuStencilTestEnabled(const VGPUDepthStencilState* depthStencil)
         depthStencil->stencilFront.passOperation != VGPUStencilOperation_Keep;
 }
 
+void vgpuGetPixelFormatInfo(VGPUTextureFormat format, VGPUPixelFormatInfo* pInfo)
+{
+    VGPU_ASSERT(pInfo);
+
+    VGPU_ASSERT(c_FormatInfo[format].format == format);
+    *pInfo = c_FormatInfo[format];
+}
+
+void vgpuGetVertexFormatInfo(VGPUVertexFormat format, VGPUVertexFormatInfo* pInfo)
+{
+    VGPU_ASSERT(pInfo);
+
+    VGPU_ASSERT(s_VertexFormatTable[format].format == format);
+    *pInfo = s_VertexFormatTable[format];
+}

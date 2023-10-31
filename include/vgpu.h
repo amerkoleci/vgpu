@@ -1092,4 +1092,7 @@ VGPU_API uint32_t vgpuToVkFormat(VGPUTextureFormat format);
 
 VGPU_API VGPUBool32 vgpuStencilTestEnabled(const VGPUDepthStencilState* depthStencil);
 
+VGPU_API void vgpuGetPixelFormatInfo(VGPUTextureFormat format, VGPUPixelFormatInfo* pInfo);
+VGPU_API void vgpuGetVertexFormatInfo(VGPUVertexFormat format, VGPUVertexFormatInfo* pInfo);
+
 #endif /* VGPU_H_ */
