@@ -1528,7 +1528,7 @@ static VkSurfaceKHR vulkan_createSurface(VulkanRenderer* renderer, const VGPUSwa
     {
         VkXcbSurfaceCreateInfoKHR createInfo = {};
         createInfo.sType = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR;
-        createInfo.connection = renderer->GetXCBConnection(static_cast<Display*>(desc->displayHandle));
+        createInfo.connection = renderer->x11xcb.GetXCBConnection(static_cast<Display*>(desc->displayHandle));
         createInfo.window = (uint32_t)desc->windowHandle;
         result = vkCreateXcbSurfaceKHR(instance, &createInfo, nullptr, &vk_surface);
     }
@@ -2823,7 +2823,7 @@ VGPUPipeline VulkanRenderer::CreateRenderPipeline(const VGPURenderPipelineDesc* 
         multisampleState.sampleShadingEnable = VK_FALSE;
         multisampleState.minSampleShading = 1.0f;
     }
-    const VkSampleMask sampleMask = UINT_MAX;
+    const VkSampleMask sampleMask = UINT32_MAX;
     multisampleState.pSampleMask = &sampleMask;
 
     // DepthStencilState
@@ -3814,8 +3814,8 @@ void VulkanCommandBuffer::BeginQuery(VGPUQueryHeap heap, uint32_t index)
         case VGPUQueryType_BinaryOcclusion:
             vkCmdBeginQuery(commandBuffer, vulkanHeap->handle, index, 0);
             break;
+        default:
         case VGPUQueryType_Timestamp:
-            break;
         case VGPUQueryType_PipelineStatistics:
             break;
     }
@@ -3840,6 +3840,8 @@ void VulkanCommandBuffer::EndQuery(VGPUQueryHeap heap, uint32_t index)
         case VGPUQueryType_Occlusion:
         case VGPUQueryType_BinaryOcclusion:
             vkCmdEndQuery(commandBuffer, vulkanHeap->handle, index);
+            break;
+        default:
             break;
     }
 }
@@ -4841,7 +4843,8 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
             if (renderer->queueFamilyIndices.queueOffsets[familyIndex] == 0)
                 continue;
 
-            VkDeviceQueueCreateInfo queueInfo = { VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO };
+            VkDeviceQueueCreateInfo queueInfo = {};
+            queueInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
             queueInfo.queueFamilyIndex = familyIndex;
             queueInfo.queueCount = renderer->queueFamilyIndices.queueOffsets[familyIndex];
             queueInfo.pQueuePriorities = renderer->queueFamilyIndices.queuePriorities[familyIndex].data();
