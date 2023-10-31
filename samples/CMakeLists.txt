@@ -14,10 +14,6 @@ function(add_sample sample_name)
     endif ()
     target_link_libraries(${sample_name} vgpu)
 
-    #if (WIN32)
-    #    set_target_properties(${sample_name} PROPERTIES WIN32_EXECUTABLE TRUE)
-    #endif ()
-
     if (PLATFORM_UWP)
 	    set_target_properties(${sample_name} PROPERTIES VS_WINDOWS_TARGET_PLATFORM_MIN_VERSION "${UWP_MIN_VERSION}")
     endif ()

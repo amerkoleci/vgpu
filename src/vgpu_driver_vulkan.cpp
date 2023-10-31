@@ -5,15 +5,13 @@
 
 #include "vgpu_driver.h"
 
-#ifdef _WIN32
-#define NOMINMAX
-#define WIN32_LEAN_AND_MEAN
-#endif
-
 VGPU_DISABLE_WARNINGS()
 #include "volk.h"
+#define VMA_STATS_STRING_ENABLED 0
+#define VMA_STATIC_VULKAN_FUNCTIONS 0
+#define VMA_DYNAMIC_VULKAN_FUNCTIONS 1
 #define VMA_IMPLEMENTATION
-#include "vk_mem_alloc.h"
+#include "third_party/vk_mem_alloc.h"
 VGPU_ENABLE_WARNINGS()
 
 #if defined(VK_USE_PLATFORM_XLIB_KHR) || defined(VK_USE_PLATFORM_XCB_KHR)

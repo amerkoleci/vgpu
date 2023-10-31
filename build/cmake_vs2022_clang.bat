@@ -1,5 +1,5 @@
 @echo off
-cmake -B "vs2022_clang" -S "./../" -G "Visual Studio 17 2022" -A x64 -T ClangCL -DCMAKE_INSTALL_PREFIX:String="SDK" %*
+cmake -S "./../"-B "vs2022_clang" -G "Visual Studio 17 2022" -A x64 -T ClangCL -DCMAKE_INSTALL_PREFIX:String="SDK" %*
 echo:
 echo !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 echo Make sure to install:

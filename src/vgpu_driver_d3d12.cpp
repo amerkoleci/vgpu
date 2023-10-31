@@ -4,7 +4,9 @@
 #if defined(VGPU_D3D12_DRIVER)
 
 // Use the C++ standard templated min/max
+#ifndef NOMINMAX
 #define NOMINMAX
+#endif
 
 // DirectX apps don't need GDI
 #define NODRAWTEXT
@@ -20,7 +22,9 @@
 // WinHelp is deprecated
 #define NOHELP
 
+#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
+#endif
 #include <Windows.h>
 
 #include <dxgi1_6.h>
@@ -34,7 +38,7 @@
 #include "vgpu_driver_d3d.h"
 
 #define D3D12MA_D3D12_HEADERS_ALREADY_INCLUDED
-#include "D3D12MemAlloc.h"
+#include "third_party/D3D12MemAlloc.h"
 
 #if defined(_DEBUG) && WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
 #   include <dxgidebug.h>
