@@ -549,13 +549,13 @@ static VGPURenderPipelineDesc _vgpuRenderPipelineDescDef(const VGPURenderPipelin
     // BlendState
     for (uint32_t i = 0; i < VGPU_MAX_COLOR_ATTACHMENTS; ++i)
     {
-        def.blendState.renderTargets[i].srcColorBlendFactor = _VGPU_DEF(def.blendState.renderTargets[0].srcColorBlendFactor, VGPUBlendFactor_One);
-        def.blendState.renderTargets[i].dstColorBlendFactor = _VGPU_DEF(def.blendState.renderTargets[0].dstColorBlendFactor, VGPUBlendFactor_Zero);
-        def.blendState.renderTargets[i].colorBlendOperation = _VGPU_DEF(def.blendState.renderTargets[0].colorBlendOperation, VGPUBlendOperation_Add);
-        def.blendState.renderTargets[i].srcAlphaBlendFactor = _VGPU_DEF(def.blendState.renderTargets[0].srcAlphaBlendFactor, VGPUBlendFactor_One);
-        def.blendState.renderTargets[i].dstAlphaBlendFactor = _VGPU_DEF(def.blendState.renderTargets[0].dstAlphaBlendFactor, VGPUBlendFactor_Zero);
-        def.blendState.renderTargets[i].alphaBlendOperation = _VGPU_DEF(def.blendState.renderTargets[0].alphaBlendOperation, VGPUBlendOperation_Add);
-        def.blendState.renderTargets[i].colorWriteMask = _VGPU_DEF(def.blendState.renderTargets[0].colorWriteMask, VGPUColorWriteMask_All);
+        def.blendState.renderTargets[i].srcColorBlendFactor = _VGPU_DEF(def.blendState.renderTargets[i].srcColorBlendFactor, VGPUBlendFactor_One);
+        def.blendState.renderTargets[i].dstColorBlendFactor = _VGPU_DEF(def.blendState.renderTargets[i].dstColorBlendFactor, VGPUBlendFactor_Zero);
+        def.blendState.renderTargets[i].colorBlendOperation = _VGPU_DEF(def.blendState.renderTargets[i].colorBlendOperation, VGPUBlendOperation_Add);
+        def.blendState.renderTargets[i].srcAlphaBlendFactor = _VGPU_DEF(def.blendState.renderTargets[i].srcAlphaBlendFactor, VGPUBlendFactor_One);
+        def.blendState.renderTargets[i].dstAlphaBlendFactor = _VGPU_DEF(def.blendState.renderTargets[i].dstAlphaBlendFactor, VGPUBlendFactor_Zero);
+        def.blendState.renderTargets[i].alphaBlendOperation = _VGPU_DEF(def.blendState.renderTargets[i].alphaBlendOperation, VGPUBlendOperation_Add);
+        def.blendState.renderTargets[i].colorWriteMask = _VGPU_DEF(def.blendState.renderTargets[i].colorWriteMask, VGPUColorWriteMask_All);
     }
 
     // DepthStencilState
@@ -693,14 +693,14 @@ static VGPUSwapChainDesc _vgpuSwapChainDescDef(const VGPUSwapChainDesc* desc)
     return def;
 }
 
-VGPUSwapChain vgpuCreateSwapChain(VGPUDevice device, void* window, const VGPUSwapChainDesc* desc)
+VGPUSwapChain vgpuCreateSwapChain(VGPUDevice device, const VGPUSwapChainDesc* desc)
 {
     VGPU_ASSERT(device);
-    NULL_RETURN_NULL(window);
     NULL_RETURN_NULL(desc);
+    NULL_RETURN_NULL(desc->windowHandle);
 
     VGPUSwapChainDesc def = _vgpuSwapChainDescDef(desc);
-    return device->CreateSwapChain(window, &def);
+    return device->CreateSwapChain(&def);
 }
 
 VGPUTextureFormat vgpuSwapChainGetFormat(VGPUSwapChain swapChain)

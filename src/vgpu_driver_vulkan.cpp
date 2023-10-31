@@ -1134,7 +1134,7 @@ public:
 
     VGPUQueryHeap CreateQueryHeap(const VGPUQueryHeapDesc* desc) override;
 
-    VGPUSwapChain CreateSwapChain(void* windowHandle, const VGPUSwapChainDesc* desc) override;
+    VGPUSwapChain CreateSwapChain(const VGPUSwapChainDesc* desc) override;
 
     VGPUCommandBuffer BeginCommandBuffer(VGPUCommandQueue queueType, const char* label) override;
     uint64_t Submit(VGPUCommandBuffer* commandBuffers, uint32_t count) override;
@@ -1147,7 +1147,7 @@ public:
     void* GetNativeObject(VGPUNativeObjectType objectType) const override;
 
 public:
-#if defined(VK_USE_PLATFORM_XCB_KHR)
+#if defined(VK_USE_PLATFORM_XLIB_KHR) || defined(VK_USE_PLATFORM_XCB_KHR)
     struct {
         void* handle;
         decltype(&::XGetXCBConnection) GetXCBConnection;
@@ -1485,7 +1485,7 @@ void* VulkanRenderer::GetNativeObject(VGPUNativeObjectType objectType) const
     }
 }
 
-static VkSurfaceKHR vulkan_createSurface(VulkanRenderer* renderer, void* windowHandle)
+static VkSurfaceKHR vulkan_createSurface(VulkanRenderer* renderer, const VGPUSwapChainDesc* desc)
 {
     VkResult result = VK_SUCCESS;
     VkSurfaceKHR vk_surface = VK_NULL_HANDLE;
@@ -1495,36 +1495,36 @@ static VkSurfaceKHR vulkan_createSurface(VulkanRenderer* renderer, void* windowH
 #if defined(VK_USE_PLATFORM_ANDROID_KHR)
     VkAndroidSurfaceCreateInfoKHR createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR;
-    createInfo.window = surface->window;
+    createInfo.window = (ANativeWindow*)desc->windowHandle;
     result = vkCreateAndroidSurfaceKHR(instance, &createInfo, NULL, &vk_surface);
 #elif defined(VK_USE_PLATFORM_WIN32_KHR)
     VkWin32SurfaceCreateInfoKHR createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
     createInfo.hinstance = GetModuleHandle(nullptr);
-    createInfo.hwnd = (HWND)windowHandle;
+    createInfo.hwnd = (HWND)desc->windowHandle;
     result = vkCreateWin32SurfaceKHR(instance, &createInfo, nullptr, &vk_surface);
 #elif defined(VK_USE_PLATFORM_METAL_EXT)
     VkMetalSurfaceCreateInfoEXT createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_METAL_SURFACE_CREATE_INFO_EXT;
-    createInfo.pLayer = (const CAMetalLayer*)windowHandle;
+    createInfo.pLayer = (const CAMetalLayer*)desc->windowHandle;
     result = vkCreateMetalSurfaceEXT(instance, &createInfo, nullptr, &vk_surface);
 #elif defined(VK_USE_PLATFORM_XCB_KHR)
-    VkXcbSurfaceCreateInfoKHR createInfo = {};
+    VkXcbSurfaceCreateInfoKHR createInfo = fXlib};
     createInfo.sType = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR;
-    //createInfo.connection = renderer->GetXCBConnection(static_cast<Display*>(surface->display));
-    createInfo.window = (xcb_window_t)windowHandle;
+    createInfo.connection = renderer->GetXCBConnection(static_cast<Display*>(desc->displayHandle));
+    createInfo.window = (uint32_t)desc->windowHandle;
     result = vkCreateXcbSurfaceKHR(instance, &createInfo, nullptr, &vk_surface);
 #elif defined(VK_USE_PLATFORM_XLIB_KHR)
     VkXlibSurfaceCreateInfoKHR createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR;
-    //createInfo.dpy = (Display*)surface->display;
-    createInfo.window = (Window)windowHandle;
+    createInfo.dpy = static_cast<Display*>(desc->displayHandle);
+    createInfo.window = (uint32_t)desc->windowHandle;
     result = vkCreateXlibSurfaceKHR(instance, &createInfo, nullptr, &vk_surface);
 #elif defined(VK_USE_PLATFORM_WAYLAND_KHR)
     VkWaylandSurfaceCreateInfoKHR createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR;
-    createInfo.display = display;
-    createInfo.surface = (wl_surface*)windowHandle;
+    createInfo.display = static_cast<struct wl_display*>(desc->displayHandle);
+    createInfo.surface = static_cast<struct wl_surface*>(desc->windowHandle);
     result = vkCreateWaylandSurfaceKHR(instance, &createInfo, nullptr, &vk_surface);
 #elif defined(VK_USE_PLATFORM_DISPLAY_KHR)
 #elif defined(VK_USE_PLATFORM_HEADLESS_EXT)
@@ -1851,7 +1851,7 @@ VulkanRenderer::~VulkanRenderer()
         instance = VK_NULL_HANDLE;
     }
 
-#if defined(VK_USE_PLATFORM_XCB_KHR)
+#if defined(VK_USE_PLATFORM_XLIB_KHR) || defined(VK_USE_PLATFORM_XCB_KHR)
     if (x11xcb.handle)
     {
         dlclose(x11xcb.handle);
@@ -3300,9 +3300,9 @@ static void vulkan_updateSwapChain(VulkanRenderer* renderer, VulkanSwapChain* sw
     swapChain->extent = createInfo.imageExtent;
 }
 
-VGPUSwapChain VulkanRenderer::CreateSwapChain(void* windowHandle, const VGPUSwapChainDesc* desc)
+VGPUSwapChain VulkanRenderer::CreateSwapChain(const VGPUSwapChainDesc* desc)
 {
-    VkSurfaceKHR vk_surface = vulkan_createSurface(this, windowHandle);
+    VkSurfaceKHR vk_surface = vulkan_createSurface(this, desc);
     if (vk_surface == VK_NULL_HANDLE)
     {
         return nullptr;
@@ -4172,7 +4172,7 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
 {
     VulkanRenderer* renderer = new VulkanRenderer();
 
-#if defined(VK_USE_PLATFORM_XCB_KHR)
+#if defined(VK_USE_PLATFORM_XLIB_KHR) || defined(VK_USE_PLATFORM_XCB_KHR)
 #if defined(__CYGWIN__)
     renderer->x11xcb.handle = dlopen("libX11-xcb-1.so", RTLD_LAZY | RTLD_LOCAL);
 #elif defined(__OpenBSD__) || defined(__NetBSD__)

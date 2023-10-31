@@ -8,6 +8,7 @@
 #include <stdbool.h>
 #include <string.h> 
 #include <atomic>
+#include <functional>
 
 #ifndef VGPU_ASSERT
 #   include <assert.h>
@@ -253,7 +254,7 @@ struct VGPUDeviceImpl : public VGPUObject
 
     virtual VGPUQueryHeap CreateQueryHeap(const VGPUQueryHeapDesc* desc) = 0;
 
-    virtual VGPUSwapChain CreateSwapChain(void* windowHandle, const VGPUSwapChainDesc* desc) = 0;
+    virtual VGPUSwapChain CreateSwapChain(const VGPUSwapChainDesc* desc) = 0;
 
     virtual VGPUCommandBuffer BeginCommandBuffer(VGPUCommandQueue queueType, const char* label) = 0;
     virtual uint64_t Submit(VGPUCommandBuffer* commandBuffers, uint32_t count) = 0;

@@ -123,19 +123,18 @@ void init_vgpu(GLFWwindow* window)
     int height = 0;
     glfwGetWindowSize(window, &width, &height);
 
-    void* windowHandle = nullptr;
-#if defined(GLFW_EXPOSE_NATIVE_WIN32)
-    windowHandle = glfwGetWin32Window(window);
-#elif defined(GLFW_EXPOSE_NATIVE_X11)
-    windowHandle = (void*)(uintptr_t)glfwGetX11Window(window);
-#endif
-
     VGPUSwapChainDesc swapChainDesc{};
+#if defined(GLFW_EXPOSE_NATIVE_WIN32)
+    swapChainDesc.windowHandle = (uintptr_t)glfwGetWin32Window(window);
+#elif defined(GLFW_EXPOSE_NATIVE_X11)
+    swapChainDesc.displayHandle = (void*)(uintptr_t)glfwGetX11Display();
+    swapChainDesc.windowHandle = (uintptr_t)glfwGetX11Window(window);
+#endif
     swapChainDesc.width = width;
     swapChainDesc.height = height;
     swapChainDesc.format = VGPUTextureFormat_BGRA8UnormSrgb;
     swapChainDesc.presentMode = VGPUPresentMode_Fifo;
-    swapChain = vgpuCreateSwapChain(device, windowHandle, &swapChainDesc);
+    swapChain = vgpuCreateSwapChain(device, &swapChainDesc);
 
     VGPUTextureDesc textureDesc = {};
     textureDesc.dimension = VGPUTextureDimension_2D;

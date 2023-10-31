@@ -875,6 +875,8 @@ typedef struct VGPUQueryHeapDesc {
 
 typedef struct VGPUSwapChainDesc {
     const char* label;
+    void* displayHandle;
+    uintptr_t windowHandle;
     uint32_t width;
     uint32_t height;
     VGPUTextureFormat format;
@@ -1012,7 +1014,7 @@ VGPU_API uint32_t vgpuQueryHeapAddRef(VGPUQueryHeap queryHeap);
 VGPU_API uint32_t vgpuQueryHeapRelease(VGPUQueryHeap queryHeap);
 
 /* SwapChain */
-VGPU_API VGPUSwapChain vgpuCreateSwapChain(VGPUDevice device, void* window, const VGPUSwapChainDesc* desc);
+VGPU_API VGPUSwapChain vgpuCreateSwapChain(VGPUDevice device, const VGPUSwapChainDesc* desc);
 VGPU_API VGPUTextureFormat vgpuSwapChainGetFormat(VGPUSwapChain swapChain);
 VGPU_API void vgpuSwapChainGetSize(VGPUSwapChain swapChain, uint32_t* width, uint32_t* height);
 VGPU_API uint32_t vgpuSwapChainAddRef(VGPUSwapChain swapChain);

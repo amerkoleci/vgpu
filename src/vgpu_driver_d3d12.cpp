@@ -1184,7 +1184,7 @@ public:
 
     VGPUQueryHeap CreateQueryHeap(const VGPUQueryHeapDesc* desc) override;
 
-    VGPUSwapChain CreateSwapChain(void* windowHandle, const VGPUSwapChainDesc* desc) override;
+    VGPUSwapChain CreateSwapChain(const VGPUSwapChainDesc* desc) override;
     void UpdateSwapChain(D3D12SwapChain* swapChain);
 
     VGPUCommandBuffer BeginCommandBuffer(VGPUCommandQueue queueType, const char* label) override;
@@ -2755,7 +2755,7 @@ void D3D12SwapChain::SetLabel(const char* label)
     VGPU_UNUSED(label);
 }
 
-VGPUSwapChain D3D12Device::CreateSwapChain(void* windowHandle, const VGPUSwapChainDesc* desc)
+VGPUSwapChain D3D12Device::CreateSwapChain(const VGPUSwapChainDesc* desc)
 {
     DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
     swapChainDesc.Width = desc->width;
@@ -2774,7 +2774,7 @@ VGPUSwapChain D3D12Device::CreateSwapChain(void* windowHandle, const VGPUSwapCha
     IDXGISwapChain1* tempSwapChain = nullptr;
 
 #if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
-    HWND window = static_cast<HWND>(windowHandle);
+    HWND window = (HWND)desc->windowHandle;
     VGPU_ASSERT(IsWindow(window));
 
     DXGI_SWAP_CHAIN_FULLSCREEN_DESC fsSwapChainDesc = {};
