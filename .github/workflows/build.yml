@@ -35,10 +35,10 @@ jobs:
 
     - name: Package Windows
       run: |
-        mkdir bin/win-x64
-        mkdir bin/win-arm64
-        mv win-x64-sdk\bin\*.dll bin/win-x64
-        mv win-arm64-sdk\bin\*.dll bin/win-arm64
+        mkdir bin/win-x64/native
+        mkdir bin/win-arm64/native
+        mv win-x64-sdk\bin\*.dll bin/win-x64/native
+        mv win-arm64-sdk\bin\*.dll bin/win-arm64/native
     - uses: actions/upload-artifact@v3
       with:
         name: libs_windows
@@ -55,7 +55,7 @@ jobs:
     - name: Install dependencies
       run: |
           sudo apt update
-          sudo apt-get install libsdl2-dev
+          sudo apt install libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev
 
     - name: Configure linux-x64
       run: cmake -S . -B build_linux_64 -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="linux-x64-sdk"
@@ -65,7 +65,7 @@ jobs:
     - name: package_linux
       run: |
         mkdir -p bin/linux-x64/native
-        mv win-linux-x64-sdk/*.so bin/linux-x64/native
+        mv linux-x64-sdk/*.so bin/linux-x64/native
     - uses: actions/upload-artifact@v3
       with:
         name: libs_linux
@@ -86,8 +86,8 @@ jobs:
 
     - name: Package macos
       run: |
-        mkdir -p bin/osx-universal
-        mv osx-universal-sdk/lib/*.dylib bin/osx-universal
+        mkdir -p bin/osx-universal/native
+        mv osx-universal-sdk/lib/*.dylib bin/osx-universal/native
     - uses: actions/upload-artifact@v3
       with:
         name: libs_osx
