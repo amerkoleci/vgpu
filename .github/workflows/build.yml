@@ -60,12 +60,12 @@ jobs:
     - name: Configure linux-x64
       run: cmake -S . -B build_linux_64 -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="linux-x64-sdk"
     - name: Build linux-x64
-      run: cmake --build build_linux_64 --config Release --verbose --parallel
+      run: cmake --build build_linux_64 --target install --config Release --verbose --parallel
 
     - name: package_linux
       run: |
         mkdir -p bin/linux-x64/native
-        mv linux-x64-sdk/*.so bin/linux-x64/native
+        mv linux-x64-sdk/lib/*.so bin/linux-x64/native
     - uses: actions/upload-artifact@v3
       with:
         name: libs_linux
