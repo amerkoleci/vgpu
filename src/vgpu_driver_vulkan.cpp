@@ -19,12 +19,8 @@ VGPU_ENABLE_WARNINGS()
 #include <dlfcn.h>
 #include <xcb/xcb.h>
 #include <X11/Xlib.h>
-#include <X11/Xfuncproto.h>
 
-_XFUNCPROTOBEGIN
-
-xcb_connection_t* XGetXCBConnection(Display* dpy);
-_XFUNCPROTOEND
+typedef xcb_connection_t*(*PFN_XGetXCBConnection)(Display* dpy);
 #endif
 
 #include <mutex>
@@ -1155,7 +1151,7 @@ public:
 #if defined(VK_USE_PLATFORM_XLIB_KHR) || defined(VK_USE_PLATFORM_XCB_KHR)
     struct {
         void* handle;
-        decltype(&::XGetXCBConnection) GetXCBConnection;
+        PFN_XGetXCBConnection GetXCBConnection;
     } x11xcb;
 #endif
 
@@ -4196,7 +4192,7 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
 
     if (renderer->x11xcb.handle)
     {
-        renderer->x11xcb.GetXCBConnection = (XGetXCBConnection)dlsym(renderer->x11xcb.handle, "XGetXCBConnection");
+        renderer->x11xcb.GetXCBConnection = (PFN_XGetXCBConnection)dlsym(renderer->x11xcb.handle, "XGetXCBConnection");
     }
 #endif
 
