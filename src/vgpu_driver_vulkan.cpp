@@ -17,13 +17,14 @@ VGPU_ENABLE_WARNINGS()
 
 #if defined(VK_USE_PLATFORM_XLIB_KHR) || defined(VK_USE_PLATFORM_XCB_KHR)
 #include <dlfcn.h>
+#include <xcb/xcb.h>
 #include <X11/Xlib.h>
-#include <X11/Xlib-xcb.h>
+#include <X11/Xfuncproto.h>
 
-#undef Success
-#undef None
-#undef Always
-#undef Bool
+_XFUNCPROTOBEGIN
+
+xcb_connection_t* XGetXCBConnection(Display* dpy);
+_XFUNCPROTOEND
 #endif
 
 #include <mutex>
