@@ -2787,7 +2787,7 @@ VGPUSampler VulkanRenderer::CreateSampler(const VGPUSamplerDesc* desc)
     createInfo.addressModeW = ToVkSamplerAddressMode(desc->addressW);
     createInfo.mipLodBias = desc->mipLodBias;
     // https://www.khronos.org/registry/vulkan/specs/1.2-extensions/man/html/VkSamplerCreateInfo.html
-    if (desc->maxAnisotropy > 1)
+    if (features2.features.samplerAnisotropy == VK_TRUE && desc->maxAnisotropy > 1)
     {
         createInfo.anisotropyEnable = VK_TRUE;
         createInfo.maxAnisotropy = _VGPU_MIN(float(desc->maxAnisotropy), properties2.properties.limits.maxSamplerAnisotropy);
@@ -5001,7 +5001,6 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
         VGPU_VERIFY(renderer->features2.features.fullDrawIndexUint32 == VK_TRUE);
         VGPU_VERIFY(renderer->features2.features.sampleRateShading == VK_TRUE);
         VGPU_VERIFY(renderer->features2.features.shaderClipDistance == VK_TRUE);
-        VGPU_VERIFY(renderer->features2.features.samplerAnisotropy == VK_TRUE);
 
         VGPU_ASSERT(renderer->features1_3.dynamicRendering == VK_TRUE);
 
