@@ -189,14 +189,12 @@ namespace
     {
         bool swapchain;
         bool depth_clip_enable;
-        bool driver_properties;
         bool memory_budget;
         bool AMD_device_coherent_memory;
         bool memory_priority;
         bool performance_query;
         bool host_query_reset;
         bool deferred_host_operations;
-        bool renderPass2;
         bool accelerationStructure;
         bool raytracingPipeline;
         bool rayQuery;
@@ -232,9 +230,6 @@ namespace
             else if (strcmp(vk_extensions[i].extensionName, VK_EXT_DEPTH_CLIP_ENABLE_EXTENSION_NAME) == 0) {
                 extensions.depth_clip_enable = true;
             }
-            else if (strcmp(vk_extensions[i].extensionName, VK_KHR_DRIVER_PROPERTIES_EXTENSION_NAME) == 0) {
-                extensions.driver_properties = true;
-            }
             else if (strcmp(vk_extensions[i].extensionName, VK_EXT_MEMORY_BUDGET_EXTENSION_NAME) == 0) {
                 extensions.memory_budget = true;
             }
@@ -252,9 +247,6 @@ namespace
             }
             else if (strcmp(vk_extensions[i].extensionName, VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME) == 0) {
                 extensions.deferred_host_operations = true;
-            }
-            else if (strcmp(vk_extensions[i].extensionName, VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME) == 0) {
-                extensions.renderPass2 = true;
             }
             else if (strcmp(vk_extensions[i].extensionName, VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME) == 0) {
                 extensions.accelerationStructure = true;
@@ -310,13 +302,6 @@ namespace
 
         VkPhysicalDeviceProperties gpuProps;
         vkGetPhysicalDeviceProperties(physicalDevice, &gpuProps);
-
-        // Core 1.2
-        if (gpuProps.apiVersion >= VK_API_VERSION_1_2)
-        {
-            extensions.driver_properties = true;
-            extensions.renderPass2 = true;
-        }
 
         // Core 1.3
         if (gpuProps.apiVersion >= VK_API_VERSION_1_3)
@@ -731,8 +716,8 @@ namespace
             case VGPUQueryType_Timestamp:
                 return VK_QUERY_TYPE_TIMESTAMP;
 
-                //case VGPUQueryType_PipelineStatistics:
-                //    return VK_QUERY_TYPE_PIPELINE_STATISTICS;
+            case VGPUQueryType_PipelineStatistics:
+                return VK_QUERY_TYPE_PIPELINE_STATISTICS;
 
             default:
                 VGPU_UNREACHABLE();
@@ -1205,12 +1190,10 @@ public:
     VkPhysicalDeviceExtendedDynamicState2FeaturesEXT extendedDynamicState2Features = {};
 
     // Properties
-    VkPhysicalDeviceDriverProperties driverProperties;
     VkPhysicalDeviceProperties2 properties2 = {};
     VkPhysicalDeviceVulkan11Properties properties_1_1 = {};
     VkPhysicalDeviceVulkan12Properties properties_1_2 = {};
     VkPhysicalDeviceVulkan13Properties properties_1_3 = {};
-    VkPhysicalDeviceSamplerFilterMinmaxProperties sampler_minmax_properties = {};
 
     VkPhysicalDeviceAccelerationStructurePropertiesKHR accelerationStructureProperties = {};
     VkPhysicalDeviceRayTracingPipelinePropertiesKHR rayTracingPipelineProperties = {};
@@ -1931,25 +1914,25 @@ void VulkanRenderer::GetAdapterProperties(VGPUAdapterProperties* properties) con
 {
     properties->vendorId = properties2.properties.vendorID;
     properties->deviceId = properties2.properties.deviceID;
-    properties->name = properties2.properties.deviceName;
+    strncpy(properties->name, properties2.properties.deviceName, _VGPU_MIN(VGPU_ADAPTER_NAME_MAX_LENGTH, VK_MAX_PHYSICAL_DEVICE_NAME_SIZE));
     properties->driverDescription = driverDescription.c_str();
 
     switch (properties2.properties.deviceType)
     {
         case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU:
-            properties->adapterType = VGPUAdapterType_IntegratedGPU;
+            properties->type = VGPUAdapterType_IntegratedGPU;
             break;
         case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:
-            properties->adapterType = VGPUAdapterType_DiscreteGPU;
+            properties->type = VGPUAdapterType_DiscreteGPU;
             break;
         case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU:
-            properties->adapterType = VGPUAdapterType_VirtualGPU;
+            properties->type = VGPUAdapterType_Unknown;
             break;
         case VK_PHYSICAL_DEVICE_TYPE_CPU:
-            properties->adapterType = VGPUAdapterType_CPU;
+            properties->type = VGPUAdapterType_CPU;
             break;
         default:
-            properties->adapterType = VGPUAdapterType_Other;
+            properties->type = VGPUAdapterType_Unknown;
             break;
     }
 }
@@ -3324,54 +3307,49 @@ void VulkanQueryHeap::SetLabel(const char* label)
 
 VGPUQueryHeap VulkanRenderer::CreateQueryHeap(const VGPUQueryHeapDesc* desc)
 {
-    VulkanQueryHeap* heap = new VulkanQueryHeap();
-    heap->renderer = this;
-    heap->type = desc->type;
-    heap->count = desc->count;
-
     VkQueryPoolCreateInfo createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
     createInfo.queryType = ToVk(desc->type);
     createInfo.queryCount = desc->count;
 
-#if TODO
     if (desc->type == VGPUQueryType_PipelineStatistics)
     {
-        if (desc->pipelineStatistics & VGPUQueryPipelineStatistic_InputAssemblyVertices)
-            createInfo.pipelineStatistics |= VK_QUERY_PIPELINE_STATISTIC_INPUT_ASSEMBLY_VERTICES_BIT;
+        createInfo.pipelineStatistics =
+            VK_QUERY_PIPELINE_STATISTIC_INPUT_ASSEMBLY_VERTICES_BIT |
+            VK_QUERY_PIPELINE_STATISTIC_INPUT_ASSEMBLY_PRIMITIVES_BIT |
+            VK_QUERY_PIPELINE_STATISTIC_VERTEX_SHADER_INVOCATIONS_BIT |
+            VK_QUERY_PIPELINE_STATISTIC_CLIPPING_INVOCATIONS_BIT |
+            VK_QUERY_PIPELINE_STATISTIC_CLIPPING_PRIMITIVES_BIT |
+            VK_QUERY_PIPELINE_STATISTIC_FRAGMENT_SHADER_INVOCATIONS_BIT |
+            VK_QUERY_PIPELINE_STATISTIC_COMPUTE_SHADER_INVOCATIONS_BIT
+            ;
 
-        if (desc->pipelineStatistics & VGPUQueryPipelineStatistic_InputAssemblyPrimitives)
-            createInfo.pipelineStatistics |= VK_QUERY_PIPELINE_STATISTIC_INPUT_ASSEMBLY_PRIMITIVES_BIT;
+        //if (StageMask & VK_PIPELINE_STAGE_GEOMETRY_SHADER_BIT)
+        //{
+        //    createInfo.pipelineStatistics |=
+        //        VK_QUERY_PIPELINE_STATISTIC_GEOMETRY_SHADER_INVOCATIONS_BIT |
+        //        VK_QUERY_PIPELINE_STATISTIC_GEOMETRY_SHADER_PRIMITIVES_BIT;
+        //}
 
-        if (desc->pipelineStatistics & VGPUQueryPipelineStatistic_VertexShaderInvocations)
-            createInfo.pipelineStatistics |= VK_QUERY_PIPELINE_STATISTIC_VERTEX_SHADER_INVOCATIONS_BIT;
+        //if (StageMask & VK_PIPELINE_STAGE_TESSELLATION_CONTROL_SHADER_BIT)
+        //    createInfo.pipelineStatistics |= VK_QUERY_PIPELINE_STATISTIC_TESSELLATION_CONTROL_SHADER_PATCHES_BIT;
 
-        if (desc->pipelineStatistics & VGPUQueryPipelineStatistic_ClipperInvocations)
-            createInfo.pipelineStatistics |= VK_QUERY_PIPELINE_STATISTIC_CLIPPING_INVOCATIONS_BIT;
-
-        if (desc->pipelineStatistics & VGPUQueryPipelineStatistic_ClipperPrimitives)
-            createInfo.pipelineStatistics |= VK_QUERY_PIPELINE_STATISTIC_CLIPPING_PRIMITIVES_BIT;
-
-        if (desc->pipelineStatistics & VGPUQueryPipelineStatistic_FragmentShaderInvocations)
-            createInfo.pipelineStatistics |= VK_QUERY_PIPELINE_STATISTIC_FRAGMENT_SHADER_INVOCATIONS_BIT;
-
-        if (desc->pipelineStatistics & VGPUQueryPipelineStatistic_HullShaderInvocations)
-            createInfo.pipelineStatistics |= VK_QUERY_PIPELINE_STATISTIC_TESSELLATION_CONTROL_SHADER_PATCHES_BIT;
-
-        if (desc->pipelineStatistics & VGPUQueryPipelineStatistic_DomainShaderInvocations)
-            createInfo.pipelineStatistics |= VK_QUERY_PIPELINE_STATISTIC_TESSELLATION_EVALUATION_SHADER_INVOCATIONS_BIT;
-
-        if (desc->pipelineStatistics & VGPUQueryPipelineStatistic_ComputeShaderInvocations)
-            createInfo.pipelineStatistics |= VK_QUERY_PIPELINE_STATISTIC_COMPUTE_SHADER_INVOCATIONS_BIT;
+        //if (StageMask & VK_PIPELINE_STAGE_TESSELLATION_EVALUATION_SHADER_BIT)
+        //    createInfo.pipelineStatistics |= VK_QUERY_PIPELINE_STATISTIC_TESSELLATION_EVALUATION_SHADER_INVOCATIONS_BIT;
     }
-#endif // TODO
 
-
-    VkResult result = vkCreateQueryPool(device, &createInfo, nullptr, &heap->handle);
+    VkQueryPool handle = VK_NULL_HANDLE;
+    VkResult result = vkCreateQueryPool(device, &createInfo, nullptr, &handle);
     if (result != VK_SUCCESS)
     {
         return nullptr;
     }
+
+    VulkanQueryHeap* heap = new VulkanQueryHeap();
+    heap->renderer = this;
+    heap->type = desc->type;
+    heap->count = desc->count;
+    heap->handle = handle;
 
     if (desc->label)
     {
@@ -3853,7 +3831,7 @@ void VulkanCommandBuffer::BeginRenderPass(const VGPURenderPassDesc* desc)
         hasRenderPassLabel = true;
     }
 
-    if (renderer->features1_3.dynamicRendering == VK_TRUE)
+    if (renderer->dynamicRendering)
     {
         VkRenderingInfo renderingInfo = {};
         renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
@@ -3996,7 +3974,7 @@ void VulkanCommandBuffer::BeginRenderPass(const VGPURenderPassDesc* desc)
 
 void VulkanCommandBuffer::EndRenderPass()
 {
-    if (renderer->features1_3.dynamicRendering == VK_TRUE)
+    if (renderer->dynamicRendering)
     {
         vkCmdEndRendering(commandBuffer);
     }
@@ -4447,7 +4425,7 @@ static VGPUBool32 vulkan_isSupported(void)
     }
 
     const uint32_t apiVersion = volkGetInstanceVersion();
-    if (apiVersion < VK_API_VERSION_1_1)
+    if (apiVersion < VK_API_VERSION_1_2)
     {
         return false;
     }
@@ -4698,10 +4676,10 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
         std::vector<const char*> enabledDeviceExtensions;
         for (const VkPhysicalDevice& candidatePhysicalDevice : physicalDevices)
         {
-            // We require minimum 1.1
+            // We require minimum 1.2
             VkPhysicalDeviceProperties gpuProps;
             vkGetPhysicalDeviceProperties(candidatePhysicalDevice, &gpuProps);
-            if (gpuProps.apiVersion < VK_API_VERSION_1_1)
+            if (gpuProps.apiVersion < VK_API_VERSION_1_2)
             {
                 continue;
             }
@@ -4738,24 +4716,19 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
                 renderer->features1_2.pNext = &renderer->features1_3;
                 features_chain = &renderer->features1_3.pNext;
             }
-            else if (gpuProps.apiVersion >= VK_API_VERSION_1_2)
-            {
-                renderer->features1_1.pNext = &renderer->features1_2;
-                features_chain = &renderer->features1_2.pNext;
-            }
             else
             {
-                features_chain = &renderer->features1_1.pNext;
+                // gpuProps.apiVersion >= VK_API_VERSION_1_2
+                renderer->features1_1.pNext = &renderer->features1_2;
+                features_chain = &renderer->features1_2.pNext;
             }
 
             // Properties
             void** propertiesChain = nullptr;
-            renderer->driverProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES;
             renderer->properties2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
             renderer->properties_1_1.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_PROPERTIES;
             renderer->properties_1_2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_PROPERTIES;
             renderer->properties_1_3.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_PROPERTIES;
-            renderer->sampler_minmax_properties = {};
             renderer->accelerationStructureProperties = {};
             renderer->rayTracingPipelineProperties = {};
             renderer->fragmentShadingRateProperties = {};
@@ -4768,19 +4741,12 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
                 renderer->properties_1_2.pNext = &renderer->properties_1_3;
                 propertiesChain = &renderer->properties_1_3.pNext;
             }
-            else if (gpuProps.apiVersion >= VK_API_VERSION_1_2)
+            else
             {
+                // gpuProps.apiVersion >= VK_API_VERSION_1_2
                 renderer->properties_1_1.pNext = &renderer->properties_1_2;
                 propertiesChain = &renderer->properties_1_2.pNext;
             }
-            else
-            {
-                propertiesChain = &renderer->properties_1_1.pNext;
-            }
-
-            renderer->sampler_minmax_properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SAMPLER_FILTER_MINMAX_PROPERTIES;
-            *propertiesChain = &renderer->sampler_minmax_properties;
-            propertiesChain = &renderer->sampler_minmax_properties.pNext;
 
             enabledDeviceExtensions.clear();
             enabledDeviceExtensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
@@ -4800,23 +4766,8 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
                 enabledDeviceExtensions.push_back(VK_EXT_MEMORY_PRIORITY_EXTENSION_NAME);
             }
 
-            // Core in 1.2
-            if (gpuProps.apiVersion < VK_API_VERSION_1_2)
-            {
-                if (physicalDeviceExt.driver_properties)
-                {
-                    enabledDeviceExtensions.push_back(VK_KHR_DRIVER_PROPERTIES_EXTENSION_NAME);
-
-                    *propertiesChain = &renderer->driverProperties;
-                    propertiesChain = &renderer->driverProperties.pNext;
-                }
-
-                if (physicalDeviceExt.renderPass2)
-                {
-                    enabledDeviceExtensions.push_back(VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME);
-                }
-            }
-            else if (gpuProps.apiVersion < VK_API_VERSION_1_3)
+            // Core in 1.3
+            if (gpuProps.apiVersion < VK_API_VERSION_1_3)
             {
                 // Core in 1.3
                 //if (strcmp(deviceExtensions[i].extensionName, VK_KHR_MAINTENANCE_4_EXTENSION_NAME) == 0)
@@ -4910,7 +4861,6 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
 
             if (physicalDeviceExt.fragment_shading_rate)
             {
-                VGPU_ASSERT(physicalDeviceExt.renderPass2 == true);
                 enabledDeviceExtensions.push_back(VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME);
 
                 renderer->fragmentShadingRateFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_FEATURES_KHR;
@@ -5193,19 +5143,10 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
                 renderer->driverDescription += std::string(": ") + renderer->properties_1_2.driverInfo;
             }
         }
-        else if (renderer->supportedExtensions.driver_properties)
-        {
-            renderer->driverDescription = renderer->driverProperties.driverName;
-            if (renderer->driverProperties.driverInfo[0] != '\0')
-            {
-                renderer->driverDescription += std::string(": ") + renderer->driverProperties.driverInfo;
-            }
-        }
         else
         {
             renderer->driverDescription = "Vulkan driver version: " + std::to_string(renderer->properties2.properties.driverVersion);
         }
-
     }
 
     // Create memory allocator

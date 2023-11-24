@@ -754,8 +754,8 @@ namespace
             case VGPUQueryType_Timestamp:
                 return D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
 
-            //case VGPUQueryType_PipelineStatistics:
-            //    return D3D12_QUERY_HEAP_TYPE_PIPELINE_STATISTICS;
+            case VGPUQueryType_PipelineStatistics:
+                return D3D12_QUERY_HEAP_TYPE_PIPELINE_STATISTICS;
 
             default:
                 VGPU_UNREACHABLE();
@@ -775,13 +775,30 @@ namespace
             case VGPUQueryType_Timestamp:
                 return D3D12_QUERY_TYPE_TIMESTAMP;
 
-            //case VGPUQueryType_PipelineStatistics:
-            //    return D3D12_QUERY_TYPE_PIPELINE_STATISTICS;
+            case VGPUQueryType_PipelineStatistics:
+                return D3D12_QUERY_TYPE_PIPELINE_STATISTICS;
 
             default:
                 VGPU_UNREACHABLE();
         }
     }
+
+    constexpr uint32_t GetQueryResultSize(VGPUQueryType type)
+    {
+        switch (type)
+        {
+            case VGPUQueryType_Occlusion:
+            case VGPUQueryType_BinaryOcclusion:
+            case VGPUQueryType_Timestamp:
+                return sizeof(uint64_t);
+
+            case VGPUQueryType_PipelineStatistics:
+                return sizeof(D3D12_QUERY_DATA_PIPELINE_STATISTICS);
+
+            default:
+                VGPU_UNREACHABLE();
+            }
+        }
 }
 
 #if !WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
@@ -982,6 +999,7 @@ struct D3D12QueryHeap final : public VGPUQueryHeapImpl
     uint32_t count;
     ID3D12QueryHeap* handle = nullptr;
     D3D12_QUERY_TYPE d3dQueryType = D3D12_QUERY_TYPE_OCCLUSION;
+    uint32_t queryResultSize = 0;
 
     ~D3D12QueryHeap() override;
     void SetLabel(const char* label) override;
@@ -1220,11 +1238,8 @@ public:
     D3D_FEATURE_LEVEL featureLevel{};
     DWORD callbackCookie{};
 
-    uint32_t vendorID;
-    uint32_t deviceID;
-    std::string adapterName;
+    DXGI_ADAPTER_DESC1 adapterDesc{};
     std::string driverDescription;
-    VGPUAdapterType adapterType;
     uint64_t timestampFrequency = 0;
 
     D3D12MA::Allocator* allocator = nullptr;
@@ -1870,11 +1885,21 @@ VGPUBool32 D3D12Device::QueryFeatureSupport(VGPUFeature feature) const
 
 void D3D12Device::GetAdapterProperties(VGPUAdapterProperties* properties) const
 {
-    properties->vendorId = vendorID;
-    properties->deviceId = deviceID;
-    properties->name = adapterName.c_str();
+    std::string adapterName = WCharToUTF8(adapterDesc.Description);
+
+    properties->vendorId = adapterDesc.VendorId;
+    properties->deviceId = adapterDesc.DeviceId;
+    strncpy(properties->name, adapterName.c_str(), _VGPU_MIN(VGPU_ADAPTER_NAME_MAX_LENGTH, 128));
     properties->driverDescription = driverDescription.c_str();
-    properties->adapterType = adapterType;
+
+    if (adapterDesc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)
+    {
+        properties->type = VGPUAdapterType_CPU;
+    }
+    else
+    {
+        properties->type = (d3dFeatures.UMA() == TRUE) ? VGPUAdapterType_IntegratedGPU : VGPUAdapterType_DiscreteGPU;
+    }
 }
 
 void D3D12Device::GetLimits(VGPULimits* limits) const
@@ -2756,22 +2781,25 @@ void D3D12QueryHeap::SetLabel(const char* label)
 
 VGPUQueryHeap D3D12Device::CreateQueryHeap(const VGPUQueryHeapDesc* desc)
 {
-    D3D12QueryHeap* heap = new D3D12QueryHeap();
-    heap->renderer = this;
-    heap->type = desc->type;
-    heap->count = desc->count;
-    heap->d3dQueryType = ToD3D12QueryType(desc->type);
-
     D3D12_QUERY_HEAP_DESC d3dDesc = {};
     d3dDesc.Type = ToD3D12(desc->type);
     d3dDesc.Count = desc->count;
     d3dDesc.NodeMask = 0;
 
-    HRESULT hr = device->CreateQueryHeap(&d3dDesc, IID_PPV_ARGS(&heap->handle));
+    ID3D12QueryHeap* handle = nullptr;
+    HRESULT hr = device->CreateQueryHeap(&d3dDesc, IID_PPV_ARGS(&handle));
     if (FAILED(hr))
     {
         return nullptr;
     }
+
+    D3D12QueryHeap* heap = new D3D12QueryHeap();
+    heap->renderer = this;
+    heap->type = desc->type;
+    heap->count = desc->count;
+    heap->d3dQueryType = ToD3D12QueryType(desc->type);
+    heap->handle = handle;
+    heap->queryResultSize = GetQueryResultSize(desc->type);
 
     if (desc->label)
     {
@@ -3307,22 +3335,22 @@ void D3D12CommandBuffer::SetStencilReference(uint32_t reference)
 
 void D3D12CommandBuffer::BeginQuery(VGPUQueryHeap heap, uint32_t index)
 {
-    auto d3dHeap = static_cast<D3D12QueryHeap*>(heap);
+    D3D12QueryHeap* d3dHeap = static_cast<D3D12QueryHeap*>(heap);
 
     commandList->BeginQuery(d3dHeap->handle, d3dHeap->d3dQueryType, index);
 }
 
 void D3D12CommandBuffer::EndQuery(VGPUQueryHeap heap, uint32_t index)
 {
-    auto d3dHeap = static_cast<D3D12QueryHeap*>(heap);
+    D3D12QueryHeap* d3dHeap = static_cast<D3D12QueryHeap*>(heap);
 
     commandList->EndQuery(d3dHeap->handle, d3dHeap->d3dQueryType, index);
 }
 
 void D3D12CommandBuffer::ResolveQuery(VGPUQueryHeap heap, uint32_t index, uint32_t count, VGPUBuffer destinationBuffer, uint64_t destinationOffset)
 {
-    auto d3dHeap = static_cast<D3D12QueryHeap*>(heap);
-    auto d3dDestBuffer = static_cast<D3D12Buffer*>(destinationBuffer);
+    D3D12QueryHeap* d3dHeap = static_cast<D3D12QueryHeap*>(heap);
+    D3D12Buffer* d3dDestBuffer = static_cast<D3D12Buffer*>(destinationBuffer);
 
     commandList->ResolveQueryData(
         d3dHeap->handle,
@@ -3877,21 +3905,7 @@ static VGPUDeviceImpl* d3d12_createDevice(const VGPUDeviceDescriptor* info)
         }
 
         // Init adapter info.
-        DXGI_ADAPTER_DESC1 adapterDesc;
-        dxgiAdapter->GetDesc1(&adapterDesc);
-
-        renderer->vendorID = adapterDesc.VendorId;
-        renderer->deviceID = adapterDesc.DeviceId;
-        renderer->adapterName = WCharToUTF8(adapterDesc.Description);
-
-        if (adapterDesc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)
-        {
-            renderer->adapterType = VGPUAdapterType_CPU;
-        }
-        else
-        {
-            renderer->adapterType = (renderer->d3dFeatures.UMA() == TRUE) ? VGPUAdapterType_IntegratedGPU : VGPUAdapterType_DiscreteGPU;
-        }
+        dxgiAdapter->GetDesc1(&renderer->adapterDesc);
 
         // Convert the adapter's D3D12 driver version to a readable string like "24.21.13.9793".
         LARGE_INTEGER umdVersion;
@@ -4068,7 +4082,7 @@ static VGPUDeviceImpl* d3d12_createDevice(const VGPUDeviceDescriptor* info)
 
     // Log some info
     vgpuLogInfo("VGPU Driver: D3D12");
-    vgpuLogInfo("D3D12 Adapter: %s", renderer->adapterName.c_str());
+    vgpuLogInfo("D3D12 Adapter: %ls", renderer->adapterDesc.Description);
 
     return renderer;
 }

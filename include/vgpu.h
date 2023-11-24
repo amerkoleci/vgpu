@@ -42,6 +42,7 @@
 #define VGPU_MAX_COLOR_ATTACHMENTS (8u)
 #define VGPU_MAX_VERTEX_ATTRIBUTES (16u)
 #define VGPU_WHOLE_SIZE (0xffffffffffffffffULL)
+#define VGPU_ADAPTER_NAME_MAX_LENGTH (256u)
 
 typedef uint32_t VGPUBool32;
 typedef uint32_t VGPUFlags;
@@ -110,11 +111,10 @@ typedef enum VGPUCommandQueue {
 } VGPUCommandQueue;
 
 typedef enum VGPUAdapterType {
-    VGPUAdapterType_Other = 0,
+    VGPUAdapterType_DiscreteGPU = 0,
     VGPUAdapterType_IntegratedGPU,
-    VGPUAdapterType_DiscreteGPU,
-    VGPUAdapterType_VirtualGPU,
     VGPUAdapterType_CPU,
+    VGPUAdapterType_Unknown,
 
     _VGPUAdapterType_Count,
     _VGPUAdapterType_Force32 = 0x7FFFFFFF
@@ -577,7 +577,7 @@ typedef enum VGPUQueryType {
     /// Create a heap to contain timestamp queries
     VGPUQueryType_Timestamp = 2,
     /// Create a heap to contain a structure of `PipelineStatistics`
-    //VGPUQueryType_PipelineStatistics = 3,
+    VGPUQueryType_PipelineStatistics = 3,
 
     _VGPUQueryType_Force32 = 0x7FFFFFFF
 } VGPUQueryType;
@@ -891,9 +891,9 @@ typedef struct VGPUDeviceDescriptor {
 typedef struct VGPUAdapterProperties {
     uint32_t vendorId;
     uint32_t deviceId;
-    const char* name;
+    char name[VGPU_ADAPTER_NAME_MAX_LENGTH];
     const char* driverDescription;
-    VGPUAdapterType adapterType;
+    VGPUAdapterType type;
 } VGPUAdapterProperties;
 
 typedef struct VGPULimits {

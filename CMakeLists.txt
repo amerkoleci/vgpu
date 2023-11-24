@@ -122,9 +122,8 @@ else()
     option(VGPU_SAMPLES "Enable samples" ${VGPU_MASTER_PROJECT})
 endif()
 
-if(VGPU_INSTALL)
-    include(GNUInstallDirs)
-endif ()
+include(cmake/CPM.cmake)
+include(GNUInstallDirs)
 
 # Detect GIT stuff
 execute_process(COMMAND git rev-list --count HEAD
@@ -186,8 +185,23 @@ if (VGPU_D3D12_DRIVER)
     message(STATUS "      - Direct3D12")
 endif ()
 
-# Third party
-add_subdirectory(third_party)
+# GLFW
+if(NOT (ANDROID OR EMSCRIPTEN OR WINDOWS_STORE))
+    CPMAddPackage(
+        NAME glfw
+        GITHUB_REPOSITORY glfw/glfw
+        GIT_TAG afd22ebcf34f2fa84d5b9f28103f014505ae8d47
+        OPTIONS
+            "GLFW_BUILD_DOCS OFF"
+            "GLFW_BUILD_EXAMPLES OFF"
+            "GLFW_BUILD_TESTS OFF"
+            "GLFW_INSTALL OFF"
+            "GLFW_USE_WAYLAND ${GLFW_USE_WAYLAND}"
+        EXCLUDE_FROM_ALL YES
+    )
+
+    set_property(TARGET glfw PROPERTY FOLDER "ThirdParty")
+endif ()
 
 # Setup library
 set(SOURCE_FILES
@@ -203,14 +217,11 @@ else ()
     set(LIBRARY_TYPE STATIC)
 endif ()
 
-
 add_library(${PROJECT_NAME} ${LIBRARY_TYPE} ${SOURCE_FILES})
 target_compile_definitions(${PROJECT_NAME} PRIVATE VGPU_IMPLEMENTATION)
 
 if (GPU_BUILD_SHARED)
     target_compile_definitions(${PROJECT_NAME} PUBLIC VGPU_SHARED_LIBRARY)
-else()
-    target_compile_definitions(${PROJECT_NAME} PUBLIC VGPU_STATIC_LIBRARY)
 endif ()
 
 # Include directories
@@ -320,6 +331,15 @@ if(WIN32)
     target_compile_definitions(${PROJECT_NAME} PRIVATE NOMINMAX)
     target_compile_definitions(${PROJECT_NAME} PRIVATE WIN32_LEAN_AND_MEAN)
 endif ()
+
+set_target_properties(
+        ${PROJECT_NAME} PROPERTIES
+
+        # Postfix for different profiles
+        DEBUG_POSTFIX "d"
+        RELWITHDEBINFO_POSTFIX "rd"
+        MINSIZEREL_POSTFIX "s"
+    )
 
 # Samples
 if (VGPU_SAMPLES)
