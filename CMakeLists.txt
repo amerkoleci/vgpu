@@ -329,7 +329,6 @@ endif ()
 if(WIN32)
     target_compile_definitions(${PROJECT_NAME} PRIVATE _UNICODE UNICODE _CRT_SECURE_NO_WARNINGS)
     target_compile_definitions(${PROJECT_NAME} PRIVATE NOMINMAX)
-    target_compile_definitions(${PROJECT_NAME} PRIVATE WIN32_LEAN_AND_MEAN)
 endif ()
 
 set_target_properties(

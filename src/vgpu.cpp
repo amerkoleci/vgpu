@@ -319,7 +319,15 @@ static VGPUTextureDesc _vgpuTextureDescDef(const VGPUTextureDesc* desc)
     def.width = _VGPU_DEF(def.width, 1);
     def.height = _VGPU_DEF(def.height, 1);
     def.depthOrArrayLayers = _VGPU_DEF(def.depthOrArrayLayers, 1);
-    def.mipLevelCount = _VGPU_DEF(def.mipLevelCount, 1);
+    if (def.mipLevelCount == 0)
+    {
+        const uint32_t depth = (def.dimension == VGPUTextureDimension_3D) ? def.depthOrArrayLayers : 1u;
+        def.mipLevelCount = vgpuGetMipLevelCount(desc->width, desc->height, depth, 1u, 1u);
+    }
+    else
+    {
+        def.mipLevelCount = _VGPU_DEF(def.mipLevelCount, 1);
+    }
     def.sampleCount = _VGPU_DEF(def.sampleCount, 1);
     return def;
 }
@@ -807,30 +815,29 @@ void vgpuSetPushConstants(VGPUCommandBuffer commandBuffer, uint32_t pushConstant
     commandBuffer->SetPushConstants(pushConstantIndex, data, size);
 }
 
+void vgpuBeginQuery(VGPUCommandBuffer commandBuffer, VGPUQueryHeap queryHeap, uint32_t index)
+{
+    commandBuffer->BeginQuery(queryHeap, index);
+}
+
+void vgpuEndQuery(VGPUCommandBuffer commandBuffer, VGPUQueryHeap queryHeap, uint32_t index)
+{
+    commandBuffer->EndQuery(queryHeap, index);
+}
+
+void vgpuResolveQuery(VGPUCommandBuffer commandBuffer, VGPUQueryHeap queryHeap, uint32_t index, uint32_t count, VGPUBuffer destinationBuffer, uint64_t destinationOffset)
+{
+    commandBuffer->ResolveQuery(queryHeap, index, count, destinationBuffer, destinationOffset);
+}
+
+void vgpuResetQuery(VGPUCommandBuffer commandBuffer, VGPUQueryHeap queryHeap, uint32_t index, uint32_t count)
+{
+    commandBuffer->ResetQuery(queryHeap, index, count);
+}
+
 void vgpuDispatch(VGPUCommandBuffer commandBuffer, uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)
 {
     commandBuffer->Dispatch(groupCountX, groupCountY, groupCountZ);
-}
-
-void vgpuDispatch1D(VGPUCommandBuffer commandBuffer, uint32_t threadCountX, uint32_t groupSizeX)
-{
-    commandBuffer->Dispatch(DivideByMultiple(threadCountX, groupSizeX), 1, 1);
-}
-
-void vgpuDispatch2D(VGPUCommandBuffer commandBuffer, uint32_t threadCountX, uint32_t threadCountY, uint32_t groupSizeX, uint32_t groupSizeY)
-{
-    commandBuffer->Dispatch(
-        DivideByMultiple(threadCountX, groupSizeX),
-        DivideByMultiple(threadCountY, groupSizeY), 1);
-}
-
-void vgpuDispatch3D(VGPUCommandBuffer commandBuffer, uint32_t threadCountX, uint32_t threadCountY, uint32_t threadCountZ, uint32_t groupSizeX, uint32_t groupSizeY, uint32_t groupSizeZ)
-{
-    commandBuffer->Dispatch(
-        DivideByMultiple(threadCountX, groupSizeX),
-        DivideByMultiple(threadCountY, groupSizeY),
-        DivideByMultiple(threadCountZ, groupSizeZ)
-    );
 }
 
 void vgpuDispatchIndirect(VGPUCommandBuffer commandBuffer, VGPUBuffer buffer, uint64_t offset)
@@ -922,25 +929,21 @@ void vgpuDrawIndexedIndirect(VGPUCommandBuffer commandBuffer, VGPUBuffer indirec
     commandBuffer->DrawIndexedIndirect(indirectBuffer, indirectBufferOffset);
 }
 
-void vgpuBeginQuery(VGPUCommandBuffer commandBuffer, VGPUQueryHeap queryHeap, uint32_t index)
+void vgpuDispatchMesh(VGPUCommandBuffer commandBuffer, uint32_t threadGroupCountX, uint32_t threadGroupCountY, uint32_t threadGroupCountZ)
 {
-    commandBuffer->BeginQuery(queryHeap, index);
+    commandBuffer->DispatchMesh(threadGroupCountX, threadGroupCountY, threadGroupCountZ);
 }
 
-void vgpuEndQuery(VGPUCommandBuffer commandBuffer, VGPUQueryHeap queryHeap, uint32_t index)
+void vgpuDispatchMeshIndirect(VGPUCommandBuffer commandBuffer, VGPUBuffer indirectBuffer, uint64_t indirectBufferOffset)
 {
-    commandBuffer->EndQuery(queryHeap, index);
+    commandBuffer->DispatchMeshIndirect(indirectBuffer, indirectBufferOffset);
 }
 
-void vgpuResolveQuery(VGPUCommandBuffer commandBuffer, VGPUQueryHeap queryHeap, uint32_t index, uint32_t count, VGPUBuffer destinationBuffer, uint64_t destinationOffset)
+void vgpuDispatchMeshIndirectCount(VGPUCommandBuffer commandBuffer, VGPUBuffer indirectBuffer, uint64_t indirectBufferOffset, VGPUBuffer countBuffer, uint64_t countBufferOffset, uint32_t maxCount)
 {
-    commandBuffer->ResolveQuery(queryHeap, index, count, destinationBuffer, destinationOffset);
+    commandBuffer->DispatchMeshIndirectCount(indirectBuffer, indirectBufferOffset, countBuffer, countBufferOffset, maxCount);
 }
 
-void vgpuResetQuery(VGPUCommandBuffer commandBuffer, VGPUQueryHeap queryHeap, uint32_t index, uint32_t count)
-{
-    commandBuffer->ResetQuery(queryHeap, index, count);
-}
 
 // Format mapping table. The rows must be in the exactly same order as Format enum members are defined.
 static const VGPUPixelFormatInfo c_FormatInfo[] = {
@@ -1214,4 +1217,21 @@ void vgpuGetVertexFormatInfo(VGPUVertexFormat format, VGPUVertexFormatInfo* pInf
 
     VGPU_ASSERT(s_VertexFormatTable[format].format == format);
     *pInfo = s_VertexFormatTable[format];
+}
+
+uint32_t vgpuGetMipLevelCount(uint32_t width, uint32_t height, uint32_t depth, uint32_t minDimension, uint32_t requiredAlignment)
+{
+    uint32_t mips = 1;
+    while (width > minDimension || height > minDimension || depth > minDimension)
+    {
+        width = _VGPU_MAX(minDimension, width >> 1u);
+        height = _VGPU_MAX(minDimension, height >> 1u);
+        depth = _VGPU_MAX(minDimension, depth >> 1u);
+        if (AlignUp(width, requiredAlignment) != width || AlignUp(height, requiredAlignment) != height || AlignUp(depth, requiredAlignment) != depth)
+        {
+            break;
+        }
+        mips++;
+    }
+    return mips;
 }

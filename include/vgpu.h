@@ -323,7 +323,6 @@ typedef enum VGPUShaderStage {
 typedef VGPUFlags VGPUShaderStageFlags;
 
 typedef enum VGPUFeature {
-    VGPUFeature_DepthClipControl,
     VGPUFeature_Depth32FloatStencil8,
     VGPUFeature_TimestampQuery,
     VGPUFeature_PipelineStatisticsQuery,
@@ -337,8 +336,13 @@ typedef enum VGPUFeature {
     VGPUFeature_GeometryShader,
     VGPUFeature_TessellationShader,
     VGPUFeature_DepthBoundsTest,
+
+    VGPUFeature_SamplerClampToBorder,
+    VGPUFeature_SamplerMirrorClampToEdge,
     VGPUFeature_SamplerMinMax,
 
+    VGPUFeature_DepthResolveMinMax,
+    VGPUFeature_StencilResolveMinMax,
     VGPUFeature_ShaderOutputViewportIndex,
     VGPUFeature_DescriptorIndexing,
     VGPUFeature_Predication,
@@ -673,7 +677,7 @@ typedef struct VGPUBufferDesc {
     uint64_t size;
     VGPUBufferUsageFlags usage;
     VGPUCpuAccessMode cpuAccess;
-    uintptr_t handle;
+    void* existingHandle;
 } VGPUBufferDesc;
 
 typedef struct VGPUTextureDesc {
@@ -1031,11 +1035,13 @@ VGPU_API void vgpuInsertDebugMarker(VGPUCommandBuffer commandBuffer, const char*
 VGPU_API void vgpuSetPipeline(VGPUCommandBuffer commandBuffer, VGPUPipeline pipeline);
 VGPU_API void vgpuSetPushConstants(VGPUCommandBuffer commandBuffer, uint32_t pushConstantIndex, const void* data, uint32_t size);
 
+VGPU_API void vgpuBeginQuery(VGPUCommandBuffer commandBuffer, VGPUQueryHeap queryHeap, uint32_t index);
+VGPU_API void vgpuEndQuery(VGPUCommandBuffer commandBuffer, VGPUQueryHeap queryHeap, uint32_t index);
+VGPU_API void vgpuResolveQuery(VGPUCommandBuffer commandBuffer, VGPUQueryHeap queryHeap, uint32_t index, uint32_t count, VGPUBuffer destinationBuffer, uint64_t destinationOffset);
+VGPU_API void vgpuResetQuery(VGPUCommandBuffer commandBuffer, VGPUQueryHeap queryHeap, uint32_t index, uint32_t count);
+
 /* Compute commands */
 VGPU_API void vgpuDispatch(VGPUCommandBuffer commandBuffer, uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ);
-VGPU_API void vgpuDispatch1D(VGPUCommandBuffer commandBuffer, uint32_t threadCountX, uint32_t groupSizeX);
-VGPU_API void vgpuDispatch2D(VGPUCommandBuffer commandBuffer, uint32_t threadCountX, uint32_t threadCountY, uint32_t groupSizeX, uint32_t groupSizeY);
-VGPU_API void vgpuDispatch3D(VGPUCommandBuffer commandBuffer, uint32_t threadCountX, uint32_t threadCountY, uint32_t threadCountZ, uint32_t groupSizeX, uint32_t groupSizeY, uint32_t groupSizeZ);
 VGPU_API void vgpuDispatchIndirect(VGPUCommandBuffer commandBuffer, VGPUBuffer buffer, uint64_t offset);
 
 /* Render commands */
@@ -1056,10 +1062,9 @@ VGPU_API void vgpuDrawIndexed(VGPUCommandBuffer commandBuffer, uint32_t indexCou
 VGPU_API void vgpuDrawIndirect(VGPUCommandBuffer commandBuffer, VGPUBuffer indirectBuffer, uint64_t indirectBufferOffset);
 VGPU_API void vgpuDrawIndexedIndirect(VGPUCommandBuffer commandBuffer, VGPUBuffer indirectBuffer, uint64_t indirectBufferOffset);
 
-VGPU_API void vgpuBeginQuery(VGPUCommandBuffer commandBuffer, VGPUQueryHeap queryHeap, uint32_t index);
-VGPU_API void vgpuEndQuery(VGPUCommandBuffer commandBuffer, VGPUQueryHeap queryHeap, uint32_t index);
-VGPU_API void vgpuResolveQuery(VGPUCommandBuffer commandBuffer, VGPUQueryHeap queryHeap, uint32_t index, uint32_t count, VGPUBuffer destinationBuffer, uint64_t destinationOffset);
-VGPU_API void vgpuResetQuery(VGPUCommandBuffer commandBuffer, VGPUQueryHeap queryHeap, uint32_t index, uint32_t count);
+VGPU_API void vgpuDispatchMesh(VGPUCommandBuffer commandBuffer, uint32_t threadGroupCountX, uint32_t threadGroupCountY, uint32_t threadGroupCountZ);
+VGPU_API void vgpuDispatchMeshIndirect(VGPUCommandBuffer commandBuffer, VGPUBuffer indirectBuffer, uint64_t indirectBufferOffset);
+VGPU_API void vgpuDispatchMeshIndirectCount(VGPUCommandBuffer commandBuffer, VGPUBuffer indirectBuffer, uint64_t indirectBufferOffset, VGPUBuffer countBuffer, uint64_t countBufferOffset, uint32_t maxCount);
 
 /* Helper functions */
 typedef struct VGPUPixelFormatInfo {
@@ -1097,5 +1102,6 @@ VGPU_API VGPUBool32 vgpuStencilTestEnabled(const VGPUDepthStencilState* depthSte
 
 VGPU_API void vgpuGetPixelFormatInfo(VGPUTextureFormat format, VGPUPixelFormatInfo* pInfo);
 VGPU_API void vgpuGetVertexFormatInfo(VGPUVertexFormat format, VGPUVertexFormatInfo* pInfo);
+VGPU_API uint32_t vgpuGetMipLevelCount(uint32_t width, uint32_t height, uint32_t depth /*= 1u*/, uint32_t minDimension /*= 1u*/, uint32_t requiredAlignment /*= 1u*/);
 
 #endif /* VGPU_H_ */

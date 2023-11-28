@@ -8,23 +8,13 @@
 #define NOMINMAX
 #endif
 
-// DirectX apps don't need GDI
 #define NODRAWTEXT
 #define NOGDI
 #define NOBITMAP
-
-// Include <mcx.h> if you need this
 #define NOMCX
-
-// Include <winsvc.h> if you need this
 #define NOSERVICE
-
-// WinHelp is deprecated
 #define NOHELP
-
-#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
-#endif
 #include <Windows.h>
 
 #include <dxgi1_6.h>
@@ -79,18 +69,6 @@ namespace
     static PFN_DXGI_GET_DEBUG_INTERFACE1 vgpuDXGIGetDebugInterface1 = nullptr;
 #endif
 #endif
-
-    template <typename T>
-    static bool IsPow2(T x) { return (x & (x - 1)) == 0; }
-
-    // Aligns given value up to nearest multiply of align value. For example: AlignUp(11, 8) = 16.
-    // Use types like UINT, uint64_t as T.
-    template <typename T>
-    static T AlignUp(T val, T alignment)
-    {
-        VGPU_ASSERT(IsPow2(alignment));
-        return (val + alignment - 1) & ~(alignment - 1);
-    }
 
     inline std::string WCharToUTF8(const wchar_t* input)
     {
@@ -797,8 +775,8 @@ namespace
 
             default:
                 VGPU_UNREACHABLE();
-            }
         }
+    }
 }
 
 #if !WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
@@ -910,6 +888,7 @@ struct D3D12Resource
     D3D12MA::Allocation* allocation = nullptr;
     D3D12_RESOURCE_STATES state = D3D12_RESOURCE_STATE_COMMON;
     D3D12_RESOURCE_STATES transitioningState = (D3D12_RESOURCE_STATES)-1;
+    bool fixedResourceState = false;
 };
 
 struct D3D12Buffer final : public VGPUBufferImpl, public D3D12Resource
@@ -931,11 +910,16 @@ struct D3D12Buffer final : public VGPUBufferImpl, public D3D12Resource
 
 struct D3D12Texture final : public VGPUTextureImpl, public D3D12Resource
 {
-    VGPUTextureDimension dimension{};
-    VGPUTextureFormat format{};
-    uint32_t width = 0;
-    uint32_t height = 0;
+    VGPUTextureDesc desc;
     DXGI_FORMAT dxgiFormat = DXGI_FORMAT_UNKNOWN;
+    uint32_t numSubResources = 0;
+    std::vector<D3D12_PLACED_SUBRESOURCE_FOOTPRINT> footPrints;
+    std::vector<uint64_t> rowSizesInBytes;
+    std::vector<uint32_t> numRows;
+    uint64_t allocatedSize{};
+    D3D12_GPU_VIRTUAL_ADDRESS gpuAddress{};
+    void* pMappedData{ nullptr };
+    HANDLE sharedHandle = nullptr;
 
     std::unordered_map<size_t, D3D12_CPU_DESCRIPTOR_HANDLE> rtvCache;
     std::unordered_map<size_t, D3D12_CPU_DESCRIPTOR_HANDLE> dsvCache;
@@ -943,8 +927,8 @@ struct D3D12Texture final : public VGPUTextureImpl, public D3D12Resource
     ~D3D12Texture() override;
     void SetLabel(const char* label) override;
 
-    VGPUTextureDimension GetDimension() const override { return dimension; }
-    VGPUTextureFormat GetFormat() const override { return format; }
+    VGPUTextureDimension GetDimension() const override { return desc.dimension; }
+    VGPUTextureFormat GetFormat() const override { return desc.format; }
 };
 
 struct D3D12Sampler final : public VGPUSamplerImpl
@@ -999,7 +983,7 @@ struct D3D12QueryHeap final : public VGPUQueryHeapImpl
     uint32_t count;
     ID3D12QueryHeap* handle = nullptr;
     D3D12_QUERY_TYPE d3dQueryType = D3D12_QUERY_TYPE_OCCLUSION;
-    uint32_t queryResultSize = 0;
+    uint32_t resultSize = 0;
 
     ~D3D12QueryHeap() override;
     void SetLabel(const char* label) override;
@@ -1036,13 +1020,14 @@ struct D3D12_UploadContext
     ID3D12CommandAllocator* commandAllocator = nullptr;
     ID3D12GraphicsCommandList* commandList = nullptr;
     ID3D12Fence* fence = nullptr;
+    uint64_t fenceValueSignaled = 0;
 
     uint64_t uploadBufferSize = 0;
-    ID3D12Resource* uploadBuffer = nullptr;
-    D3D12MA::Allocation* uploadBufferAllocation = nullptr;
+    D3D12Buffer* uploadBuffer = nullptr;
     void* uploadBufferData = nullptr;
 
     inline bool IsValid() const { return commandList != nullptr; }
+    inline bool IsCompleted() const { return fence->GetCompletedValue() >= fenceValueSignaled; }
 };
 
 static constexpr UINT PIX_EVENT_UNICODE_VERSION = 0;
@@ -1055,7 +1040,7 @@ public:
     bool hasLabel = false;
 
     ID3D12CommandAllocator* commandAllocators[VGPU_MAX_INFLIGHT_FRAMES];
-    ID3D12GraphicsCommandList4* commandList;
+    ID3D12GraphicsCommandList6* commandList = nullptr;
 
     D3D12_RESOURCE_BARRIER resourceBarriers[16];
     UINT numBarriersToFlush;
@@ -1180,6 +1165,10 @@ public:
     void DrawIndexed(uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t baseVertex, uint32_t firstInstance) override;
     void DrawIndirect(VGPUBuffer indirectBuffer, uint64_t indirectBufferOffset) override;
     void DrawIndexedIndirect(VGPUBuffer indirectBuffer, uint64_t indirectBufferOffset) override;
+
+    void DispatchMesh(uint32_t threadGroupCountX, uint32_t threadGroupCountY, uint32_t threadGroupCountZ) override;
+    void DispatchMeshIndirect(VGPUBuffer indirectBuffer, uint64_t indirectBufferOffset) override;
+    void DispatchMeshIndirectCount(VGPUBuffer indirectBuffer, uint64_t indirectBufferOffset, VGPUBuffer countBuffer, uint64_t countBufferOffset, uint32_t maxCount) override;
 };
 
 struct D3D12Queue final
@@ -1232,6 +1221,9 @@ public:
     void DeferDestroy(IUnknown* resource, D3D12MA::Allocation* allocation = nullptr);
     void ProcessDeletionQueue();
 
+    D3D12_UploadContext UploadAllocate(uint64_t size);
+    void UploadSubmit(D3D12_UploadContext context);
+
     IDXGIFactory6* factory = nullptr;
     bool tearingSupported = false;
     ID3D12Device5* device = nullptr;
@@ -1246,6 +1238,11 @@ public:
     CD3DX12FeatureSupport d3dFeatures;
     D3D12Queue queues[_VGPUCommandQueue_Count] = {};
 
+    // Separate upload copy queue
+    ID3D12CommandQueue* uploadCommandQueue = nullptr;
+    std::mutex uploadLocker;
+    std::vector<D3D12_UploadContext> uploadFreeList;
+
     /* Command contexts */
     std::mutex cmdBuffersLocker;
     uint32_t cmdBuffersCount{ 0 };
@@ -1254,8 +1251,6 @@ public:
     uint32_t frameIndex = 0;
     uint64_t frameCount = 0;
 
-    std::mutex uploadLocker;
-    std::vector<D3D12_UploadContext> uploadFreeList;
 
     D3D12DescriptorAllocator resourceAllocator;
     D3D12DescriptorAllocator samplerAllocator;
@@ -1348,66 +1343,45 @@ void D3D12Device::ProcessDeletionQueue()
     destroyMutex.unlock();
 }
 
-static D3D12_UploadContext d3d12_AllocateUpload(D3D12Device* renderer, uint64_t size)
+D3D12_UploadContext D3D12Device::UploadAllocate(uint64_t size)
 {
     D3D12_UploadContext context;
 
-    renderer->uploadLocker.lock();
+    uploadLocker.lock();
     // Try to search for a staging buffer that can fit the request:
-    for (size_t i = 0; i < renderer->uploadFreeList.size(); ++i)
+    for (size_t i = 0; i < uploadFreeList.size(); ++i)
     {
-        if (renderer->uploadFreeList[i].uploadBuffer != nullptr &&
-            renderer->uploadFreeList[i].uploadBufferSize >= size)
+        if (uploadFreeList[i].uploadBuffer != nullptr &&
+            uploadFreeList[i].uploadBufferSize >= size)
         {
-            if (renderer->uploadFreeList[i].fence->GetCompletedValue() == 1)
+            if (uploadFreeList[i].IsCompleted())
             {
-                VHR(renderer->uploadFreeList[i].fence->Signal(0));
-                context = std::move(renderer->uploadFreeList[i]);
-                std::swap(renderer->uploadFreeList[i], renderer->uploadFreeList.back());
-                renderer->uploadFreeList.pop_back();
+                VHR(uploadFreeList[i].fence->Signal(0));
+                context = std::move(uploadFreeList[i]);
+                std::swap(uploadFreeList[i], uploadFreeList.back());
+                uploadFreeList.pop_back();
                 break;
             }
         }
     }
-    renderer->uploadLocker.unlock();
+    uploadLocker.unlock();
 
     // If no buffer was found that fits the data, create one:
     if (!context.IsValid())
     {
-        VHR(renderer->device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COPY, IID_PPV_ARGS(&context.commandAllocator)));
-        VHR(renderer->device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COPY, context.commandAllocator, nullptr, IID_PPV_ARGS(&context.commandList)));
+        VHR(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COPY, IID_PPV_ARGS(&context.commandAllocator)));
+        VHR(device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COPY, context.commandAllocator, nullptr, IID_PPV_ARGS(&context.commandList)));
         VHR(context.commandList->Close());
-        VHR(renderer->device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&context.fence)));
+        VHR(device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&context.fence)));
 
         context.uploadBufferSize = vgpuNextPowerOfTwo(size);
 
-        D3D12MA::ALLOCATION_DESC allocationDesc = {};
-        allocationDesc.HeapType = D3D12_HEAP_TYPE_UPLOAD;
-        D3D12_RESOURCE_DESC resourceDesc;
-        resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-        resourceDesc.Alignment = 0;
-        resourceDesc.Width = context.uploadBufferSize;
-        resourceDesc.Height = 1;
-        resourceDesc.DepthOrArraySize = 1;
-        resourceDesc.MipLevels = 1;
-        resourceDesc.Format = DXGI_FORMAT_UNKNOWN;
-        resourceDesc.SampleDesc.Count = 1;
-        resourceDesc.SampleDesc.Quality = 0;
-        resourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-        resourceDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+        VGPUBufferDesc bufferDesc = {};
+        bufferDesc.size = context.uploadBufferSize;
+        bufferDesc.cpuAccess = VGPUCpuAccessMode_Write;
 
-        const HRESULT hr = renderer->allocator->CreateResource(
-            &allocationDesc,
-            &resourceDesc,
-            D3D12_RESOURCE_STATE_GENERIC_READ,
-            nullptr,
-            &context.uploadBufferAllocation,
-            IID_PPV_ARGS(&context.uploadBuffer)
-        );
-        VHR(hr);
-
-        D3D12_RANGE readRange = {};
-        VHR(context.uploadBuffer->Map(0, &readRange, &context.uploadBufferData));
+        context.uploadBuffer = static_cast<D3D12Buffer*>(CreateBuffer(&bufferDesc, nullptr));
+        context.uploadBufferData = context.uploadBuffer->pMappedData;
     }
 
     // Begin command list in valid state
@@ -1593,22 +1567,29 @@ static D3D12_CPU_DESCRIPTOR_HANDLE d3d12_GetDSV(D3D12Device* renderer, D3D12Text
     return it->second;
 }
 
-static void d3d12_UploadSubmit(D3D12Device* renderer, D3D12_UploadContext context)
+void D3D12Device::UploadSubmit(D3D12_UploadContext context)
 {
+    uploadLocker.lock();
+    context.fenceValueSignaled++;
+    uploadFreeList.push_back(context);
+    uploadLocker.unlock();
+
     VHR(context.commandList->Close());
 
     ID3D12CommandList* commandlists[] = {
         context.commandList
     };
-    renderer->queues[VGPUCommandQueue_Copy].handle->ExecuteCommandLists(1, commandlists);
-    VHR(renderer->queues[VGPUCommandQueue_Copy].handle->Signal(context.fence, 1));
 
-    VHR(renderer->queues[VGPUCommandQueue_Graphics].handle->Wait(context.fence, 1));
-    VHR(renderer->queues[VGPUCommandQueue_Compute].handle->Wait(context.fence, 1));
+    uploadCommandQueue->ExecuteCommandLists(1, commandlists);
+    VHR(uploadCommandQueue->Signal(context.fence, context.fenceValueSignaled));
 
-    renderer->uploadLocker.lock();
-    renderer->uploadFreeList.push_back(context);
-    renderer->uploadLocker.unlock();
+    VHR(queues[VGPUCommandQueue_Graphics].handle->Wait(context.fence, context.fenceValueSignaled));
+    VHR(queues[VGPUCommandQueue_Compute].handle->Wait(context.fence, context.fenceValueSignaled));
+    VHR(queues[VGPUCommandQueue_Copy].handle->Wait(context.fence, context.fenceValueSignaled));
+    //if (device->GetVideoDecode().handle)
+    //{
+    //    VHR(device->GetVideoDecode().handle->Wait(context.fence, context.fenceValueSignaled));
+    //}
 }
 
 /* D3D12Buffer */
@@ -1678,12 +1659,13 @@ D3D12Device::~D3D12Device()
         for (auto& item : uploadFreeList)
         {
             item.uploadBuffer->Release();
-            item.uploadBufferAllocation->Release();
             item.commandAllocator->Release();
             item.commandList->Release();
             item.fence->Release();
         }
         uploadFreeList.clear();
+
+        SAFE_RELEASE(uploadCommandQueue);
     }
 
     // CPU descriptor allocators
@@ -1782,11 +1764,15 @@ void D3D12Device::UpdateSwapChain(D3D12SwapChain* swapChain)
     {
         D3D12Texture* texture = new D3D12Texture();
         texture->renderer = this;
-        texture->dimension = VGPUTextureDimension_2D;
-        texture->format = swapChain->colorFormat;
+        texture->desc.dimension = VGPUTextureDimension_2D;
+        texture->desc.format = swapChain->colorFormat;
+        texture->desc.usage = VGPUTextureUsage_ShaderRead | VGPUTextureUsage_RenderTarget;
+        texture->desc.width = swapChainDesc.Width;
+        texture->desc.height = swapChainDesc.Height;
+        texture->desc.depthOrArrayLayers = 1u;
+        texture->desc.mipLevelCount = 1u;
+        texture->desc.sampleCount = 1u;
         texture->state = D3D12_RESOURCE_STATE_PRESENT;
-        texture->width = swapChainDesc.Width;
-        texture->height = swapChainDesc.Height;
         texture->dxgiFormat = ToDxgiFormat(swapChain->colorFormat);
         hr = swapChain->handle->GetBuffer(i, IID_PPV_ARGS(&texture->handle));
         VGPU_ASSERT(SUCCEEDED(hr));
@@ -1824,7 +1810,6 @@ VGPUBool32 D3D12Device::QueryFeatureSupport(VGPUFeature feature) const
 {
     switch (feature)
     {
-        case VGPUFeature_DepthClipControl:
         case VGPUFeature_Depth32FloatStencil8:
         case VGPUFeature_TimestampQuery:
         case VGPUFeature_PipelineStatisticsQuery:
@@ -1834,6 +1819,10 @@ VGPUBool32 D3D12Device::QueryFeatureSupport(VGPUFeature feature) const
         case VGPUFeature_TessellationShader:
         case VGPUFeature_DescriptorIndexing:
         case VGPUFeature_Predication:
+        case VGPUFeature_DepthResolveMinMax:
+        case VGPUFeature_StencilResolveMinMax:
+        case VGPUFeature_SamplerClampToBorder:
+        case VGPUFeature_SamplerMirrorClampToEdge:
             return true;
 
         case VGPUFeature_TextureCompressionETC2:
@@ -1962,14 +1951,15 @@ void D3D12Device::SetLabel(const char* label)
 /* Buffer */
 VGPUBuffer D3D12Device::CreateBuffer(const VGPUBufferDesc* desc, const void* pInitialData)
 {
-    if (desc->handle)
+    D3D12Buffer* buffer = new D3D12Buffer();
+    buffer->renderer = this;
+    buffer->state = D3D12_RESOURCE_STATE_COMMON;
+
+    if (desc->existingHandle)
     {
-        D3D12Buffer* buffer = new D3D12Buffer();
-        buffer->renderer = this;
-        buffer->handle = (ID3D12Resource*)desc->handle;
+        buffer->handle = reinterpret_cast<ID3D12Resource*>(desc->existingHandle);
         buffer->handle->AddRef();
         buffer->allocation = nullptr;
-        buffer->state = D3D12_RESOURCE_STATE_COMMON;
         buffer->size = desc->size;
         buffer->usage = desc->usage;
         buffer->allocatedSize = 0u;
@@ -2014,36 +2004,47 @@ VGPUBuffer D3D12Device::CreateBuffer(const VGPUBufferDesc* desc, const void* pIn
     }
 
     D3D12MA::ALLOCATION_DESC allocationDesc = {};
-    D3D12_RESOURCE_STATES resourceState = D3D12_RESOURCE_STATE_COMMON;
     allocationDesc.HeapType = D3D12_HEAP_TYPE_DEFAULT;
     if (desc->cpuAccess == VGPUCpuAccessMode_Read)
     {
         allocationDesc.HeapType = D3D12_HEAP_TYPE_READBACK;
-        resourceState = D3D12_RESOURCE_STATE_COPY_DEST;
+        buffer->state = D3D12_RESOURCE_STATE_COPY_DEST;
+        buffer->fixedResourceState = true;
         resourceDesc.Flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
     }
     else if (desc->cpuAccess == VGPUCpuAccessMode_Write)
     {
         allocationDesc.HeapType = D3D12_HEAP_TYPE_UPLOAD;
-        resourceState = D3D12_RESOURCE_STATE_GENERIC_READ;
+        buffer->state = D3D12_RESOURCE_STATE_GENERIC_READ;
+        buffer->fixedResourceState = true;
     }
-
-    D3D12Buffer* buffer = new D3D12Buffer();
-    buffer->renderer = this;
-    buffer->state = resourceState;
     buffer->size = desc->size;
     buffer->usage = desc->usage;
 
-    device->GetCopyableFootprints(&resourceDesc, 0, 1, 0, &buffer->footprint, nullptr, nullptr, &buffer->allocatedSize);
-
-    HRESULT hr = allocator->CreateResource(
-        &allocationDesc,
-        &resourceDesc,
-        resourceState,
-        nullptr,
-        &buffer->allocation,
-        IID_PPV_ARGS(&buffer->handle)
-    );
+    HRESULT hr = E_FAIL;
+    const bool isSparse = false;
+    if (isSparse)
+        //if (CheckBitsAny(desc.usage, RHIBufferUsage::Sparse))
+    {
+        hr = device->CreateReservedResource(
+            &resourceDesc,
+            buffer->state,
+            nullptr,
+            IID_PPV_ARGS(&buffer->handle)
+        );
+        //buffer->sparsePageSize = D3D12_TILED_RESOURCE_TILE_SIZE_IN_BYTES;
+    }
+    else
+    {
+        hr = allocator->CreateResource(
+            &allocationDesc,
+            &resourceDesc,
+            buffer->state,
+            nullptr,
+            &buffer->allocation,
+            IID_PPV_ARGS(&buffer->handle)
+        );
+    }
 
     if (FAILED(hr))
     {
@@ -2057,6 +2058,7 @@ VGPUBuffer D3D12Device::CreateBuffer(const VGPUBufferDesc* desc, const void* pIn
         buffer->SetLabel(desc->label);
     }
 
+    device->GetCopyableFootprints(&resourceDesc, 0, 1, 0, &buffer->footprint, nullptr, nullptr, &buffer->allocatedSize);
     buffer->gpuAddress = buffer->handle->GetGPUVirtualAddress();
 
     if (desc->cpuAccess == VGPUCpuAccessMode_Read)
@@ -2078,18 +2080,18 @@ VGPUBuffer D3D12Device::CreateBuffer(const VGPUBufferDesc* desc, const void* pIn
         }
         else
         {
-            auto context = d3d12_AllocateUpload(this, desc->size);
+            D3D12_UploadContext context = UploadAllocate(desc->size);
             memcpy(context.uploadBufferData, pInitialData, desc->size);
 
             context.commandList->CopyBufferRegion(
                 buffer->handle,
                 0,
-                context.uploadBuffer,
+                context.uploadBuffer->handle,
                 0,
                 desc->size
             );
 
-            d3d12_UploadSubmit(this, context);
+            UploadSubmit(context);
         }
     }
 
@@ -2140,67 +2142,47 @@ VGPUBuffer D3D12Device::CreateBuffer(const VGPUBufferDesc* desc, const void* pIn
 /* Texture */
 VGPUTexture D3D12Device::CreateTexture(const VGPUTextureDesc* desc, const VGPUTextureData* pInitialData)
 {
-    D3D12MA::ALLOCATION_DESC allocationDesc = {};
-    allocationDesc.HeapType = D3D12_HEAP_TYPE_DEFAULT;
+    DXGI_FORMAT dxgiFormat = ToDxgiFormat(desc->format);
 
-    D3D12_RESOURCE_DESC resourceDesc;
-    if (desc->dimension == VGPUTextureDimension_1D)
+    const bool isDepthStencil = vgpuIsDepthStencilFormat(desc->format);
+
+    if (isDepthStencil && (desc->usage & (VGPUTextureUsage_ShaderRead | VGPUTextureUsage_ShaderWrite)))
     {
-        resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE1D;
+        dxgiFormat = GetTypelessFormatFromDepthFormat(desc->format);
     }
-    else if (desc->dimension == VGPUTextureDimension_3D)
+
+    D3D12_RESOURCE_DESC resourceDesc = {};
+    switch (desc->dimension)
     {
-        resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE3D;
+        case VGPUTextureDimension_1D:
+            resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE1D;
+            resourceDesc.Width = desc->width;
+            resourceDesc.Height = 1u;
+            resourceDesc.DepthOrArraySize = (UINT16)desc->depthOrArrayLayers;
+            break;
+        case VGPUTextureDimension_2D:
+            resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+            resourceDesc.Width = desc->width;
+            resourceDesc.Height = desc->height;
+            resourceDesc.DepthOrArraySize = (UINT16)desc->depthOrArrayLayers;
+            break;
+        case VGPUTextureDimension_3D:
+            resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE3D;
+            resourceDesc.Width = desc->width;
+            resourceDesc.Height = desc->height;
+            resourceDesc.DepthOrArraySize = (UINT16)desc->depthOrArrayLayers;
+            break;
     }
-    else
-    {
-        resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-    }
-    resourceDesc.Alignment = 0;
-    resourceDesc.Width = desc->width;
-    resourceDesc.Height = desc->height;
-    resourceDesc.DepthOrArraySize = (UINT16)desc->depthOrArrayLayers;
     resourceDesc.MipLevels = (UINT16)desc->mipLevelCount;
-    resourceDesc.Format = ToDxgiFormat(desc->format);
+    resourceDesc.Format = dxgiFormat;
     resourceDesc.SampleDesc.Count = desc->sampleCount;
     resourceDesc.SampleDesc.Quality = 0;
     resourceDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
     resourceDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
 
-    D3D12_RESOURCE_STATES resourceState = D3D12_RESOURCE_STATE_COMMON;
-
-    if (pInitialData == nullptr)
-    {
-        if (desc->usage & VGPUTextureUsage_RenderTarget)
-        {
-            if (vgpuIsDepthStencilFormat(desc->format))
-            {
-                resourceState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
-            }
-            else
-            {
-                resourceState = D3D12_RESOURCE_STATE_RENDER_TARGET;
-            }
-        }
-        if (desc->usage & VGPUTextureUsage_ShaderRead)
-        {
-            resourceState |= D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
-        }
-
-        if (desc->usage & VGPUTextureUsage_ShaderWrite)
-        {
-            resourceState |= D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-        }
-    }
-
-    if (desc->usage & VGPUTextureUsage_ShaderWrite)
-    {
-        resourceDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-    }
-
     if (desc->usage & VGPUTextureUsage_RenderTarget)
     {
-        if (vgpuIsDepthStencilFormat(desc->format))
+        if (isDepthStencil)
         {
             resourceDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
 
@@ -2215,35 +2197,66 @@ VGPUTexture D3D12Device::CreateTexture(const VGPUTextureDesc* desc, const VGPUTe
         }
     }
 
+    if (desc->usage & VGPUTextureUsage_ShaderWrite)
+    {
+        resourceDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+    }
+
+    D3D12_RESOURCE_STATES resourceState = D3D12_RESOURCE_STATE_COMMON;
+    if (pInitialData == nullptr)
+    {
+        if (desc->usage & VGPUTextureUsage_RenderTarget)
+        {
+            if (isDepthStencil)
+            {
+                resourceState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+            }
+            else
+            {
+                resourceState = D3D12_RESOURCE_STATE_RENDER_TARGET;
+            }
+        }
+
+        if (desc->usage & VGPUTextureUsage_ShaderRead)
+        {
+            resourceState |= D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+        }
+
+        if (desc->usage & VGPUTextureUsage_ShaderWrite)
+        {
+            resourceState |= D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+        }
+    }
+
     D3D12_CLEAR_VALUE clearValue = {};
     D3D12_CLEAR_VALUE* pClearValue = nullptr;
 
     if (desc->usage & VGPUTextureUsage_RenderTarget)
     {
         clearValue.Format = resourceDesc.Format;
-        if (vgpuIsDepthStencilFormat(desc->format))
+        if (isDepthStencil)
         {
             clearValue.DepthStencil.Depth = 1.0f;
         }
         pClearValue = &clearValue;
     }
 
-    // If shader read/write and depth format, set to typeless
-    if (vgpuIsDepthFormat(desc->format) && desc->usage & (VGPUTextureUsage_ShaderRead | VGPUTextureUsage_ShaderWrite))
-    {
-        resourceDesc.Format = GetTypelessFormatFromDepthFormat(desc->format);
-        pClearValue = nullptr;
-    }
-
-    // TODO: TextureLayout/State
     D3D12Texture* texture = new D3D12Texture();
     texture->renderer = this;
-    texture->dimension = desc->dimension;
-    texture->format = desc->format;
-    texture->state = resourceState;
-    texture->width = desc->width;
-    texture->height = desc->height;
+    texture->desc = *desc;
     texture->dxgiFormat = resourceDesc.Format;
+    texture->state = resourceState;
+
+    D3D12MA::ALLOCATION_DESC allocationDesc = {};
+    allocationDesc.HeapType = D3D12_HEAP_TYPE_DEFAULT;
+
+    bool isShared = false;
+    if (desc->usage & VGPUTextureUsage_Shared)
+    {
+        // What about D3D12_RESOURCE_FLAG_ALLOW_CROSS_ADAPTER and D3D12_HEAP_FLAG_SHARED_CROSS_ADAPTER?
+        allocationDesc.ExtraHeapFlags |= D3D12_HEAP_FLAG_SHARED;
+        isShared = true;
+    }
 
     HRESULT hr = allocator->CreateResource(
         &allocationDesc,
@@ -2261,9 +2274,138 @@ VGPUTexture D3D12Device::CreateTexture(const VGPUTextureDesc* desc, const VGPUTe
         return nullptr;
     }
 
+    texture->allocatedSize = 0;
+    texture->numSubResources = desc->mipLevelCount * desc->depthOrArrayLayers;
+    texture->footPrints.resize(texture->numSubResources);
+    texture->rowSizesInBytes.resize(texture->footPrints.size());
+    texture->numRows.resize(texture->footPrints.size());
+    device->GetCopyableFootprints(
+        &resourceDesc,
+        0,
+        (UINT)texture->footPrints.size(),
+        0,
+        texture->footPrints.data(),
+        texture->numRows.data(),
+        texture->rowSizesInBytes.data(),
+        &texture->allocatedSize
+    );
+
     if (desc->label)
     {
         D3D12SetName(texture->handle, desc->label);
+    }
+
+    // Issue data copy on request:
+    if (pInitialData != nullptr)
+    {
+#if TODO_UMA
+        if (allocationDesc.CustomPool != nullptr &&
+            allocationDesc.CustomPool == umaPool.Get())
+        {
+            // UMA direct texture write path:
+            for (size_t i = 0; i < texture->footPrints.size(); ++i)
+            {
+                const TextureData& data = initialData[i];
+
+                hr = texture->handle->WriteToSubresource(
+                    (UINT)i,
+                    nullptr,
+                    data.pData,
+                    data.rowPitch,
+                    data.slicePitch
+                );
+                ThrowIfFailed(hr);
+            }
+        }
+        else
+#endif // TODO_UMA
+
+        {
+            std::vector<D3D12_SUBRESOURCE_DATA> subresourceData(texture->footPrints.size());
+            for (size_t i = 0; i < texture->footPrints.size(); ++i)
+            {
+                uint32_t rowPitch = pInitialData[i].rowPitch;
+                uint32_t slicePitch = pInitialData[i].slicePitch;
+                //GetSurfaceInfo(desc.format, texture->footprints[i].Footprint.Width, texture->footprints[i].Footprint.Height, &rowPitch, &slicePitch);
+
+                subresourceData[i].pData = pInitialData[i].pData;
+                subresourceData[i].RowPitch = rowPitch;
+                subresourceData[i].SlicePitch = slicePitch;
+            }
+
+            D3D12_UploadContext context;
+            void* pMappedData = nullptr;
+            if (desc->cpuAccess == VGPUCpuAccessMode_Write)
+            {
+                pMappedData = texture->pMappedData;
+            }
+            else
+            {
+                context = UploadAllocate(texture->allocatedSize);
+                pMappedData = context.uploadBufferData;
+            }
+
+            for (size_t i = 0; i < texture->footPrints.size(); ++i)
+            {
+                if (texture->rowSizesInBytes[i] > (SIZE_T)-1)
+                    continue;
+
+                D3D12_MEMCPY_DEST DestData = {};
+                DestData.pData = (void*)((UINT64)pMappedData + texture->footPrints[i].Offset);
+                DestData.RowPitch = (SIZE_T)texture->footPrints[i].Footprint.RowPitch;
+                DestData.SlicePitch = (SIZE_T)texture->footPrints[i].Footprint.RowPitch * (SIZE_T)texture->numRows[i];
+
+                MemcpySubresource(&DestData,
+                    &subresourceData[i],
+                    (SIZE_T)texture->rowSizesInBytes[i],
+                    texture->numRows[i],
+                    texture->footPrints[i].Footprint.Depth
+                );
+
+                if (context.IsValid())
+                {
+                    D3D12_TEXTURE_COPY_LOCATION dst = {};
+                    dst.pResource = texture->handle;
+                    dst.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+                    dst.SubresourceIndex = UINT(i);
+
+                    D3D12_TEXTURE_COPY_LOCATION src = {};
+                    src.pResource = context.uploadBuffer->handle;
+                    src.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+                    src.PlacedFootprint = texture->footPrints[i];
+
+                    context.commandList->CopyTextureRegion(
+                        &dst,
+                        0,
+                        0,
+                        0,
+                        &src,
+                        nullptr
+                    );
+                }
+            }
+
+            if (context.IsValid())
+            {
+                UploadSubmit(context);
+            }
+        }
+    }
+
+    if (isShared)
+    {
+        hr = device->CreateSharedHandle(
+            texture->handle,
+            nullptr,
+            GENERIC_ALL,
+            nullptr,
+            &texture->sharedHandle);
+
+        if (FAILED(hr))
+        {
+            vgpuLogError("D3D12: Failed to create texture shared handle");
+            return nullptr;
+        }
     }
 
     return texture;
@@ -2799,7 +2941,7 @@ VGPUQueryHeap D3D12Device::CreateQueryHeap(const VGPUQueryHeapDesc* desc)
     heap->count = desc->count;
     heap->d3dQueryType = ToD3D12QueryType(desc->type);
     heap->handle = handle;
-    heap->queryResultSize = GetQueryResultSize(desc->type);
+    heap->resultSize = GetQueryResultSize(desc->type);
 
     if (desc->label)
     {
@@ -3214,8 +3356,8 @@ void D3D12CommandBuffer::BeginRenderPass(const VGPURenderPassDesc* desc)
         // TODO: Resolve
         RTVs[numRTVS].EndingAccess.Type = ToD3D12(attachment->storeAction);
 
-        width = _VGPU_MIN(width, _VGPU_MAX(1U, texture->width >> level));
-        height = _VGPU_MIN(height, _VGPU_MAX(1U, texture->height >> level));
+        width = _VGPU_MIN(width, _VGPU_MAX(1U, texture->desc.width >> level));
+        height = _VGPU_MIN(height, _VGPU_MAX(1U, texture->desc.height >> level));
 
         numRTVS++;
     }
@@ -3228,8 +3370,8 @@ void D3D12CommandBuffer::BeginRenderPass(const VGPURenderPassDesc* desc)
         const uint32_t level = attachment->level;
         const uint32_t slice = attachment->slice;
 
-        width = _VGPU_MIN(width, _VGPU_MAX(1U, texture->width >> level));
-        height = _VGPU_MIN(height, _VGPU_MAX(1U, texture->height >> level));
+        width = _VGPU_MIN(width, _VGPU_MAX(1U, texture->desc.width >> level));
+        height = _VGPU_MIN(height, _VGPU_MAX(1U, texture->desc.height >> level));
 
         DSV.cpuDescriptor = d3d12_GetDSV(renderer, texture, level, slice);
 
@@ -3426,6 +3568,46 @@ void D3D12CommandBuffer::DrawIndexedIndirect(VGPUBuffer indirectBuffer, uint64_t
         0);
 }
 
+void D3D12CommandBuffer::DispatchMesh(uint32_t threadGroupCountX, uint32_t threadGroupCountY, uint32_t threadGroupCountZ)
+{
+    PrepareDraw();
+
+    commandList->DispatchMesh(threadGroupCountX, threadGroupCountY, threadGroupCountZ);
+}
+
+void D3D12CommandBuffer::DispatchMeshIndirect(VGPUBuffer indirectBuffer, uint64_t indirectBufferOffset)
+{
+    VGPU_ASSERT(indirectBuffer);
+    PrepareDraw();
+
+    D3D12Buffer* backendBuffer = static_cast<D3D12Buffer*>(indirectBuffer);
+    commandList->ExecuteIndirect(
+        renderer->dispatchMeshIndirectCommandSignature,
+        1,
+        backendBuffer->handle,
+        indirectBufferOffset,
+        nullptr,
+        0);
+}
+
+void D3D12CommandBuffer::DispatchMeshIndirectCount(VGPUBuffer indirectBuffer, uint64_t indirectBufferOffset, VGPUBuffer countBuffer, uint64_t countBufferOffset, uint32_t maxCount)
+{
+    VGPU_ASSERT(indirectBuffer);
+    VGPU_ASSERT(countBuffer);
+
+    D3D12Buffer* d3dIndirectBuffer = static_cast<D3D12Buffer*>(indirectBuffer);
+    D3D12Buffer* d3dCountBuffer = static_cast<D3D12Buffer*>(countBuffer);
+
+    PrepareDraw();
+    commandList->ExecuteIndirect(
+        renderer->dispatchMeshIndirectCommandSignature,
+        1,
+        d3dIndirectBuffer->handle, indirectBufferOffset,
+        d3dCountBuffer->handle, countBufferOffset
+    );
+}
+
+/* D3D12Device */
 VGPUCommandBuffer D3D12Device::BeginCommandBuffer(VGPUCommandQueue queueType, const char* label)
 {
     HRESULT hr = S_OK;
@@ -3927,6 +4109,15 @@ static VGPUDeviceImpl* d3d12_createDevice(const VGPUDeviceDescriptor* info)
 
     // Create command queues
     {
+        // Create Copy queye
+        D3D12_COMMAND_QUEUE_DESC queueDesc = {};
+        queueDesc.Type = D3D12_COMMAND_LIST_TYPE_COPY;
+        queueDesc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
+        queueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+        queueDesc.NodeMask = 0;
+        VHR(renderer->device->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&renderer->uploadCommandQueue)));
+        VHR(renderer->uploadCommandQueue->SetName(L"Upload Copy Queue"));
+
         for (uint32_t queue = 0; queue < _VGPUCommandQueue_Count; ++queue)
         {
             VGPUCommandQueue queueType = (VGPUCommandQueue)queue;

@@ -91,9 +91,15 @@ namespace
     }
 
     template <typename T>
-    VGPU_FORCE_INLINE T DivideByMultiple(T value, size_t alignment)
+    VGPU_FORCE_INLINE bool IsPow2(T x) { return (x & (x - 1)) == 0; }
+
+    // Aligns given value up to nearest multiply of align value. For example: AlignUp(11, 8) = 16.
+    // Use types like UINT, uint64_t as T.
+    template <typename T>
+    VGPU_FORCE_INLINE T AlignUp(T val, T alignment)
     {
-        return (T)((value + alignment - 1) / alignment);
+        VGPU_ASSERT(IsPow2(alignment));
+        return (val + alignment - 1) & ~(alignment - 1);
     }
 
     template <class T>
@@ -236,6 +242,10 @@ public:
     virtual void DrawIndexed(uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t baseVertex, uint32_t firstInstance) = 0;
     virtual void DrawIndirect(VGPUBuffer indirectBuffer, uint64_t indirectBufferOffset) = 0;
     virtual void DrawIndexedIndirect(VGPUBuffer indirectBuffer, uint64_t indirectBufferOffset) = 0;
+
+    virtual void DispatchMesh(uint32_t threadGroupCountX, uint32_t threadGroupCountY, uint32_t threadGroupCountZ) = 0;
+    virtual void DispatchMeshIndirect(VGPUBuffer indirectBuffer, uint64_t indirectBufferOffset) = 0;
+    virtual void DispatchMeshIndirectCount(VGPUBuffer indirectBuffer, uint64_t indirectBufferOffset, VGPUBuffer countBuffer, uint64_t countBufferOffset, uint32_t maxCount) = 0;
 };
 
 struct VGPUDeviceImpl : public VGPUObject

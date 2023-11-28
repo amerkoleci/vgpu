@@ -140,7 +140,7 @@ void init_vgpu(GLFWwindow* window)
     textureDesc.dimension = VGPUTextureDimension_2D;
     textureDesc.width = width;
     textureDesc.height = height;
-    //textureDesc.depthOrArrayLayers = 1u;
+    textureDesc.depthOrArrayLayers = 1u;
     textureDesc.format = VGPUTextureFormat_Depth32Float;
     textureDesc.usage = VGPUTextureUsage_RenderTarget;
     textureDesc.mipLevelCount = 1u;
