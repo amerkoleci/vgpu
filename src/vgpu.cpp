@@ -264,6 +264,26 @@ VGPUBuffer vgpuCreateBuffer(VGPUDevice device, const VGPUBufferDesc* desc, const
     NULL_RETURN_NULL(desc);
 
     VGPUBufferDesc desc_def = _vgpu_buffer_desc_def(desc);
+
+    // Check for caps
+    if (desc_def.usage & VGPUBufferUsage_Predication)
+    {
+        if (!device->QueryFeatureSupport(VGPUFeature_Predication))
+        {
+            vgpuLogError("vgpuCreateBuffer: Predication is not supported");
+            return nullptr;
+        }
+    }
+
+    if (desc_def.usage & VGPUBufferUsage_RayTracing)
+    {
+        if (!device->QueryFeatureSupport(VGPUFeature_RayTracing))
+        {
+            vgpuLogError("vgpuCreateBuffer: RayTracing is not supported");
+            return nullptr;
+        }
+    }
+
     return device->CreateBuffer(&desc_def, pInitialData);
 }
 
@@ -798,6 +818,13 @@ void vgpuInsertDebugMarker(VGPUCommandBuffer commandBuffer, const char* markerLa
     NULL_RETURN(markerLabel);
 
     commandBuffer->InsertDebugMarker(markerLabel);
+}
+
+void vgpuClearBuffer(VGPUCommandBuffer commandBuffer, VGPUBuffer buffer, uint64_t offset, uint64_t size)
+{
+    VGPU_ASSERT(buffer);
+
+    commandBuffer->ClearBuffer(buffer, offset, size);
 }
 
 void vgpuSetPipeline(VGPUCommandBuffer commandBuffer, VGPUPipeline pipeline)

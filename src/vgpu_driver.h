@@ -214,6 +214,8 @@ public:
     virtual void PopDebugGroup() = 0;
     virtual void InsertDebugMarker(const char* markerLabel) = 0;
 
+    virtual void ClearBuffer(VGPUBuffer buffer, uint64_t offset, uint64_t size) = 0;
+
     virtual void SetPipeline(VGPUPipeline pipeline) = 0;
     virtual void SetPushConstants(uint32_t pushConstantIndex, const void* data, uint32_t size) = 0;
 

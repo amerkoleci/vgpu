@@ -1058,6 +1058,8 @@ public:
     void PushDebugGroup(const char* groupLabel) override;
     void PopDebugGroup() override;
     void InsertDebugMarker(const char* debugLabel) override;
+    void ClearBuffer(VGPUBuffer buffer, uint64_t offset, uint64_t size) override;
+
     void SetPipeline(VGPUPipeline pipeline) override;
     void SetPushConstants(uint32_t pushConstantIndex, const void* data, uint32_t size) override;
 
@@ -1187,9 +1189,9 @@ public:
 #endif
 
     bool debugUtils;
-    bool portability;
     bool xlib_surface;
     bool xcb_surface;
+    bool wayland_surface;
     VkInstance instance;
     VkDebugUtilsMessengerEXT debugUtilsMessenger;
 
@@ -2071,15 +2073,18 @@ VGPUBuffer VulkanRenderer::CreateBuffer(const VGPUBufferDesc* desc, const void* 
     VkBufferCreateInfo bufferInfo = {};
     bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
     bufferInfo.size = desc->size;
-    bufferInfo.usage = 0;
+    bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 
+    bool needBufferDeviceAddress = false;
     if (desc->usage & VGPUBufferUsage_Vertex)
     {
         bufferInfo.usage |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+        needBufferDeviceAddress = true;
     }
     if (desc->usage & VGPUBufferUsage_Index)
     {
         bufferInfo.usage |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+        needBufferDeviceAddress = true;
     }
 
     if (desc->usage & VGPUBufferUsage_Constant)
@@ -2091,23 +2096,22 @@ VGPUBuffer VulkanRenderer::CreateBuffer(const VGPUBufferDesc* desc, const void* 
     if (desc->usage & VGPUBufferUsage_ShaderRead)
     {
         // ReadOnly ByteAddressBuffer is also storage buffer
-        bufferInfo.usage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-        bufferInfo.usage |= VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT;
+        bufferInfo.usage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT;
     }
 
     if (desc->usage & VGPUBufferUsage_ShaderWrite)
     {
-        bufferInfo.usage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-        bufferInfo.usage |= VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT;
+        bufferInfo.usage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT;
     }
 
     if (desc->usage & VGPUBufferUsage_Indirect)
     {
         bufferInfo.usage |= VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
+        needBufferDeviceAddress = true;
     }
 
-    if (desc->usage & VGPUBufferUsage_Predication &&
-        conditionalRenderingFeatures.conditionalRendering == VK_TRUE)
+    // We check for feature in vgpuCreateBuffer
+    if (desc->usage & VGPUBufferUsage_Predication)
     {
         bufferInfo.usage |= VK_BUFFER_USAGE_CONDITIONAL_RENDERING_BIT_EXT;
     }
@@ -2117,13 +2121,13 @@ VGPUBuffer VulkanRenderer::CreateBuffer(const VGPUBufferDesc* desc, const void* 
         bufferInfo.usage |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR;
         bufferInfo.usage |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
         bufferInfo.usage |= VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR;
+        needBufferDeviceAddress = true;
     }
 
-    if (features1_2.bufferDeviceAddress == VK_TRUE)
+    if (features1_2.bufferDeviceAddress == VK_TRUE && needBufferDeviceAddress)
     {
         bufferInfo.usage |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
     }
-    bufferInfo.usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 
     uint32_t sharingIndices[3] = {};
     for (auto& i : queueFamilyIndices.familyIndices)
@@ -3752,13 +3756,22 @@ void VulkanCommandBuffer::InsertDebugMarker(const char* markerLabel)
     vkCmdInsertDebugUtilsLabelEXT(commandBuffer, &label);
 }
 
+void VulkanCommandBuffer::ClearBuffer(VGPUBuffer buffer, uint64_t offset, uint64_t size)
+{
+    VulkanBuffer* backendBuffer = (VulkanBuffer*)buffer;
+
+    //InsertBufferMemoryBarrier(buffer, BufferUsage::CopyDst);
+    VkDeviceSize commandSize = (size == VGPU_WHOLE_SIZE) ? VK_WHOLE_SIZE : size;
+    vkCmdFillBuffer(commandBuffer, backendBuffer->handle, offset, commandSize, 0u);
+}
+
 void VulkanCommandBuffer::SetPipeline(VGPUPipeline pipeline)
 {
-    VulkanPipeline* newPipeline = (VulkanPipeline*)pipeline;
-    if (currentPipeline == newPipeline)
+    VulkanPipeline* backendPipeline = (VulkanPipeline*)pipeline;
+    if (currentPipeline == backendPipeline)
         return;
 
-    currentPipeline = newPipeline;
+    currentPipeline = backendPipeline;
     currentPipeline->AddRef();
 
     vkCmdBindPipeline(commandBuffer, currentPipeline->bindPoint, currentPipeline->handle);
@@ -4518,7 +4531,7 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
     if (renderer->x11xcb.handle)
     {
         renderer->x11xcb.GetXCBConnection = (PFN_XGetXCBConnection)dlsym(renderer->x11xcb.handle, "XGetXCBConnection");
-    }
+}
 #endif
 
     VkResult result = VK_SUCCESS;
@@ -4539,6 +4552,12 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
         std::vector<const char*> instanceLayers;
         std::vector<const char*> instanceExtensions;
 
+        // MoltenVK
+#if defined(__APPLE__)
+        instanceExtensions.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
+        instanceExtensions.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+#endif
+
         for (auto& availableExtension : availableInstanceExtensions)
         {
             if (strcmp(availableExtension.extensionName, VK_EXT_DEBUG_UTILS_EXTENSION_NAME) == 0)
@@ -4554,49 +4573,43 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
             {
                 instanceExtensions.push_back(VK_EXT_SAMPLER_FILTER_MINMAX_EXTENSION_NAME);
             }
-#if defined(__APPLE__)
-            else if (strcmp(availableExtension.extensionName, VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME) == 0)
-            {
-                instanceExtensions.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
-            }
-            else if (strcmp(availableExtension.extensionName, VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME) == 0)
-            {
-                renderer->portability = true;
-                instanceExtensions.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
-            }
-#endif
             else if (strcmp(availableExtension.extensionName, "VK_KHR_xlib_surface") == 0)
             {
                 renderer->xlib_surface = true;
-                instanceExtensions.push_back("VK_KHR_xlib_surface");
             }
             else if (strcmp(availableExtension.extensionName, "VK_KHR_xcb_surface") == 0)
             {
                 renderer->xcb_surface = true;
-                instanceExtensions.push_back("VK_KHR_xcb_surface");
+            }
+            else if (strcmp(availableExtension.extensionName, "VK_KHR_wayland_surface") == 0)
+            {
+                renderer->wayland_surface = true;
             }
         }
 
         instanceExtensions.push_back(VK_KHR_SURFACE_EXTENSION_NAME);
 
         // Enable surface extensions depending on os
-#if defined(VK_USE_PLATFORM_ANDROID_KHR)
-        instanceExtensions.push_back(VK_KHR_ANDROID_SURFACE_EXTENSION_NAME);
-#elif defined(VK_USE_PLATFORM_WIN32_KHR)
+#if defined(VK_USE_PLATFORM_WIN32_KHR)
         instanceExtensions.push_back(VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
+#elif defined(VK_USE_PLATFORM_ANDROID_KHR)
+        instanceExtensions.push_back(VK_KHR_ANDROID_SURFACE_EXTENSION_NAME);
 #elif defined(VK_USE_PLATFORM_METAL_EXT)
         instanceExtensions.push_back(VK_EXT_METAL_SURFACE_EXTENSION_NAME);
-#endif
+#else
+        if (renderer->xlib_surface)
+        {
+            instanceExtensions.push_back("VK_KHR_xlib_surface");
+        }
+        else if (renderer->xcb_surface)
+        {
+            instanceExtensions.push_back("VK_KHR_xcb_surface");
+        }
 
-#if defined(VK_USE_PLATFORM_WAYLAND_KHR)
-        instanceExtensions.push_back(VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME);
-#endif
-
-#if defined(VK_USE_PLATFORM_XLIB_KHR)
-        instanceExtensions.push_back(VK_KHR_XLIB_SURFACE_EXTENSION_NAME);
-#endif
-#if defined(VK_USE_PLATFORM_XCB_KHR)
-        instanceExtensions.push_back(VK_KHR_XCB_SURFACE_EXTENSION_NAME);
+        if (renderer->wayland_surface)
+        {
+            instanceExtensions.push_back("VK_KHR_wayland_surface");
+    }
 #endif
 
         if (info->validationMode != VGPUValidationMode_Disabled)
@@ -4677,10 +4690,9 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
         }
 #endif
 
-        if (renderer->portability)
-        {
-            createInfo.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
-        }
+#if defined(__APPLE__)
+        createInfo.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+#endif
 
         result = vkCreateInstance(&createInfo, nullptr, &renderer->instance);
         if (result != VK_SUCCESS)

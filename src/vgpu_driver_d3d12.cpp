@@ -1135,6 +1135,8 @@ public:
     void PushDebugGroup(const char* groupLabel) override;
     void PopDebugGroup() override;
     void InsertDebugMarker(const char* debugLabel) override;
+    void ClearBuffer(VGPUBuffer buffer, uint64_t offset, uint64_t size) override;
+
     void SetPipeline(VGPUPipeline pipeline) override;
     void SetPushConstants(uint32_t pushConstantIndex, const void* data, uint32_t size) override;
 
@@ -3162,25 +3164,31 @@ void D3D12CommandBuffer::InsertDebugMarker(const char* markerLabel)
     commandList->SetMarker(PIX_EVENT_UNICODE_VERSION, wide_name.c_str(), size);
 }
 
+void D3D12CommandBuffer::ClearBuffer(VGPUBuffer buffer, uint64_t offset, uint64_t size)
+{
+    // TODO:
+    //commandList->buffer
+}
+
 void D3D12CommandBuffer::SetPipeline(VGPUPipeline pipeline)
 {
-    D3D12Pipeline* newPipeline = (D3D12Pipeline*)pipeline;
+    D3D12Pipeline* backendPipeline = (D3D12Pipeline*)pipeline;
 
-    if (currentPipeline == newPipeline)
+    if (currentPipeline == backendPipeline)
         return;
 
-    currentPipeline = newPipeline;
+    currentPipeline = backendPipeline;
     currentPipeline->AddRef();
 
-    commandList->SetPipelineState(newPipeline->handle);
-    if (newPipeline->type == VGPUPipelineType_Render)
+    commandList->SetPipelineState(backendPipeline->handle);
+    if (backendPipeline->type == VGPUPipelineType_Render)
     {
-        commandList->IASetPrimitiveTopology(newPipeline->primitiveTopology);
-        commandList->SetGraphicsRootSignature(newPipeline->pipelineLayout->handle);
+        commandList->IASetPrimitiveTopology(backendPipeline->primitiveTopology);
+        commandList->SetGraphicsRootSignature(backendPipeline->pipelineLayout->handle);
     }
     else
     {
-        commandList->SetGraphicsRootSignature(newPipeline->pipelineLayout->handle);
+        commandList->SetGraphicsRootSignature(backendPipeline->pipelineLayout->handle);
     }
 }
 
