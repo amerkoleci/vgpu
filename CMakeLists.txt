@@ -1,5 +1,5 @@
 # CMake version
-cmake_minimum_required (VERSION 3.14)
+cmake_minimum_required(VERSION 3.24.0 FATAL_ERROR)
 
 if (${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
 	message(FATAL_ERROR "In-source builds are not supported. Please choose a different binary directory.")
@@ -23,11 +23,11 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-set(CMAKE_C_STANDARD 99)
 set(CMAKE_INSTALL_MESSAGE LAZY)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+set(CMAKE_DEBUG_POSTFIX "")
 
-set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15" CACHE STRING "Minimum OS X deployment version")
+set(CMAKE_OSX_DEPLOYMENT_TARGET "11" CACHE STRING "Minimum OS X deployment version")
 set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64" CACHE STRING "Build architectures for OS X")
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
@@ -190,13 +190,12 @@ if(NOT (ANDROID OR EMSCRIPTEN OR WINDOWS_STORE))
     CPMAddPackage(
         NAME glfw
         GITHUB_REPOSITORY glfw/glfw
-        GIT_TAG afd22ebcf34f2fa84d5b9f28103f014505ae8d47
+        GIT_TAG b35641f4a3c62aa86a0b3c983d163bc0fe36026d
         OPTIONS
             "GLFW_BUILD_DOCS OFF"
             "GLFW_BUILD_EXAMPLES OFF"
             "GLFW_BUILD_TESTS OFF"
             "GLFW_INSTALL OFF"
-            "GLFW_USE_WAYLAND ${GLFW_USE_WAYLAND}"
         EXCLUDE_FROM_ALL YES
     )
 
@@ -311,8 +310,9 @@ if (VGPU_D3D12_DRIVER)
         src/third_party/D3D12MemAlloc.cpp
     )
 
+    target_compile_definitions(${PROJECT_NAME} PRIVATE D3D12MA_USING_DIRECTX_HEADERS)
     target_compile_definitions(${PROJECT_NAME} PRIVATE VGPU_D3D12_DRIVER)
-
+    
     if(WINDOWS_STORE)
         target_link_libraries(${PROJECT_NAME} PRIVATE d3d12 dxgi)
     endif ()
