@@ -187,6 +187,15 @@ namespace
 
     struct PhysicalDeviceExtensions final
     {
+        // Core in 1.3
+        bool maintenance4;
+        bool dynamicRendering;
+        bool synchronization2;
+        bool extendedDynamicState;
+        bool extendedDynamicState2;
+        bool pipelineCreationCacheControl;
+        bool formatFeatureFlags2;
+
         bool swapchain;
         bool depth_clip_enable;
         bool memory_budget;
@@ -195,18 +204,19 @@ namespace
         bool performance_query;
         bool host_query_reset;
         bool deferred_host_operations;
+        bool textureCompressionAstcHdr;
         bool accelerationStructure;
         bool raytracingPipeline;
         bool rayQuery;
         bool fragment_shading_rate;
         bool meshShader;
         bool conditionalRendering;
+
+        bool externalMemory;
+        bool externalSemaphore;
+        bool externalFence;
+
         bool win32_full_screen_exclusive;
-        bool dynamicRendering;
-        bool extended_dynamic_state;
-        bool extended_dynamic_state2;
-        bool pipeline_creation_cache_control;
-        bool format_feature_flags2;
         PhysicalDeviceVideoExtensions video{};
     };
 
@@ -224,77 +234,139 @@ namespace
 
         for (uint32_t i = 0; i < count; ++i)
         {
-            if (strcmp(vk_extensions[i].extensionName, VK_KHR_SWAPCHAIN_EXTENSION_NAME) == 0) {
+            // Core 1.3
+            if (strcmp(vk_extensions[i].extensionName, VK_KHR_MAINTENANCE_4_EXTENSION_NAME) == 0)
+            {
+                extensions.maintenance4 = true;
+            }
+            else if (strcmp(vk_extensions[i].extensionName, VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME) == 0)
+            {
+                extensions.dynamicRendering = true;
+            }
+            else if (strcmp(vk_extensions[i].extensionName, VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME) == 0)
+            {
+                extensions.synchronization2 = true;
+            }
+            else if (strcmp(vk_extensions[i].extensionName, VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME) == 0)
+            {
+                extensions.extendedDynamicState = true;
+            }
+            else if (strcmp(vk_extensions[i].extensionName, VK_EXT_EXTENDED_DYNAMIC_STATE_2_EXTENSION_NAME) == 0)
+            {
+                extensions.extendedDynamicState2 = true;
+            }
+            else if (strcmp(vk_extensions[i].extensionName, VK_EXT_PIPELINE_CREATION_CACHE_CONTROL_EXTENSION_NAME) == 0)
+            {
+                extensions.pipelineCreationCacheControl = true;
+            }
+            else if (strcmp(vk_extensions[i].extensionName, VK_KHR_FORMAT_FEATURE_FLAGS_2_EXTENSION_NAME) == 0)
+            {
+                extensions.formatFeatureFlags2 = true;
+            }
+
+            if (strcmp(vk_extensions[i].extensionName, VK_KHR_SWAPCHAIN_EXTENSION_NAME) == 0)
+            {
                 extensions.swapchain = true;
             }
-            else if (strcmp(vk_extensions[i].extensionName, VK_EXT_DEPTH_CLIP_ENABLE_EXTENSION_NAME) == 0) {
+            else if (strcmp(vk_extensions[i].extensionName, VK_EXT_DEPTH_CLIP_ENABLE_EXTENSION_NAME) == 0)
+            {
                 extensions.depth_clip_enable = true;
             }
             else if (strcmp(vk_extensions[i].extensionName, VK_EXT_MEMORY_BUDGET_EXTENSION_NAME) == 0) {
                 extensions.memory_budget = true;
             }
-            else if (strcmp(vk_extensions[i].extensionName, VK_AMD_DEVICE_COHERENT_MEMORY_EXTENSION_NAME) == 0) {
+            else if (strcmp(vk_extensions[i].extensionName, VK_AMD_DEVICE_COHERENT_MEMORY_EXTENSION_NAME) == 0)
+            {
                 extensions.AMD_device_coherent_memory = true;
             }
-            else if (strcmp(vk_extensions[i].extensionName, VK_EXT_MEMORY_PRIORITY_EXTENSION_NAME) == 0) {
+            else if (strcmp(vk_extensions[i].extensionName, VK_EXT_MEMORY_PRIORITY_EXTENSION_NAME) == 0)
+            {
                 extensions.memory_priority = true;
             }
-            else if (strcmp(vk_extensions[i].extensionName, VK_KHR_PERFORMANCE_QUERY_EXTENSION_NAME) == 0) {
+            else if (strcmp(vk_extensions[i].extensionName, VK_KHR_PERFORMANCE_QUERY_EXTENSION_NAME) == 0)
+            {
                 extensions.performance_query = true;
             }
-            else if (strcmp(vk_extensions[i].extensionName, VK_EXT_HOST_QUERY_RESET_EXTENSION_NAME) == 0) {
+            else if (strcmp(vk_extensions[i].extensionName, VK_EXT_HOST_QUERY_RESET_EXTENSION_NAME) == 0)
+            {
                 extensions.host_query_reset = true;
             }
-            else if (strcmp(vk_extensions[i].extensionName, VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME) == 0) {
+            else if (strcmp(vk_extensions[i].extensionName, VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME) == 0)
+            {
                 extensions.deferred_host_operations = true;
             }
-            else if (strcmp(vk_extensions[i].extensionName, VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME) == 0) {
+            else if (strcmp(vk_extensions[i].extensionName, VK_EXT_TEXTURE_COMPRESSION_ASTC_HDR_EXTENSION_NAME) == 0)
+            {
+                extensions.textureCompressionAstcHdr = true;
+            }
+            else if (strcmp(vk_extensions[i].extensionName, VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME) == 0)
+            {
                 extensions.accelerationStructure = true;
             }
-            else if (strcmp(vk_extensions[i].extensionName, VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME) == 0) {
+            else if (strcmp(vk_extensions[i].extensionName, VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME) == 0)
+            {
                 extensions.raytracingPipeline = true;
             }
-            else if (strcmp(vk_extensions[i].extensionName, VK_KHR_RAY_QUERY_EXTENSION_NAME) == 0) {
+            else if (strcmp(vk_extensions[i].extensionName, VK_KHR_RAY_QUERY_EXTENSION_NAME) == 0)
+            {
                 extensions.rayQuery = true;
             }
-            else if (strcmp(vk_extensions[i].extensionName, VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME) == 0) {
+            else if (strcmp(vk_extensions[i].extensionName, VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME) == 0)
+            {
                 extensions.fragment_shading_rate = true;
             }
-            else if (strcmp(vk_extensions[i].extensionName, VK_EXT_MESH_SHADER_EXTENSION_NAME) == 0) {
+            else if (strcmp(vk_extensions[i].extensionName, VK_EXT_MESH_SHADER_EXTENSION_NAME) == 0)
+            {
                 extensions.meshShader = true;
             }
-            else if (strcmp(vk_extensions[i].extensionName, VK_EXT_CONDITIONAL_RENDERING_EXTENSION_NAME) == 0) {
+            else if (strcmp(vk_extensions[i].extensionName, VK_EXT_CONDITIONAL_RENDERING_EXTENSION_NAME) == 0)
+            {
                 extensions.conditionalRendering = true;
             }
-            else if (strcmp(vk_extensions[i].extensionName, VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME) == 0) {
-                extensions.dynamicRendering = true;
-            }
-            else if (strcmp(vk_extensions[i].extensionName, VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME) == 0) {
-                extensions.extended_dynamic_state = true;
-            }
-            else if (strcmp(vk_extensions[i].extensionName, VK_EXT_EXTENDED_DYNAMIC_STATE_2_EXTENSION_NAME) == 0) {
-                extensions.extended_dynamic_state2 = true;
-            }
-            else if (strcmp(vk_extensions[i].extensionName, VK_EXT_PIPELINE_CREATION_CACHE_CONTROL_EXTENSION_NAME) == 0) {
-                extensions.pipeline_creation_cache_control = true;
-            }
-            else if (strcmp(vk_extensions[i].extensionName, VK_KHR_FORMAT_FEATURE_FLAGS_2_EXTENSION_NAME) == 0) {
-                extensions.format_feature_flags2 = true;
-            }
-            else if (strcmp(vk_extensions[i].extensionName, VK_KHR_VIDEO_QUEUE_EXTENSION_NAME) == 0) {
+            else if (strcmp(vk_extensions[i].extensionName, VK_KHR_VIDEO_QUEUE_EXTENSION_NAME) == 0)
+            {
                 extensions.video.queue = true;
             }
-            else if (strcmp(vk_extensions[i].extensionName, VK_KHR_VIDEO_DECODE_QUEUE_EXTENSION_NAME) == 0) {
+            else if (strcmp(vk_extensions[i].extensionName, VK_KHR_VIDEO_DECODE_QUEUE_EXTENSION_NAME) == 0)
+            {
                 extensions.video.decode_queue = true;
             }
-            else if (strcmp(vk_extensions[i].extensionName, VK_KHR_VIDEO_DECODE_H264_EXTENSION_NAME) == 0) {
+            else if (strcmp(vk_extensions[i].extensionName, VK_KHR_VIDEO_DECODE_H264_EXTENSION_NAME) == 0)
+            {
                 extensions.video.decode_h264 = true;
             }
-            else if (strcmp(vk_extensions[i].extensionName, VK_KHR_VIDEO_DECODE_H265_EXTENSION_NAME) == 0) {
+            else if (strcmp(vk_extensions[i].extensionName, VK_KHR_VIDEO_DECODE_H265_EXTENSION_NAME) == 0)
+            {
                 extensions.video.decode_h265 = true;
             }
+            else if (strcmp(vk_extensions[i].extensionName, VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME) == 0)
+            {
+                extensions.externalMemory = true;
+            }
+            else if (strcmp(vk_extensions[i].extensionName, VK_KHR_EXTERNAL_SEMAPHORE_FD_EXTENSION_NAME) == 0)
+            {
+                extensions.externalSemaphore = true;
+            }
+            else if (strcmp(vk_extensions[i].extensionName, VK_KHR_EXTERNAL_FENCE_FD_EXTENSION_NAME) == 0)
+            {
+                extensions.externalFence = true;
+            }
+
 #if defined(VK_USE_PLATFORM_WIN32_KHR)
-            else if (strcmp(vk_extensions[i].extensionName, VK_EXT_FULL_SCREEN_EXCLUSIVE_EXTENSION_NAME) == 0) {
+            if (strcmp(vk_extensions[i].extensionName, VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME) == 0)
+            {
+                extensions.externalMemory = true;
+            }
+            else if (strcmp(vk_extensions[i].extensionName, VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME) == 0)
+            {
+                extensions.externalSemaphore = true;
+            }
+            else if (strcmp(vk_extensions[i].extensionName, VK_KHR_EXTERNAL_FENCE_WIN32_EXTENSION_NAME) == 0)
+            {
+                extensions.externalFence = true;
+            }
+            else if (strcmp(vk_extensions[i].extensionName, VK_EXT_FULL_SCREEN_EXCLUSIVE_EXTENSION_NAME) == 0)
+            {
                 extensions.win32_full_screen_exclusive = true;
             }
 #endif
@@ -306,11 +378,13 @@ namespace
         // Core 1.3
         if (gpuProps.apiVersion >= VK_API_VERSION_1_3)
         {
+            extensions.maintenance4 = true;
             extensions.dynamicRendering = true;
-            extensions.extended_dynamic_state = true;
-            extensions.extended_dynamic_state2 = true;
-            extensions.pipeline_creation_cache_control = true;
-            extensions.format_feature_flags2 = true;
+            extensions.synchronization2 = true;
+            extensions.extendedDynamicState = true;
+            extensions.extendedDynamicState2 = true;
+            extensions.pipelineCreationCacheControl = true;
+            extensions.formatFeatureFlags2 = true;
         }
 
         return extensions;
@@ -908,6 +982,7 @@ struct VulkanTexture final : public VGPUTextureImpl
     uint32_t height = 0;
     VkFormat vkFormat = VK_FORMAT_UNDEFINED;
     std::unordered_map<size_t, VkImageView> viewCache;
+    void* sharedHandle = nullptr;
 
     ~VulkanTexture() override;
     void SetLabel(const char* label) override;
@@ -993,6 +1068,7 @@ struct VulkanSwapChain final : public VGPUSwapChainImpl
     VkSemaphore releaseSemaphore = VK_NULL_HANDLE;
 
     ~VulkanSwapChain() override;
+    bool Update();
     void SetLabel(const char* label) override;
     VGPUTextureFormat GetFormat() const override { return colorFormat; }
     uint32_t GetWidth() const override { return extent.width; }
@@ -1142,6 +1218,7 @@ struct VulkanRenderer final : public VGPUDeviceImpl
 public:
     ~VulkanRenderer() override;
 
+    bool Init(const VGPUDeviceDescriptor* info);
     void SetLabel(const char* label) override;
     void WaitIdle() override;
     VGPUBackend GetBackendType() const override { return VGPUBackend_Vulkan; }
@@ -1180,6 +1257,9 @@ public:
 
     void* GetNativeObject(VGPUNativeObjectType objectType) const override;
 
+    bool GetImageFormatProperties(const VkImageCreateInfo& createInfo, const void* pNext, VkImageFormatProperties2* properties2) const;
+    bool GetImageFormatProperties(VkFormat format, VkImageType type, VkImageTiling tiling, VkImageUsageFlags usage, VkImageCreateFlags flags, const void* pNext, VkImageFormatProperties2* properties2) const;
+
 public:
 #if defined(VK_USE_PLATFORM_XLIB_KHR) || defined(VK_USE_PLATFORM_XCB_KHR)
     struct {
@@ -1203,23 +1283,31 @@ public:
     VkPhysicalDeviceVulkan12Features features1_2 = {};
     VkPhysicalDeviceVulkan13Features features1_3 = {};
 
+    // Core in 1.3
+    VkPhysicalDeviceMaintenance4Features maintenance4Features = {};
+    VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeatures = {};
+    VkPhysicalDeviceSynchronization2Features synchronization2Features = {};
+    VkPhysicalDeviceExtendedDynamicStateFeaturesEXT extendedDynamicStateFeatures = {};
+    VkPhysicalDeviceExtendedDynamicState2FeaturesEXT extendedDynamicState2Features = {};
+
     VkPhysicalDeviceDepthClipEnableFeaturesEXT depthClipEnableFeatures = {};
     VkPhysicalDevicePerformanceQueryFeaturesKHR perf_counter_features = {};
     VkPhysicalDeviceHostQueryResetFeatures host_query_reset_features = {};
+    VkPhysicalDeviceTextureCompressionASTCHDRFeatures astc_hdrFeatures = {};
     VkPhysicalDeviceAccelerationStructureFeaturesKHR acceleration_structure_features = {};
     VkPhysicalDeviceRayTracingPipelineFeaturesKHR raytracing_features = {};
     VkPhysicalDeviceRayQueryFeaturesKHR rayQueryFeatures = {};
     VkPhysicalDeviceFragmentShadingRateFeaturesKHR fragmentShadingRateFeatures = {};
     VkPhysicalDeviceMeshShaderFeaturesEXT meshShaderFeatures = {};
     VkPhysicalDeviceConditionalRenderingFeaturesEXT conditionalRenderingFeatures = {};
-    VkPhysicalDeviceExtendedDynamicStateFeaturesEXT extendedDynamicStateFeatures = {};
-    VkPhysicalDeviceExtendedDynamicState2FeaturesEXT extendedDynamicState2Features = {};
 
     // Properties
     VkPhysicalDeviceProperties2 properties2 = {};
     VkPhysicalDeviceVulkan11Properties properties_1_1 = {};
     VkPhysicalDeviceVulkan12Properties properties_1_2 = {};
     VkPhysicalDeviceVulkan13Properties properties_1_3 = {};
+
+    VkPhysicalDeviceDriverProperties driverProperties = {};
     VkPhysicalDeviceDepthStencilResolveProperties depthStencilResolveProperties = {};
     VkPhysicalDeviceAccelerationStructurePropertiesKHR accelerationStructureProperties = {};
     VkPhysicalDeviceRayTracingPipelinePropertiesKHR rayTracingPipelineProperties = {};
@@ -1257,6 +1345,7 @@ public:
     VkDevice device = VK_NULL_HANDLE;
     VulkanQueue queues[_VGPUCommandQueue_Count];
     VmaAllocator allocator = VK_NULL_HANDLE;
+    VmaAllocator externalAllocator = VK_NULL_HANDLE;
     uint64_t timestampFrequency = 0;
 
     uint32_t frameIndex = 0;
@@ -1515,16 +1604,39 @@ void* VulkanRenderer::GetNativeObject(VGPUNativeObjectType objectType) const
 {
     switch (objectType)
     {
-        case VGPU_NATIVE_VkDevice:
+        case VGPUNativeObjectType_VkDevice:
             return device;
-        case VGPU_NATIVE_VkPhysicalDevice:
+        case VGPUNativeObjectType_VkPhysicalDevice:
             return physicalDevice;
-        case VGPU_NATIVE_VkInstance:
+        case VGPUNativeObjectType_VkInstance:
             return instance;
         default:
             return nullptr;
     }
 }
+
+bool VulkanRenderer::GetImageFormatProperties(const VkImageCreateInfo& createInfo, const void* pNext, VkImageFormatProperties2* properties2) const
+{
+    return GetImageFormatProperties(createInfo.format, createInfo.imageType, createInfo.tiling, createInfo.usage, createInfo.flags, pNext, properties2);
+}
+
+bool VulkanRenderer::GetImageFormatProperties(VkFormat format, VkImageType type, VkImageTiling tiling, VkImageUsageFlags usage, VkImageCreateFlags flags, const void* pNext, VkImageFormatProperties2* properties2) const
+{
+    VGPU_ASSERT(properties2->sType == VK_STRUCTURE_TYPE_IMAGE_FORMAT_PROPERTIES_2);
+
+    VkPhysicalDeviceImageFormatInfo2 info = {};
+    info.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_FORMAT_INFO_2;
+    info.pNext = pNext;
+    info.format = format;
+    info.type = type;
+    info.tiling = tiling;
+    info.usage = usage;
+    info.flags = flags;
+
+    const VkResult result = vkGetPhysicalDeviceImageFormatProperties2(physicalDevice, &info, properties2);
+    return result == VK_SUCCESS;
+}
+
 
 static VkSurfaceKHR vulkan_createSurface(VulkanRenderer* renderer, const VGPUSwapChainDesc* desc)
 {
@@ -1550,7 +1662,7 @@ static VkSurfaceKHR vulkan_createSurface(VulkanRenderer* renderer, const VGPUSwa
     createInfo.pLayer = (const CAMetalLayer*)desc->windowHandle;
     result = vkCreateMetalSurfaceEXT(instance, &createInfo, nullptr, &vk_surface);
 #elif defined(VK_USE_PLATFORM_XCB_KHR) || defined(VK_USE_PLATFORM_XLIB_KHR)
-    if (renderer->xlib_surface)
+    if (xlib_surface)
     {
         VkXlibSurfaceCreateInfoKHR createInfo = {};
         createInfo.sType = VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR;
@@ -1558,11 +1670,11 @@ static VkSurfaceKHR vulkan_createSurface(VulkanRenderer* renderer, const VGPUSwa
         createInfo.window = (uint32_t)desc->windowHandle;
         result = vkCreateXlibSurfaceKHR(instance, &createInfo, nullptr, &vk_surface);
     }
-    else if (renderer->xcb_surface)
+    else if (xcb_surface)
     {
         VkXcbSurfaceCreateInfoKHR createInfo = {};
         createInfo.sType = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR;
-        createInfo.connection = renderer->x11xcb.GetXCBConnection(static_cast<Display*>(desc->displayHandle));
+        createInfo.connection = x11xcb.GetXCBConnection(static_cast<Display*>(desc->displayHandle));
         createInfo.window = (uint32_t)desc->windowHandle;
         result = vkCreateXcbSurfaceKHR(instance, &createInfo, nullptr, &vk_surface);
     }
@@ -1799,6 +1911,22 @@ VulkanRenderer::~VulkanRenderer()
         allocator = VK_NULL_HANDLE;
     }
 
+    if (externalAllocator != VK_NULL_HANDLE)
+    {
+#if defined(_DEBUG)
+        VmaTotalStatistics stats;
+        vmaCalculateStatistics(externalAllocator, &stats);
+
+        if (stats.total.statistics.allocationBytes > 0)
+        {
+            //    vgpuLogError("Total device memory leaked: {} bytes.", stats.total.usedBytes);
+        }
+#endif
+
+        vmaDestroyAllocator(externalAllocator);
+        externalAllocator = VK_NULL_HANDLE;
+    }
+
     if (device != VK_NULL_HANDLE)
     {
         vkDestroyDevice(device, nullptr);
@@ -1824,6 +1952,1017 @@ VulkanRenderer::~VulkanRenderer()
         x11xcb.handle = NULL;
     }
 #endif
+}
+
+bool VulkanRenderer::Init(const VGPUDeviceDescriptor* info)
+{
+
+#if defined(VK_USE_PLATFORM_XLIB_KHR) || defined(VK_USE_PLATFORM_XCB_KHR)
+#if defined(__CYGWIN__)
+    x11xcb.handle = dlopen("libX11-xcb-1.so", RTLD_LAZY | RTLD_LOCAL);
+#elif defined(__OpenBSD__) || defined(__NetBSD__)
+    x11xcb.handle = dlopen("libX11-xcb.so", RTLD_LAZY | RTLD_LOCAL);
+#else
+    x11xcb.handle = dlopen("libX11-xcb.so.1", RTLD_LAZY | RTLD_LOCAL);
+#endif
+
+    if (x11xcb.handle)
+    {
+        x11xcb.GetXCBConnection = (PFN_XGetXCBConnection)dlsym(x11xcb.handle, "XGetXCBConnection");
+    }
+#endif
+
+    VkResult result = VK_SUCCESS;
+
+    // Enumerate available layers and extensions:
+    {
+        uint32_t instanceLayerCount;
+        VK_CHECK(vkEnumerateInstanceLayerProperties(&instanceLayerCount, nullptr));
+        std::vector<VkLayerProperties> availableInstanceLayers(instanceLayerCount);
+        VK_CHECK(vkEnumerateInstanceLayerProperties(&instanceLayerCount, availableInstanceLayers.data()));
+
+        uint32_t extensionCount = 0;
+        VK_CHECK(vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr));
+        std::vector<VkExtensionProperties> availableInstanceExtensions(extensionCount);
+        VK_CHECK(vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, availableInstanceExtensions.data()));
+
+        std::vector<const char*> instanceLayers;
+        std::vector<const char*> instanceExtensions;
+
+        // MoltenVK
+#if defined(__APPLE__)
+        instanceExtensions.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
+        instanceExtensions.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+#endif
+
+        for (auto& availableExtension : availableInstanceExtensions)
+        {
+            if (strcmp(availableExtension.extensionName, VK_EXT_DEBUG_UTILS_EXTENSION_NAME) == 0)
+            {
+                debugUtils = true;
+                instanceExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+            }
+            else if (strcmp(availableExtension.extensionName, VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME) == 0)
+            {
+                instanceExtensions.push_back(VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME);
+            }
+            else if (strcmp(availableExtension.extensionName, VK_EXT_SAMPLER_FILTER_MINMAX_EXTENSION_NAME) == 0)
+            {
+                instanceExtensions.push_back(VK_EXT_SAMPLER_FILTER_MINMAX_EXTENSION_NAME);
+            }
+            else if (strcmp(availableExtension.extensionName, "VK_KHR_xlib_surface") == 0)
+            {
+                xlib_surface = true;
+            }
+            else if (strcmp(availableExtension.extensionName, "VK_KHR_xcb_surface") == 0)
+            {
+                xcb_surface = true;
+            }
+            else if (strcmp(availableExtension.extensionName, "VK_KHR_wayland_surface") == 0)
+            {
+                wayland_surface = true;
+            }
+        }
+
+        instanceExtensions.push_back(VK_KHR_SURFACE_EXTENSION_NAME);
+
+        // Enable surface extensions depending on os
+#if defined(VK_USE_PLATFORM_WIN32_KHR)
+        instanceExtensions.push_back(VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
+#elif defined(VK_USE_PLATFORM_ANDROID_KHR)
+        instanceExtensions.push_back(VK_KHR_ANDROID_SURFACE_EXTENSION_NAME);
+#elif defined(VK_USE_PLATFORM_METAL_EXT)
+        instanceExtensions.push_back(VK_EXT_METAL_SURFACE_EXTENSION_NAME);
+#else
+        if (xlib_surface)
+        {
+            instanceExtensions.push_back("VK_KHR_xlib_surface");
+        }
+        else if (xcb_surface)
+        {
+            instanceExtensions.push_back("VK_KHR_xcb_surface");
+        }
+
+        if (wayland_surface)
+        {
+            instanceExtensions.push_back("VK_KHR_wayland_surface");
+        }
+#endif
+
+        if (info->validationMode != VGPUValidationMode_Disabled)
+        {
+            // Determine the optimal validation layers to enable that are necessary for useful debugging
+            std::vector<const char*> optimalValidationLyers = GetOptimalValidationLayers(availableInstanceLayers);
+            instanceLayers.insert(instanceLayers.end(), optimalValidationLyers.begin(), optimalValidationLyers.end());
+        }
+
+#if defined(_DEBUG)
+        bool validationFeatures = false;
+        if (info->validationMode == VGPUValidationMode_GPU)
+        {
+            uint32_t layerInstanceExtensionCount;
+            VK_CHECK(vkEnumerateInstanceExtensionProperties("VK_LAYER_KHRONOS_validation", &layerInstanceExtensionCount, nullptr));
+            std::vector<VkExtensionProperties> availableLayerInstanceExtensions(layerInstanceExtensionCount);
+            VK_CHECK(vkEnumerateInstanceExtensionProperties("VK_LAYER_KHRONOS_validation", &layerInstanceExtensionCount, availableLayerInstanceExtensions.data()));
+
+            for (auto& availableExtension : availableLayerInstanceExtensions)
+            {
+                if (strcmp(availableExtension.extensionName, VK_EXT_VALIDATION_FEATURES_EXTENSION_NAME) == 0)
+                {
+                    validationFeatures = true;
+                    instanceExtensions.push_back(VK_EXT_VALIDATION_FEATURES_EXTENSION_NAME);
+                }
+            }
+        }
+#endif 
+
+        VkApplicationInfo appInfo = {};
+        appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+        appInfo.pApplicationName = info->label;
+        appInfo.applicationVersion = 1;
+        appInfo.pEngineName = "vgpu";
+        appInfo.engineVersion = VK_MAKE_VERSION(VGPU_VERSION_MAJOR, VGPU_VERSION_MINOR, VGPU_VERSION_PATCH);
+        appInfo.apiVersion = VK_API_VERSION_1_3;
+
+        VkInstanceCreateInfo createInfo = {};
+        createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+        createInfo.pApplicationInfo = &appInfo;
+        createInfo.enabledLayerCount = static_cast<uint32_t>(instanceLayers.size());
+        createInfo.ppEnabledLayerNames = instanceLayers.data();
+        createInfo.enabledExtensionCount = static_cast<uint32_t>(instanceExtensions.size());
+        createInfo.ppEnabledExtensionNames = instanceExtensions.data();
+
+        VkDebugUtilsMessengerCreateInfoEXT debugUtilsCreateInfo{};
+
+        if (info->validationMode != VGPUValidationMode_Disabled && debugUtils)
+        {
+            debugUtilsCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+            debugUtilsCreateInfo.pNext = nullptr;
+            debugUtilsCreateInfo.flags = 0;
+
+            debugUtilsCreateInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+            if (info->validationMode == VGPUValidationMode_Verbose)
+            {
+                debugUtilsCreateInfo.messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT;
+            }
+
+            debugUtilsCreateInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+            debugUtilsCreateInfo.pfnUserCallback = DebugUtilsMessengerCallback;
+            createInfo.pNext = &debugUtilsCreateInfo;
+        }
+
+#if defined(_DEBUG)
+        VkValidationFeaturesEXT validationFeaturesInfo = {};
+        validationFeaturesInfo.sType = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT;
+        if (validationFeatures)
+        {
+            static const VkValidationFeatureEnableEXT enable_features[2] = {
+                VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
+                VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT,
+            };
+            validationFeaturesInfo.enabledValidationFeatureCount = 2;
+            validationFeaturesInfo.pEnabledValidationFeatures = enable_features;
+            validationFeaturesInfo.pNext = createInfo.pNext;
+            createInfo.pNext = &validationFeaturesInfo;
+        }
+#endif
+
+#if defined(__APPLE__)
+        createInfo.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+#endif
+
+        result = vkCreateInstance(&createInfo, nullptr, &instance);
+        if (result != VK_SUCCESS)
+        {
+            VK_LOG_ERROR(result, "Failed to create Vulkan instance.");
+            return false;
+        }
+
+        volkLoadInstanceOnly(instance);
+
+        if (info->validationMode != VGPUValidationMode_Disabled && debugUtils)
+        {
+            result = vkCreateDebugUtilsMessengerEXT(instance, &debugUtilsCreateInfo, nullptr, &debugUtilsMessenger);
+            if (result != VK_SUCCESS)
+            {
+                VK_LOG_ERROR(result, "Could not create debug utils messenger");
+            }
+        }
+
+#ifdef _DEBUG
+        vgpuLogInfo("Created VkInstance with version: %d.%d.%d",
+            VK_VERSION_MAJOR(appInfo.apiVersion),
+            VK_VERSION_MINOR(appInfo.apiVersion),
+            VK_VERSION_PATCH(appInfo.apiVersion)
+        );
+
+        if (createInfo.enabledLayerCount)
+        {
+            vgpuLogInfo("Enabled %d Validation Layers:", createInfo.enabledLayerCount);
+
+            for (uint32_t i = 0; i < createInfo.enabledLayerCount; ++i)
+            {
+                vgpuLogInfo("	\t%s", createInfo.ppEnabledLayerNames[i]);
+            }
+        }
+
+        vgpuLogInfo("Enabled %d Instance Extensions:", createInfo.enabledExtensionCount);
+        for (uint32_t i = 0; i < createInfo.enabledExtensionCount; ++i)
+        {
+            vgpuLogInfo("	\t%s", createInfo.ppEnabledExtensionNames[i]);
+        }
+#endif
+    }
+
+    // Enumerate physical device and create logical device.
+    {
+        uint32_t deviceCount = 0;
+        VK_CHECK(vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr));
+
+        if (deviceCount == 0)
+        {
+            vgpuLogError("Vulkan: Failed to find GPUs with Vulkan support");
+            return false;
+        }
+
+        std::vector<VkPhysicalDevice> physicalDevices(deviceCount);
+        VK_CHECK(vkEnumeratePhysicalDevices(instance, &deviceCount, physicalDevices.data()));
+
+        std::vector<const char*> enabledDeviceExtensions;
+        for (const VkPhysicalDevice& candidatePhysicalDevice : physicalDevices)
+        {
+            // We require minimum 1.2
+            VkPhysicalDeviceProperties gpuProps;
+            vkGetPhysicalDeviceProperties(candidatePhysicalDevice, &gpuProps);
+            if (gpuProps.apiVersion < VK_API_VERSION_1_2)
+            {
+                continue;
+            }
+
+            PhysicalDeviceExtensions physicalDeviceExt = QueryPhysicalDeviceExtensions(candidatePhysicalDevice);
+            bool suitable = physicalDeviceExt.swapchain;
+
+            if (!suitable)
+            {
+                continue;
+            }
+
+            // For debug purpose
+            //gpuProps.apiVersion = VK_API_VERSION_1_2;
+
+            // Features
+            void** features_chain = nullptr;
+            features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+            features1_1.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
+            features1_2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+            features1_3.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+
+            maintenance4Features = {};
+            dynamicRenderingFeatures = {};
+            synchronization2Features = {};
+            extendedDynamicStateFeatures = {};
+            extendedDynamicState2Features = {};
+
+            astc_hdrFeatures = {};
+            depthClipEnableFeatures = {};
+            acceleration_structure_features = {};
+            raytracing_features = {};
+            rayQueryFeatures = {};
+            fragmentShadingRateFeatures = {};
+            meshShaderFeatures = {};
+            conditionalRenderingFeatures = {};
+
+            features2.pNext = &features1_1;
+            if (gpuProps.apiVersion >= VK_API_VERSION_1_3)
+            {
+                features1_1.pNext = &features1_2;
+                features1_2.pNext = &features1_3;
+                features_chain = &features1_3.pNext;
+            }
+            else
+            {
+                // gpuProps.apiVersion >= VK_API_VERSION_1_2
+                features1_1.pNext = &features1_2;
+                features_chain = &features1_2.pNext;
+            }
+
+            // Properties
+            void** propertiesChain = nullptr;
+            properties2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+            properties_1_1.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_PROPERTIES;
+            properties_1_2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_PROPERTIES;
+            properties_1_3.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_PROPERTIES;
+            driverProperties = {};
+            depthStencilResolveProperties = {};
+            accelerationStructureProperties = {};
+            rayTracingPipelineProperties = {};
+            fragmentShadingRateProperties = {};
+            meshShaderProperties = {};
+
+            properties2.pNext = &properties_1_1;
+            if (gpuProps.apiVersion >= VK_API_VERSION_1_3)
+            {
+                properties_1_1.pNext = &properties_1_2;
+                properties_1_2.pNext = &properties_1_3;
+                propertiesChain = &properties_1_3.pNext;
+            }
+            else
+            {
+                // gpuProps.apiVersion >= VK_API_VERSION_1_2
+                properties_1_1.pNext = &properties_1_2;
+                propertiesChain = &properties_1_2.pNext;
+            }
+
+            depthStencilResolveProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEPTH_STENCIL_RESOLVE_PROPERTIES;
+            *propertiesChain = &depthStencilResolveProperties;
+            propertiesChain = &depthStencilResolveProperties.pNext;
+
+            enabledDeviceExtensions.clear();
+            enabledDeviceExtensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+
+            if (physicalDeviceExt.memory_budget)
+            {
+                enabledDeviceExtensions.push_back(VK_EXT_MEMORY_BUDGET_EXTENSION_NAME);
+            }
+
+            if (physicalDeviceExt.AMD_device_coherent_memory)
+            {
+                enabledDeviceExtensions.push_back(VK_AMD_DEVICE_COHERENT_MEMORY_EXTENSION_NAME);
+            }
+
+            if (physicalDeviceExt.memory_priority)
+            {
+                enabledDeviceExtensions.push_back(VK_EXT_MEMORY_PRIORITY_EXTENSION_NAME);
+            }
+
+            // Core in 1.3
+            if (gpuProps.apiVersion < VK_API_VERSION_1_3)
+            {
+                // Core in 1.3
+                driverProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES;
+                *propertiesChain = &driverProperties;
+                propertiesChain = &driverProperties.pNext;
+
+                if (physicalDeviceExt.maintenance4)
+                {
+                    enabledDeviceExtensions.push_back(VK_KHR_MAINTENANCE_4_EXTENSION_NAME);
+
+                    maintenance4Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_4_FEATURES;
+                    *propertiesChain = &maintenance4Features;
+                    propertiesChain = &maintenance4Features.pNext;
+                }
+
+                if (physicalDeviceExt.extendedDynamicState)
+                {
+                    enabledDeviceExtensions.push_back(VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME);
+
+                    extendedDynamicStateFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT;
+                    *features_chain = &extendedDynamicStateFeatures;
+                    features_chain = &extendedDynamicStateFeatures.pNext;
+                }
+
+                if (physicalDeviceExt.extendedDynamicState2)
+                {
+                    enabledDeviceExtensions.push_back(VK_EXT_EXTENDED_DYNAMIC_STATE_2_EXTENSION_NAME);
+
+                    extendedDynamicState2Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_2_FEATURES_EXT;
+                    *features_chain = &extendedDynamicState2Features;
+                    features_chain = &extendedDynamicState2Features.pNext;
+                }
+            }
+
+            if (physicalDeviceExt.textureCompressionAstcHdr)
+            {
+                enabledDeviceExtensions.push_back(VK_EXT_TEXTURE_COMPRESSION_ASTC_HDR_EXTENSION_NAME);
+
+                astc_hdrFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TEXTURE_COMPRESSION_ASTC_HDR_FEATURES;
+                *features_chain = &astc_hdrFeatures;
+                features_chain = &astc_hdrFeatures.pNext;
+            }
+
+            // For performance queries, we also use host query reset since queryPool resets cannot live in the same command buffer as beginQuery
+            if (physicalDeviceExt.performance_query &&
+                physicalDeviceExt.host_query_reset)
+            {
+                enabledDeviceExtensions.push_back(VK_KHR_PERFORMANCE_QUERY_EXTENSION_NAME);
+
+                perf_counter_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PERFORMANCE_QUERY_FEATURES_KHR;
+                *features_chain = &perf_counter_features;
+                features_chain = &perf_counter_features.pNext;
+
+                host_query_reset_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_HOST_QUERY_RESET_FEATURES;
+                enabledDeviceExtensions.push_back(VK_EXT_HOST_QUERY_RESET_EXTENSION_NAME);
+                *features_chain = &host_query_reset_features;
+                features_chain = &host_query_reset_features.pNext;
+            }
+
+            if (physicalDeviceExt.depth_clip_enable)
+            {
+                enabledDeviceExtensions.push_back(VK_EXT_DEPTH_CLIP_ENABLE_EXTENSION_NAME);
+
+                depthClipEnableFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEPTH_CLIP_ENABLE_FEATURES_EXT;
+                *features_chain = &depthClipEnableFeatures;
+                features_chain = &depthClipEnableFeatures.pNext;
+            }
+
+            if (physicalDeviceExt.deferred_host_operations)
+            {
+                enabledDeviceExtensions.push_back(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME);
+            }
+
+            if (physicalDeviceExt.accelerationStructure)
+            {
+                // Required by VK_KHR_acceleration_structure
+                VGPU_ASSERT(physicalDeviceExt.deferred_host_operations);
+
+                enabledDeviceExtensions.push_back(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME);
+
+                acceleration_structure_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
+                *features_chain = &acceleration_structure_features;
+                features_chain = &acceleration_structure_features.pNext;
+
+                accelerationStructureProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_PROPERTIES_KHR;
+                *propertiesChain = &accelerationStructureProperties;
+                propertiesChain = &accelerationStructureProperties.pNext;
+
+                if (physicalDeviceExt.raytracingPipeline)
+                {
+                    enabledDeviceExtensions.push_back(VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME);
+                    raytracing_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR;
+                    *features_chain = &raytracing_features;
+                    features_chain = &raytracing_features.pNext;
+
+                    rayTracingPipelineProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR;
+                    *propertiesChain = &rayTracingPipelineProperties;
+                    propertiesChain = &rayTracingPipelineProperties.pNext;
+                }
+
+                if (physicalDeviceExt.rayQuery)
+                {
+                    enabledDeviceExtensions.push_back(VK_KHR_RAY_QUERY_EXTENSION_NAME);
+
+                    rayQueryFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR;
+                    *features_chain = &rayQueryFeatures;
+                    features_chain = &rayQueryFeatures.pNext;
+                }
+            }
+
+            if (physicalDeviceExt.fragment_shading_rate)
+            {
+                enabledDeviceExtensions.push_back(VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME);
+
+                fragmentShadingRateFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_FEATURES_KHR;
+                *features_chain = &fragmentShadingRateFeatures;
+                features_chain = &fragmentShadingRateFeatures.pNext;
+
+                fragmentShadingRateProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_PROPERTIES_KHR;
+                *propertiesChain = &fragmentShadingRateProperties;
+                propertiesChain = &fragmentShadingRateProperties.pNext;
+            }
+
+            if (physicalDeviceExt.meshShader)
+            {
+                enabledDeviceExtensions.push_back(VK_EXT_MESH_SHADER_EXTENSION_NAME);
+
+                meshShaderFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT;
+                *features_chain = &meshShaderFeatures;
+                features_chain = &meshShaderFeatures.pNext;
+
+                meshShaderProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_PROPERTIES_EXT;
+                *propertiesChain = &meshShaderProperties;
+                propertiesChain = &meshShaderProperties.pNext;
+            }
+
+            if (physicalDeviceExt.conditionalRendering)
+            {
+                enabledDeviceExtensions.push_back(VK_EXT_CONDITIONAL_RENDERING_EXTENSION_NAME);
+
+                conditionalRenderingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_CONDITIONAL_RENDERING_FEATURES_EXT;
+                *features_chain = &conditionalRenderingFeatures;
+                features_chain = &conditionalRenderingFeatures.pNext;
+            }
+
+            vkGetPhysicalDeviceProperties2(candidatePhysicalDevice, &properties2);
+
+            bool priority = properties2.properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
+            if (info->powerPreference == VGPUPowerPreference_LowPower)
+            {
+                priority = properties2.properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU;
+            }
+
+            if (priority || physicalDevice == VK_NULL_HANDLE)
+            {
+                physicalDevice = candidatePhysicalDevice;
+                supportedExtensions = physicalDeviceExt;
+
+                if (priority)
+                {
+                    // If this is prioritized GPU type, look no further
+                    break;
+                }
+            }
+        }
+
+        if (physicalDevice == VK_NULL_HANDLE)
+        {
+            vgpuLogError("Vulkan: Failed to find a suitable GPU");
+            return false;
+        }
+
+        vkGetPhysicalDeviceFeatures2(physicalDevice, &features2);
+        vkGetPhysicalDeviceProperties2(physicalDevice, &properties2);
+
+        // Memory properties
+        memoryProperties2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2;
+        vkGetPhysicalDeviceMemoryProperties2(physicalDevice, &memoryProperties2);
+
+        VGPU_VERIFY(features2.features.robustBufferAccess == VK_TRUE);
+        VGPU_VERIFY(features2.features.depthBiasClamp == VK_TRUE);
+        VGPU_VERIFY(features2.features.fragmentStoresAndAtomics == VK_TRUE);
+        VGPU_VERIFY(features2.features.imageCubeArray == VK_TRUE);
+        VGPU_VERIFY(features2.features.independentBlend == VK_TRUE);
+        VGPU_VERIFY(features2.features.fullDrawIndexUint32 == VK_TRUE);
+        VGPU_VERIFY(features2.features.sampleRateShading == VK_TRUE);
+        VGPU_VERIFY(features2.features.shaderClipDistance == VK_TRUE);
+        VGPU_VERIFY(features2.features.depthClamp == VK_TRUE);
+        VGPU_VERIFY(features2.features.occlusionQueryPrecise == VK_TRUE);
+
+        VGPU_ASSERT(features1_3.dynamicRendering == VK_TRUE || dynamicRenderingFeatures.dynamicRendering == VK_TRUE);
+
+        synchronization2 = features1_3.synchronization2 == VK_TRUE;
+        dynamicRendering = features1_3.dynamicRendering == VK_TRUE || dynamicRenderingFeatures.dynamicRendering == VK_TRUE;
+
+        if (!features2.features.textureCompressionBC &&
+            !(features2.features.textureCompressionETC2 && features2.features.textureCompressionASTC_LDR))
+        {
+            vgpuLogError("Vulkan textureCompressionBC feature required or both textureCompressionETC2 and textureCompressionASTC required.");
+            return false;
+        }
+
+        // Find queue families:
+        uint32_t queueFamilyCount = 0;
+        vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, nullptr);
+
+        std::vector<VkQueueFamilyProperties2> queueFamilies(queueFamilyCount);
+        std::vector<VkQueueFamilyVideoPropertiesKHR> queueFamiliesVideo(queueFamilyCount);
+        for (uint32_t i = 0; i < queueFamilyCount; ++i)
+        {
+            queueFamilies[i].sType = VK_STRUCTURE_TYPE_QUEUE_FAMILY_PROPERTIES_2;
+
+            if (supportedExtensions.video.queue)
+            {
+                queueFamilies[i].pNext = &queueFamiliesVideo[i];
+                queueFamiliesVideo[i].sType = VK_STRUCTURE_TYPE_QUEUE_FAMILY_VIDEO_PROPERTIES_KHR;
+            }
+        }
+
+        vkGetPhysicalDeviceQueueFamilyProperties2(physicalDevice, &queueFamilyCount, queueFamilies.data());
+
+        queueFamilyIndices.queueFamilyCount = queueFamilyCount;
+        queueFamilyIndices.queueOffsets.resize(queueFamilyCount);
+        queueFamilyIndices.queuePriorities.resize(queueFamilyCount);
+
+        const auto FindVacantQueue = [&](uint32_t& family, uint32_t& index,
+            VkQueueFlags required, VkQueueFlags ignore_flags,
+            float priority) -> bool
+            {
+                for (uint32_t familyIndex = 0; familyIndex < queueFamilyCount; familyIndex++)
+                {
+                    if ((queueFamilies[familyIndex].queueFamilyProperties.queueFlags & ignore_flags) != 0)
+                        continue;
+
+                    // A graphics queue candidate must support present for us to select it.
+                    if ((required & VK_QUEUE_GRAPHICS_BIT) != 0)
+                    {
+                        VkBool32 supported = vulkan_queryPresentationSupport(physicalDevice, familyIndex);
+                        if (!supported)
+                            continue;
+                        //if (vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, familyIndex, vk_surface, &supported) != VK_SUCCESS || !supported)
+                        //    continue;
+                    }
+
+                    // A video decode queue candidate must support VK_VIDEO_CODEC_OPERATION_DECODE_H264_BIT_KHR or VK_VIDEO_CODEC_OPERATION_DECODE_H265_BIT_KHR
+                    if ((required & VK_QUEUE_VIDEO_DECODE_BIT_KHR) != 0)
+                    {
+                        VkVideoCodecOperationFlagsKHR videoCodecOperations = queueFamiliesVideo[familyIndex].videoCodecOperations;
+
+                        if ((videoCodecOperations & VK_VIDEO_CODEC_OPERATION_DECODE_H264_BIT_KHR) == 0 &&
+                            (videoCodecOperations & VK_VIDEO_CODEC_OPERATION_DECODE_H265_BIT_KHR) == 0)
+                        {
+                            continue;
+                        }
+                    }
+
+                    if (queueFamilies[familyIndex].queueFamilyProperties.queueCount &&
+                        (queueFamilies[familyIndex].queueFamilyProperties.queueFlags & required) == required)
+                    {
+                        family = familyIndex;
+                        queueFamilies[familyIndex].queueFamilyProperties.queueCount--;
+                        index = queueFamilyIndices.queueOffsets[familyIndex]++;
+                        queueFamilyIndices.queuePriorities[familyIndex].push_back(priority);
+                        return true;
+                    }
+                }
+
+                return false;
+            };
+
+        if (!FindVacantQueue(queueFamilyIndices.familyIndices[VGPUCommandQueue_Graphics], queueFamilyIndices.queueIndices[VGPUCommandQueue_Graphics],
+            VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT, 0, 0.5f))
+        {
+            vgpuLogError("Vulkan: Could not find suitable graphics queue.");
+            return false;
+        }
+
+        // XXX: This assumes timestamp valid bits is the same for all queue types.
+        queueFamilyIndices.timestampValidBits = queueFamilies[queueFamilyIndices.familyIndices[VGPUCommandQueue_Graphics]].queueFamilyProperties.timestampValidBits;
+
+        // Prefer another graphics queue since we can do async graphics that way.
+        // The compute queue is to be treated as high priority since we also do async graphics on it.
+        if (!FindVacantQueue(queueFamilyIndices.familyIndices[VGPUCommandQueue_Compute], queueFamilyIndices.queueIndices[VGPUCommandQueue_Compute], VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT, 0, 1.0f) &&
+            !FindVacantQueue(queueFamilyIndices.familyIndices[VGPUCommandQueue_Compute], queueFamilyIndices.queueIndices[VGPUCommandQueue_Compute], VK_QUEUE_COMPUTE_BIT, 0, 1.0f))
+        {
+            // Fallback to the graphics queue if we must.
+            queueFamilyIndices.familyIndices[VGPUCommandQueue_Compute] = queueFamilyIndices.familyIndices[VGPUCommandQueue_Graphics];
+            queueFamilyIndices.queueIndices[VGPUCommandQueue_Compute] = queueFamilyIndices.queueIndices[VGPUCommandQueue_Graphics];
+        }
+
+        // For transfer, try to find a queue which only supports transfer, e.g. DMA queue.
+        // If not, fallback to a dedicated compute queue.
+        // Finally, fallback to same queue as compute.
+        if (!FindVacantQueue(queueFamilyIndices.familyIndices[VGPUCommandQueue_Copy], queueFamilyIndices.queueIndices[VGPUCommandQueue_Copy], VK_QUEUE_TRANSFER_BIT, VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT, 0.5f) &&
+            !FindVacantQueue(queueFamilyIndices.familyIndices[VGPUCommandQueue_Copy], queueFamilyIndices.queueIndices[VGPUCommandQueue_Copy], VK_QUEUE_COMPUTE_BIT, VK_QUEUE_GRAPHICS_BIT, 0.5f))
+        {
+            queueFamilyIndices.familyIndices[VGPUCommandQueue_Copy] = queueFamilyIndices.familyIndices[VGPUCommandQueue_Compute];
+            queueFamilyIndices.queueIndices[VGPUCommandQueue_Copy] = queueFamilyIndices.queueIndices[VGPUCommandQueue_Compute];
+        }
+
+        VkDeviceCreateInfo createInfo{};
+        createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+
+        std::vector<VkDeviceQueueCreateInfo> queueInfos;
+        for (uint32_t familyIndex = 0; familyIndex < queueFamilyCount; familyIndex++)
+        {
+            if (queueFamilyIndices.queueOffsets[familyIndex] == 0)
+                continue;
+
+            VkDeviceQueueCreateInfo queueInfo = {};
+            queueInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+            queueInfo.queueFamilyIndex = familyIndex;
+            queueInfo.queueCount = queueFamilyIndices.queueOffsets[familyIndex];
+            queueInfo.pQueuePriorities = queueFamilyIndices.queuePriorities[familyIndex].data();
+            queueInfos.push_back(queueInfo);
+        }
+
+        createInfo.pNext = &features2;
+        createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueInfos.size());
+        createInfo.pQueueCreateInfos = queueInfos.data();
+        createInfo.enabledLayerCount = 0;
+        createInfo.ppEnabledLayerNames = nullptr;
+        createInfo.pEnabledFeatures = nullptr;
+        createInfo.enabledExtensionCount = static_cast<uint32_t>(enabledDeviceExtensions.size());
+        createInfo.ppEnabledExtensionNames = enabledDeviceExtensions.data();
+
+        result = vkCreateDevice(physicalDevice, &createInfo, nullptr, &device);
+        if (result != VK_SUCCESS)
+        {
+            VK_LOG_ERROR(result, "Cannot create device");
+            return false;
+        }
+
+        volkLoadDevice(device);
+
+        // Queues
+        VkFenceCreateInfo fenceInfo = {};
+        fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+
+        for (uint8_t i = 0; i < _VGPUCommandQueue_Count; i++)
+        {
+            if (queueFamilyIndices.familyIndices[i] != VK_QUEUE_FAMILY_IGNORED)
+            {
+                vkGetDeviceQueue(device, queueFamilyIndices.familyIndices[i], queueFamilyIndices.queueIndices[i], &queues[i].queue);
+
+                queueFamilyIndices.counts[i] = queueFamilyIndices.queueOffsets[queueFamilyIndices.familyIndices[i]];
+
+                for (uint32_t frameIndex = 0; frameIndex < VGPU_MAX_INFLIGHT_FRAMES; ++frameIndex)
+                {
+                    VK_CHECK(vkCreateFence(device, &fenceInfo, nullptr, &queues[i].frameFences[frameIndex]));
+                }
+            }
+            else
+            {
+                queues[i].queue = VK_NULL_HANDLE;
+            }
+        }
+
+#ifdef _DEBUG
+        vgpuLogInfo("Enabled %d Device Extensions:", createInfo.enabledExtensionCount);
+        for (uint32_t i = 0; i < createInfo.enabledExtensionCount; ++i)
+        {
+            vgpuLogInfo("	\t%s", createInfo.ppEnabledExtensionNames[i]);
+        }
+#endif
+        if (info->label)
+        {
+            SetObjectName(VK_OBJECT_TYPE_DEVICE, reinterpret_cast<uint64_t>(device), info->label);
+        }
+
+        if (properties2.properties.apiVersion >= VK_API_VERSION_1_3)
+        {
+            driverDescription = properties_1_2.driverName;
+            if (properties_1_2.driverInfo[0] != '\0')
+            {
+                driverDescription += std::string(": ") + properties_1_2.driverInfo;
+            }
+        }
+        else
+        {
+            driverDescription = driverProperties.driverName;
+            if (driverProperties.driverInfo[0] != '\0')
+            {
+                //driverDescription += std::to_string(": ") + driverProperties.driverInfo;
+            }
+        }
+    }
+
+    // Create memory allocator
+    {
+        VmaAllocatorCreateInfo allocatorInfo{};
+        allocatorInfo.physicalDevice = physicalDevice;
+        allocatorInfo.device = device;
+        allocatorInfo.instance = instance;
+        allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_3;
+
+        // Core in 1.1
+        allocatorInfo.flags = VMA_ALLOCATOR_CREATE_KHR_DEDICATED_ALLOCATION_BIT | VMA_ALLOCATOR_CREATE_KHR_BIND_MEMORY2_BIT;
+        if (supportedExtensions.memory_budget)
+        {
+            allocatorInfo.flags |= VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT;
+        }
+
+        if (supportedExtensions.AMD_device_coherent_memory)
+        {
+            allocatorInfo.flags |= VMA_ALLOCATOR_CREATE_AMD_DEVICE_COHERENT_MEMORY_BIT;
+        }
+
+        if (features1_2.bufferDeviceAddress == VK_TRUE)
+        {
+            allocatorInfo.flags |= VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
+        }
+
+        if (supportedExtensions.memory_priority)
+        {
+            allocatorInfo.flags |= VMA_ALLOCATOR_CREATE_EXT_MEMORY_PRIORITY_BIT;
+        }
+
+#if VMA_DYNAMIC_VULKAN_FUNCTIONS
+        static VmaVulkanFunctions vulkanFunctions = {};
+        vulkanFunctions.vkGetInstanceProcAddr = vkGetInstanceProcAddr;
+        vulkanFunctions.vkGetDeviceProcAddr = vkGetDeviceProcAddr;
+        allocatorInfo.pVulkanFunctions = &vulkanFunctions;
+#endif
+
+        result = vmaCreateAllocator(&allocatorInfo, &allocator);
+
+        if (result != VK_SUCCESS)
+        {
+            VK_LOG_ERROR(result, "Cannot create allocator");
+            return false;
+        }
+
+        if (supportedExtensions.externalMemory)
+        {
+            std::vector<VkExternalMemoryHandleTypeFlags> externalMemoryHandleTypes;
+#if defined(VK_USE_PLATFORM_WIN32_KHR)
+            externalMemoryHandleTypes.resize(memoryProperties2.memoryProperties.memoryTypeCount, VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT);
+#else
+            externalMemoryHandleTypes.resize(memoryProperties2.memoryProperties.memoryTypeCount, VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT);
+#endif
+
+            allocatorInfo.pTypeExternalMemoryHandleTypes = externalMemoryHandleTypes.data();
+            result = vmaCreateAllocator(&allocatorInfo, &externalAllocator);
+            if (result != VK_SUCCESS)
+            {
+                VK_LOG_ERROR(result, "Failed to create Vulkan external memory allocator");
+            }
+        }
+
+    }
+
+    // Create default null descriptors.
+    {
+        VkBufferCreateInfo bufferInfo = {};
+        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        bufferInfo.size = 4;
+        bufferInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+        bufferInfo.flags = 0;
+        VmaAllocationCreateInfo bufferAllocInfo = {};
+        bufferAllocInfo.preferredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+        result = vmaCreateBuffer(allocator, &bufferInfo, &bufferAllocInfo, &nullBuffer, &nullBufferAllocation, nullptr);
+        VGPU_ASSERT(result == VK_SUCCESS);
+
+        VkBufferViewCreateInfo bufferViewInfo = {};
+        bufferViewInfo.sType = VK_STRUCTURE_TYPE_BUFFER_VIEW_CREATE_INFO;
+        bufferViewInfo.format = VK_FORMAT_R32G32B32A32_SFLOAT;
+        bufferViewInfo.range = VK_WHOLE_SIZE;
+        bufferViewInfo.buffer = nullBuffer;
+        result = vkCreateBufferView(device, &bufferViewInfo, nullptr, &nullBufferView);
+        VGPU_ASSERT(result == VK_SUCCESS);
+    }
+    {
+        VkImageCreateInfo imageInfo = {};
+        imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+        imageInfo.extent.width = 1;
+        imageInfo.extent.height = 1;
+        imageInfo.extent.depth = 1;
+        imageInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+        imageInfo.arrayLayers = 1;
+        imageInfo.mipLevels = 1;
+        imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+        imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+        imageInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
+        imageInfo.flags = 0;
+
+        VmaAllocationCreateInfo allocInfo = {};
+        allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+        imageInfo.imageType = VK_IMAGE_TYPE_1D;
+        result = vmaCreateImage(allocator, &imageInfo, &allocInfo, &nullImage1D, &nullImageAllocation1D, nullptr);
+        VGPU_ASSERT(result == VK_SUCCESS);
+
+        imageInfo.imageType = VK_IMAGE_TYPE_2D;
+        imageInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+        imageInfo.arrayLayers = 6;
+        result = vmaCreateImage(allocator, &imageInfo, &allocInfo, &nullImage2D, &nullImageAllocation2D, nullptr);
+        VGPU_ASSERT(result == VK_SUCCESS);
+
+        imageInfo.imageType = VK_IMAGE_TYPE_3D;
+        imageInfo.flags = 0;
+        imageInfo.arrayLayers = 1;
+        result = vmaCreateImage(allocator, &imageInfo, &allocInfo, &nullImage3D, &nullImageAllocation3D, nullptr);
+        VGPU_ASSERT(result == VK_SUCCESS);
+
+        // Transitions
+        {
+            VulkanUploadContext  uploadContext = Allocate(0);
+            if (synchronization2)
+            {
+                VkImageMemoryBarrier2 barrier = {};
+                barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+                barrier.oldLayout = imageInfo.initialLayout;
+                barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+                barrier.srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+                barrier.dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+                barrier.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT;
+                barrier.srcAccessMask = 0;
+                barrier.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT;
+                barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                barrier.subresourceRange.baseArrayLayer = 0;
+                barrier.subresourceRange.baseMipLevel = 0;
+                barrier.subresourceRange.levelCount = 1;
+                barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                barrier.image = nullImage1D;
+                barrier.subresourceRange.layerCount = 1;
+
+                VkDependencyInfo dependencyInfo = {};
+                dependencyInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+                dependencyInfo.imageMemoryBarrierCount = 1;
+                dependencyInfo.pImageMemoryBarriers = &barrier;
+                vkCmdPipelineBarrier2(uploadContext.transitionCommandBuffer, &dependencyInfo);
+
+                barrier.image = nullImage2D;
+                barrier.subresourceRange.layerCount = 6;
+                vkCmdPipelineBarrier2(uploadContext.transitionCommandBuffer, &dependencyInfo);
+                barrier.image = nullImage3D;
+                barrier.subresourceRange.layerCount = 1;
+                vkCmdPipelineBarrier2(uploadContext.transitionCommandBuffer, &dependencyInfo);
+            }
+            else
+            {
+                VkImageMemoryBarrier barrier = {};
+                barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+                barrier.oldLayout = imageInfo.initialLayout;
+                barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+                barrier.srcAccessMask = 0;
+                barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+                barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                barrier.image = nullImage1D;
+                barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                barrier.subresourceRange.baseArrayLayer = 0;
+                barrier.subresourceRange.baseMipLevel = 0;
+                barrier.subresourceRange.levelCount = 1;
+                barrier.subresourceRange.layerCount = 1;
+
+                vkCmdPipelineBarrier(uploadContext.transitionCommandBuffer,
+                    VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                    0,
+                    0, nullptr,
+                    0, nullptr,
+                    1, &barrier);
+
+                barrier.image = nullImage2D;
+                barrier.subresourceRange.layerCount = 6;
+                vkCmdPipelineBarrier(uploadContext.transitionCommandBuffer,
+                    VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                    0,
+                    0, nullptr,
+                    0, nullptr,
+                    1, &barrier);
+
+                barrier.image = nullImage3D;
+                barrier.subresourceRange.layerCount = 1;
+                vkCmdPipelineBarrier(uploadContext.transitionCommandBuffer,
+                    VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                    0,
+                    0, nullptr,
+                    0, nullptr,
+                    1, &barrier);
+            }
+
+            UploadSubmit(uploadContext);
+        }
+
+        VkImageViewCreateInfo imageViewInfo = {};
+        imageViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        imageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_1D;
+        imageViewInfo.image = nullImage1D;
+        imageViewInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+        imageViewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        imageViewInfo.subresourceRange.baseArrayLayer = 0;
+        imageViewInfo.subresourceRange.layerCount = 1;
+        imageViewInfo.subresourceRange.baseMipLevel = 0;
+        imageViewInfo.subresourceRange.levelCount = 1;
+        result = vkCreateImageView(device, &imageViewInfo, nullptr, &nullImageView1D);
+        VGPU_ASSERT(result == VK_SUCCESS);
+
+        imageViewInfo.image = nullImage1D;
+        imageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_1D_ARRAY;
+        result = vkCreateImageView(device, &imageViewInfo, nullptr, &nullImageView1DArray);
+        VGPU_ASSERT(result == VK_SUCCESS);
+
+        imageViewInfo.image = nullImage2D;
+        imageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        result = vkCreateImageView(device, &imageViewInfo, nullptr, &nullImageView2D);
+        VGPU_ASSERT(result == VK_SUCCESS);
+
+        imageViewInfo.image = nullImage2D;
+        imageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+        result = vkCreateImageView(device, &imageViewInfo, nullptr, &nullImageView2DArray);
+        VGPU_ASSERT(result == VK_SUCCESS);
+
+        imageViewInfo.image = nullImage2D;
+        imageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
+        imageViewInfo.subresourceRange.layerCount = 6;
+        result = vkCreateImageView(device, &imageViewInfo, nullptr, &nullImageViewCube);
+        VGPU_ASSERT(result == VK_SUCCESS);
+
+        imageViewInfo.image = nullImage2D;
+        imageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_CUBE_ARRAY;
+        imageViewInfo.subresourceRange.layerCount = 6;
+        result = vkCreateImageView(device, &imageViewInfo, nullptr, &nullImageViewCubeArray);
+        VGPU_ASSERT(result == VK_SUCCESS);
+
+        imageViewInfo.image = nullImage3D;
+        imageViewInfo.subresourceRange.layerCount = 1;
+        imageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_3D;
+        result = vkCreateImageView(device, &imageViewInfo, nullptr, &nullImageView3D);
+        VGPU_ASSERT(result == VK_SUCCESS);
+    }
+    {
+        VkSamplerCreateInfo samplerInfo = {};
+        samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+        result = vkCreateSampler(device, &samplerInfo, nullptr, &nullSampler);
+        VGPU_ASSERT(result == VK_SUCCESS);
+    }
+
+    // Dynamic PSO states:
+    psoDynamicStates.push_back(VK_DYNAMIC_STATE_VIEWPORT);
+    psoDynamicStates.push_back(VK_DYNAMIC_STATE_SCISSOR);
+    psoDynamicStates.push_back(VK_DYNAMIC_STATE_BLEND_CONSTANTS);
+    psoDynamicStates.push_back(VK_DYNAMIC_STATE_STENCIL_REFERENCE);
+    if (features2.features.depthBounds == VK_TRUE)
+    {
+        psoDynamicStates.push_back(VK_DYNAMIC_STATE_DEPTH_BOUNDS);
+    }
+    if (fragmentShadingRateFeatures.pipelineFragmentShadingRate == VK_TRUE)
+    {
+        psoDynamicStates.push_back(VK_DYNAMIC_STATE_FRAGMENT_SHADING_RATE_KHR);
+    }
+
+    dynamicStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    dynamicStateInfo.dynamicStateCount = (uint32_t)psoDynamicStates.size();
+    dynamicStateInfo.pDynamicStates = psoDynamicStates.data();
+
+    // Init caps
+    timestampFrequency = uint64_t(1.0 / double(properties2.properties.limits.timestampPeriod) * 1000 * 1000 * 1000);
+
+    // Log some info
+    vgpuLogInfo("VGPU Driver: Vulkan");
+    vgpuLogInfo("Vulkan Adapter: %s", properties2.properties.deviceName);
+
+    return true;
 }
 
 void VulkanRenderer::SetLabel(const char* label)
@@ -1907,11 +3046,11 @@ VGPUBool32 VulkanRenderer::QueryFeatureSupport(VGPUFeature feature) const
             return features1_2.shaderOutputLayer == VK_TRUE && features1_2.shaderOutputViewportIndex == VK_TRUE;
 
         case VGPUFeature_DescriptorIndexing:
-            //VGPU_ASSERT(renderer->features1_2.descriptorIndexing == VK_TRUE);
-            //VGPU_ASSERT(renderer->features1_2.runtimeDescriptorArray == VK_TRUE);
-            //VGPU_ASSERT(renderer->features1_2.descriptorBindingPartiallyBound == VK_TRUE);
-            //VGPU_ASSERT(renderer->features1_2.descriptorBindingVariableDescriptorCount == VK_TRUE);
-            //VGPU_ASSERT(renderer->features1_2.shaderSampledImageArrayNonUniformIndexing == VK_TRUE);
+            //VGPU_ASSERT(features1_2.descriptorIndexing == VK_TRUE);
+            //VGPU_ASSERT(features1_2.runtimeDescriptorArray == VK_TRUE);
+            //VGPU_ASSERT(features1_2.descriptorBindingPartiallyBound == VK_TRUE);
+            //VGPU_ASSERT(features1_2.descriptorBindingVariableDescriptorCount == VK_TRUE);
+            //VGPU_ASSERT(features1_2.shaderSampledImageArrayNonUniformIndexing == VK_TRUE);
             return features1_2.descriptorIndexing == VK_TRUE;
 
         case VGPUFeature_Predication:
@@ -2466,7 +3605,7 @@ VGPUTexture VulkanRenderer::CreateTexture(const VGPUTextureDesc* desc, const VGP
 
     // If ShaderRead and RenderTarget add input attachment
     if (!isDepthStencilFormat &&
-        (desc->usage & VGPUTextureUsage_RenderTarget | VGPUTextureUsage_ShaderRead))
+        (desc->usage & (VGPUTextureUsage_RenderTarget | VGPUTextureUsage_ShaderRead)))
     {
         createInfo.usage |= VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
     }
@@ -2492,25 +3631,56 @@ VGPUTexture VulkanRenderer::CreateTexture(const VGPUTextureDesc* desc, const VGP
         createInfo.pQueueFamilyIndices = nullptr;
     }
 
+    VmaAllocationCreateInfo memoryInfo = {};
+    memoryInfo.usage = VMA_MEMORY_USAGE_AUTO;
     bool isShared = false;
-    VkExternalMemoryImageCreateInfo externalMemoryImageCreateInfo = {};
-    if (desc->usage, VGPUTextureUsage_Shared)
+    VkExternalMemoryImageCreateInfo externalInfo = {};
+    if (desc->usage & VGPUTextureUsage_Shared)
     {
-        externalMemoryImageCreateInfo.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO;
+        // Ensure that the handle type is supported.
+        VkImageFormatProperties2 props2 = {};
+        props2.sType = VK_STRUCTURE_TYPE_IMAGE_FORMAT_PROPERTIES_2;
+        VkExternalImageFormatProperties externalProps = {};
+        externalProps.sType = VK_STRUCTURE_TYPE_EXTERNAL_IMAGE_FORMAT_PROPERTIES;
+
+        VkPhysicalDeviceExternalImageFormatInfo externalFormatInfo = {};
+        externalFormatInfo.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTERNAL_IMAGE_FORMAT_INFO;
 #if defined(VK_USE_PLATFORM_WIN32_KHR)
-        externalMemoryImageCreateInfo.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT;
+        externalFormatInfo.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT;
+#else
+        externalFormatInfo.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT;
 #endif
 
-        createInfo.pNext = &externalMemoryImageCreateInfo;
+        props2.pNext = &externalProps;
+        if (!GetImageFormatProperties(createInfo, &externalFormatInfo, &props2))
+        {
+            vgpuLogError("Image format is not supported for external memory type %u.", (uint32_t)externalFormatInfo.handleType);
+            return nullptr;
+        }
+
+        externalInfo.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO;
+#if defined(VK_USE_PLATFORM_WIN32_KHR)
+        externalInfo.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT;
+#else
+        externalInfo.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT;
+#endif
+
+        const bool supportsImport = (externalProps.externalMemoryProperties.externalMemoryFeatures & VK_EXTERNAL_MEMORY_FEATURE_IMPORTABLE_BIT) != 0;
+        const bool supportsExport = (externalProps.externalMemoryProperties.externalMemoryFeatures & VK_EXTERNAL_MEMORY_FEATURE_EXPORTABLE_BIT) != 0;
+
+        VGPU_UNUSED(supportsImport);
+        VGPU_UNUSED(supportsExport);
+
+        createInfo.pNext = &externalInfo;
 
         // We have to use a dedicated allocator for external handles that has been created with VkExportMemoryAllocateInfo
-        //allocator = externalAllocator;
+        allocator = externalAllocator;
 
+        // Dedicated memory
+        memoryInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
         isShared = true;
     }
 
-    VmaAllocationCreateInfo memoryInfo = {};
-    memoryInfo.usage = VMA_MEMORY_USAGE_AUTO;
     VmaAllocationInfo allocationInfo{};
 
     if (desc->cpuAccess == VGPUCpuAccessMode_Write
@@ -2545,6 +3715,25 @@ VGPUTexture VulkanRenderer::CreateTexture(const VGPUTextureDesc* desc, const VGP
         texture->SetLabel(desc->label);
     }
 
+    if (isShared)
+    {
+#if defined(VK_USE_PLATFORM_WIN32_KHR)
+        VkMemoryGetWin32HandleInfoKHR getWin32HandleInfoKHR = {};
+        getWin32HandleInfoKHR.sType = VK_STRUCTURE_TYPE_MEMORY_GET_WIN32_HANDLE_INFO_KHR;
+        getWin32HandleInfoKHR.pNext = nullptr;
+        getWin32HandleInfoKHR.memory = allocationInfo.deviceMemory;
+        getWin32HandleInfoKHR.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT_KHR;
+        VK_CHECK(vkGetMemoryWin32HandleKHR(device, &getWin32HandleInfoKHR, &texture->sharedHandle));
+#elif defined(__linux__)
+        VkMemoryGetFdInfoKHR memoryGetFdInfoKHR = {};
+        memoryGetFdInfoKHR.sType = VK_STRUCTURE_TYPE_MEMORY_GET_FD_INFO_KHR;
+        memoryGetFdInfoKHR.pNext = nullptr;
+        memoryGetFdInfoKHR.memory = allocationInfo.deviceMemory;
+        memoryGetFdInfoKHR.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT_KHR;
+        VK_CHECK(vkGetMemoryFdKHR(device, &memoryGetFdInfoKHR, &texture->sharedHandle));
+#endif
+    }
+
     VkImageSubresourceRange subresourceRange{};
     subresourceRange.aspectMask = GetImageAspectFlags(createInfo.format);
     subresourceRange.baseMipLevel = 0;
@@ -2565,6 +3754,7 @@ VGPUTexture VulkanRenderer::CreateTexture(const VGPUTextureDesc* desc, const VGP
             uploadContext = Allocate(allocationInfo.size);
             pMappedData = uploadContext.uploadBuffer->pMappedData;
         }
+        VGPU_UNUSED(pMappedData);
 
         std::vector<VkBufferImageCopy> copyRegions;
 
@@ -3429,36 +4619,31 @@ VulkanSwapChain::~VulkanSwapChain()
     }
 }
 
-void VulkanSwapChain::SetLabel(const char* label)
-{
-    renderer->SetObjectName(VK_OBJECT_TYPE_SWAPCHAIN_KHR, reinterpret_cast<uint64_t>(handle), label);
-}
-
-static void vulkan_updateSwapChain(VulkanRenderer* renderer, VulkanSwapChain* swapChain)
+bool VulkanSwapChain::Update()
 {
     VkSurfaceCapabilitiesKHR caps;
-    VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(renderer->physicalDevice, swapChain->surface, &caps));
+    VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(renderer->physicalDevice, surface, &caps));
 
     uint32_t formatCount;
-    VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(renderer->physicalDevice, swapChain->surface, &formatCount, nullptr));
+    VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(renderer->physicalDevice, surface, &formatCount, nullptr));
 
     std::vector<VkSurfaceFormatKHR> swapchainFormats(formatCount);
-    VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(renderer->physicalDevice, swapChain->surface, &formatCount, swapchainFormats.data()));
+    VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(renderer->physicalDevice, surface, &formatCount, swapchainFormats.data()));
 
     uint32_t presentModeCount;
-    VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(renderer->physicalDevice, swapChain->surface, &presentModeCount, nullptr));
+    VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(renderer->physicalDevice, surface, &presentModeCount, nullptr));
 
     std::vector<VkPresentModeKHR> swapchainPresentModes(presentModeCount);
-    VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(renderer->physicalDevice, swapChain->surface, &presentModeCount, swapchainPresentModes.data()));
+    VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(renderer->physicalDevice, surface, &presentModeCount, swapchainPresentModes.data()));
 
     VkSurfaceFormatKHR surfaceFormat = {};
-    surfaceFormat.format = ToVkFormat(swapChain->colorFormat);
+    surfaceFormat.format = ToVkFormat(colorFormat);
     surfaceFormat.colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
     bool valid = false;
 
     for (const auto& format : swapchainFormats)
     {
-        if (!swapChain->allowHDR && format.colorSpace != VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+        if (!allowHDR && format.colorSpace != VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
             continue;
 
         if (format.format == surfaceFormat.format)
@@ -3477,12 +4662,12 @@ static void vulkan_updateSwapChain(VulkanRenderer* renderer, VulkanSwapChain* sw
     if (caps.currentExtent.width != 0xFFFFFFFF
         && caps.currentExtent.height != 0xFFFFFFFF)
     {
-        swapChain->extent = caps.currentExtent;
+        extent = caps.currentExtent;
     }
     else
     {
-        swapChain->extent.width = _VGPU_MAX(caps.minImageExtent.width, _VGPU_MIN(caps.maxImageExtent.width, swapChain->extent.width));
-        swapChain->extent.height = _VGPU_MAX(caps.minImageExtent.height, _VGPU_MIN(caps.maxImageExtent.height, swapChain->extent.height));
+        extent.width = _VGPU_MAX(caps.minImageExtent.width, _VGPU_MIN(caps.maxImageExtent.width, extent.width));
+        extent.height = _VGPU_MAX(caps.minImageExtent.height, _VGPU_MIN(caps.maxImageExtent.height, extent.height));
     }
 
     // Determine the number of images
@@ -3494,12 +4679,12 @@ static void vulkan_updateSwapChain(VulkanRenderer* renderer, VulkanSwapChain* sw
 
     VkSwapchainCreateInfoKHR createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-    createInfo.surface = swapChain->surface;
+    createInfo.surface = surface;
     createInfo.minImageCount = imageCount;
     createInfo.imageFormat = surfaceFormat.format;
     createInfo.imageColorSpace = surfaceFormat.colorSpace;
-    createInfo.imageExtent.width = swapChain->extent.width;
-    createInfo.imageExtent.height = swapChain->extent.height;
+    createInfo.imageExtent.width = extent.width;
+    createInfo.imageExtent.height = extent.height;
     createInfo.imageArrayLayers = 1;
     createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
@@ -3518,7 +4703,7 @@ static void vulkan_updateSwapChain(VulkanRenderer* renderer, VulkanSwapChain* sw
     createInfo.preTransform = caps.currentTransform;
 
     createInfo.presentMode = VK_PRESENT_MODE_FIFO_KHR; // The only one that is always supported
-    if (!swapChain->vsync)
+    if (!vsync)
     {
         // The mailbox/immediate present mode is not necessarily supported:
         for (auto& presentMode : swapchainPresentModes)
@@ -3535,24 +4720,29 @@ static void vulkan_updateSwapChain(VulkanRenderer* renderer, VulkanSwapChain* sw
         }
     }
     createInfo.clipped = VK_TRUE;
-    createInfo.oldSwapchain = swapChain->handle;
+    createInfo.oldSwapchain = handle;
 
-    VK_CHECK(vkCreateSwapchainKHR(renderer->device, &createInfo, nullptr, &swapChain->handle));
+    VkResult result = vkCreateSwapchainKHR(renderer->device, &createInfo, nullptr, &handle);
+    if (result != VK_SUCCESS)
+    {
+        VK_LOG_ERROR(result, "vkCreateSwapchainKHR failed");
+        return false;
+    }
 
     if (createInfo.oldSwapchain != VK_NULL_HANDLE)
     {
-        for (size_t i = 0, count = swapChain->backbufferTextures.size(); i < count; ++i)
+        for (size_t i = 0, count = backbufferTextures.size(); i < count; ++i)
         {
-            delete swapChain->backbufferTextures[i];
+            delete backbufferTextures[i];
         }
-        swapChain->backbufferTextures.clear();
+        backbufferTextures.clear();
 
         vkDestroySwapchainKHR(renderer->device, createInfo.oldSwapchain, nullptr);
     }
 
-    VK_CHECK(vkGetSwapchainImagesKHR(renderer->device, swapChain->handle, &imageCount, nullptr));
+    VK_CHECK(vkGetSwapchainImagesKHR(renderer->device, handle, &imageCount, nullptr));
     std::vector<VkImage> swapchainImages(imageCount);
-    VK_CHECK(vkGetSwapchainImagesKHR(renderer->device, swapChain->handle, &imageCount, swapchainImages.data()));
+    VK_CHECK(vkGetSwapchainImagesKHR(renderer->device, handle, &imageCount, swapchainImages.data()));
 
     VGPUTextureFormat colorFormat = VGPUTextureFormat_BGRA8Unorm;
     if (createInfo.imageFormat == VK_FORMAT_B8G8R8A8_UNORM)
@@ -3572,8 +4762,8 @@ static void vulkan_updateSwapChain(VulkanRenderer* renderer, VulkanSwapChain* sw
         colorFormat = VGPUTextureFormat_RGBA8UnormSrgb;
     }
 
-    swapChain->imageIndex = 0;
-    swapChain->backbufferTextures.resize(imageCount);
+    imageIndex = 0;
+    backbufferTextures.resize(imageCount);
     for (uint32_t i = 0; i < imageCount; ++i)
     {
         VulkanTexture* texture = new VulkanTexture();
@@ -3584,31 +4774,36 @@ static void vulkan_updateSwapChain(VulkanRenderer* renderer, VulkanSwapChain* sw
         texture->width = createInfo.imageExtent.width;
         texture->height = createInfo.imageExtent.height;
         texture->vkFormat = createInfo.imageFormat;
-        swapChain->backbufferTextures[i] = texture;
+        backbufferTextures[i] = texture;
     }
 
     VkSemaphoreCreateInfo semaphoreInfo = {};
     semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-    if (swapChain->acquireSemaphore == VK_NULL_HANDLE)
+    if (acquireSemaphore == VK_NULL_HANDLE)
     {
-        VK_CHECK(vkCreateSemaphore(renderer->device, &semaphoreInfo, nullptr, &swapChain->acquireSemaphore));
+        VK_CHECK(vkCreateSemaphore(renderer->device, &semaphoreInfo, nullptr, &acquireSemaphore));
     }
 
-    if (swapChain->releaseSemaphore == VK_NULL_HANDLE)
+    if (releaseSemaphore == VK_NULL_HANDLE)
     {
-        VK_CHECK(vkCreateSemaphore(renderer->device, &semaphoreInfo, nullptr, &swapChain->releaseSemaphore));
+        VK_CHECK(vkCreateSemaphore(renderer->device, &semaphoreInfo, nullptr, &releaseSemaphore));
     }
 
     if (createInfo.imageFormat == VK_FORMAT_B8G8R8A8_UNORM)
     {
-        swapChain->colorFormat = VGPUTextureFormat_BGRA8Unorm;
+        colorFormat = VGPUTextureFormat_BGRA8Unorm;
     }
     else if (createInfo.imageFormat == VK_FORMAT_R8G8B8A8_SRGB)
     {
-        swapChain->colorFormat = VGPUTextureFormat_BGRA8UnormSrgb;
+        colorFormat = VGPUTextureFormat_BGRA8UnormSrgb;
     }
+    extent = createInfo.imageExtent;
+    return true;
+}
 
-    swapChain->extent = createInfo.imageExtent;
+void VulkanSwapChain::SetLabel(const char* label)
+{
+    renderer->SetObjectName(VK_OBJECT_TYPE_SWAPCHAIN_KHR, reinterpret_cast<uint64_t>(handle), label);
 }
 
 VGPUSwapChain VulkanRenderer::CreateSwapChain(const VGPUSwapChainDesc* desc)
@@ -3633,7 +4828,11 @@ VGPUSwapChain VulkanRenderer::CreateSwapChain(const VGPUSwapChainDesc* desc)
     swapChain->extent.height = desc->height;
     swapChain->colorFormat = desc->format;
     swapChain->vsync = desc->presentMode == VGPUPresentMode_Fifo;
-    vulkan_updateSwapChain(this, swapChain);
+    if (!swapChain->Update())
+    {
+        delete swapChain;
+        return nullptr;
+    }
 
     if (desc->label)
     {
@@ -3650,7 +4849,7 @@ VulkanCommandBuffer::~VulkanCommandBuffer()
 
     for (uint32_t j = 0; j < VGPU_MAX_INFLIGHT_FRAMES; ++j)
     {
-        //vkFreeCommandBuffers(renderer->device, commandPools[j], 1, &commandBuffers[j]);
+        //vkFreeCommandBuffers(device, commandPools[j], 1, &commandBuffers[j]);
         vkDestroyCommandPool(renderer->device, commandPools[j], nullptr);
     }
 
@@ -3821,7 +5020,7 @@ VGPUTexture VulkanCommandBuffer::AcquireSwapchainTexture(VGPUSwapChain swapChain
         vulkanSwapChain->extent.height != surfaceProperties.currentExtent.height)
     {
         renderer->WaitIdle();
-        vulkan_updateSwapChain(renderer, vulkanSwapChain);
+        vulkanSwapChain->Update();
     }
 
     VkResult result = vkAcquireNextImageKHR(renderer->device,
@@ -3836,7 +5035,7 @@ VGPUTexture VulkanCommandBuffer::AcquireSwapchainTexture(VGPUSwapChain swapChain
         if (result == VK_SUBOPTIMAL_KHR || result == VK_ERROR_OUT_OF_DATE_KHR)
         {
             renderer->WaitIdle();
-            vulkan_updateSwapChain(renderer, vulkanSwapChain);
+            vulkanSwapChain->Update();
             return AcquireSwapchainTexture(swapChain);
         }
     }
@@ -4278,7 +5477,7 @@ VGPUCommandBuffer VulkanRenderer::BeginCommandBuffer(VGPUCommandQueue queueType,
             poolInfo.queueFamilyIndex = queueFamilyIndices.familyIndices[queueType];
 
             poolInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
-            //poolInfo.queueFamilyIndex = renderer->computeQueueFamily;
+            //poolInfo.queueFamilyIndex = computeQueueFamily;
             VK_CHECK(vkCreateCommandPool(device, &poolInfo, nullptr, &commandBuffer->commandPools[i]));
 
             VkCommandBufferAllocateInfo commandBufferInfo = {};
@@ -4362,7 +5561,7 @@ void VulkanQueue::Submit(VulkanRenderer* device, VkFence fence)
             {
                 for (auto& swapchain : swapchainUpdates)
                 {
-                    vulkan_updateSwapChain(device, swapchain);
+                    swapchain->Update();
                 }
             }
             else
@@ -4505,6 +5704,7 @@ static VGPUBool32 vulkan_isSupported(void)
         return false;
     }
 
+    // We require vulkan 1.2
     const uint32_t apiVersion = volkGetInstanceVersion();
     if (apiVersion < VK_API_VERSION_1_2)
     {
@@ -4519,982 +5719,11 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
 {
     VulkanRenderer* renderer = new VulkanRenderer();
 
-#if defined(VK_USE_PLATFORM_XLIB_KHR) || defined(VK_USE_PLATFORM_XCB_KHR)
-#if defined(__CYGWIN__)
-    renderer->x11xcb.handle = dlopen("libX11-xcb-1.so", RTLD_LAZY | RTLD_LOCAL);
-#elif defined(__OpenBSD__) || defined(__NetBSD__)
-    renderer->x11xcb.handle = dlopen("libX11-xcb.so", RTLD_LAZY | RTLD_LOCAL);
-#else
-    renderer->x11xcb.handle = dlopen("libX11-xcb.so.1", RTLD_LAZY | RTLD_LOCAL);
-#endif
-
-    if (renderer->x11xcb.handle)
+    if (!renderer->Init(info))
     {
-        renderer->x11xcb.GetXCBConnection = (PFN_XGetXCBConnection)dlsym(renderer->x11xcb.handle, "XGetXCBConnection");
-}
-#endif
-
-    VkResult result = VK_SUCCESS;
-    uint32_t apiVersion = volkGetInstanceVersion();
-
-    // Enumerate available layers and extensions:
-    {
-        uint32_t instanceLayerCount;
-        VK_CHECK(vkEnumerateInstanceLayerProperties(&instanceLayerCount, nullptr));
-        std::vector<VkLayerProperties> availableInstanceLayers(instanceLayerCount);
-        VK_CHECK(vkEnumerateInstanceLayerProperties(&instanceLayerCount, availableInstanceLayers.data()));
-
-        uint32_t extensionCount = 0;
-        VK_CHECK(vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr));
-        std::vector<VkExtensionProperties> availableInstanceExtensions(extensionCount);
-        VK_CHECK(vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, availableInstanceExtensions.data()));
-
-        std::vector<const char*> instanceLayers;
-        std::vector<const char*> instanceExtensions;
-
-        // MoltenVK
-#if defined(__APPLE__)
-        instanceExtensions.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
-        instanceExtensions.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
-#endif
-
-        for (auto& availableExtension : availableInstanceExtensions)
-        {
-            if (strcmp(availableExtension.extensionName, VK_EXT_DEBUG_UTILS_EXTENSION_NAME) == 0)
-            {
-                renderer->debugUtils = true;
-                instanceExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-            }
-            else if (strcmp(availableExtension.extensionName, VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME) == 0)
-            {
-                instanceExtensions.push_back(VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME);
-            }
-            else if (strcmp(availableExtension.extensionName, VK_EXT_SAMPLER_FILTER_MINMAX_EXTENSION_NAME) == 0)
-            {
-                instanceExtensions.push_back(VK_EXT_SAMPLER_FILTER_MINMAX_EXTENSION_NAME);
-            }
-            else if (strcmp(availableExtension.extensionName, "VK_KHR_xlib_surface") == 0)
-            {
-                renderer->xlib_surface = true;
-            }
-            else if (strcmp(availableExtension.extensionName, "VK_KHR_xcb_surface") == 0)
-            {
-                renderer->xcb_surface = true;
-            }
-            else if (strcmp(availableExtension.extensionName, "VK_KHR_wayland_surface") == 0)
-            {
-                renderer->wayland_surface = true;
-            }
-        }
-
-        instanceExtensions.push_back(VK_KHR_SURFACE_EXTENSION_NAME);
-
-        // Enable surface extensions depending on os
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
-        instanceExtensions.push_back(VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
-#elif defined(VK_USE_PLATFORM_ANDROID_KHR)
-        instanceExtensions.push_back(VK_KHR_ANDROID_SURFACE_EXTENSION_NAME);
-#elif defined(VK_USE_PLATFORM_METAL_EXT)
-        instanceExtensions.push_back(VK_EXT_METAL_SURFACE_EXTENSION_NAME);
-#else
-        if (renderer->xlib_surface)
-        {
-            instanceExtensions.push_back("VK_KHR_xlib_surface");
-        }
-        else if (renderer->xcb_surface)
-        {
-            instanceExtensions.push_back("VK_KHR_xcb_surface");
-        }
-
-        if (renderer->wayland_surface)
-        {
-            instanceExtensions.push_back("VK_KHR_wayland_surface");
+        delete renderer;
+        return nullptr;
     }
-#endif
-
-        if (info->validationMode != VGPUValidationMode_Disabled)
-        {
-            // Determine the optimal validation layers to enable that are necessary for useful debugging
-            std::vector<const char*> optimalValidationLyers = GetOptimalValidationLayers(availableInstanceLayers);
-            instanceLayers.insert(instanceLayers.end(), optimalValidationLyers.begin(), optimalValidationLyers.end());
-        }
-
-#if defined(_DEBUG)
-        bool validationFeatures = false;
-        if (info->validationMode == VGPUValidationMode_GPU)
-        {
-            uint32_t layerInstanceExtensionCount;
-            VK_CHECK(vkEnumerateInstanceExtensionProperties("VK_LAYER_KHRONOS_validation", &layerInstanceExtensionCount, nullptr));
-            std::vector<VkExtensionProperties> availableLayerInstanceExtensions(layerInstanceExtensionCount);
-            VK_CHECK(vkEnumerateInstanceExtensionProperties("VK_LAYER_KHRONOS_validation", &layerInstanceExtensionCount, availableLayerInstanceExtensions.data()));
-
-            for (auto& availableExtension : availableLayerInstanceExtensions)
-            {
-                if (strcmp(availableExtension.extensionName, VK_EXT_VALIDATION_FEATURES_EXTENSION_NAME) == 0)
-                {
-                    validationFeatures = true;
-                    instanceExtensions.push_back(VK_EXT_VALIDATION_FEATURES_EXTENSION_NAME);
-                }
-            }
-        }
-#endif 
-
-        VkApplicationInfo appInfo = {};
-        appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-        appInfo.pApplicationName = info->label;
-        appInfo.applicationVersion = 1;
-        appInfo.pEngineName = "vgpu";
-        appInfo.engineVersion = VK_MAKE_VERSION(VGPU_VERSION_MAJOR, VGPU_VERSION_MINOR, VGPU_VERSION_PATCH);
-        appInfo.apiVersion = VK_API_VERSION_1_3;
-
-        VkInstanceCreateInfo createInfo = {};
-        createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-        createInfo.pApplicationInfo = &appInfo;
-        createInfo.enabledLayerCount = static_cast<uint32_t>(instanceLayers.size());
-        createInfo.ppEnabledLayerNames = instanceLayers.data();
-        createInfo.enabledExtensionCount = static_cast<uint32_t>(instanceExtensions.size());
-        createInfo.ppEnabledExtensionNames = instanceExtensions.data();
-
-        VkDebugUtilsMessengerCreateInfoEXT debugUtilsCreateInfo{};
-
-        if (info->validationMode != VGPUValidationMode_Disabled && renderer->debugUtils)
-        {
-            debugUtilsCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-            debugUtilsCreateInfo.pNext = nullptr;
-            debugUtilsCreateInfo.flags = 0;
-
-            debugUtilsCreateInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-            if (info->validationMode == VGPUValidationMode_Verbose)
-            {
-                debugUtilsCreateInfo.messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT;
-            }
-
-            debugUtilsCreateInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-            debugUtilsCreateInfo.pfnUserCallback = DebugUtilsMessengerCallback;
-            createInfo.pNext = &debugUtilsCreateInfo;
-        }
-
-#if defined(_DEBUG)
-        VkValidationFeaturesEXT validationFeaturesInfo = {};
-        validationFeaturesInfo.sType = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT;
-        if (validationFeatures)
-        {
-            static const VkValidationFeatureEnableEXT enable_features[2] = {
-                VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
-                VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT,
-            };
-            validationFeaturesInfo.enabledValidationFeatureCount = 2;
-            validationFeaturesInfo.pEnabledValidationFeatures = enable_features;
-            validationFeaturesInfo.pNext = createInfo.pNext;
-            createInfo.pNext = &validationFeaturesInfo;
-        }
-#endif
-
-#if defined(__APPLE__)
-        createInfo.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
-#endif
-
-        result = vkCreateInstance(&createInfo, nullptr, &renderer->instance);
-        if (result != VK_SUCCESS)
-        {
-            VK_LOG_ERROR(result, "Failed to create Vulkan instance.");
-            delete renderer;
-            return nullptr;
-        }
-
-        volkLoadInstanceOnly(renderer->instance);
-
-        if (info->validationMode != VGPUValidationMode_Disabled && renderer->debugUtils)
-        {
-            result = vkCreateDebugUtilsMessengerEXT(renderer->instance, &debugUtilsCreateInfo, nullptr, &renderer->debugUtilsMessenger);
-            if (result != VK_SUCCESS)
-            {
-                VK_LOG_ERROR(result, "Could not create debug utils messenger");
-            }
-        }
-
-#ifdef _DEBUG
-        vgpuLogInfo("Created VkInstance with version: %d.%d.%d",
-            VK_VERSION_MAJOR(appInfo.apiVersion),
-            VK_VERSION_MINOR(appInfo.apiVersion),
-            VK_VERSION_PATCH(appInfo.apiVersion)
-        );
-
-        if (createInfo.enabledLayerCount)
-        {
-            vgpuLogInfo("Enabled %d Validation Layers:", createInfo.enabledLayerCount);
-
-            for (uint32_t i = 0; i < createInfo.enabledLayerCount; ++i)
-            {
-                vgpuLogInfo("	\t%s", createInfo.ppEnabledLayerNames[i]);
-            }
-        }
-
-        vgpuLogInfo("Enabled %d Instance Extensions:", createInfo.enabledExtensionCount);
-        for (uint32_t i = 0; i < createInfo.enabledExtensionCount; ++i)
-        {
-            vgpuLogInfo("	\t%s", createInfo.ppEnabledExtensionNames[i]);
-        }
-#endif
-    }
-
-    // Enumerate physical device and create logical device.
-    {
-        uint32_t deviceCount = 0;
-        VK_CHECK(vkEnumeratePhysicalDevices(renderer->instance, &deviceCount, nullptr));
-
-        if (deviceCount == 0)
-        {
-            vgpuLogError("Vulkan: Failed to find GPUs with Vulkan support");
-            delete renderer;
-            return nullptr;
-        }
-
-        std::vector<VkPhysicalDevice> physicalDevices(deviceCount);
-        VK_CHECK(vkEnumeratePhysicalDevices(renderer->instance, &deviceCount, physicalDevices.data()));
-
-        std::vector<const char*> enabledDeviceExtensions;
-        for (const VkPhysicalDevice& candidatePhysicalDevice : physicalDevices)
-        {
-            // We require minimum 1.2
-            VkPhysicalDeviceProperties gpuProps;
-            vkGetPhysicalDeviceProperties(candidatePhysicalDevice, &gpuProps);
-            if (gpuProps.apiVersion < VK_API_VERSION_1_2)
-            {
-                continue;
-            }
-
-            PhysicalDeviceExtensions physicalDeviceExt = QueryPhysicalDeviceExtensions(candidatePhysicalDevice);
-            bool suitable = physicalDeviceExt.swapchain;
-
-            if (!suitable)
-            {
-                continue;
-            }
-
-            // For debug purpose
-            //gpuProps.apiVersion = VK_API_VERSION_1_2;
-
-            // Features
-            void** features_chain = nullptr;
-            renderer->features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-            renderer->features1_1.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
-            renderer->features1_2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
-            renderer->features1_3.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
-            renderer->depthClipEnableFeatures = {};
-            renderer->acceleration_structure_features = {};
-            renderer->raytracing_features = {};
-            renderer->rayQueryFeatures = {};
-            renderer->fragmentShadingRateFeatures = {};
-            renderer->meshShaderFeatures = {};
-            renderer->conditionalRenderingFeatures = {};
-
-            renderer->features2.pNext = &renderer->features1_1;
-            if (gpuProps.apiVersion >= VK_API_VERSION_1_3)
-            {
-                renderer->features1_1.pNext = &renderer->features1_2;
-                renderer->features1_2.pNext = &renderer->features1_3;
-                features_chain = &renderer->features1_3.pNext;
-            }
-            else
-            {
-                // gpuProps.apiVersion >= VK_API_VERSION_1_2
-                renderer->features1_1.pNext = &renderer->features1_2;
-                features_chain = &renderer->features1_2.pNext;
-            }
-
-            // Properties
-            void** propertiesChain = nullptr;
-            renderer->properties2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
-            renderer->properties_1_1.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_PROPERTIES;
-            renderer->properties_1_2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_PROPERTIES;
-            renderer->properties_1_3.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_PROPERTIES;
-            renderer->depthStencilResolveProperties = {};
-            renderer->accelerationStructureProperties = {};
-            renderer->rayTracingPipelineProperties = {};
-            renderer->fragmentShadingRateProperties = {};
-            renderer->meshShaderProperties = {};
-
-            renderer->properties2.pNext = &renderer->properties_1_1;
-            if (gpuProps.apiVersion >= VK_API_VERSION_1_3)
-            {
-                renderer->properties_1_1.pNext = &renderer->properties_1_2;
-                renderer->properties_1_2.pNext = &renderer->properties_1_3;
-                propertiesChain = &renderer->properties_1_3.pNext;
-            }
-            else
-            {
-                // gpuProps.apiVersion >= VK_API_VERSION_1_2
-                renderer->properties_1_1.pNext = &renderer->properties_1_2;
-                propertiesChain = &renderer->properties_1_2.pNext;
-            }
-
-            renderer->depthStencilResolveProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEPTH_STENCIL_RESOLVE_PROPERTIES;
-            *propertiesChain = &renderer->depthStencilResolveProperties;
-            propertiesChain = &renderer->depthStencilResolveProperties.pNext;
-
-            enabledDeviceExtensions.clear();
-            enabledDeviceExtensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
-
-            if (physicalDeviceExt.memory_budget)
-            {
-                enabledDeviceExtensions.push_back(VK_EXT_MEMORY_BUDGET_EXTENSION_NAME);
-            }
-
-            if (physicalDeviceExt.AMD_device_coherent_memory)
-            {
-                enabledDeviceExtensions.push_back(VK_AMD_DEVICE_COHERENT_MEMORY_EXTENSION_NAME);
-            }
-
-            if (physicalDeviceExt.memory_priority)
-            {
-                enabledDeviceExtensions.push_back(VK_EXT_MEMORY_PRIORITY_EXTENSION_NAME);
-            }
-
-            // Core in 1.3
-            if (gpuProps.apiVersion < VK_API_VERSION_1_3)
-            {
-                // Core in 1.3
-                //if (strcmp(deviceExtensions[i].extensionName, VK_KHR_MAINTENANCE_4_EXTENSION_NAME) == 0)
-                //{
-                //    maintenance4Supported = true;
-                //}
-            }
-
-            // For performance queries, we also use host query reset since queryPool resets cannot live in the same command buffer as beginQuery
-            if (physicalDeviceExt.performance_query &&
-                physicalDeviceExt.host_query_reset)
-            {
-                renderer->perf_counter_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PERFORMANCE_QUERY_FEATURES_KHR;
-                enabledDeviceExtensions.push_back(VK_KHR_PERFORMANCE_QUERY_EXTENSION_NAME);
-                *features_chain = &renderer->perf_counter_features;
-                features_chain = &renderer->perf_counter_features.pNext;
-
-                renderer->host_query_reset_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_HOST_QUERY_RESET_FEATURES;
-                enabledDeviceExtensions.push_back(VK_EXT_HOST_QUERY_RESET_EXTENSION_NAME);
-                *features_chain = &renderer->host_query_reset_features;
-                features_chain = &renderer->host_query_reset_features.pNext;
-            }
-
-            if (physicalDeviceExt.depth_clip_enable)
-            {
-                enabledDeviceExtensions.push_back(VK_EXT_DEPTH_CLIP_ENABLE_EXTENSION_NAME);
-
-                renderer->depthClipEnableFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEPTH_CLIP_ENABLE_FEATURES_EXT;
-                *features_chain = &renderer->depthClipEnableFeatures;
-                features_chain = &renderer->depthClipEnableFeatures.pNext;
-            }
-
-            // Core 1.2.
-            {
-                // Required by VK_KHR_spirv_1_4
-                //enabledExtensions.push_back(VK_KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME);
-
-                // Required for VK_KHR_ray_tracing_pipeline
-                //enabledExtensions.push_back(VK_KHR_SPIRV_1_4_EXTENSION_NAME);
-
-                //enabledExtensions.push_back(VK_EXT_SHADER_VIEWPORT_INDEX_LAYER_EXTENSION_NAME);
-
-                // Required by VK_KHR_acceleration_structure
-                //enabledExtensions.push_back(VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME);
-
-                // Required by VK_KHR_acceleration_structure
-                //enabledExtensions.push_back(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
-            }
-
-            if (physicalDeviceExt.deferred_host_operations)
-            {
-                enabledDeviceExtensions.push_back(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME);
-            }
-
-            if (physicalDeviceExt.accelerationStructure)
-            {
-                // Required by VK_KHR_acceleration_structure
-                VGPU_ASSERT(physicalDeviceExt.deferred_host_operations);
-
-                enabledDeviceExtensions.push_back(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME);
-
-                renderer->acceleration_structure_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
-                *features_chain = &renderer->acceleration_structure_features;
-                features_chain = &renderer->acceleration_structure_features.pNext;
-
-                renderer->accelerationStructureProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_PROPERTIES_KHR;
-                *propertiesChain = &renderer->accelerationStructureProperties;
-                propertiesChain = &renderer->accelerationStructureProperties.pNext;
-
-                if (physicalDeviceExt.raytracingPipeline)
-                {
-                    enabledDeviceExtensions.push_back(VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME);
-                    renderer->raytracing_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR;
-                    *features_chain = &renderer->raytracing_features;
-                    features_chain = &renderer->raytracing_features.pNext;
-
-                    renderer->rayTracingPipelineProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR;
-                    *propertiesChain = &renderer->rayTracingPipelineProperties;
-                    propertiesChain = &renderer->rayTracingPipelineProperties.pNext;
-                }
-
-                if (physicalDeviceExt.rayQuery)
-                {
-                    enabledDeviceExtensions.push_back(VK_KHR_RAY_QUERY_EXTENSION_NAME);
-
-                    renderer->rayQueryFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR;
-                    *features_chain = &renderer->rayQueryFeatures;
-                    features_chain = &renderer->rayQueryFeatures.pNext;
-                }
-            }
-
-            if (physicalDeviceExt.fragment_shading_rate)
-            {
-                enabledDeviceExtensions.push_back(VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME);
-
-                renderer->fragmentShadingRateFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_FEATURES_KHR;
-                *features_chain = &renderer->fragmentShadingRateFeatures;
-                features_chain = &renderer->fragmentShadingRateFeatures.pNext;
-
-                renderer->fragmentShadingRateProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_PROPERTIES_KHR;
-                *propertiesChain = &renderer->fragmentShadingRateProperties;
-                propertiesChain = &renderer->fragmentShadingRateProperties.pNext;
-            }
-
-            if (physicalDeviceExt.meshShader)
-            {
-                enabledDeviceExtensions.push_back(VK_EXT_MESH_SHADER_EXTENSION_NAME);
-
-                renderer->meshShaderFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT;
-                *features_chain = &renderer->meshShaderFeatures;
-                features_chain = &renderer->meshShaderFeatures.pNext;
-
-                renderer->meshShaderProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_PROPERTIES_EXT;
-                *propertiesChain = &renderer->meshShaderProperties;
-                propertiesChain = &renderer->meshShaderProperties.pNext;
-            }
-
-            if (physicalDeviceExt.conditionalRendering)
-            {
-                enabledDeviceExtensions.push_back(VK_EXT_CONDITIONAL_RENDERING_EXTENSION_NAME);
-
-                renderer->conditionalRenderingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_CONDITIONAL_RENDERING_FEATURES_EXT;
-                *features_chain = &renderer->conditionalRenderingFeatures;
-                features_chain = &renderer->conditionalRenderingFeatures.pNext;
-            }
-
-            if (physicalDeviceExt.extended_dynamic_state)
-            {
-                enabledDeviceExtensions.push_back(VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME);
-                renderer->extendedDynamicStateFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT;
-                *features_chain = &renderer->extendedDynamicStateFeatures;
-                features_chain = &renderer->extendedDynamicStateFeatures.pNext;
-            }
-
-            if (physicalDeviceExt.extended_dynamic_state2)
-            {
-                enabledDeviceExtensions.push_back(VK_EXT_EXTENDED_DYNAMIC_STATE_2_EXTENSION_NAME);
-                renderer->extendedDynamicState2Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_2_FEATURES_EXT;
-                *features_chain = &renderer->extendedDynamicState2Features;
-                features_chain = &renderer->extendedDynamicState2Features.pNext;
-            }
-
-            vkGetPhysicalDeviceProperties2(candidatePhysicalDevice, &renderer->properties2);
-
-            bool priority = renderer->properties2.properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
-            if (info->powerPreference == VGPUPowerPreference_LowPower)
-            {
-                priority = renderer->properties2.properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU;
-            }
-
-            if (priority || renderer->physicalDevice == VK_NULL_HANDLE)
-            {
-                renderer->physicalDevice = candidatePhysicalDevice;
-                renderer->supportedExtensions = physicalDeviceExt;
-
-                if (priority)
-                {
-                    // If this is prioritized GPU type, look no further
-                    break;
-                }
-            }
-        }
-
-        if (renderer->physicalDevice == VK_NULL_HANDLE)
-        {
-            vgpuLogError("Vulkan: Failed to find a suitable GPU");
-            delete renderer;
-            return nullptr;
-        }
-
-        vkGetPhysicalDeviceFeatures2(renderer->physicalDevice, &renderer->features2);
-        vkGetPhysicalDeviceProperties2(renderer->physicalDevice, &renderer->properties2);
-        renderer->memoryProperties2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2;
-        vkGetPhysicalDeviceMemoryProperties2(renderer->physicalDevice, &renderer->memoryProperties2);
-
-        VGPU_VERIFY(renderer->features2.features.robustBufferAccess == VK_TRUE);
-        VGPU_VERIFY(renderer->features2.features.depthBiasClamp == VK_TRUE);
-        VGPU_VERIFY(renderer->features2.features.fragmentStoresAndAtomics == VK_TRUE);
-        VGPU_VERIFY(renderer->features2.features.imageCubeArray == VK_TRUE);
-        VGPU_VERIFY(renderer->features2.features.independentBlend == VK_TRUE);
-        VGPU_VERIFY(renderer->features2.features.fullDrawIndexUint32 == VK_TRUE);
-        VGPU_VERIFY(renderer->features2.features.sampleRateShading == VK_TRUE);
-        VGPU_VERIFY(renderer->features2.features.shaderClipDistance == VK_TRUE);
-        VGPU_VERIFY(renderer->features2.features.depthClamp == VK_TRUE);
-        VGPU_VERIFY(renderer->features2.features.occlusionQueryPrecise == VK_TRUE);
-
-        VGPU_ASSERT(renderer->features1_3.dynamicRendering == VK_TRUE);
-
-        renderer->synchronization2 = renderer->features1_3.synchronization2 == VK_TRUE;
-        renderer->dynamicRendering = renderer->features1_3.dynamicRendering == VK_TRUE;
-
-        if (!renderer->features2.features.textureCompressionBC &&
-            !(renderer->features2.features.textureCompressionETC2 && renderer->features2.features.textureCompressionASTC_LDR))
-        {
-            vgpuLogError("Vulkan textureCompressionBC feature required or both textureCompressionETC2 and textureCompressionASTC required.");
-            delete renderer;
-            return nullptr;
-        }
-
-        // Find queue families:
-        uint32_t queueFamilyCount = 0;
-        vkGetPhysicalDeviceQueueFamilyProperties(renderer->physicalDevice, &queueFamilyCount, nullptr);
-
-        std::vector<VkQueueFamilyProperties2> queueFamilies(queueFamilyCount);
-        std::vector<VkQueueFamilyVideoPropertiesKHR> queueFamiliesVideo(queueFamilyCount);
-        for (uint32_t i = 0; i < queueFamilyCount; ++i)
-        {
-            queueFamilies[i].sType = VK_STRUCTURE_TYPE_QUEUE_FAMILY_PROPERTIES_2;
-
-            if (renderer->supportedExtensions.video.queue)
-            {
-                queueFamilies[i].pNext = &queueFamiliesVideo[i];
-                queueFamiliesVideo[i].sType = VK_STRUCTURE_TYPE_QUEUE_FAMILY_VIDEO_PROPERTIES_KHR;
-            }
-        }
-
-        vkGetPhysicalDeviceQueueFamilyProperties2(renderer->physicalDevice, &queueFamilyCount, queueFamilies.data());
-
-        renderer->queueFamilyIndices.queueFamilyCount = queueFamilyCount;
-        renderer->queueFamilyIndices.queueOffsets.resize(queueFamilyCount);
-        renderer->queueFamilyIndices.queuePriorities.resize(queueFamilyCount);
-
-        const auto FindVacantQueue = [&](uint32_t& family, uint32_t& index,
-            VkQueueFlags required, VkQueueFlags ignore_flags,
-            float priority) -> bool
-            {
-                for (uint32_t familyIndex = 0; familyIndex < queueFamilyCount; familyIndex++)
-                {
-                    if ((queueFamilies[familyIndex].queueFamilyProperties.queueFlags & ignore_flags) != 0)
-                        continue;
-
-                    // A graphics queue candidate must support present for us to select it.
-                    if ((required & VK_QUEUE_GRAPHICS_BIT) != 0)
-                    {
-                        VkBool32 supported = vulkan_queryPresentationSupport(renderer->physicalDevice, familyIndex);
-                        if (!supported)
-                            continue;
-                        //if (vkGetPhysicalDeviceSurfaceSupportKHR(renderer->physicalDevice, familyIndex, vk_surface, &supported) != VK_SUCCESS || !supported)
-                        //    continue;
-                    }
-
-                    // A video decode queue candidate must support VK_VIDEO_CODEC_OPERATION_DECODE_H264_BIT_KHR or VK_VIDEO_CODEC_OPERATION_DECODE_H265_BIT_KHR
-                    if ((required & VK_QUEUE_VIDEO_DECODE_BIT_KHR) != 0)
-                    {
-                        VkVideoCodecOperationFlagsKHR videoCodecOperations = queueFamiliesVideo[familyIndex].videoCodecOperations;
-
-                        if ((videoCodecOperations & VK_VIDEO_CODEC_OPERATION_DECODE_H264_BIT_KHR) == 0 &&
-                            (videoCodecOperations & VK_VIDEO_CODEC_OPERATION_DECODE_H265_BIT_KHR) == 0)
-                        {
-                            continue;
-                        }
-                    }
-
-                    if (queueFamilies[familyIndex].queueFamilyProperties.queueCount &&
-                        (queueFamilies[familyIndex].queueFamilyProperties.queueFlags & required) == required)
-                    {
-                        family = familyIndex;
-                        queueFamilies[familyIndex].queueFamilyProperties.queueCount--;
-                        index = renderer->queueFamilyIndices.queueOffsets[familyIndex]++;
-                        renderer->queueFamilyIndices.queuePriorities[familyIndex].push_back(priority);
-                        return true;
-                    }
-                }
-
-                return false;
-            };
-
-        if (!FindVacantQueue(renderer->queueFamilyIndices.familyIndices[VGPUCommandQueue_Graphics], renderer->queueFamilyIndices.queueIndices[VGPUCommandQueue_Graphics],
-            VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT, 0, 0.5f))
-        {
-            vgpuLogError("Vulkan: Could not find suitable graphics queue.");
-            delete renderer;
-            return nullptr;
-        }
-
-        // XXX: This assumes timestamp valid bits is the same for all queue types.
-        renderer->queueFamilyIndices.timestampValidBits = queueFamilies[renderer->queueFamilyIndices.familyIndices[VGPUCommandQueue_Graphics]].queueFamilyProperties.timestampValidBits;
-
-        // Prefer another graphics queue since we can do async graphics that way.
-        // The compute queue is to be treated as high priority since we also do async graphics on it.
-        if (!FindVacantQueue(renderer->queueFamilyIndices.familyIndices[VGPUCommandQueue_Compute], renderer->queueFamilyIndices.queueIndices[VGPUCommandQueue_Compute], VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT, 0, 1.0f) &&
-            !FindVacantQueue(renderer->queueFamilyIndices.familyIndices[VGPUCommandQueue_Compute], renderer->queueFamilyIndices.queueIndices[VGPUCommandQueue_Compute], VK_QUEUE_COMPUTE_BIT, 0, 1.0f))
-        {
-            // Fallback to the graphics queue if we must.
-            renderer->queueFamilyIndices.familyIndices[VGPUCommandQueue_Compute] = renderer->queueFamilyIndices.familyIndices[VGPUCommandQueue_Graphics];
-            renderer->queueFamilyIndices.queueIndices[VGPUCommandQueue_Compute] = renderer->queueFamilyIndices.queueIndices[VGPUCommandQueue_Graphics];
-        }
-
-        // For transfer, try to find a queue which only supports transfer, e.g. DMA queue.
-        // If not, fallback to a dedicated compute queue.
-        // Finally, fallback to same queue as compute.
-        if (!FindVacantQueue(renderer->queueFamilyIndices.familyIndices[VGPUCommandQueue_Copy], renderer->queueFamilyIndices.queueIndices[VGPUCommandQueue_Copy], VK_QUEUE_TRANSFER_BIT, VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT, 0.5f) &&
-            !FindVacantQueue(renderer->queueFamilyIndices.familyIndices[VGPUCommandQueue_Copy], renderer->queueFamilyIndices.queueIndices[VGPUCommandQueue_Copy], VK_QUEUE_COMPUTE_BIT, VK_QUEUE_GRAPHICS_BIT, 0.5f))
-        {
-            renderer->queueFamilyIndices.familyIndices[VGPUCommandQueue_Copy] = renderer->queueFamilyIndices.familyIndices[VGPUCommandQueue_Compute];
-            renderer->queueFamilyIndices.queueIndices[VGPUCommandQueue_Copy] = renderer->queueFamilyIndices.queueIndices[VGPUCommandQueue_Compute];
-        }
-
-        VkDeviceCreateInfo createInfo{};
-        createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-
-        std::vector<VkDeviceQueueCreateInfo> queueInfos;
-        for (uint32_t familyIndex = 0; familyIndex < queueFamilyCount; familyIndex++)
-        {
-            if (renderer->queueFamilyIndices.queueOffsets[familyIndex] == 0)
-                continue;
-
-            VkDeviceQueueCreateInfo queueInfo = {};
-            queueInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-            queueInfo.queueFamilyIndex = familyIndex;
-            queueInfo.queueCount = renderer->queueFamilyIndices.queueOffsets[familyIndex];
-            queueInfo.pQueuePriorities = renderer->queueFamilyIndices.queuePriorities[familyIndex].data();
-            queueInfos.push_back(queueInfo);
-        }
-
-        createInfo.pNext = &renderer->features2;
-        createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueInfos.size());
-        createInfo.pQueueCreateInfos = queueInfos.data();
-        createInfo.enabledLayerCount = 0;
-        createInfo.ppEnabledLayerNames = nullptr;
-        createInfo.pEnabledFeatures = nullptr;
-        createInfo.enabledExtensionCount = static_cast<uint32_t>(enabledDeviceExtensions.size());
-        createInfo.ppEnabledExtensionNames = enabledDeviceExtensions.data();
-
-        result = vkCreateDevice(renderer->physicalDevice, &createInfo, nullptr, &renderer->device);
-        if (result != VK_SUCCESS)
-        {
-            VK_LOG_ERROR(result, "Cannot create device");
-            delete renderer;
-            return nullptr;
-        }
-
-        volkLoadDevice(renderer->device);
-
-        // Queues
-        VkFenceCreateInfo fenceInfo = {};
-        fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-
-        for (uint8_t i = 0; i < _VGPUCommandQueue_Count; i++)
-        {
-            if (renderer->queueFamilyIndices.familyIndices[i] != VK_QUEUE_FAMILY_IGNORED)
-            {
-                vkGetDeviceQueue(renderer->device, renderer->queueFamilyIndices.familyIndices[i], renderer->queueFamilyIndices.queueIndices[i], &renderer->queues[i].queue);
-
-                renderer->queueFamilyIndices.counts[i] = renderer->queueFamilyIndices.queueOffsets[renderer->queueFamilyIndices.familyIndices[i]];
-
-                for (uint32_t frameIndex = 0; frameIndex < VGPU_MAX_INFLIGHT_FRAMES; ++frameIndex)
-                {
-                    VK_CHECK(vkCreateFence(renderer->device, &fenceInfo, nullptr, &renderer->queues[i].frameFences[frameIndex]));
-                }
-            }
-            else
-            {
-                renderer->queues[i].queue = VK_NULL_HANDLE;
-            }
-        }
-
-#ifdef _DEBUG
-        vgpuLogInfo("Enabled %d Device Extensions:", createInfo.enabledExtensionCount);
-        for (uint32_t i = 0; i < createInfo.enabledExtensionCount; ++i)
-        {
-            vgpuLogInfo("	\t%s", createInfo.ppEnabledExtensionNames[i]);
-        }
-#endif
-        if (info->label)
-        {
-            renderer->SetObjectName(VK_OBJECT_TYPE_DEVICE, reinterpret_cast<uint64_t>(renderer->device), info->label);
-        }
-
-        if (renderer->properties2.properties.apiVersion >= VK_API_VERSION_1_3)
-        {
-            renderer->driverDescription = renderer->properties_1_2.driverName;
-            if (renderer->properties_1_2.driverInfo[0] != '\0')
-            {
-                renderer->driverDescription += std::string(": ") + renderer->properties_1_2.driverInfo;
-            }
-        }
-        else
-        {
-            renderer->driverDescription = "Vulkan driver version: " + std::to_string(renderer->properties2.properties.driverVersion);
-        }
-    }
-
-    // Create memory allocator
-    {
-        VmaAllocatorCreateInfo allocatorInfo{};
-        allocatorInfo.physicalDevice = renderer->physicalDevice;
-        allocatorInfo.device = renderer->device;
-        allocatorInfo.instance = renderer->instance;
-        allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_3;
-
-        // Core in 1.1
-        allocatorInfo.flags = VMA_ALLOCATOR_CREATE_KHR_DEDICATED_ALLOCATION_BIT | VMA_ALLOCATOR_CREATE_KHR_BIND_MEMORY2_BIT;
-        if (renderer->supportedExtensions.memory_budget)
-        {
-            allocatorInfo.flags |= VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT;
-        }
-
-        if (renderer->supportedExtensions.AMD_device_coherent_memory)
-        {
-            allocatorInfo.flags |= VMA_ALLOCATOR_CREATE_AMD_DEVICE_COHERENT_MEMORY_BIT;
-        }
-
-        if (renderer->features1_2.bufferDeviceAddress == VK_TRUE)
-        {
-            allocatorInfo.flags |= VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
-        }
-
-        if (renderer->supportedExtensions.memory_priority)
-        {
-            allocatorInfo.flags |= VMA_ALLOCATOR_CREATE_EXT_MEMORY_PRIORITY_BIT;
-        }
-
-#if VMA_DYNAMIC_VULKAN_FUNCTIONS
-        static VmaVulkanFunctions vulkanFunctions = {};
-        vulkanFunctions.vkGetInstanceProcAddr = vkGetInstanceProcAddr;
-        vulkanFunctions.vkGetDeviceProcAddr = vkGetDeviceProcAddr;
-        allocatorInfo.pVulkanFunctions = &vulkanFunctions;
-#endif
-
-        result = vmaCreateAllocator(&allocatorInfo, &renderer->allocator);
-
-        if (result != VK_SUCCESS)
-        {
-            VK_LOG_ERROR(result, "Cannot create allocator");
-            delete renderer;
-            return nullptr;
-        }
-    }
-
-    // Create default null descriptors.
-    {
-        VkBufferCreateInfo bufferInfo = {};
-        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        bufferInfo.size = 4;
-        bufferInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-        bufferInfo.flags = 0;
-        VmaAllocationCreateInfo bufferAllocInfo = {};
-        bufferAllocInfo.preferredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-        result = vmaCreateBuffer(renderer->allocator, &bufferInfo, &bufferAllocInfo, &renderer->nullBuffer, &renderer->nullBufferAllocation, nullptr);
-        VGPU_ASSERT(result == VK_SUCCESS);
-
-        VkBufferViewCreateInfo bufferViewInfo = {};
-        bufferViewInfo.sType = VK_STRUCTURE_TYPE_BUFFER_VIEW_CREATE_INFO;
-        bufferViewInfo.format = VK_FORMAT_R32G32B32A32_SFLOAT;
-        bufferViewInfo.range = VK_WHOLE_SIZE;
-        bufferViewInfo.buffer = renderer->nullBuffer;
-        result = vkCreateBufferView(renderer->device, &bufferViewInfo, nullptr, &renderer->nullBufferView);
-        VGPU_ASSERT(result == VK_SUCCESS);
-    }
-    {
-        VkImageCreateInfo imageInfo = {};
-        imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-        imageInfo.extent.width = 1;
-        imageInfo.extent.height = 1;
-        imageInfo.extent.depth = 1;
-        imageInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
-        imageInfo.arrayLayers = 1;
-        imageInfo.mipLevels = 1;
-        imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-        imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-        imageInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
-        imageInfo.flags = 0;
-
-        VmaAllocationCreateInfo allocInfo = {};
-        allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
-        imageInfo.imageType = VK_IMAGE_TYPE_1D;
-        result = vmaCreateImage(renderer->allocator, &imageInfo, &allocInfo, &renderer->nullImage1D, &renderer->nullImageAllocation1D, nullptr);
-        VGPU_ASSERT(result == VK_SUCCESS);
-
-        imageInfo.imageType = VK_IMAGE_TYPE_2D;
-        imageInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
-        imageInfo.arrayLayers = 6;
-        result = vmaCreateImage(renderer->allocator, &imageInfo, &allocInfo, &renderer->nullImage2D, &renderer->nullImageAllocation2D, nullptr);
-        VGPU_ASSERT(result == VK_SUCCESS);
-
-        imageInfo.imageType = VK_IMAGE_TYPE_3D;
-        imageInfo.flags = 0;
-        imageInfo.arrayLayers = 1;
-        result = vmaCreateImage(renderer->allocator, &imageInfo, &allocInfo, &renderer->nullImage3D, &renderer->nullImageAllocation3D, nullptr);
-        VGPU_ASSERT(result == VK_SUCCESS);
-
-        // Transitions
-        {
-            VulkanUploadContext  uploadContext = renderer->Allocate(0);
-            if (renderer->synchronization2)
-            {
-                VkImageMemoryBarrier2 barrier = {};
-                barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-                barrier.oldLayout = imageInfo.initialLayout;
-                barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
-                barrier.srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
-                barrier.dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
-                barrier.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT;
-                barrier.srcAccessMask = 0;
-                barrier.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT;
-                barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-                barrier.subresourceRange.baseArrayLayer = 0;
-                barrier.subresourceRange.baseMipLevel = 0;
-                barrier.subresourceRange.levelCount = 1;
-                barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-                barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-                barrier.image = renderer->nullImage1D;
-                barrier.subresourceRange.layerCount = 1;
-
-                VkDependencyInfo dependencyInfo = {};
-                dependencyInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-                dependencyInfo.imageMemoryBarrierCount = 1;
-                dependencyInfo.pImageMemoryBarriers = &barrier;
-                vkCmdPipelineBarrier2(uploadContext.transitionCommandBuffer, &dependencyInfo);
-
-                barrier.image = renderer->nullImage2D;
-                barrier.subresourceRange.layerCount = 6;
-                vkCmdPipelineBarrier2(uploadContext.transitionCommandBuffer, &dependencyInfo);
-                barrier.image = renderer->nullImage3D;
-                barrier.subresourceRange.layerCount = 1;
-                vkCmdPipelineBarrier2(uploadContext.transitionCommandBuffer, &dependencyInfo);
-            }
-            else
-            {
-                VkImageMemoryBarrier barrier = {};
-                barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-                barrier.oldLayout = imageInfo.initialLayout;
-                barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
-                barrier.srcAccessMask = 0;
-                barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-                barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-                barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-                barrier.image = renderer->nullImage1D;
-                barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-                barrier.subresourceRange.baseArrayLayer = 0;
-                barrier.subresourceRange.baseMipLevel = 0;
-                barrier.subresourceRange.levelCount = 1;
-                barrier.subresourceRange.layerCount = 1;
-
-                vkCmdPipelineBarrier(uploadContext.transitionCommandBuffer,
-                    VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                    0,
-                    0, nullptr,
-                    0, nullptr,
-                    1, &barrier);
-
-                barrier.image = renderer->nullImage2D;
-                barrier.subresourceRange.layerCount = 6;
-                vkCmdPipelineBarrier(uploadContext.transitionCommandBuffer,
-                    VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                    0,
-                    0, nullptr,
-                    0, nullptr,
-                    1, &barrier);
-
-                barrier.image = renderer->nullImage3D;
-                barrier.subresourceRange.layerCount = 1;
-                vkCmdPipelineBarrier(uploadContext.transitionCommandBuffer,
-                    VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                    0,
-                    0, nullptr,
-                    0, nullptr,
-                    1, &barrier);
-            }
-
-            renderer->UploadSubmit(uploadContext);
-        }
-
-        VkImageViewCreateInfo imageViewInfo = {};
-        imageViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        imageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_1D;
-        imageViewInfo.image = renderer->nullImage1D;
-        imageViewInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
-        imageViewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        imageViewInfo.subresourceRange.baseArrayLayer = 0;
-        imageViewInfo.subresourceRange.layerCount = 1;
-        imageViewInfo.subresourceRange.baseMipLevel = 0;
-        imageViewInfo.subresourceRange.levelCount = 1;
-        result = vkCreateImageView(renderer->device, &imageViewInfo, nullptr, &renderer->nullImageView1D);
-        VGPU_ASSERT(result == VK_SUCCESS);
-
-        imageViewInfo.image = renderer->nullImage1D;
-        imageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_1D_ARRAY;
-        result = vkCreateImageView(renderer->device, &imageViewInfo, nullptr, &renderer->nullImageView1DArray);
-        VGPU_ASSERT(result == VK_SUCCESS);
-
-        imageViewInfo.image = renderer->nullImage2D;
-        imageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        result = vkCreateImageView(renderer->device, &imageViewInfo, nullptr, &renderer->nullImageView2D);
-        VGPU_ASSERT(result == VK_SUCCESS);
-
-        imageViewInfo.image = renderer->nullImage2D;
-        imageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
-        result = vkCreateImageView(renderer->device, &imageViewInfo, nullptr, &renderer->nullImageView2DArray);
-        VGPU_ASSERT(result == VK_SUCCESS);
-
-        imageViewInfo.image = renderer->nullImage2D;
-        imageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
-        imageViewInfo.subresourceRange.layerCount = 6;
-        result = vkCreateImageView(renderer->device, &imageViewInfo, nullptr, &renderer->nullImageViewCube);
-        VGPU_ASSERT(result == VK_SUCCESS);
-
-        imageViewInfo.image = renderer->nullImage2D;
-        imageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_CUBE_ARRAY;
-        imageViewInfo.subresourceRange.layerCount = 6;
-        result = vkCreateImageView(renderer->device, &imageViewInfo, nullptr, &renderer->nullImageViewCubeArray);
-        VGPU_ASSERT(result == VK_SUCCESS);
-
-        imageViewInfo.image = renderer->nullImage3D;
-        imageViewInfo.subresourceRange.layerCount = 1;
-        imageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_3D;
-        result = vkCreateImageView(renderer->device, &imageViewInfo, nullptr, &renderer->nullImageView3D);
-        VGPU_ASSERT(result == VK_SUCCESS);
-    }
-    {
-        VkSamplerCreateInfo samplerInfo = {};
-        samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-        result = vkCreateSampler(renderer->device, &samplerInfo, nullptr, &renderer->nullSampler);
-        VGPU_ASSERT(result == VK_SUCCESS);
-    }
-
-    // Dynamic PSO states:
-    renderer->psoDynamicStates.push_back(VK_DYNAMIC_STATE_VIEWPORT);
-    renderer->psoDynamicStates.push_back(VK_DYNAMIC_STATE_SCISSOR);
-    renderer->psoDynamicStates.push_back(VK_DYNAMIC_STATE_BLEND_CONSTANTS);
-    renderer->psoDynamicStates.push_back(VK_DYNAMIC_STATE_STENCIL_REFERENCE);
-    if (renderer->features2.features.depthBounds == VK_TRUE)
-    {
-        renderer->psoDynamicStates.push_back(VK_DYNAMIC_STATE_DEPTH_BOUNDS);
-    }
-    if (renderer->fragmentShadingRateFeatures.pipelineFragmentShadingRate == VK_TRUE)
-    {
-        renderer->psoDynamicStates.push_back(VK_DYNAMIC_STATE_FRAGMENT_SHADING_RATE_KHR);
-    }
-
-    renderer->dynamicStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-    renderer->dynamicStateInfo.dynamicStateCount = (uint32_t)renderer->psoDynamicStates.size();
-    renderer->dynamicStateInfo.pDynamicStates = renderer->psoDynamicStates.data();
-
-    // Init caps
-    renderer->timestampFrequency = uint64_t(1.0 / double(renderer->properties2.properties.limits.timestampPeriod) * 1000 * 1000 * 1000);
-
-    // Log some info
-    vgpuLogInfo("VGPU Driver: Vulkan");
-    vgpuLogInfo("Vulkan Adapter: %s", renderer->properties2.properties.deviceName);
 
     return renderer;
 }

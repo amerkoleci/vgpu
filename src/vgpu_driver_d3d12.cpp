@@ -368,9 +368,11 @@ namespace
 
             case VGPUTextureFormat_RGB10A2Unorm:
                 return VGPUTextureFormat_RGB10A2Unorm;
+
+            default:
+                return VGPUTextureFormat_BGRA8Unorm;
         }
 
-        return VGPUTextureFormat_BGRA8Unorm;
     }
 
     constexpr DXGI_FORMAT GetTypelessFormatFromDepthFormat(VGPUTextureFormat format)
@@ -1056,7 +1058,7 @@ private:
 
     D3D12_RENDER_PASS_RENDER_TARGET_DESC RTVs[VGPU_MAX_COLOR_ATTACHMENTS] = {};
     // Due to a API bug, this resolve_subresources array must be kept alive between BeginRenderpass() and EndRenderpass()!
-    D3D12_RENDER_PASS_ENDING_ACCESS_RESOLVE_SUBRESOURCE_PARAMETERS resolveSubresources[D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT] = {};
+    //D3D12_RENDER_PASS_ENDING_ACCESS_RESOLVE_SUBRESOURCE_PARAMETERS resolveSubresources[D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT] = {};
 
 public:
     ~D3D12CommandBuffer() override;
@@ -1228,6 +1230,7 @@ public:
 
     IDXGIFactory6* factory = nullptr;
     bool tearingSupported = false;
+    ComPtr<IDXGIAdapter1> dxgiAdapter = nullptr;
     ID3D12Device5* device = nullptr;
     D3D_FEATURE_LEVEL featureLevel{};
     DWORD callbackCookie{};
@@ -1277,10 +1280,14 @@ void* D3D12Device::GetNativeObject(VGPUNativeObjectType objectType) const
 {
     switch (objectType)
     {
-        case VGPU_NATIVE_D3D12Device:
+        case VGPUNativeObjectType_D3D12Device:
             return device;
+        case VGPUNativeObjectType_DXGIAdapter:
+            return dxgiAdapter.Get();
+        case VGPUNativeObjectType_DXGIFactory:
+            return factory;
         default:
-            return 0;
+            return nullptr;
     }
 }
 
@@ -1736,6 +1743,7 @@ D3D12Device::~D3D12Device()
         device = nullptr;
     }
 
+    dxgiAdapter.Reset();
     SAFE_RELEASE(factory);
 
 #if defined(_DEBUG) && WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
@@ -1829,6 +1837,7 @@ VGPUBool32 D3D12Device::QueryFeatureSupport(VGPUFeature feature) const
 
         case VGPUFeature_TextureCompressionETC2:
         case VGPUFeature_TextureCompressionASTC:
+        case VGPUFeature_TextureCompressionASTC_HDR:
             return false;
 
         case VGPUFeature_ShaderFloat16:
@@ -2173,6 +2182,8 @@ VGPUTexture D3D12Device::CreateTexture(const VGPUTextureDesc* desc, const VGPUTe
             resourceDesc.Width = desc->width;
             resourceDesc.Height = desc->height;
             resourceDesc.DepthOrArraySize = (UINT16)desc->depthOrArrayLayers;
+            break;
+        default:
             break;
     }
     resourceDesc.MipLevels = (UINT16)desc->mipLevelCount;
@@ -2831,6 +2842,9 @@ VGPUPipeline D3D12Device::CreateRenderPipeline(const VGPURenderPipelineDesc* des
             break;
         case VGPUPrimitiveTopology_PatchList:
             stream.stream1.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_PATCH;
+            break;
+        default:
+            VGPU_UNREACHABLE();
             break;
     }
     pipeline->primitiveTopology = ToD3DPrimitiveTopology(desc->primitiveTopology, desc->patchControlPoints);
@@ -3978,13 +3992,12 @@ static VGPUDeviceImpl* d3d12_createDevice(const VGPUDeviceDescriptor* info)
             D3D_FEATURE_LEVEL_11_0,
         };
 
-        ComPtr<IDXGIAdapter1> dxgiAdapter = nullptr;
         for (uint32_t i = 0;
-            renderer->factory->EnumAdapterByGpuPreference(i, gpuPreference, IID_PPV_ARGS(dxgiAdapter.ReleaseAndGetAddressOf())) != DXGI_ERROR_NOT_FOUND;
+            renderer->factory->EnumAdapterByGpuPreference(i, gpuPreference, IID_PPV_ARGS(renderer->dxgiAdapter.ReleaseAndGetAddressOf())) != DXGI_ERROR_NOT_FOUND;
             ++i)
         {
             DXGI_ADAPTER_DESC1 adapterDesc;
-            dxgiAdapter->GetDesc1(&adapterDesc);
+            renderer->dxgiAdapter->GetDesc1(&adapterDesc);
 
             // Don't select the Basic Render Driver adapter.
             if (adapterDesc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)
@@ -3994,7 +4007,7 @@ static VGPUDeviceImpl* d3d12_createDevice(const VGPUDeviceDescriptor* info)
 
             for (auto& featurelevel : s_featureLevels)
             {
-                if (SUCCEEDED(vgpuD3D12CreateDevice(dxgiAdapter.Get(), featurelevel, IID_PPV_ARGS(&renderer->device))))
+                if (SUCCEEDED(vgpuD3D12CreateDevice(renderer->dxgiAdapter.Get(), featurelevel, IID_PPV_ARGS(&renderer->device))))
                 {
                     break;
                 }
@@ -4004,8 +4017,8 @@ static VGPUDeviceImpl* d3d12_createDevice(const VGPUDeviceDescriptor* info)
                 break;
         }
 
-        VGPU_ASSERT(dxgiAdapter != nullptr);
-        if (dxgiAdapter == nullptr)
+        VGPU_ASSERT(renderer->dxgiAdapter != nullptr);
+        if (renderer->dxgiAdapter == nullptr)
         {
             vgpuLogError("DXGI: No capable adapter found!");
             delete renderer;
@@ -4086,7 +4099,7 @@ static VGPUDeviceImpl* d3d12_createDevice(const VGPUDeviceDescriptor* info)
         // Create allocator
         D3D12MA::ALLOCATOR_DESC allocatorDesc = {};
         allocatorDesc.pDevice = renderer->device;
-        allocatorDesc.pAdapter = dxgiAdapter.Get();
+        allocatorDesc.pAdapter = renderer->dxgiAdapter.Get();
         allocatorDesc.Flags = D3D12MA::ALLOCATOR_FLAG_NONE;
         if (FAILED(D3D12MA::CreateAllocator(&allocatorDesc, &renderer->allocator)))
         {
@@ -4095,11 +4108,11 @@ static VGPUDeviceImpl* d3d12_createDevice(const VGPUDeviceDescriptor* info)
         }
 
         // Init adapter info.
-        dxgiAdapter->GetDesc1(&renderer->adapterDesc);
+        renderer->dxgiAdapter->GetDesc1(&renderer->adapterDesc);
 
         // Convert the adapter's D3D12 driver version to a readable string like "24.21.13.9793".
         LARGE_INTEGER umdVersion;
-        if (dxgiAdapter->CheckInterfaceSupport(__uuidof(IDXGIDevice), &umdVersion) != DXGI_ERROR_UNSUPPORTED)
+        if (renderer->dxgiAdapter->CheckInterfaceSupport(__uuidof(IDXGIDevice), &umdVersion) != DXGI_ERROR_UNSUPPORTED)
         {
             uint64_t encodedVersion = umdVersion.QuadPart;
             std::ostringstream o;
@@ -4157,6 +4170,9 @@ static VGPUDeviceImpl* d3d12_createDevice(const VGPUDeviceDescriptor* info)
                     renderer->queues[queue].handle->SetName(L"CopyQueue");
                     renderer->queues[queue].fence->SetName(L"CopyQueue - Fence");
                     break;
+                default:
+                    VGPU_UNREACHABLE();
+                    break;
             }
 
             // Create frame-resident resources:
@@ -4179,6 +4195,9 @@ static VGPUDeviceImpl* d3d12_createDevice(const VGPUDeviceDescriptor* info)
                         break;
                     case VGPUCommandQueue_Copy:
                         swprintf(fenceName, 64, L"CopyQueue - Frame Fence %u", frameIndex);
+                        break;
+                    default:
+                        VGPU_UNREACHABLE();
                         break;
                 }
 

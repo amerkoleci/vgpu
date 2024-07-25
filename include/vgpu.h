@@ -329,6 +329,7 @@ typedef enum VGPUFeature {
     VGPUFeature_TextureCompressionBC,
     VGPUFeature_TextureCompressionETC2,
     VGPUFeature_TextureCompressionASTC,
+    VGPUFeature_TextureCompressionASTC_HDR,
     VGPUFeature_IndirectFirstInstance,
     VGPUFeature_ShaderFloat16,
     VGPUFeature_CacheCoherentUMA,
@@ -585,6 +586,20 @@ typedef enum VGPUQueryType {
 
     _VGPUQueryType_Force32 = 0x7FFFFFFF
 } VGPUQueryType;
+
+
+typedef enum VGPUNativeObjectType {
+    // Vulkan
+    VGPUNativeObjectType_VkDevice = 1,
+    VGPUNativeObjectType_VkPhysicalDevice = 2,
+    VGPUNativeObjectType_VkInstance = 3,
+    // D3D12
+    VGPUNativeObjectType_D3D12Device = 101,
+    VGPUNativeObjectType_DXGIAdapter = 102,
+    VGPUNativeObjectType_DXGIFactory = 103,
+
+    _VGPUNativeObjectType_Force32 = 0x7FFFFFFF
+} VGPUNativeObjectType;
 
 typedef struct VGPUColor {
     float r;
@@ -931,14 +946,6 @@ typedef struct VGPULimits {
     uint32_t rayTracingShaderRecursionMaxDepth;
     uint32_t rayTracingMaxGeometryCount;
 } VGPULimits;
-
-typedef uint32_t VGPUNativeObjectType;
-
-#define VGPU_NATIVE_D3D12Device (0x00020001)
-
-#define VGPU_NATIVE_VkDevice (0x00030001)
-#define VGPU_NATIVE_VkPhysicalDevice (0x00030002)
-#define VGPU_NATIVE_VkInstance (0x00030003)
 
 typedef void (*VGPULogCallback)(VGPULogLevel level, const char* message, void* userData);
 VGPU_API VGPULogLevel vgpuGetLogLevel(void);
