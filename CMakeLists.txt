@@ -6,34 +6,6 @@ if (${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
 	return()
 endif()
 
-# Determine if engine is built as a subproject (using add_subdirectory)
-# or if it is the master project.
-if (NOT DEFINED VGPU_MASTER_PROJECT)
-    set(VGPU_MASTER_PROJECT OFF)
-    if (CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
-        set(VGPU_MASTER_PROJECT ON)
-        message(STATUS "CMake version: ${CMAKE_VERSION}")
-    endif ()
-endif ()
-
-# Use solution folders to organize projects
-set_property(GLOBAL PROPERTY USE_FOLDERS ON)
-
-# Configure CMake global variables
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
-set(CMAKE_INSTALL_MESSAGE LAZY)
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-set(CMAKE_DEBUG_POSTFIX "")
-
-set(CMAKE_OSX_DEPLOYMENT_TARGET "11" CACHE STRING "Minimum OS X deployment version")
-set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64" CACHE STRING "Build architectures for OS X")
-
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
-
 # Build version
 set (VGPU_VERSION_MAJOR 1)
 set (VGPU_VERSION_MINOR 0)
@@ -47,6 +19,42 @@ project (vgpu
     HOMEPAGE_URL "https://github.com/amerkoleci/vgpu"
     LANGUAGES CXX C
 )
+
+# Use solution folders to organize projects
+set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+
+# Determine if engine is built as a subproject (using add_subdirectory)
+# or if it is the master project.
+if (NOT DEFINED VGPU_MASTER_PROJECT)
+    set(VGPU_MASTER_PROJECT OFF)
+    if (CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
+        set(VGPU_MASTER_PROJECT ON)
+        message(STATUS "CMake version: ${CMAKE_VERSION}")
+    endif ()
+endif ()
+
+# Configure CMake global variables
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_INSTALL_MESSAGE LAZY)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+set(CMAKE_DEBUG_POSTFIX "")
+
+set(CMAKE_OSX_DEPLOYMENT_TARGET "11" CACHE STRING "Minimum OS X deployment version")
+set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64" CACHE STRING "Build architectures for OS X")
+
+if (VGPU_MASTER_PROJECT)
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
+    set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
+endif ()
+
+if (MSVC AND VGPU_MASTER_PROJECT)
+    if (NOT DEFINED CMAKE_MSVC_RUNTIME_LIBRARY)
+        set (CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif ()
+endif ()
 
 # Set the default CMAKE_BUILD_TYPE to Release.
 # This should be done before the project command since the latter can set

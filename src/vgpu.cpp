@@ -461,6 +461,7 @@ uint32_t vgpuTextureRelease(VGPUTexture texture)
 static VGPUSamplerDesc _vgpuSamplerDescDef(const VGPUSamplerDesc* desc)
 {
     VGPUSamplerDesc def = *desc;
+    def.compareFunction = _VGPU_DEF(desc->compareFunction, VGPUCompareFunction_Never);
     def.maxAnisotropy = _VGPU_DEF(desc->maxAnisotropy, 1);
     return def;
 }
@@ -518,14 +519,14 @@ void vgpuBindGroupLayoutSetLabel(VGPUBindGroupLayout bindGroupLayout, const char
     bindGroupLayout->SetLabel(label);
 }
 
-uint32_t vgpuBindGroupLayoutAddRef(VGPUPipelineLayout bindGroupLayout)
+uint32_t vgpuBindGroupLayoutAddRef(VGPUBindGroupLayout bindGroupLayout)
 {
     VGPU_ASSERT(bindGroupLayout);
 
     return bindGroupLayout->AddRef();
 }
 
-uint32_t vgpuBindGroupLayoutRelease(VGPUPipelineLayout bindGroupLayout)
+uint32_t vgpuBindGroupLayoutRelease(VGPUBindGroupLayout bindGroupLayout)
 {
     VGPU_ASSERT(bindGroupLayout);
 
@@ -567,6 +568,44 @@ uint32_t vgpuPipelineLayoutRelease(VGPUPipelineLayout pipelineLayout)
     VGPU_ASSERT(pipelineLayout);
 
     return pipelineLayout->Release();
+}
+
+/* BindGroup */
+static VGPUBindGroupDesc _VGPUBindGroupDesc_Def(const VGPUBindGroupDesc* desc)
+{
+    VGPUBindGroupDesc def = *desc;
+    return def;
+}
+
+VGPUBindGroup vgpuCreateBindGroup(VGPUDevice device, const VGPUBindGroupLayout layout, const VGPUBindGroupDesc* desc)
+{
+    VGPU_ASSERT(device);
+    NULL_RETURN_NULL(layout);
+    NULL_RETURN_NULL(desc);
+
+    VGPUBindGroupDesc desc_def = _VGPUBindGroupDesc_Def(desc);
+    return device->CreateBindGroup(layout, &desc_def);
+}
+
+void vgpuBindGroupSetLabel(VGPUBindGroup bindGroup, const char* label)
+{
+    VGPU_ASSERT(bindGroup);
+
+    bindGroup->SetLabel(label);
+}
+
+uint32_t vgpuBindGroupAddRef(VGPUBindGroup bindGroup)
+{
+    VGPU_ASSERT(bindGroup);
+
+    return bindGroup->AddRef();
+}
+
+uint32_t vgpuBindGroupRelease(VGPUBindGroup bindGroup)
+{
+    VGPU_ASSERT(bindGroup);
+
+    return bindGroup->Release();
 }
 
 /* ShaderModule */
@@ -832,6 +871,11 @@ void vgpuSetPipeline(VGPUCommandBuffer commandBuffer, VGPUPipeline pipeline)
     VGPU_ASSERT(pipeline);
 
     commandBuffer->SetPipeline(pipeline);
+}
+
+void vgpuSetBindGroup(VGPUCommandBuffer commandBuffer, uint32_t groupIndex, VGPUBindGroup bindGroup)
+{
+    commandBuffer->SetBindGroup(groupIndex, bindGroup);
 }
 
 void vgpuSetPushConstants(VGPUCommandBuffer commandBuffer, uint32_t pushConstantIndex, const void* data, uint32_t size)

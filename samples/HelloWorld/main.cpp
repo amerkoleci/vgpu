@@ -28,6 +28,9 @@ VGPUBuffer indexBuffer = nullptr;
 VGPUPipelineLayout pipelineLayout = nullptr;
 VGPUPipeline renderPipeline = nullptr;
 
+VGPUBuffer constantBuffer = nullptr;
+VGPUBindGroup bindGroup = nullptr;
+
 inline void vgpu_log(VGPULogLevel level, const char* message, void* user_data)
 {
 #if defined(_WIN32)
@@ -184,13 +187,48 @@ void init_vgpu(GLFWwindow* window)
     shaderStages[1].stage = VGPUShaderStage_Fragment;
     shaderStages[1].entryPoint = "fragmentMain";
 
-    VGPUPushConstantRange pushConstantRange{};
-    pushConstantRange.visibility = VGPUShaderStage_Fragment;
-    pushConstantRange.size = sizeof(PushData);
+    VGPUBindGroupLayoutEntry bindGroupLayoutEntry{};
+    bindGroupLayoutEntry.binding = 0;
+    bindGroupLayoutEntry.count = 1;
+    bindGroupLayoutEntry.visibility = VGPUShaderStage_Fragment;
+    bindGroupLayoutEntry.descriptorType = VGPUDescriptorType_ConstantBuffer;
+
+    VGPUBindGroupLayoutDesc bindGroupLayoutDesc{};
+    bindGroupLayoutDesc.entryCount = 1;
+    bindGroupLayoutDesc.entries = &bindGroupLayoutEntry;
+    VGPUBindGroupLayout bindGroupLayout = vgpuCreateBindGroupLayout(device, &bindGroupLayoutDesc);
+
+    // Buffer and Bind Group
+    VGPUBufferDesc constantBufferDesc{};
+    constantBufferDesc.label = "Constant Buffer";
+    constantBufferDesc.size = sizeof(PushData);
+    constantBufferDesc.usage = VGPUBufferUsage_Constant;
+
+    PushData pushData{};
+    pushData.color.x = 1.0f;
+    constantBuffer = vgpuCreateBuffer(device, &constantBufferDesc, &pushData);
+
+    VGPUBindGroupEntry bindGroupEntry{};
+    bindGroupEntry.binding = 0;
+    bindGroupEntry.arrayElement = 0;
+    bindGroupEntry.buffer = constantBuffer;
+    bindGroupEntry.offset = 0;
+    bindGroupEntry.size = VGPU_WHOLE_SIZE;
+
+    VGPUBindGroupDesc bindGroupDesc{};
+    bindGroupDesc.entryCount = 1;
+    bindGroupDesc.entries = &bindGroupEntry;
+    bindGroup = vgpuCreateBindGroup(device, bindGroupLayout, &bindGroupDesc);
+
+    //VGPUPushConstantRange pushConstantRange{};
+    //pushConstantRange.visibility = VGPUShaderStage_Fragment;
+    //pushConstantRange.size = sizeof(PushData);
 
     VGPUPipelineLayoutDesc pipelineLayoutDesc{};
-    pipelineLayoutDesc.pushConstantRangeCount = 1;
-    pipelineLayoutDesc.pushConstantRanges = &pushConstantRange;
+    pipelineLayoutDesc.bindGroupLayoutCount = 1;
+    pipelineLayoutDesc.bindGroupLayouts = &bindGroupLayout;
+    //pipelineLayoutDesc.pushConstantRangeCount = 1;
+    //pipelineLayoutDesc.pushConstantRanges = &pushConstantRange;
     pipelineLayout = vgpuCreatePipelineLayout(device, &pipelineLayoutDesc);
 
     VGPUTextureFormat colorFormat = vgpuSwapChainGetFormat(swapChain);
@@ -228,6 +266,7 @@ void init_vgpu(GLFWwindow* window)
 
     vgpuShaderModuleRelease(shaderStages[0].module);
     vgpuShaderModuleRelease(shaderStages[1].module);
+    vgpuBindGroupLayoutRelease(bindGroupLayout);
 }
 
 void draw_frame()
@@ -261,9 +300,11 @@ void draw_frame()
         vgpuBeginRenderPass(commandBuffer, &renderPass);
         vgpuSetPipeline(commandBuffer, renderPipeline);
 
-        PushData pushData{};
-        pushData.color.x = 1.0f;
-        vgpuSetPushConstants(commandBuffer, 0, &pushData, sizeof(pushData));
+        //PushData pushData{};
+        //pushData.color.x = 1.0f;
+        //vgpuSetPushConstants(commandBuffer, 0, &pushData, sizeof(pushData));
+
+        vgpuSetBindGroup(commandBuffer, 0, bindGroup);
 
         vgpuSetVertexBuffer(commandBuffer, 0, vertexBuffer, 0);
         vgpuSetIndexBuffer(commandBuffer, indexBuffer, VGPUIndexType_Uint16, 0);
@@ -298,10 +339,13 @@ int main()
     vgpuDeviceWaitIdle(device);
     vgpuBufferRelease(vertexBuffer);
     vgpuBufferRelease(indexBuffer);
+    vgpuBufferRelease(constantBuffer);
     vgpuTextureRelease(depthStencilTexture);
     vgpuPipelineLayoutRelease(pipelineLayout);
     vgpuPipelineRelease(renderPipeline);
+    vgpuBindGroupRelease(bindGroup);
     vgpuSwapChainRelease(swapChain);
+
     vgpuDeviceRelease(device);
     glfwDestroyWindow(window);
     glfwTerminate();

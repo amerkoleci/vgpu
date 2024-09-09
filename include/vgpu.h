@@ -30,6 +30,10 @@
 
 #define VGPU_API _VGPU_EXTERN _VGPU_EXPORT
 
+#if !defined(VGPU_ENUM_ATTRIBUTE)
+#define VGPU_ENUM_ATTRIBUTE
+#endif
+
 #include <stddef.h>
 #include <stdint.h>
 
@@ -40,6 +44,7 @@
 
 #define VGPU_MAX_INFLIGHT_FRAMES (2u)
 #define VGPU_MAX_COLOR_ATTACHMENTS (8u)
+#define VGPU_MAX_BIND_GROUPS (8u)
 #define VGPU_MAX_VERTEX_ATTRIBUTES (16u)
 #define VGPU_WHOLE_SIZE (0xffffffffffffffffULL)
 #define VGPU_ADAPTER_NAME_MAX_LENGTH (256u)
@@ -55,6 +60,7 @@ typedef struct VGPUTextureViewImpl*     VGPUTextureView;
 typedef struct VGPUSamplerImpl*         VGPUSampler;
 typedef struct VGPUBindGroupLayoutImpl* VGPUBindGroupLayout;
 typedef struct VGPUPipelineLayoutImpl*  VGPUPipelineLayout;
+typedef struct VGPUBindGroupImpl*       VGPUBindGroup;
 typedef struct VGPUShaderModuleImpl*    VGPUShaderModule;
 typedef struct VGPUPipelineImpl*        VGPUPipeline;
 typedef struct VGPUQueryHeapImpl*       VGPUQueryHeap;
@@ -307,7 +313,7 @@ typedef enum VGPUPresentMode {
 
     _VGPUPresentMode_Count,
     _VGPUPresentMode_Force32 = 0x7FFFFFFF
-} VGPUPresentMode;
+} VGPUPresentMode VGPU_ENUM_ATTRIBUTE;
 
 typedef enum VGPUShaderStage {
     VGPUShaderStage_All = 0,
@@ -345,6 +351,7 @@ typedef enum VGPUFeature {
     VGPUFeature_DepthResolveMinMax,
     VGPUFeature_StencilResolveMinMax,
     VGPUFeature_ShaderOutputViewportIndex,
+    VGPUFeature_ConservativeRasterization,
     VGPUFeature_DescriptorIndexing,
     VGPUFeature_Predication,
     VGPUFeature_VariableRateShading,
@@ -354,7 +361,7 @@ typedef enum VGPUFeature {
     VGPUFeature_MeshShader,
 
     _VGPUFeature_Force32 = 0x7FFFFFFF
-} VGPUFeature;
+} VGPUFeature VGPU_ENUM_ATTRIBUTE;
 
 typedef enum VGPULoadAction {
     VGPULoadAction_Load = 0,
@@ -362,14 +369,14 @@ typedef enum VGPULoadAction {
     VGPULoadAction_DontCare = 2,
 
     _VGPULoadAction_Force32 = 0x7FFFFFFF
-} VGPULoadAction;
+} VGPULoadAction VGPU_ENUM_ATTRIBUTE;
 
 typedef enum VGPUStoreAction {
     VGPUStoreAction_Store = 0,
     VGPUStoreAction_DontCare = 1,
 
     _VGPUStoreAction_Force32 = 0x7FFFFFFF
-} VGPUStoreAction;
+} VGPUStoreAction VGPU_ENUM_ATTRIBUTE;
 
 typedef enum VGPUIndexType {
     VGPUIndexType_Uint16,
@@ -377,10 +384,10 @@ typedef enum VGPUIndexType {
 
     _VGPUIndexType_Count,
     _VGPUIndexType_Force32 = 0x7FFFFFFF
-} VGPUIndexType;
+} VGPUIndexType VGPU_ENUM_ATTRIBUTE;
 
 typedef enum VGPUCompareFunction {
-    _VGPUCompareFunction_Default = 0,
+    VGPUCompareFunction_Undefined = 0,
     VGPUCompareFunction_Never,
     VGPUCompareFunction_Less,
     VGPUCompareFunction_Equal,
@@ -391,7 +398,7 @@ typedef enum VGPUCompareFunction {
     VGPUCompareFunction_Always,
 
     _VGPUCompareFunction_Force32 = 0x7FFFFFFF
-} VGPUCompareFunction;
+} VGPUCompareFunction VGPU_ENUM_ATTRIBUTE;
 
 typedef enum VGPUStencilOperation {
     VGPUStencilOperation_Keep = 0,
@@ -402,14 +409,14 @@ typedef enum VGPUStencilOperation {
     VGPUStencilOperation_Invert,
     VGPUStencilOperation_IncrementWrap,
     VGPUStencilOperation_DecrementWrap,
-} VGPUStencilOperation;
+} VGPUStencilOperation VGPU_ENUM_ATTRIBUTE;
 
 typedef enum VGPUSamplerFilter {
     VGPUSamplerFilter_Nearest = 0,
     VGPUSamplerFilter_Linear,
 
     _VGPUSamplerFilter_Force32 = 0x7FFFFFFF
-} VGPUSamplerFilter;
+} VGPUSamplerFilter VGPU_ENUM_ATTRIBUTE;
 
 typedef enum VGPUSamplerMipFilter
 {
@@ -417,7 +424,7 @@ typedef enum VGPUSamplerMipFilter
     VGPUSamplerMipFilter_Linear,
 
     _VGPUSamplerMipFilter_Force32 = 0x7FFFFFFF
-} VGPUSamplerMipFilter;
+} VGPUSamplerMipFilter VGPU_ENUM_ATTRIBUTE;
 
 typedef enum VGPUSamplerAddressMode
 {
@@ -427,7 +434,7 @@ typedef enum VGPUSamplerAddressMode
     VGPUSamplerAddressMode_Border,
 
     _VGPUSamplerAddressMode_Force32 = 0x7FFFFFFF
-} VGPUSamplerAddressMode;
+} VGPUSamplerAddressMode VGPU_ENUM_ATTRIBUTE;
 
 typedef enum VGPUSamplerBorderColor {
     VGPUSamplerBorderColor_TransparentBlack = 0,
@@ -435,14 +442,14 @@ typedef enum VGPUSamplerBorderColor {
     VGPUSamplerBorderColor_OpaqueWhite,
 
     _VGPUSamplerBorderColor_Force32 = 0x7FFFFFFF
-} VGPUSamplerBorderColor;
+} VGPUSamplerBorderColor VGPU_ENUM_ATTRIBUTE;
 
 typedef enum VGPUFillMode {
     VGPUFillMode_Solid = 0,
     VGPUFillMode_Wireframe = 1,
 
     _VGPUFillMode_Force32 = 0x7FFFFFFF
-} VGPUFillMode;
+} VGPUFillMode VGPU_ENUM_ATTRIBUTE;
 
 typedef enum VGPUCullMode {
     VGPUCullMode_Back = 0,
@@ -450,7 +457,14 @@ typedef enum VGPUCullMode {
     VGPUCullMode_None = 2,
 
     _VGPUCullMode_Force32 = 0x7FFFFFFF
-} VGPUCullMode;
+} VGPUCullMode VGPU_ENUM_ATTRIBUTE;
+
+typedef enum VGPUFrontFace {
+    VGPUFrontFace_Clockwise = 0,
+    VGPUFrontFace_CounterClockwise = 1,
+
+    _VGPUFrontFace_Force32 = 0x7FFFFFFF
+} VGPUFrontFace VGPU_ENUM_ATTRIBUTE;
 
 typedef enum VGPUDepthClipMode {
     VGPUDepthClipMode_Clip = 0,
@@ -732,29 +746,30 @@ typedef struct VGPUSamplerDesc {
 } VGPUSamplerDesc;
 
 typedef enum VGPUDescriptorType {
-    VGPUDescriptorType_ShaderResource,
-    VGPUDescriptorType_ConstantBuffer,
-    VGPUDescriptorType_UnorderedAccess,
     VGPUDescriptorType_Sampler,
+    VGPUDescriptorType_SampledTexture,
+    VGPUDescriptorType_StorageTexture,
+    VGPUDescriptorType_ReadOnlyStorageTexture,
+
+    VGPUDescriptorType_ConstantBuffer,
+    VGPUDescriptorType_DynamicConstantBuffer,
+    VGPUDescriptorType_StorageBuffer,
+    VGPUDescriptorType_ReadOnlyStorageBuffer,
 
     _VGPUDescriptorType_Force32 = 0x7FFFFFFF
 } VGPUDescriptorType;
 
-typedef struct VGPUDescriptorRangeDesc {
-    uint32_t baseRegisterIndex;
-    uint32_t descriptorNum;
+typedef struct VGPUBindGroupLayoutEntry {
+    uint32_t binding;
+    uint32_t count;
     VGPUDescriptorType descriptorType;
     VGPUShaderStage visibility;
-} VGPUDescriptorRangeDesc;
-
-typedef struct VGPUDescriptorSetDesc {
-    uint32_t registerSpace;
-    uint32_t rangeCount;
-    const VGPUDescriptorRangeDesc* ranges;
-} VGPUDescriptorSetDesc;
+} VGPUBindGroupLayoutEntry;
 
 typedef struct VGPUBindGroupLayoutDesc {
     const char* label;
+    size_t entryCount;
+    const VGPUBindGroupLayoutEntry* entries;
 } VGPUBindGroupLayoutDesc;
 
 typedef struct VGPUPushConstantRange {
@@ -768,11 +783,28 @@ typedef struct VGPUPushConstantRange {
 
 typedef struct VGPUPipelineLayoutDesc {
     const char* label;
-    uint32_t descriptorSetCount;
-    const VGPUDescriptorSetDesc* descriptorSets;
+    size_t bindGroupLayoutCount;
+    const VGPUBindGroupLayout* bindGroupLayouts;
     uint32_t pushConstantRangeCount;
     const VGPUPushConstantRange* pushConstantRanges;
 } VGPUPipelineLayoutDesc;
+
+typedef struct VGPUBindGroupEntry {
+    uint32_t                binding;
+    uint32_t                arrayElement;
+    VGPUBuffer              buffer;
+    uint64_t                offset;
+    uint64_t                size;
+    //uint64_t                stride = 0;
+    //SharedPtr<RHISampler>   sampler;
+    //const RHITexture* textureView = nullptr;
+} VGPUBindGroupEntry;
+
+typedef struct VGPUBindGroupDesc {
+    const char* label;
+    size_t entryCount;
+    const VGPUBindGroupEntry* entries;
+} VGPUBindGroupDesc;
 
 typedef struct VGPUShaderModuleDesc {
     const char*     label;
@@ -807,11 +839,8 @@ typedef struct VGPUBlendState {
 typedef struct VGPURasterizerState {
     VGPUFillMode fillMode;
     VGPUCullMode cullMode;
-    VGPUBool32 frontFaceCounterClockwise;
-    VGPUDepthClipMode depthClipMode;
-    float depthBias;
-    float depthBiasClamp;
-    float slopeScaledDepthBias;
+    VGPUFrontFace frontFace;
+    VGPUBool32 conservativeRaster;
 } VGPURasterizerState;
 
 typedef struct VGPUStencilFaceState {
@@ -828,7 +857,11 @@ typedef struct VGPUDepthStencilState {
     VGPUStencilFaceState stencilBack;
     uint32_t stencilReadMask;
     uint32_t stencilWriteMask;
-    VGPUBool32 depthBoundsTestEnable;
+    float depthBias;
+    float depthBiasSlopeScale;
+    float depthBiasClamp;
+    VGPUDepthClipMode depthClipMode;
+    VGPUBool32 depthBoundsTestEnable; /* Only if VGPUFeature_DepthBoundsTest is supported */
 } VGPUDepthStencilState;
 
 typedef struct VGPUVertexAttribute {
@@ -995,14 +1028,20 @@ VGPU_API uint32_t vgpuSamplerRelease(VGPUSampler sampler);
 /* BindGroupLayout */
 VGPU_API VGPUBindGroupLayout vgpuCreateBindGroupLayout(VGPUDevice device, const VGPUBindGroupLayoutDesc* desc);
 VGPU_API void vgpuBindGroupLayoutSetLabel(VGPUBindGroupLayout bindGroupLayout, const char* label);
-VGPU_API uint32_t vgpuBindGroupLayoutAddRef(VGPUPipelineLayout bindGroupLayout);
-VGPU_API uint32_t vgpuBindGroupLayoutRelease(VGPUPipelineLayout bindGroupLayout);
+VGPU_API uint32_t vgpuBindGroupLayoutAddRef(VGPUBindGroupLayout bindGroupLayout);
+VGPU_API uint32_t vgpuBindGroupLayoutRelease(VGPUBindGroupLayout bindGroupLayout);
 
 /* PipelineLayout */
 VGPU_API VGPUPipelineLayout vgpuCreatePipelineLayout(VGPUDevice device, const VGPUPipelineLayoutDesc* desc);
 VGPU_API void vgpuPipelineLayoutSetLabel(VGPUPipelineLayout pipelineLayout, const char* label);
 VGPU_API uint32_t vgpuPipelineLayoutAddRef(VGPUPipelineLayout pipelineLayout);
 VGPU_API uint32_t vgpuPipelineLayoutRelease(VGPUPipelineLayout pipelineLayout);
+
+/* BindGroup */
+VGPU_API VGPUBindGroup vgpuCreateBindGroup(VGPUDevice device, const VGPUBindGroupLayout layout, const VGPUBindGroupDesc* desc);
+VGPU_API void vgpuBindGroupSetLabel(VGPUBindGroup bindGroup, const char* label);
+VGPU_API uint32_t vgpuBindGroupAddRef(VGPUBindGroup bindGroup);
+VGPU_API uint32_t vgpuBindGroupRelease(VGPUBindGroup bindGroup);
 
 /* ShaderModule */
 VGPU_API VGPUShaderModule vgpuCreateShaderModule(VGPUDevice device, const VGPUShaderModuleDesc* desc);
@@ -1041,6 +1080,7 @@ VGPU_API void vgpuPopDebugGroup(VGPUCommandBuffer commandBuffer);
 VGPU_API void vgpuInsertDebugMarker(VGPUCommandBuffer commandBuffer, const char* markerLabel);
 VGPU_API void vgpuClearBuffer(VGPUCommandBuffer commandBuffer, VGPUBuffer buffer, uint64_t offset, uint64_t size);
 VGPU_API void vgpuSetPipeline(VGPUCommandBuffer commandBuffer, VGPUPipeline pipeline);
+VGPU_API void vgpuSetBindGroup(VGPUCommandBuffer commandBuffer, uint32_t groupIndex, VGPUBindGroup bindGroup);
 VGPU_API void vgpuSetPushConstants(VGPUCommandBuffer commandBuffer, uint32_t pushConstantIndex, const void* data, uint32_t size);
 
 VGPU_API void vgpuBeginQuery(VGPUCommandBuffer commandBuffer, VGPUQueryHeap queryHeap, uint32_t index);

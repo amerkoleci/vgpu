@@ -15,7 +15,8 @@ struct PushData {
     float4 color;
 };
 
-PUSH_CONSTANT(PushData, data, 0);
+ConstantBuffer<PushData> data : register(b0, space0);
+//PUSH_CONSTANT(PushData, data, 0);
 
 struct VertexInput {
     float3 Position     : ATTRIBUTE0;

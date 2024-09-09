@@ -942,11 +942,28 @@ struct D3D12Sampler final : public VGPUSamplerImpl
     void SetLabel(const char* label) override;
 };
 
+struct D3D12BindGroupLayout final : public VGPUBindGroupLayoutImpl
+{
+    D3D12Device* device = nullptr;
+    uint32_t descriptorTableSizeCbvUavSrv = 0;
+    uint32_t descriptorTableSizeSamplers = 0;
+
+    std::vector<D3D12_DESCRIPTOR_RANGE1> cbvUavSrvDescriptorRanges;
+    std::vector<D3D12_DESCRIPTOR_RANGE1> samplerDescriptorRanges;
+    std::vector<D3D12_STATIC_SAMPLER_DESC> staticSamplers;
+
+    ~D3D12BindGroupLayout() override;
+    void SetLabel(const char* label) override;
+};
+
 struct D3D12PipelineLayout final : public VGPUPipelineLayoutImpl
 {
     D3D12Device* renderer = nullptr;
     ID3D12RootSignature* handle = nullptr;
 
+    size_t bindGroupLayoutCount = 0;
+    std::vector<RootParameterIndex> cbvUavSrvRootParameterIndex;
+    std::vector<RootParameterIndex> samplerRootParameterIndex;
     RootParameterIndex pushConstantsBaseIndex = ~0u;
 
     ~D3D12PipelineLayout() override;
@@ -1140,6 +1157,7 @@ public:
     void ClearBuffer(VGPUBuffer buffer, uint64_t offset, uint64_t size) override;
 
     void SetPipeline(VGPUPipeline pipeline) override;
+    void SetBindGroup(uint32_t groupIndex, VGPUBindGroup bindGroup) override;
     void SetPushConstants(uint32_t pushConstantIndex, const void* data, uint32_t size) override;
 
     void Dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ) override;
@@ -1202,6 +1220,7 @@ public:
 
     VGPUBindGroupLayout CreateBindGroupLayout(const VGPUBindGroupLayoutDesc* desc) override;
     VGPUPipelineLayout CreatePipelineLayout(const VGPUPipelineLayoutDesc* desc) override;
+    VGPUBindGroup CreateBindGroup(const VGPUBindGroupLayout layout, const VGPUBindGroupDesc* desc) override;
 
     VGPUShaderModule CreateShaderModule(const VGPUShaderModuleDesc* desc) override;
 
@@ -1863,6 +1882,9 @@ VGPUBool32 D3D12Device::QueryFeatureSupport(VGPUFeature feature) const
         case VGPUFeature_ShaderOutputViewportIndex:
             return (d3dFeatures.VPAndRTArrayIndexFromAnyShaderFeedingRasterizerSupportedWithoutGSEmulation() == TRUE);
 
+        case VGPUFeature_ConservativeRasterization:
+            return (d3dFeatures.ConservativeRasterizationTier() != D3D12_CONSERVATIVE_RASTERIZATION_TIER_NOT_SUPPORTED);
+
         case VGPUFeature_VariableRateShading:
             return (d3dFeatures.VariableShadingRateTier() >= D3D12_VARIABLE_SHADING_RATE_TIER_1);
 
@@ -2486,11 +2508,148 @@ VGPUSampler D3D12Device::CreateSampler(const VGPUSamplerDesc* desc)
 }
 
 /* BindGroupLayout */
+D3D12BindGroupLayout::~D3D12BindGroupLayout()
+{
+
+}
+
+void D3D12BindGroupLayout::SetLabel(const char* label)
+{
+    VGPU_UNUSED(label);
+}
+
 VGPUBindGroupLayout D3D12Device::CreateBindGroupLayout(const VGPUBindGroupLayoutDesc* desc)
 {
-    VGPU_UNUSED(desc);
+    const uint32_t bindingLayoutCount = static_cast<uint32_t>(desc->entryCount);
 
-    return nullptr;
+    D3D12BindGroupLayout* layout = new D3D12BindGroupLayout();
+    layout->device = this;
+
+    D3D12_DESCRIPTOR_RANGE_TYPE currentType = static_cast<D3D12_DESCRIPTOR_RANGE_TYPE>(-1);
+    uint32_t currentBinding = ~0u;
+
+    D3D12_ROOT_CONSTANTS rootConstants = {};
+
+    for (uint32_t i = 0, count = bindingLayoutCount; i < count; ++i)
+    {
+        const VGPUBindGroupLayoutEntry& entry = desc->entries[i];
+
+        //if (entry.sampler.staticSampler != nullptr)
+        //{
+        //    D3D12_STATIC_SAMPLER_DESC statiSamplerDesc = ToD3D12StaticSamplerDesc(
+        //        *entry.sampler.staticSampler,
+        //        entry.binding,
+        //        D3D12_DRIVER_RESERVED_REGISTER_SPACE_VALUES_START,
+        //        ToD3D12(entry.visibility));
+        //    layout->staticSamplers.push_back(statiSamplerDesc);
+        //    continue;
+        //}
+
+        D3D12_DESCRIPTOR_RANGE_TYPE descriptorRangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+
+        switch (entry.descriptorType)
+        {
+            case VGPUDescriptorType_Sampler:
+                descriptorRangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER;
+                break;
+
+            case VGPUDescriptorType_SampledTexture:
+                descriptorRangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+                break;
+
+            case VGPUDescriptorType_StorageTexture:
+                descriptorRangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
+                break;
+
+            case VGPUDescriptorType_ReadOnlyStorageTexture:
+                descriptorRangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+                break;
+
+            case VGPUDescriptorType_ConstantBuffer:
+            case VGPUDescriptorType_DynamicConstantBuffer:
+                descriptorRangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
+                break;
+
+            case VGPUDescriptorType_StorageBuffer:
+                descriptorRangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
+                break;
+
+            case VGPUDescriptorType_ReadOnlyStorageBuffer:
+                descriptorRangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+                break;
+
+            default:
+                break;
+        }
+
+        if (descriptorRangeType != currentType || entry.binding != currentBinding + 1)
+        {
+            // Start a new range
+            D3D12_DESCRIPTOR_RANGE1 range = {};
+            range.RangeType = descriptorRangeType;
+            range.NumDescriptors = entry.count;
+            range.BaseShaderRegister = entry.binding;
+            range.RegisterSpace = D3D12_DRIVER_RESERVED_REGISTER_SPACE_VALUES_START;
+            range.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+            switch (descriptorRangeType)
+            {
+                case D3D12_DESCRIPTOR_RANGE_TYPE_SRV:
+                    range.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE | D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE;
+                    break;
+
+                case D3D12_DESCRIPTOR_RANGE_TYPE_CBV:
+                    range.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE;
+                    break;
+
+                case D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER:
+                    range.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_NONE;
+                    break;
+            }
+
+            currentType = descriptorRangeType;
+            currentBinding = entry.binding;
+
+            if (descriptorRangeType == D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER)
+            {
+                range.OffsetInDescriptorsFromTableStart = layout->descriptorTableSizeSamplers;
+                layout->samplerDescriptorRanges.push_back(range);
+
+                layout->descriptorTableSizeSamplers++;
+            }
+            else
+            {
+                range.OffsetInDescriptorsFromTableStart = layout->descriptorTableSizeCbvUavSrv;
+                layout->cbvUavSrvDescriptorRanges.push_back(range);
+
+                layout->descriptorTableSizeCbvUavSrv++;
+            }
+        }
+        else
+        {
+            // Extend the current range
+            if (descriptorRangeType == D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER)
+            {
+                VGPU_ASSERT(!layout->samplerDescriptorRanges.empty());
+                D3D12_DESCRIPTOR_RANGE1& range = layout->samplerDescriptorRanges[layout->samplerDescriptorRanges.size() - 1];
+
+                range.NumDescriptors += entry.count;
+                layout->descriptorTableSizeSamplers += entry.count;
+            }
+            else
+            {
+                VGPU_ASSERT(!layout->cbvUavSrvDescriptorRanges.empty());
+                D3D12_DESCRIPTOR_RANGE1& range = layout->cbvUavSrvDescriptorRanges[layout->cbvUavSrvDescriptorRanges.size() - 1];
+
+                range.NumDescriptors += entry.count;
+                layout->descriptorTableSizeCbvUavSrv += entry.count;
+            }
+
+            currentBinding = entry.binding;
+        }
+    }
+
+    return layout;
 }
 
 /* PipelineLayout */
@@ -2528,17 +2687,74 @@ VGPUPipelineLayout D3D12Device::CreatePipelineLayout(const VGPUPipelineLayoutDes
     D3D12PipelineLayout* layout = new D3D12PipelineLayout();
     layout->renderer = this;
 
-    uint32_t rangeMax = 0;
-    for (uint32_t i = 0; i < desc->descriptorSetCount; i++)
-    {
-        rangeMax += desc->descriptorSets[i].rangeCount;
-    }
-
-    uint32_t totalRangeNum = 0;
+    // TODO: Handle dynamic constant buffers
+    size_t bindGroupLayoutCount = desc->bindGroupLayoutCount;
     std::vector<D3D12_ROOT_PARAMETER1> rootParameters;
-    std::vector<D3D12_DESCRIPTOR_RANGE1> descriptorRanges(rangeMax);
     std::vector<D3D12_STATIC_SAMPLER_DESC> staticSamplers;
 
+    layout->bindGroupLayoutCount = bindGroupLayoutCount;
+    layout->cbvUavSrvRootParameterIndex.resize(bindGroupLayoutCount);
+    layout->samplerRootParameterIndex.resize(bindGroupLayoutCount);
+    rootParameters.resize(0);
+
+    for (size_t i = 0; i < bindGroupLayoutCount; i++)
+    {
+        layout->cbvUavSrvRootParameterIndex[i] = ~0u;
+        layout->samplerRootParameterIndex[i] = ~0u;
+
+        D3D12BindGroupLayout* bindGroupLayout = static_cast<D3D12BindGroupLayout*>(desc->bindGroupLayouts[i]);
+        if (bindGroupLayout->descriptorTableSizeCbvUavSrv > 0)
+        {
+            layout->cbvUavSrvRootParameterIndex[i] = RootParameterIndex(rootParameters.size());
+
+            //std::vector<D3D12_DESCRIPTOR_RANGE1> cbvUavSrvDescriptorRanges = bindGroupLayout->cbvUavSrvDescriptorRanges;
+            for (D3D12_DESCRIPTOR_RANGE1& range : bindGroupLayout->cbvUavSrvDescriptorRanges)
+            {
+                VGPU_ASSERT(range.RegisterSpace == D3D12_DRIVER_RESERVED_REGISTER_SPACE_VALUES_START);
+                range.RegisterSpace = (uint32_t)i;
+            }
+
+            D3D12_ROOT_PARAMETER1& param = rootParameters.emplace_back();
+
+            param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+            param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+            param.DescriptorTable.NumDescriptorRanges = UINT(bindGroupLayout->cbvUavSrvDescriptorRanges.size());
+            param.DescriptorTable.pDescriptorRanges = bindGroupLayout->cbvUavSrvDescriptorRanges.data();
+        }
+
+        if (bindGroupLayout->descriptorTableSizeSamplers > 0)
+        {
+            layout->samplerRootParameterIndex[i] = RootParameterIndex(rootParameters.size());
+
+            //std::vector<D3D12_DESCRIPTOR_RANGE1> cbvUavSrvDescriptorRanges = bindGroupLayout->cbvUavSrvDescriptorRanges;
+            for (D3D12_DESCRIPTOR_RANGE1& range : bindGroupLayout->samplerDescriptorRanges)
+            {
+                VGPU_ASSERT(range.RegisterSpace == D3D12_DRIVER_RESERVED_REGISTER_SPACE_VALUES_START);
+                range.RegisterSpace = (uint32_t)i;
+            }
+
+            D3D12_ROOT_PARAMETER1& param = rootParameters.emplace_back();
+
+            param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+            param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+            param.DescriptorTable.NumDescriptorRanges = UINT(bindGroupLayout->samplerDescriptorRanges.size());
+            param.DescriptorTable.pDescriptorRanges = bindGroupLayout->samplerDescriptorRanges.data();
+        }
+
+        if (bindGroupLayout->staticSamplers.size() > 0)
+        {
+            for (const D3D12_STATIC_SAMPLER_DESC& staticSampler : bindGroupLayout->staticSamplers)
+            {
+                VGPU_ASSERT(staticSampler.RegisterSpace == D3D12_DRIVER_RESERVED_REGISTER_SPACE_VALUES_START);
+
+                D3D12_STATIC_SAMPLER_DESC& sampler = staticSamplers.emplace_back();
+                memcpy(&sampler, &staticSampler, sizeof(sampler));
+                sampler.RegisterSpace = (uint32_t)i;
+            }
+        }
+    }
+
+    // PushConstants
     if (desc->pushConstantRangeCount > 0)
     {
         layout->pushConstantsBaseIndex = RootParameterIndex(rootParameters.size());
@@ -2557,7 +2773,6 @@ VGPUPipelineLayout D3D12Device::CreatePipelineLayout(const VGPUPipelineLayoutDes
             rootParameters.push_back(rootParameter);
         }
     }
-    VGPU_UNUSED(totalRangeNum);
 
     D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = { };
     rootSignatureDesc.NumParameters = (UINT)rootParameters.size();
@@ -2578,6 +2793,11 @@ VGPUPipelineLayout D3D12Device::CreatePipelineLayout(const VGPUPipelineLayoutDes
     }
 
     return layout;
+}
+
+VGPUBindGroup D3D12Device::CreateBindGroup(const VGPUBindGroupLayout layout, const VGPUBindGroupDesc* desc)
+{
+    return nullptr;
 }
 
 /* ShaderModule */
@@ -2778,15 +2998,15 @@ VGPUPipeline D3D12Device::CreateRenderPipeline(const VGPURenderPipelineDesc* des
     CD3DX12_RASTERIZER_DESC rasterizerState{};
     rasterizerState.FillMode = ToD3D12(desc->rasterizerState.fillMode);
     rasterizerState.CullMode = ToD3D12(desc->rasterizerState.cullMode);
-    rasterizerState.FrontCounterClockwise = desc->rasterizerState.frontFaceCounterClockwise ? TRUE : FALSE;
-    rasterizerState.DepthBias = static_cast<INT>(desc->rasterizerState.depthBias);
-    rasterizerState.DepthBiasClamp = desc->rasterizerState.depthBiasClamp;
-    rasterizerState.SlopeScaledDepthBias = desc->rasterizerState.slopeScaledDepthBias;
-    rasterizerState.DepthClipEnable = (desc->rasterizerState.depthClipMode == VGPUDepthClipMode_Clip) ? TRUE : FALSE;
+    rasterizerState.FrontCounterClockwise = (desc->rasterizerState.frontFace == VGPUFrontFace_CounterClockwise) ? TRUE : FALSE;
+    rasterizerState.DepthBias = static_cast<INT>(desc->depthStencilState.depthBias);
+    rasterizerState.DepthBiasClamp = desc->depthStencilState.depthBiasClamp;
+    rasterizerState.SlopeScaledDepthBias = desc->depthStencilState.depthBiasSlopeScale;
+    rasterizerState.DepthClipEnable = (desc->depthStencilState.depthClipMode == VGPUDepthClipMode_Clip) ? TRUE : FALSE;
     rasterizerState.MultisampleEnable = desc->sampleCount > 1 ? TRUE : FALSE;
     rasterizerState.AntialiasedLineEnable = FALSE;
     rasterizerState.ForcedSampleCount = 0;
-    rasterizerState.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
+    rasterizerState.ConservativeRaster = (desc->rasterizerState.conservativeRaster) ? D3D12_CONSERVATIVE_RASTERIZATION_MODE_ON : D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
     stream.stream1.RasterizerState = rasterizerState;
 
     // DepthStencilState
@@ -3206,6 +3426,11 @@ void D3D12CommandBuffer::SetPipeline(VGPUPipeline pipeline)
     }
 }
 
+void D3D12CommandBuffer::SetBindGroup(uint32_t groupIndex, VGPUBindGroup bindGroup)
+{
+
+}
+
 void D3D12CommandBuffer::SetPushConstants(uint32_t pushConstantIndex, const void* data, uint32_t size)
 {
     VGPU_ASSERT(currentPipeline);
@@ -3280,7 +3505,7 @@ VGPUTexture D3D12CommandBuffer::AcquireSwapchainTexture(VGPUSwapChain swapChain)
         height == 0)
     {
         return nullptr;
-    }
+}
 
     if (width != swapChainDesc.Width ||
         height != swapChainDesc.Height)
@@ -3927,8 +4152,8 @@ static VGPUDeviceImpl* d3d12_createDevice(const VGPUDeviceDescriptor* info)
                 {
                     debugController2->SetGPUBasedValidationFlags(D3D12_GPU_BASED_VALIDATION_FLAGS_NONE);
                 }
-            }
         }
+    }
         else
         {
             OutputDebugStringA("WARNING: Direct3D Debug Device is not available\n");
@@ -3954,7 +4179,7 @@ static VGPUDeviceImpl* d3d12_createDevice(const VGPUDeviceDescriptor* info)
             dxgiInfoQueue->AddStorageFilterEntries(VGFX_DXGI_DEBUG_DXGI, &filter);
         }
 #endif
-    }
+}
 
     if (FAILED(vgpuCreateDXGIFactory2(dxgiFactoryFlags, IID_PPV_ARGS(&renderer->factory))))
     {

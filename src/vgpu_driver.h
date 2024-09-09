@@ -179,6 +179,12 @@ struct VGPUPipelineLayoutImpl : public VGPUObject
 public:
 };
 
+struct VGPUBindGroupImpl : public VGPUObject
+{
+public:
+    virtual void Update(const VGPUBindGroupEntry* entry) = 0;
+};
+
 struct VGPUShaderModuleImpl : public VGPUObject
 {
 public:
@@ -217,6 +223,7 @@ public:
     virtual void ClearBuffer(VGPUBuffer buffer, uint64_t offset, uint64_t size) = 0;
 
     virtual void SetPipeline(VGPUPipeline pipeline) = 0;
+    virtual void SetBindGroup(uint32_t groupIndex, VGPUBindGroup bindGroup) = 0;
     virtual void SetPushConstants(uint32_t pushConstantIndex, const void* data, uint32_t size) = 0;
 
     virtual void Dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ) = 0;
@@ -266,6 +273,7 @@ struct VGPUDeviceImpl : public VGPUObject
 
     virtual VGPUBindGroupLayout CreateBindGroupLayout(const VGPUBindGroupLayoutDesc* desc) = 0;
     virtual VGPUPipelineLayout CreatePipelineLayout(const VGPUPipelineLayoutDesc* desc) = 0;
+    virtual VGPUBindGroup CreateBindGroup(const VGPUBindGroupLayout layout, const VGPUBindGroupDesc* desc) = 0;
 
     virtual VGPUShaderModule CreateShaderModule(const VGPUShaderModuleDesc* desc) = 0;
 
