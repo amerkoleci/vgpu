@@ -608,36 +608,6 @@ uint32_t vgpuBindGroupRelease(VGPUBindGroup bindGroup)
     return bindGroup->Release();
 }
 
-/* ShaderModule */
-VGPUShaderModule vgpuCreateShaderModule(VGPUDevice device, const VGPUShaderModuleDesc* desc)
-{
-    VGPU_ASSERT(device);
-    NULL_RETURN_NULL(desc);
-
-    return device->CreateShaderModule(desc);
-}
-
-void vgpuShaderModuleSetLabel(VGPUShaderModule shaderModule, const char* label)
-{
-    NULL_RETURN(shaderModule);
-
-    shaderModule->SetLabel(label);
-}
-
-uint32_t vgpuShaderModuleAddRef(VGPUShaderModule shaderModule)
-{
-    VGPU_ASSERT(shaderModule);
-
-    return shaderModule->AddRef();
-}
-
-uint32_t vgpuShaderModuleRelease(VGPUShaderModule shaderModule)
-{
-    VGPU_ASSERT(shaderModule);
-
-    return shaderModule->Release();
-}
-
 /* Pipeline */
 static VGPURenderPipelineDesc _vgpuRenderPipelineDescDef(const VGPURenderPipelineDesc* desc)
 {
@@ -694,8 +664,8 @@ VGPUPipeline vgpuCreateComputePipeline(VGPUDevice device, const VGPUComputePipel
 
     NULL_RETURN_NULL(desc);
     VGPU_ASSERT(desc->layout);
-    VGPU_ASSERT(desc->computeShader.stage == VGPUShaderStage_Compute);
-    VGPU_ASSERT(desc->computeShader.module != nullptr);
+    VGPU_ASSERT(desc->shader.stage == VGPUShaderStage_Compute);
+    VGPU_ASSERT(desc->shader.entryPointName);
 
     return device->CreateComputePipeline(desc);
 }

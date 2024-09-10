@@ -61,7 +61,6 @@ typedef struct VGPUSamplerImpl*         VGPUSampler;
 typedef struct VGPUBindGroupLayoutImpl* VGPUBindGroupLayout;
 typedef struct VGPUPipelineLayoutImpl*  VGPUPipelineLayout;
 typedef struct VGPUBindGroupImpl*       VGPUBindGroup;
-typedef struct VGPUShaderModuleImpl*    VGPUShaderModule;
 typedef struct VGPUPipelineImpl*        VGPUPipeline;
 typedef struct VGPUQueryHeapImpl*       VGPUQueryHeap;
 typedef struct VGPUSurfaceImpl*         VGPUSurface;
@@ -796,7 +795,7 @@ typedef struct VGPUBindGroupEntry {
     uint64_t                offset;
     uint64_t                size;
     //uint64_t                stride = 0;
-    //SharedPtr<RHISampler>   sampler;
+    VGPUSampler             sampler;
     //const RHITexture* textureView = nullptr;
 } VGPUBindGroupEntry;
 
@@ -806,16 +805,11 @@ typedef struct VGPUBindGroupDesc {
     const VGPUBindGroupEntry* entries;
 } VGPUBindGroupDesc;
 
-typedef struct VGPUShaderModuleDesc {
-    const char*     label;
-    const void*     pCode;
-    size_t          codeSize;
-} VGPUShaderModuleDesc;
-
 typedef struct VGPUShaderStageDesc {
-    VGPUShaderModule module;
     VGPUShaderStage stage;
-    const char*     entryPoint;
+    const void* bytecode;
+    size_t size;
+    const char* entryPointName;
 } VGPUShaderStageDesc;
 
 typedef struct VGPURenderTargetBlendState {
@@ -905,9 +899,9 @@ typedef struct VGPURenderPipelineDesc {
 } VGPURenderPipelineDesc;
 
 typedef struct VGPUComputePipelineDesc {
-    const char*         label;
-    VGPUPipelineLayout  layout;
-    VGPUShaderStageDesc computeShader;
+    const char* label;
+    VGPUPipelineLayout layout;
+    VGPUShaderStageDesc shader;
 } VGPUComputePipelineDesc;
 
 typedef struct VGPURayTracingPipelineDesc {
@@ -1042,12 +1036,6 @@ VGPU_API VGPUBindGroup vgpuCreateBindGroup(VGPUDevice device, const VGPUBindGrou
 VGPU_API void vgpuBindGroupSetLabel(VGPUBindGroup bindGroup, const char* label);
 VGPU_API uint32_t vgpuBindGroupAddRef(VGPUBindGroup bindGroup);
 VGPU_API uint32_t vgpuBindGroupRelease(VGPUBindGroup bindGroup);
-
-/* ShaderModule */
-VGPU_API VGPUShaderModule vgpuCreateShaderModule(VGPUDevice device, const VGPUShaderModuleDesc* desc);
-VGPU_API void vgpuShaderModuleSetLabel(VGPUShaderModule shaderModule, const char* label);
-VGPU_API uint32_t vgpuShaderModuleAddRef(VGPUShaderModule shaderModule);
-VGPU_API uint32_t vgpuShaderModuleRelease(VGPUShaderModule shaderModule);
 
 /* Pipeline */
 VGPU_API VGPUPipeline vgpuCreateRenderPipeline(VGPUDevice device, const VGPURenderPipelineDesc* desc);

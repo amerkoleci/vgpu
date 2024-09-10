@@ -77,6 +77,19 @@ _VGPU_EXTERN void vgpuLogError(const char* format, ...);
 namespace
 {
     /// Round up to next power of two.
+    constexpr uint32_t vgpuNextPowerOfTwo(uint32_t value)
+    {
+        // http://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2
+        --value;
+        value |= value >> 1u;
+        value |= value >> 2u;
+        value |= value >> 4u;
+        value |= value >> 8u;
+        value |= value >> 16u;
+        return ++value;
+    }
+
+    /// Round up to next power of two.
     constexpr uint64_t vgpuNextPowerOfTwo(uint64_t value)
     {
         // http://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2
@@ -182,12 +195,7 @@ public:
 struct VGPUBindGroupImpl : public VGPUObject
 {
 public:
-    virtual void Update(const VGPUBindGroupEntry* entry) = 0;
-};
-
-struct VGPUShaderModuleImpl : public VGPUObject
-{
-public:
+    virtual void Update(size_t entryCount, const VGPUBindGroupEntry* entries) = 0;
 };
 
 struct VGPUPipelineImpl : public VGPUObject
@@ -274,8 +282,6 @@ struct VGPUDeviceImpl : public VGPUObject
     virtual VGPUBindGroupLayout CreateBindGroupLayout(const VGPUBindGroupLayoutDesc* desc) = 0;
     virtual VGPUPipelineLayout CreatePipelineLayout(const VGPUPipelineLayoutDesc* desc) = 0;
     virtual VGPUBindGroup CreateBindGroup(const VGPUBindGroupLayout layout, const VGPUBindGroupDesc* desc) = 0;
-
-    virtual VGPUShaderModule CreateShaderModule(const VGPUShaderModuleDesc* desc) = 0;
 
     virtual VGPUPipeline CreateRenderPipeline(const VGPURenderPipelineDesc* desc) = 0;
     virtual VGPUPipeline CreateComputePipeline(const VGPUComputePipelineDesc* desc) = 0;

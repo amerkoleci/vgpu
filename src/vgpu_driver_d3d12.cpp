@@ -424,7 +424,6 @@ namespace
         }
     }
 
-
     constexpr D3D_PRIMITIVE_TOPOLOGY ToD3DPrimitiveTopology(VGPUPrimitiveTopology type, uint32_t patchControlPoints = 1)
     {
         switch (type)
@@ -779,6 +778,32 @@ namespace
                 VGPU_UNREACHABLE();
         }
     }
+
+    inline void __stdcall DebugMessageCallback(
+        D3D12_MESSAGE_CATEGORY Category,
+        D3D12_MESSAGE_SEVERITY Severity,
+        D3D12_MESSAGE_ID ID,
+        LPCSTR pDescription,
+        void* pContext)
+    {
+        VGPU_UNUSED(Category);
+        VGPU_UNUSED(ID);
+        VGPU_UNUSED(pContext);
+
+        if (Severity == D3D12_MESSAGE_SEVERITY_CORRUPTION || Severity == D3D12_MESSAGE_SEVERITY_ERROR)
+        {
+            vgpuLogError("%s", pDescription);
+            VGPU_UNREACHABLE();
+        }
+        else if (Severity == D3D12_MESSAGE_SEVERITY_WARNING)
+        {
+            vgpuLogWarn("%s", pDescription);
+        }
+        else
+        {
+            vgpuLogInfo("%s", pDescription);
+        }
+    }
 }
 
 #if !WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
@@ -792,92 +817,204 @@ namespace
 using DescriptorIndex = uint32_t;
 using RootParameterIndex = uint32_t;
 
+static constexpr DescriptorIndex kInvalidDescriptorIndex = ~0u;
+
 struct D3D12DescriptorAllocator final
 {
     ID3D12Device* device = nullptr;
-    std::mutex locker;
-    D3D12_DESCRIPTOR_HEAP_DESC desc = {};
-    std::vector<ID3D12DescriptorHeap*> heaps;
-    uint32_t descriptorSize = 0;
-    std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> freelist;
+    ID3D12DescriptorHeap* heap = nullptr;
+    ID3D12DescriptorHeap* shaderVisibleHeap = nullptr;
+    D3D12_DESCRIPTOR_HEAP_TYPE heapType = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+    uint32_t numDescriptors = 0;
+    bool shaderVisible = true;
+    uint32_t stride = 0;
+    D3D12_CPU_DESCRIPTOR_HANDLE startCpuHandle = { 0 };
+    D3D12_CPU_DESCRIPTOR_HANDLE startCpuHandleShaderVisible = { 0 };
+    D3D12_GPU_DESCRIPTOR_HANDLE startGpuHandleShaderVisible = { 0 };
+    std::vector<bool> allocatedDescriptors;
+    DescriptorIndex searchStart = 0;
+    uint32_t numAllocatedDescriptors = 0;
+    std::mutex mutex;
 
-    void Init(ID3D12Device* device_, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32_t numDescriptorsPerBlock)
+    void Init(ID3D12Device* device_, D3D12_DESCRIPTOR_HEAP_TYPE heapType_, uint32_t numDescriptors_)
     {
         device = device_;
+        heapType = heapType_;
+        shaderVisible = heapType == D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV || heapType == D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
+        stride = device_->GetDescriptorHandleIncrementSize(heapType);
 
-        desc.Type = type;
-        desc.NumDescriptors = numDescriptorsPerBlock;
-        descriptorSize = device->GetDescriptorHandleIncrementSize(type);
+        VHR(AllocateResources(numDescriptors_));
     }
 
     void Shutdown()
     {
-        for (auto heap : heaps)
-        {
-            heap->Release();
-        }
-        heaps.clear();
+        SAFE_RELEASE(heap);
+        SAFE_RELEASE(shaderVisibleHeap);
     }
 
-    void BlockAllocate()
+    DescriptorIndex AllocateDescriptors(uint32_t count = 1u)
     {
-        heaps.emplace_back();
-        HRESULT hr = device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&heaps.back()));
-        VGPU_UNUSED(hr);
-        VGPU_ASSERT(SUCCEEDED(hr));
+        std::lock_guard lockGuard(mutex);
 
-        D3D12_CPU_DESCRIPTOR_HANDLE heap_start = heaps.back()->GetCPUDescriptorHandleForHeapStart();
-        for (UINT i = 0; i < desc.NumDescriptors; ++i)
+        DescriptorIndex foundIndex = 0;
+        uint32_t freeCount = 0;
+        bool found = false;
+
+        // Find a contiguous range of 'count' indices for which m_AllocatedDescriptors[index] is false
+        for (DescriptorIndex index = searchStart; index < numDescriptors; index++)
         {
-            D3D12_CPU_DESCRIPTOR_HANDLE handle = heap_start;
-            handle.ptr += i * descriptorSize;
-            freelist.push_back(handle);
+            if (allocatedDescriptors[index])
+                freeCount = 0;
+            else
+                freeCount += 1;
+
+            if (freeCount >= count)
+            {
+                foundIndex = index - count + 1;
+                found = true;
+                break;
+            }
         }
+
+        if (!found)
+        {
+            foundIndex = numDescriptors;
+
+            if (FAILED(Grow(numDescriptors + count)))
+            {
+                vgpuLogError("Failed to grow a descriptor heap!");
+                return kInvalidDescriptorIndex;
+            }
+        }
+
+        for (DescriptorIndex index = foundIndex; index < foundIndex + count; index++)
+        {
+            allocatedDescriptors[index] = true;
+        }
+
+        numAllocatedDescriptors += count;
+
+        searchStart = foundIndex + count;
+        return foundIndex;
     }
 
-    D3D12_CPU_DESCRIPTOR_HANDLE Allocate()
+    void ReleaseDescriptors(DescriptorIndex baseIndex, uint32_t count)
     {
-        locker.lock();
-        if (freelist.empty())
+        std::lock_guard lockGuard(mutex);
+
+        if (count == 0)
+            return;
+
+        for (DescriptorIndex index = baseIndex; index < baseIndex + count; index++)
         {
-            BlockAllocate();
+#ifdef _DEBUG
+            if (!allocatedDescriptors[index])
+            {
+                vgpuLogError("Attempted to release an un-allocated descriptor");
+            }
+#endif
+
+            allocatedDescriptors[index] = false;
         }
-        VGPU_ASSERT(!freelist.empty());
-        D3D12_CPU_DESCRIPTOR_HANDLE handle = freelist.back();
-        freelist.pop_back();
-        locker.unlock();
+
+        numAllocatedDescriptors -= count;
+
+        if (searchStart > baseIndex)
+            searchStart = baseIndex;
+    }
+
+    void ReleaseDescriptor(DescriptorIndex index)
+    {
+        ReleaseDescriptors(index, 1);
+    }
+
+    void CopyToShaderVisibleHeap(DescriptorIndex index, uint32_t count = 1)
+    {
+        device->CopyDescriptorsSimple(count, GetCpuHandleShaderVisible(index), GetCpuHandle(index), heapType);
+    }
+
+
+    D3D12_CPU_DESCRIPTOR_HANDLE GetCpuHandle(DescriptorIndex index)
+    {
+        D3D12_CPU_DESCRIPTOR_HANDLE handle = startCpuHandle;
+        handle.ptr += index * stride;
         return handle;
     }
 
-    void Free(D3D12_CPU_DESCRIPTOR_HANDLE index)
+    D3D12_CPU_DESCRIPTOR_HANDLE GetCpuHandleShaderVisible(DescriptorIndex index)
     {
-        locker.lock();
-        freelist.push_back(index);
-        locker.unlock();
+        D3D12_CPU_DESCRIPTOR_HANDLE handle = startCpuHandleShaderVisible;
+        handle.ptr += index * stride;
+        return handle;
     }
-};
 
-struct D3D12GpuDescriptorHeap final
-{
-    uint32_t numDescriptors = 0;
-    ID3D12DescriptorHeap* handle = nullptr;
-    D3D12_CPU_DESCRIPTOR_HANDLE cpuStart = {};
-    D3D12_GPU_DESCRIPTOR_HANDLE gpuStart = {};
-
-    // CPU status
-    std::atomic<uint64_t> allocationOffset{ 0 };
-
-    // GPU status
-    ID3D12Fence* fence = nullptr;
-    uint64_t fenceValue = 0;
-    uint64_t cachedCompletedValue = 0;
-
-    void SignalGPU(ID3D12CommandQueue* queue)
+    D3D12_GPU_DESCRIPTOR_HANDLE GetGpuHandle(DescriptorIndex index)
     {
-        // Descriptor heaps' progress is recorded by the GPU:
-        fenceValue = allocationOffset.load();
-        VHR(queue->Signal(fence, fenceValue));
-        cachedCompletedValue = fence->GetCompletedValue();
+        D3D12_GPU_DESCRIPTOR_HANDLE handle = startGpuHandleShaderVisible;
+        handle.ptr += index * stride;
+        return handle;
+    }
+
+    [[nodiscard]] ID3D12DescriptorHeap* GetHeap() const { return heap; }
+    [[nodiscard]] ID3D12DescriptorHeap* GetShaderVisibleHeap() const { return shaderVisibleHeap; }
+    [[nodiscard]] uint32_t GetStride() const { return stride; }
+
+private:
+    HRESULT AllocateResources(uint32_t numDescriptors_)
+    {
+        SAFE_RELEASE(heap);
+        SAFE_RELEASE(shaderVisibleHeap);
+        numDescriptors = numDescriptors_;
+
+        D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {};
+        heapDesc.Type = heapType;
+        heapDesc.NumDescriptors = numDescriptors;
+        heapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+
+        HRESULT hr = device->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(&heap));
+
+        if (FAILED(hr))
+            return hr;
+
+        if (shaderVisible)
+        {
+            heapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+
+            hr = device->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(&shaderVisibleHeap));
+
+            if (FAILED(hr))
+                return hr;
+
+            startCpuHandleShaderVisible = shaderVisibleHeap->GetCPUDescriptorHandleForHeapStart();
+            startGpuHandleShaderVisible = shaderVisibleHeap->GetGPUDescriptorHandleForHeapStart();
+        }
+
+        startCpuHandle = heap->GetCPUDescriptorHandleForHeapStart();
+        allocatedDescriptors.resize(numDescriptors);
+
+        return S_OK;
+    }
+
+    HRESULT Grow(uint32_t minRequiredSize)
+    {
+        uint32_t oldSize = numDescriptors;
+        uint32_t newSize = vgpuNextPowerOfTwo(minRequiredSize);
+
+        ID3D12DescriptorHeap* oldHeap = heap;
+
+        HRESULT hr = AllocateResources(newSize);
+
+        if (FAILED(hr))
+            return hr;
+
+        device->CopyDescriptorsSimple(oldSize, startCpuHandle, oldHeap->GetCPUDescriptorHandleForHeapStart(), heapType);
+
+        if (shaderVisibleHeap != nullptr)
+        {
+            device->CopyDescriptorsSimple(oldSize, startCpuHandleShaderVisible, oldHeap->GetCPUDescriptorHandleForHeapStart(), heapType);
+        }
+
+        return S_OK;
     }
 };
 
@@ -923,8 +1060,8 @@ struct D3D12Texture final : public VGPUTextureImpl, public D3D12Resource
     void* pMappedData{ nullptr };
     HANDLE sharedHandle = nullptr;
 
-    std::unordered_map<size_t, D3D12_CPU_DESCRIPTOR_HANDLE> rtvCache;
-    std::unordered_map<size_t, D3D12_CPU_DESCRIPTOR_HANDLE> dsvCache;
+    std::unordered_map<size_t, DescriptorIndex> RTVs;
+    std::unordered_map<size_t, DescriptorIndex> DSVs;
 
     ~D3D12Texture() override;
     void SetLabel(const char* label) override;
@@ -936,7 +1073,7 @@ struct D3D12Texture final : public VGPUTextureImpl, public D3D12Resource
 struct D3D12Sampler final : public VGPUSamplerImpl
 {
     D3D12Device* renderer = nullptr;
-    D3D12_CPU_DESCRIPTOR_HANDLE handle{};
+    D3D12_SAMPLER_DESC samplerDesc{};
 
     ~D3D12Sampler() override;
     void SetLabel(const char* label) override;
@@ -970,14 +1107,16 @@ struct D3D12PipelineLayout final : public VGPUPipelineLayoutImpl
     void SetLabel(const char* label) override;
 };
 
-struct D3D12ShaderModule final : public VGPUShaderModuleImpl
+struct D3D12BindGroup final : public VGPUBindGroupImpl
 {
-    D3D12Device* renderer = nullptr;
-    void* pByteCode = nullptr;
-    D3D12_SHADER_BYTECODE handle = {};
+    D3D12Device* device = nullptr;
+    D3D12BindGroupLayout* bindGroupLayout = nullptr;
+    DescriptorIndex descriptorTableCbvUavSrv = 0;
+    DescriptorIndex descriptorTableSamplers = 0;
 
-    ~D3D12ShaderModule() override;
+    ~D3D12BindGroup() override;
     void SetLabel(const char* label) override;
+    void Update(size_t entryCount, const VGPUBindGroupEntry* entries) override;
 };
 
 struct D3D12Pipeline final : public VGPUPipelineImpl
@@ -1067,6 +1206,10 @@ public:
     bool insideRenderPass = false;
     bool hasRenderPassLabel = false;
     D3D12Pipeline* currentPipeline = nullptr;
+
+    bool bindGroupsDirty{ false };
+    uint32_t numBoundBindGroups{ 0 };
+    D3D12BindGroup* boundBindGroups[VGPU_MAX_BIND_GROUPS] = {};
 
     std::vector<D3D12SwapChain*> swapChains;
 
@@ -1182,6 +1325,7 @@ public:
     void ResolveQuery(VGPUQueryHeap heap, uint32_t index, uint32_t count, VGPUBuffer destinationBuffer, uint64_t destinationOffset) override;
     void ResetQuery(VGPUQueryHeap heap, uint32_t index, uint32_t count) override;
 
+    void FlushBindGroups(bool graphics);
     void PrepareDraw();
     void Draw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance) override;
     void DrawIndexed(uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t baseVertex, uint32_t firstInstance) override;
@@ -1206,6 +1350,7 @@ class D3D12Device final : public VGPUDeviceImpl
 public:
     ~D3D12Device() override;
 
+    bool Init(const VGPUDeviceDescriptor* info);
     void SetLabel(const char* label) override;
     void WaitIdle() override;
     VGPUBackend GetBackendType() const override { return VGPUBackend_D3D12; }
@@ -1221,8 +1366,6 @@ public:
     VGPUBindGroupLayout CreateBindGroupLayout(const VGPUBindGroupLayoutDesc* desc) override;
     VGPUPipelineLayout CreatePipelineLayout(const VGPUPipelineLayoutDesc* desc) override;
     VGPUBindGroup CreateBindGroup(const VGPUBindGroupLayout layout, const VGPUBindGroupDesc* desc) override;
-
-    VGPUShaderModule CreateShaderModule(const VGPUShaderModuleDesc* desc) override;
 
     VGPUPipeline CreateRenderPipeline(const VGPURenderPipelineDesc* desc) override;
     VGPUPipeline CreateComputePipeline(const VGPUComputePipelineDesc* desc) override;
@@ -1275,14 +1418,10 @@ public:
     uint32_t frameIndex = 0;
     uint64_t frameCount = 0;
 
-
-    D3D12DescriptorAllocator resourceAllocator;
-    D3D12DescriptorAllocator samplerAllocator;
-    D3D12DescriptorAllocator rtvAllocator;
-    D3D12DescriptorAllocator dsvAllocator;
-
-    D3D12GpuDescriptorHeap resourceDescriptorHeap;
-    D3D12GpuDescriptorHeap samplerDescriptorHeap;
+    D3D12DescriptorAllocator renderTargetViewHeap;
+    D3D12DescriptorAllocator depthStencilViewHeap;
+    D3D12DescriptorAllocator shaderResourceViewHeap;
+    D3D12DescriptorAllocator samplerHeap;
 
     ID3D12CommandSignature* dispatchIndirectCommandSignature = nullptr;
     ID3D12CommandSignature* drawIndirectCommandSignature = nullptr;
@@ -1419,15 +1558,15 @@ D3D12_UploadContext D3D12Device::UploadAllocate(uint64_t size)
     return context;
 }
 
-static D3D12_CPU_DESCRIPTOR_HANDLE d3d12_GetRTV(D3D12Device* renderer, D3D12Texture* texture, uint32_t mipLevel, uint32_t slice)
+static D3D12_CPU_DESCRIPTOR_HANDLE d3d12_GetRTV(D3D12Texture* texture, uint32_t mipLevel, uint32_t slice)
 {
     size_t hash = 0;
     //hash_combine(hash, format);
     hash_combine(hash, mipLevel);
     hash_combine(hash, slice);
 
-    auto it = texture->rtvCache.find(hash);
-    if (it == texture->rtvCache.end())
+    auto it = texture->RTVs.find(hash);
+    if (it == texture->RTVs.end())
     {
         const D3D12_RESOURCE_DESC& resourceDesc = texture->handle->GetDesc();
 
@@ -1501,24 +1640,25 @@ static D3D12_CPU_DESCRIPTOR_HANDLE d3d12_GetRTV(D3D12Device* renderer, D3D12Text
                 return {};
         }
 
-        D3D12_CPU_DESCRIPTOR_HANDLE newView = renderer->rtvAllocator.Allocate();
-        renderer->device->CreateRenderTargetView(texture->handle, &viewDesc, newView);
-        texture->rtvCache[hash] = newView;
-        return newView;
+        DescriptorIndex descriptorIndex = texture->renderer->renderTargetViewHeap.AllocateDescriptors();
+        D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = texture->renderer->renderTargetViewHeap.GetCpuHandle(descriptorIndex);
+        texture->renderer->device->CreateRenderTargetView(texture->handle, &viewDesc, cpuHandle);
+        texture->RTVs[hash] = descriptorIndex;
+        return cpuHandle;
     }
 
-    return it->second;
+    return texture->renderer->renderTargetViewHeap.GetCpuHandle(it->second);
 }
 
-static D3D12_CPU_DESCRIPTOR_HANDLE d3d12_GetDSV(D3D12Device* renderer, D3D12Texture* texture, uint32_t mipLevel, uint32_t slice)
+static D3D12_CPU_DESCRIPTOR_HANDLE d3d12_GetDSV(D3D12Texture* texture, uint32_t mipLevel, uint32_t slice)
 {
     size_t hash = 0;
     hash_combine(hash, mipLevel);
     hash_combine(hash, slice);
     //hash_combine(hash, format);
 
-    auto it = texture->dsvCache.find(hash);
-    if (it == texture->dsvCache.end())
+    auto it = texture->DSVs.find(hash);
+    if (it == texture->DSVs.end())
     {
         const D3D12_RESOURCE_DESC& resourceDesc = texture->handle->GetDesc();
 
@@ -1586,13 +1726,14 @@ static D3D12_CPU_DESCRIPTOR_HANDLE d3d12_GetDSV(D3D12Device* renderer, D3D12Text
                 return {};
         }
 
-        D3D12_CPU_DESCRIPTOR_HANDLE newView = renderer->dsvAllocator.Allocate();
-        renderer->device->CreateDepthStencilView(texture->handle, &viewDesc, newView);
-        texture->dsvCache[hash] = newView;
-        return newView;
+        DescriptorIndex descriptorIndex = texture->renderer->depthStencilViewHeap.AllocateDescriptors();
+        D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = texture->renderer->depthStencilViewHeap.GetCpuHandle(descriptorIndex);
+        texture->renderer->device->CreateDepthStencilView(texture->handle, &viewDesc, cpuHandle);
+        texture->DSVs[hash] = descriptorIndex;
+        return cpuHandle;
     }
 
-    return it->second;
+    return texture->renderer->depthStencilViewHeap.GetCpuHandle(it->second);
 }
 
 void D3D12Device::UploadSubmit(D3D12_UploadContext context)
@@ -1635,18 +1776,17 @@ void D3D12Buffer::SetLabel(const char* label)
 D3D12Texture::~D3D12Texture()
 {
     renderer->DeferDestroy(handle, allocation);
-    for (auto& it : rtvCache)
+    for (auto& it : RTVs)
     {
-        renderer->rtvAllocator.Free(it.second);
+        renderer->renderTargetViewHeap.ReleaseDescriptor(it.second);
     }
-    rtvCache.clear();
-    for (auto& it : dsvCache)
+    RTVs.clear();
+    for (auto& it : DSVs)
     {
-        renderer->dsvAllocator.Free(it.second);
+        renderer->depthStencilViewHeap.ReleaseDescriptor(it.second);
     }
-    dsvCache.clear();
+    DSVs.clear();
 }
-
 
 void D3D12Texture::SetLabel(const char* label)
 {
@@ -1656,7 +1796,6 @@ void D3D12Texture::SetLabel(const char* label)
 /* D3D12Sampler */
 D3D12Sampler::~D3D12Sampler()
 {
-    renderer->samplerAllocator.Free(handle);
 }
 
 void D3D12Sampler::SetLabel(const char*/* label*/)
@@ -1696,19 +1835,11 @@ D3D12Device::~D3D12Device()
         SAFE_RELEASE(uploadCommandQueue);
     }
 
-    // CPU descriptor allocators
-    {
-        resourceAllocator.Shutdown();
-        samplerAllocator.Shutdown();
-        rtvAllocator.Shutdown();
-        dsvAllocator.Shutdown();
-
-        // GPU Heaps
-        SAFE_RELEASE(resourceDescriptorHeap.handle);
-        SAFE_RELEASE(resourceDescriptorHeap.fence);
-        SAFE_RELEASE(samplerDescriptorHeap.handle);
-        SAFE_RELEASE(samplerDescriptorHeap.fence);
-    }
+    // CPU/GPU descriptor allocators
+    renderTargetViewHeap.Shutdown();
+    depthStencilViewHeap.Shutdown();
+    shaderResourceViewHeap.Shutdown();
+    samplerHeap.Shutdown();
 
     SAFE_RELEASE(dispatchIndirectCommandSignature);
     SAFE_RELEASE(drawIndirectCommandSignature);
@@ -1976,6 +2107,375 @@ void D3D12Device::GetLimits(VGPULimits* limits) const
 
 }
 
+bool D3D12Device::Init(const VGPUDeviceDescriptor* info)
+{
+    DWORD dxgiFactoryFlags = 0;
+    if (info->validationMode != VGPUValidationMode_Disabled)
+    {
+        ComPtr<ID3D12Debug> debugController;
+#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
+        if (vgpuD3D12GetDebugInterface != nullptr &&
+            SUCCEEDED(vgpuD3D12GetDebugInterface(IID_PPV_ARGS(debugController.GetAddressOf()))))
+#else
+        if (SUCCEEDED(vgpuD3D12GetDebugInterface(IID_PPV_ARGS(debugController.GetAddressOf()))))
+#endif
+        {
+            debugController->EnableDebugLayer();
+
+            if (info->validationMode == VGPUValidationMode_GPU)
+            {
+                ComPtr<ID3D12Debug1> debugController1;
+                if (SUCCEEDED(debugController.As(&debugController1)))
+                {
+                    debugController1->SetEnableGPUBasedValidation(TRUE);
+                    debugController1->SetEnableSynchronizedCommandQueueValidation(TRUE);
+                }
+
+                ComPtr<ID3D12Debug2> debugController2;
+                if (SUCCEEDED(debugController.As(&debugController2)))
+                {
+                    debugController2->SetGPUBasedValidationFlags(D3D12_GPU_BASED_VALIDATION_FLAGS_NONE);
+                }
+            }
+        }
+        else
+        {
+            OutputDebugStringA("WARNING: Direct3D Debug Device is not available\n");
+        }
+
+#if defined(_DEBUG) && WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
+        ComPtr<IDXGIInfoQueue> dxgiInfoQueue;
+        if (vgpuDXGIGetDebugInterface1 != nullptr &&
+            SUCCEEDED(vgpuDXGIGetDebugInterface1(0, IID_PPV_ARGS(dxgiInfoQueue.GetAddressOf()))))
+        {
+            dxgiFactoryFlags = DXGI_CREATE_FACTORY_DEBUG;
+
+            dxgiInfoQueue->SetBreakOnSeverity(VGFX_DXGI_DEBUG_ALL, DXGI_INFO_QUEUE_MESSAGE_SEVERITY_ERROR, true);
+            dxgiInfoQueue->SetBreakOnSeverity(VGFX_DXGI_DEBUG_ALL, DXGI_INFO_QUEUE_MESSAGE_SEVERITY_CORRUPTION, true);
+
+            DXGI_INFO_QUEUE_MESSAGE_ID hide[] =
+            {
+                80 /* IDXGISwapChain::GetContainingOutput: The swapchain's adapter does not control the output on which the swapchain's window resides. */,
+            };
+            DXGI_INFO_QUEUE_FILTER filter = {};
+            filter.DenyList.NumIDs = _countof(hide);
+            filter.DenyList.pIDList = hide;
+            dxgiInfoQueue->AddStorageFilterEntries(VGFX_DXGI_DEBUG_DXGI, &filter);
+        }
+#endif
+    }
+
+    if (FAILED(vgpuCreateDXGIFactory2(dxgiFactoryFlags, IID_PPV_ARGS(&factory))))
+    {
+        return false;
+    }
+
+    // Determines whether tearing support is available for fullscreen borderless windows.
+    {
+        BOOL allowTearing = FALSE;
+        HRESULT hr = factory->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &allowTearing, sizeof(allowTearing));
+
+        if (FAILED(hr) || !allowTearing)
+        {
+            tearingSupported = false;
+#ifdef _DEBUG
+            OutputDebugStringA("WARNING: Variable refresh rate displays not supported");
+#endif
+        }
+        else
+        {
+            tearingSupported = true;
+        }
+    }
+
+    {
+        const DXGI_GPU_PREFERENCE gpuPreference = (info->powerPreference == VGPUPowerPreference_LowPower) ? DXGI_GPU_PREFERENCE_MINIMUM_POWER : DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE;
+
+        static constexpr D3D_FEATURE_LEVEL s_featureLevels[] =
+        {
+            D3D_FEATURE_LEVEL_12_2,
+            D3D_FEATURE_LEVEL_12_1,
+            D3D_FEATURE_LEVEL_12_0,
+            D3D_FEATURE_LEVEL_11_1,
+            D3D_FEATURE_LEVEL_11_0,
+        };
+
+        for (uint32_t i = 0;
+            factory->EnumAdapterByGpuPreference(i, gpuPreference, IID_PPV_ARGS(dxgiAdapter.ReleaseAndGetAddressOf())) != DXGI_ERROR_NOT_FOUND;
+            ++i)
+        {
+            DXGI_ADAPTER_DESC1 adapterDesc;
+            dxgiAdapter->GetDesc1(&adapterDesc);
+
+            // Don't select the Basic Render Driver adapter.
+            if (adapterDesc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)
+            {
+                continue;
+            }
+
+            for (auto& featurelevel : s_featureLevels)
+            {
+                if (SUCCEEDED(vgpuD3D12CreateDevice(dxgiAdapter.Get(), featurelevel, IID_PPV_ARGS(&device))))
+                {
+                    break;
+                }
+            }
+
+            if (device != nullptr)
+                break;
+        }
+
+        VGPU_ASSERT(dxgiAdapter != nullptr);
+        if (dxgiAdapter == nullptr)
+        {
+            vgpuLogError("D3D12: No capable adapter found!");
+            return false;
+        }
+
+        // Init feature check (https://devblogs.microsoft.com/directx/introducing-a-new-api-for-checking-feature-support-in-direct3d-12/)
+        VHR(d3dFeatures.Init(device));
+
+        if (d3dFeatures.HighestRootSignatureVersion() < D3D_ROOT_SIGNATURE_VERSION_1_1)
+        {
+            vgpuLogError("Direct3D12: Root signature version 1.1 not supported!");
+            return false;
+        }
+
+        // Assign label object.
+        if (info->label)
+        {
+            SetLabel(info->label);
+        }
+
+        if (info->validationMode != VGPUValidationMode_Disabled)
+        {
+            // Configure debug device (if active).
+            ID3D12InfoQueue* infoQueue = nullptr;
+            if (SUCCEEDED(device->QueryInterface(&infoQueue)))
+            {
+                infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, TRUE);
+                infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, TRUE);
+
+                std::vector<D3D12_MESSAGE_SEVERITY> enabledSeverities;
+                std::vector<D3D12_MESSAGE_ID> disabledMessages;
+
+                // These severities should be seen all the time
+                enabledSeverities.push_back(D3D12_MESSAGE_SEVERITY_CORRUPTION);
+                enabledSeverities.push_back(D3D12_MESSAGE_SEVERITY_ERROR);
+                enabledSeverities.push_back(D3D12_MESSAGE_SEVERITY_WARNING);
+                enabledSeverities.push_back(D3D12_MESSAGE_SEVERITY_MESSAGE);
+
+                if (info->validationMode == VGPUValidationMode_Verbose)
+                {
+                    // Verbose only filters
+                    enabledSeverities.push_back(D3D12_MESSAGE_SEVERITY_INFO);
+                }
+
+                disabledMessages.push_back(D3D12_MESSAGE_ID_CLEARRENDERTARGETVIEW_MISMATCHINGCLEARVALUE);
+                disabledMessages.push_back(D3D12_MESSAGE_ID_CLEARDEPTHSTENCILVIEW_MISMATCHINGCLEARVALUE);
+                disabledMessages.push_back(D3D12_MESSAGE_ID_MAP_INVALID_NULLRANGE);
+                disabledMessages.push_back(D3D12_MESSAGE_ID_UNMAP_INVALID_NULLRANGE);
+                disabledMessages.push_back(D3D12_MESSAGE_ID_EXECUTECOMMANDLISTS_WRONGSWAPCHAINBUFFERREFERENCE);
+                disabledMessages.push_back(D3D12_MESSAGE_ID_RESOURCE_BARRIER_MISMATCHING_COMMAND_LIST_TYPE);
+                disabledMessages.push_back(D3D12_MESSAGE_ID_EXECUTECOMMANDLISTS_GPU_WRITTEN_READBACK_RESOURCE_MAPPED);
+                disabledMessages.push_back(D3D12_MESSAGE_ID_LOADPIPELINE_NAMENOTFOUND);
+                disabledMessages.push_back(D3D12_MESSAGE_ID_STOREPIPELINE_DUPLICATENAME);
+
+                D3D12_INFO_QUEUE_FILTER filter = {};
+                filter.AllowList.NumSeverities = static_cast<UINT>(enabledSeverities.size());
+                filter.AllowList.pSeverityList = enabledSeverities.data();
+                filter.DenyList.NumIDs = static_cast<UINT>(disabledMessages.size());
+                filter.DenyList.pIDList = disabledMessages.data();
+
+                // Clear out the existing filters since we're taking full control of them
+                infoQueue->PushEmptyStorageFilter();
+
+                infoQueue->AddStorageFilterEntries(&filter);
+                infoQueue->Release();
+            }
+
+            ID3D12InfoQueue1* infoQueue1 = nullptr;
+            if (SUCCEEDED(device->QueryInterface(&infoQueue1)))
+            {
+                infoQueue1->RegisterMessageCallback(DebugMessageCallback, D3D12_MESSAGE_CALLBACK_FLAG_NONE, this, &callbackCookie);
+                infoQueue1->Release();
+            }
+        }
+
+        // Create allocator
+        D3D12MA::ALLOCATOR_DESC allocatorDesc = {};
+        allocatorDesc.pDevice = device;
+        allocatorDesc.pAdapter = dxgiAdapter.Get();
+        allocatorDesc.Flags = D3D12MA::ALLOCATOR_FLAG_NONE;
+        if (FAILED(D3D12MA::CreateAllocator(&allocatorDesc, &allocator)))
+        {
+            return false;
+        }
+
+        // Init adapter info.
+        dxgiAdapter->GetDesc1(&adapterDesc);
+
+        // Convert the adapter's D3D12 driver version to a readable string like "24.21.13.9793".
+        LARGE_INTEGER umdVersion;
+        if (dxgiAdapter->CheckInterfaceSupport(__uuidof(IDXGIDevice), &umdVersion) != DXGI_ERROR_UNSUPPORTED)
+        {
+            uint64_t encodedVersion = umdVersion.QuadPart;
+            std::ostringstream o;
+            o << "D3D12 driver version ";
+            uint16_t driverVersion[4] = {};
+
+            for (size_t i = 0; i < 4; ++i) {
+                driverVersion[i] = (encodedVersion >> (48 - 16 * i)) & 0xFFFF;
+                o << driverVersion[i] << ".";
+            }
+
+            driverDescription = o.str();
+        }
+    }
+
+    // Create command queues
+    {
+        // Create separate copy queue for uploading
+        D3D12_COMMAND_QUEUE_DESC queueDesc{};
+        queueDesc.Type = D3D12_COMMAND_LIST_TYPE_COPY;
+        queueDesc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
+        queueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+        queueDesc.NodeMask = 0;
+        VHR(device->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&uploadCommandQueue)));
+        VHR(uploadCommandQueue->SetName(L"Upload Copy Queue"));
+
+        for (uint32_t queue = 0; queue < _VGPUCommandQueue_Count; ++queue)
+        {
+            VGPUCommandQueue queueType = (VGPUCommandQueue)queue;
+
+            queueDesc.Type = ToD3D12(queueType);
+            queueDesc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
+            queueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+            queueDesc.NodeMask = 0;
+            VHR(
+                device->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&queues[queue].handle))
+            );
+            VHR(
+                device->CreateFence(0, D3D12_FENCE_FLAG_SHARED, IID_PPV_ARGS(&queues[queue].fence))
+            );
+
+            switch (queueType)
+            {
+                case VGPUCommandQueue_Graphics:
+                    queues[queue].handle->SetName(L"Graphics Queue");
+                    queues[queue].fence->SetName(L"GraphicsQueue - Fence");
+                    break;
+                case VGPUCommandQueue_Compute:
+                    queues[queue].handle->SetName(L"Compute Queue");
+                    queues[queue].fence->SetName(L"ComputeQueue - Fence");
+                    break;
+                case VGPUCommandQueue_Copy:
+                    queues[queue].handle->SetName(L"CopyQueue");
+                    queues[queue].fence->SetName(L"CopyQueue - Fence");
+                    break;
+                default:
+                    VGPU_UNREACHABLE();
+                    break;
+            }
+
+            // Create frame-resident resources:
+            for (uint32_t frameIndex = 0; frameIndex < VGPU_MAX_INFLIGHT_FRAMES; ++frameIndex)
+            {
+                VHR(device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&queues[queue].frameFences[frameIndex])));
+
+#if defined(_DEBUG)
+                wchar_t fenceName[64];
+
+                switch (queueType)
+                {
+                    case VGPUCommandQueue_Graphics:
+                        swprintf(fenceName, 64, L"GraphicsQueue - Frame Fence %u", frameIndex);
+                        break;
+                    case VGPUCommandQueue_Compute:
+                        swprintf(fenceName, 64, L"ComputeQueue - Frame Fence %u", frameIndex);
+                        break;
+                    case VGPUCommandQueue_Copy:
+                        swprintf(fenceName, 64, L"CopyQueue - Frame Fence %u", frameIndex);
+                        break;
+                    default:
+                        VGPU_UNREACHABLE();
+                        break;
+                }
+
+                queues[queue].frameFences[frameIndex]->SetName(fenceName);
+#endif
+            }
+        }
+    }
+
+    // Init CPU descriptor allocators
+    const uint32_t renderTargetViewHeapSize = 1024;
+    const uint32_t depthStencilViewHeapSize = 256;
+
+    // Maximum number of CBV/SRV/UAV descriptors in heap for Tier 1
+    const uint32_t shaderResourceViewHeapSize = 1000000;
+
+    // Maximum number of samplers descriptors in heap for Tier 1
+    const uint32_t samplerHeapSize = 2048; // 2048 ->  Tier1 limit
+
+    renderTargetViewHeap.Init(device, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, renderTargetViewHeapSize);
+    depthStencilViewHeap.Init(device, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, depthStencilViewHeapSize);
+
+    // Shader visible descriptor heaps
+    shaderResourceViewHeap.Init(device, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, shaderResourceViewHeapSize);
+    samplerHeap.Init(device, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, samplerHeapSize);
+
+    // Create common indirect command signatures
+    {
+        // DispatchIndirectCommand
+        D3D12_INDIRECT_ARGUMENT_DESC dispatchArg{};
+        dispatchArg.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH;
+
+        D3D12_COMMAND_SIGNATURE_DESC cmdSignatureDesc = {};
+        cmdSignatureDesc.ByteStride = sizeof(VGPUDispatchIndirectCommand);
+        cmdSignatureDesc.NumArgumentDescs = 1;
+        cmdSignatureDesc.pArgumentDescs = &dispatchArg;
+        VHR(device->CreateCommandSignature(&cmdSignatureDesc, nullptr, IID_PPV_ARGS(&dispatchIndirectCommandSignature)));
+
+        // DrawIndirectCommand
+        D3D12_INDIRECT_ARGUMENT_DESC drawInstancedArg{};
+        drawInstancedArg.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW;
+        cmdSignatureDesc.ByteStride = sizeof(VGPUDrawIndirectCommand);
+        cmdSignatureDesc.NumArgumentDescs = 1;
+        cmdSignatureDesc.pArgumentDescs = &drawInstancedArg;
+        VHR(device->CreateCommandSignature(&cmdSignatureDesc, nullptr, IID_PPV_ARGS(&drawIndirectCommandSignature)));
+
+        // DrawIndexedIndirectCommand
+        D3D12_INDIRECT_ARGUMENT_DESC drawIndexedInstancedArg{};
+        drawIndexedInstancedArg.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED;
+        cmdSignatureDesc.ByteStride = sizeof(VGPUDrawIndexedIndirectCommand);
+        cmdSignatureDesc.NumArgumentDescs = 1;
+        cmdSignatureDesc.pArgumentDescs = &drawIndexedInstancedArg;
+        VHR(device->CreateCommandSignature(&cmdSignatureDesc, nullptr, IID_PPV_ARGS(&drawIndexedIndirectCommandSignature)));
+
+        if (d3dFeatures.MeshShaderTier() >= D3D12_MESH_SHADER_TIER_1)
+        {
+            D3D12_INDIRECT_ARGUMENT_DESC dispatchMeshArg{};
+            dispatchMeshArg.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH_MESH;
+
+            cmdSignatureDesc.ByteStride = sizeof(VGPUDispatchIndirectCommand);
+            cmdSignatureDesc.NumArgumentDescs = 1;
+            cmdSignatureDesc.pArgumentDescs = &dispatchMeshArg;
+            VHR(device->CreateCommandSignature(&cmdSignatureDesc, nullptr, IID_PPV_ARGS(&dispatchMeshIndirectCommandSignature)));
+        }
+    }
+
+    // Init features
+    featureLevel = d3dFeatures.MaxSupportedFeatureLevel();
+    VHR(queues[VGPUCommandQueue_Graphics].handle->GetTimestampFrequency(&timestampFrequency));
+
+    // Log some info
+    vgpuLogInfo("VGPU Driver: D3D12");
+    vgpuLogInfo("D3D12 Adapter: %ls", adapterDesc.Description);
+
+    return true;
+}
+
 void D3D12Device::SetLabel(const char* label)
 {
     D3D12SetName(device, label);
@@ -2128,6 +2628,7 @@ VGPUBuffer D3D12Device::CreateBuffer(const VGPUBufferDesc* desc, const void* pIn
         }
     }
 
+#if TODO_OLD
     if (desc->usage & VGPUBufferUsage_ShaderRead)
     {
         // Create Raw Buffer
@@ -2168,6 +2669,8 @@ VGPUBuffer D3D12Device::CreateBuffer(const VGPUBufferDesc* desc, const void* pIn
         //const uint32_t bindlessUAV = AllocateBindlessResource(handle);
         //buffer->SetBindlessUAV(bindlessUAV);
     }
+#endif // TODO_OLD
+
 
     return buffer;
 }
@@ -2500,8 +3003,9 @@ VGPUSampler D3D12Device::CreateSampler(const VGPUSamplerDesc* desc)
 
     D3D12Sampler* sampler = new D3D12Sampler();
     sampler->renderer = this;
-    sampler->handle = samplerAllocator.Allocate();
-    device->CreateSampler(&samplerDesc, sampler->handle);
+    sampler->samplerDesc = samplerDesc;
+    //sampler->handle = samplerAllocator.Allocate();
+    //device->CreateSampler(&samplerDesc, sampler->handle);
     //sampler->bindlessIndex = AllocateBindlessSampler(sampler->handle);
 
     return sampler;
@@ -2795,33 +3299,351 @@ VGPUPipelineLayout D3D12Device::CreatePipelineLayout(const VGPUPipelineLayoutDes
     return layout;
 }
 
-VGPUBindGroup D3D12Device::CreateBindGroup(const VGPUBindGroupLayout layout, const VGPUBindGroupDesc* desc)
+/* BindGroup */
+D3D12BindGroup::~D3D12BindGroup()
 {
-    return nullptr;
+    if (descriptorTableCbvUavSrv)
+        device->shaderResourceViewHeap.ReleaseDescriptors(descriptorTableCbvUavSrv, bindGroupLayout->descriptorTableSizeCbvUavSrv);
+
+    if (descriptorTableSamplers)
+        device->samplerHeap.ReleaseDescriptors(descriptorTableSamplers, bindGroupLayout->descriptorTableSizeSamplers);
+
+    bindGroupLayout->Release();
 }
 
-/* ShaderModule */
-D3D12ShaderModule::~D3D12ShaderModule()
-{
-    ::free(pByteCode);
-    handle = {};
-    pByteCode = nullptr;
-}
-
-void D3D12ShaderModule::SetLabel(const char* label)
+void D3D12BindGroup::SetLabel(const char* label)
 {
     VGPU_UNUSED(label);
 }
 
-VGPUShaderModule D3D12Device::CreateShaderModule(const VGPUShaderModuleDesc* desc)
+static void CreateNullSRV(ID3D12Device* device, D3D12_CPU_DESCRIPTOR_HANDLE descriptor, DXGI_FORMAT srvFormat = DXGI_FORMAT_R32_UINT)
 {
-    D3D12ShaderModule* shaderModule = new D3D12ShaderModule();
-    shaderModule->renderer = this;
-    shaderModule->pByteCode = malloc(desc->codeSize);
-    memcpy(shaderModule->pByteCode, desc->pCode, desc->codeSize);
-    shaderModule->handle.pShaderBytecode = shaderModule->pByteCode;
-    shaderModule->handle.BytecodeLength = desc->codeSize;
-    return shaderModule;
+    D3D12_SHADER_RESOURCE_VIEW_DESC viewDesc{};
+    viewDesc.Format = srvFormat;
+    viewDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+    viewDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    device->CreateShaderResourceView(nullptr, &viewDesc, descriptor);
+}
+
+static void CreateNullUAV(ID3D12Device* device, D3D12_CPU_DESCRIPTOR_HANDLE descriptor, DXGI_FORMAT srvFormat = DXGI_FORMAT_R32_UINT)
+{
+    D3D12_UNORDERED_ACCESS_VIEW_DESC viewDesc{};
+    viewDesc.Format = srvFormat;
+    viewDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+    device->CreateUnorderedAccessView(nullptr, nullptr, &viewDesc, descriptor);
+}
+
+
+void D3D12BindGroup::Update(size_t entryCount, const VGPUBindGroupEntry* entries)
+{
+    if (descriptorTableCbvUavSrv)
+        device->shaderResourceViewHeap.ReleaseDescriptors(descriptorTableCbvUavSrv, bindGroupLayout->descriptorTableSizeCbvUavSrv);
+
+    if (descriptorTableSamplers)
+        device->samplerHeap.ReleaseDescriptors(descriptorTableSamplers, bindGroupLayout->descriptorTableSizeSamplers);
+
+    if (bindGroupLayout->descriptorTableSizeCbvUavSrv > 0)
+    {
+        DescriptorIndex descriptorTableBaseIndex = device->shaderResourceViewHeap.AllocateDescriptors(bindGroupLayout->descriptorTableSizeCbvUavSrv);
+        this->descriptorTableCbvUavSrv = descriptorTableBaseIndex;
+
+        size_t startIndex = 0;
+        for (const D3D12_DESCRIPTOR_RANGE1& range : bindGroupLayout->cbvUavSrvDescriptorRanges)
+        {
+            for (uint32_t index = 0; index < range.NumDescriptors; ++index)
+            {
+                uint32_t binding = range.BaseShaderRegister + index;
+
+                const D3D12_CPU_DESCRIPTOR_HANDLE descriptorHandle = device->shaderResourceViewHeap.GetCpuHandle(
+                    descriptorTableBaseIndex + range.OffsetInDescriptorsFromTableStart + index);
+
+                bool found = false;
+                for (size_t entryIndex = startIndex; entryIndex < entryCount; entryIndex++)
+                {
+                    const VGPUBindGroupEntry& entry = entries[entryIndex];
+
+                    if (entry.binding != binding)
+                        continue;
+
+                    if (range.RangeType == D3D12_DESCRIPTOR_RANGE_TYPE_CBV)
+                    {
+                        if (entry.buffer)
+                        {
+                            auto backendBuffer = static_cast<D3D12Buffer*>(entry.buffer);
+                            uint64_t size = (entry.size == 0 || entry.size == VGPU_WHOLE_SIZE) ? backendBuffer->GetSize() : entry.size;
+                            uint64_t offset = _VGPU_MIN(entry.offset, backendBuffer->GetSize());
+                            D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc{};
+                            cbvDesc.BufferLocation = backendBuffer->gpuAddress + offset;
+                            cbvDesc.SizeInBytes = (UINT)AlignUp<UINT>((UINT)size, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+                            device->device->CreateConstantBufferView(&cbvDesc, descriptorHandle);
+                            found = true;
+                        }
+
+                        break;
+                    }
+
+#if TODO
+                    if (range.RangeType == D3D12_DESCRIPTOR_RANGE_TYPE_SRV && (entry.buffer != nullptr || entry.textureView != nullptr))
+                    {
+                        if (entry.buffer != nullptr)
+                        {
+                            auto backendBuffer = static_cast<D3D12Buffer*>(entry.buffer);
+                            uint64_t size = (entry.size == 0 || entry.size == VGPU_WHOLE_SIZE) ? backendBuffer->GetSize() : entry.size;
+
+                            D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+                            srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+                            srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+
+                            if (entry.stride == 0)
+                            {
+                                // Raw Buffer (ByteAddressBuffer in HLSL) -> WebGPU 
+                                srvDesc.Format = DXGI_FORMAT_R32_TYPELESS;
+                                srvDesc.Buffer.FirstElement = entry.offset / sizeof(uint32_t);
+                                srvDesc.Buffer.NumElements = UINT(size / sizeof(uint32_t));
+                                srvDesc.Buffer.StructureByteStride = 0;
+                                srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_RAW;
+                            }
+                            else
+                            {
+                                // structured buffer offset must be aligned to structure stride!
+                                ALIMER_ASSERT(IsAligned(entry.offset, entry.stride));
+
+                                srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+                                srvDesc.Buffer.FirstElement = entry.offset / entry.stride;
+                                srvDesc.Buffer.NumElements = UINT((size - entry.offset) / entry.stride);
+                                srvDesc.Buffer.StructureByteStride = (UINT)entry.stride;
+                                srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
+                            }
+
+                            device->CreateShaderResourceView(backendBuffer->handle, &srvDesc, descriptorHandle);
+                        }
+                        else if (entry.textureView != nullptr)
+                        {
+                            auto backendTexture = static_cast<const D3D12Texture*>(entry.textureView);
+
+                            uint32_t baseMipLevel = 0;
+                            uint32_t mipLevelCount = backendTexture->GetMipLevelCount();
+                            uint32_t baseArrayLayer = 0;
+                            uint32_t arrayLayerCount = backendTexture->GetArrayLayers();
+                            uint32_t planeSlice = 0;
+
+                            D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
+                            srvDesc.Shader4ComponentMapping = ToD3D12Swizzle(backendTexture->GetSwizzle());
+
+                            // Try to resolve resource format:
+                            switch (backendTexture->GetFormat())
+                            {
+                                case PixelFormat::Depth16Unorm:
+                                    srvDesc.Format = DXGI_FORMAT_R16_UNORM;
+                                    break;
+                                case PixelFormat::Depth32Float:
+                                    srvDesc.Format = DXGI_FORMAT_R32_FLOAT;
+                                    break;
+
+                                case PixelFormat::Stencil8:
+                                case PixelFormat::Depth24UnormStencil8:
+                                    srvDesc.Format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+                                    break;
+                                case PixelFormat::Depth32FloatStencil8:
+                                    srvDesc.Format = DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS;
+                                    break;
+                                    //case PixelFormat::NV12:
+                                    //    srvDesc.Format = DXGI_FORMAT_R8_UNORM;
+                                    //    break;
+                                default:
+                                    srvDesc.Format = (DXGI_FORMAT)ToDxgiFormat(backendTexture->GetFormat());
+                                    break;
+                            }
+
+                            const TextureDimension dimension = backendTexture->GetDimension();
+                            if (dimension == TextureDimension::Texture1D)
+                            {
+                                if (backendTexture->GetArrayLayers() > 1)
+                                {
+                                    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE1DARRAY;
+                                    srvDesc.Texture1DArray.MostDetailedMip = baseMipLevel;
+                                    srvDesc.Texture1DArray.MipLevels = mipLevelCount;
+                                    srvDesc.Texture1DArray.FirstArraySlice = baseMipLevel;
+                                    srvDesc.Texture1DArray.ArraySize = arrayLayerCount;
+                                    srvDesc.Texture1DArray.ResourceMinLODClamp = 0.0f;
+                                }
+                                else
+                                {
+                                    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE1D;
+                                    srvDesc.Texture1D.MostDetailedMip = baseMipLevel;
+                                    srvDesc.Texture1D.MipLevels = mipLevelCount;
+                                    srvDesc.Texture1D.ResourceMinLODClamp = 0.0f;
+                                }
+                            }
+                            else if (dimension == TextureDimension::Texture2D || dimension == TextureDimension::TextureCube)
+                            {
+                                if (backendTexture->GetArrayLayers() > 1)
+                                {
+                                    if (dimension == TextureDimension::TextureCube)
+                                    {
+                                        if (backendTexture->GetArrayLayers() > 6 && arrayLayerCount > 6)
+                                        {
+                                            srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBEARRAY;
+                                            srvDesc.TextureCubeArray.First2DArrayFace = baseMipLevel;
+                                            srvDesc.TextureCubeArray.NumCubes = std::min(backendTexture->GetArrayLayers(), arrayLayerCount) / 6;
+                                            srvDesc.TextureCubeArray.MostDetailedMip = baseMipLevel;
+                                            srvDesc.TextureCubeArray.MipLevels = mipLevelCount;
+                                            srvDesc.TextureCubeArray.ResourceMinLODClamp = 0.0f;
+                                        }
+                                        else
+                                        {
+                                            srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
+                                            srvDesc.TextureCube.MostDetailedMip = baseMipLevel;
+                                            srvDesc.TextureCube.MipLevels = mipLevelCount;
+                                            srvDesc.TextureCube.ResourceMinLODClamp = 0.0f;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        if (backendTexture->GetSampleCount() > TextureSampleCount::Count1)
+                                        {
+                                            srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DMSARRAY;
+                                            srvDesc.Texture2DMSArray.FirstArraySlice = baseArrayLayer;
+                                            srvDesc.Texture2DMSArray.ArraySize = arrayLayerCount;
+                                        }
+                                        else
+                                        {
+                                            srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
+                                            srvDesc.Texture2DArray.FirstArraySlice = baseArrayLayer;
+                                            srvDesc.Texture2DArray.ArraySize = arrayLayerCount;
+                                            srvDesc.Texture2DArray.MostDetailedMip = baseMipLevel;
+                                            srvDesc.Texture2DArray.MipLevels = mipLevelCount;
+                                            srvDesc.Texture2DArray.PlaneSlice = planeSlice;
+                                            srvDesc.Texture2DArray.ResourceMinLODClamp = 0.0f;
+                                        }
+                                    }
+                                }
+                                else
+                                {
+                                    if (backendTexture->GetSampleCount() > TextureSampleCount::Count1)
+                                    {
+                                        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DMS;
+                                    }
+                                    else
+                                    {
+                                        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+                                        srvDesc.Texture2D.MostDetailedMip = baseMipLevel;
+                                        srvDesc.Texture2D.MipLevels = mipLevelCount;
+                                        srvDesc.Texture2D.PlaneSlice = planeSlice;
+                                        srvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
+                                    }
+                                }
+                            }
+                            else if (dimension == TextureDimension::Texture3D)
+                            {
+                                srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE3D;
+                                srvDesc.Texture3D.MostDetailedMip = baseMipLevel;
+                                srvDesc.Texture3D.MipLevels = mipLevelCount;
+                            }
+
+                            device->CreateShaderResourceView(backendTexture->handle, &srvDesc, descriptorHandle);
+                        }
+
+                        found = true;
+                        break;
+                    }
+#endif // TODO
+
+                }
+
+                if (!found)
+                {
+                    // Create a null SRV, UAV, or CBV
+                    switch (range.RangeType)
+                    {
+                        case D3D12_DESCRIPTOR_RANGE_TYPE_SRV:
+                            CreateNullSRV(device->device, descriptorHandle);
+                            break;
+
+                        case D3D12_DESCRIPTOR_RANGE_TYPE_UAV:
+                            CreateNullUAV(device->device, descriptorHandle);
+                            break;
+
+                        case D3D12_DESCRIPTOR_RANGE_TYPE_CBV:
+                            device->device->CreateConstantBufferView(nullptr, descriptorHandle);
+                            break;
+
+                        case D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER:
+                        default:
+                            vgpuLogError("Invalid range type");
+                            break;
+                    }
+                }
+                else
+                {
+                    startIndex++;
+                }
+            }
+        }
+
+        device->shaderResourceViewHeap.CopyToShaderVisibleHeap(descriptorTableBaseIndex, bindGroupLayout->descriptorTableSizeCbvUavSrv);
+    }
+
+    if (bindGroupLayout->descriptorTableSizeSamplers > 0)
+    {
+        DescriptorIndex descriptorTableBaseIndex = device->samplerHeap.AllocateDescriptors(bindGroupLayout->descriptorTableSizeSamplers);
+        this->descriptorTableSamplers = descriptorTableBaseIndex;
+
+        size_t startIndex = 0;
+        for (const D3D12_DESCRIPTOR_RANGE1& range : bindGroupLayout->samplerDescriptorRanges)
+        {
+            for (uint32_t index = 0; index < range.NumDescriptors; ++index)
+            {
+                uint32_t binding = range.BaseShaderRegister + index;
+
+                D3D12_CPU_DESCRIPTOR_HANDLE descriptorHandle = device->samplerHeap.GetCpuHandle(descriptorTableBaseIndex + range.OffsetInDescriptorsFromTableStart + index);
+
+                bool found = false;
+                for (size_t entryIndex = startIndex; entryIndex < entryCount; entryIndex++)
+                {
+                    const VGPUBindGroupEntry& entry = entries[entryIndex];
+
+                    if (entry.binding == binding && entry.sampler != nullptr)
+                    {
+                        auto backendSampler = static_cast<D3D12Sampler*>(entry.sampler);
+                        const D3D12_SAMPLER_DESC& desc = backendSampler->samplerDesc;
+
+                        device->device->CreateSampler(&desc, descriptorHandle);
+                        found = true;
+                        startIndex++;
+                        break;
+                    }
+                }
+
+                if (!found)
+                {
+                    // Create a default sampler
+                    D3D12_SAMPLER_DESC samplerDesc{};
+                    device->device->CreateSampler(&samplerDesc, descriptorHandle);
+                    continue;
+                }
+
+                startIndex++;
+            }
+        }
+
+        device->samplerHeap.CopyToShaderVisibleHeap(descriptorTableBaseIndex, bindGroupLayout->descriptorTableSizeSamplers);
+    }
+}
+
+VGPUBindGroup D3D12Device::CreateBindGroup(const VGPUBindGroupLayout layout, const VGPUBindGroupDesc* desc)
+{
+    D3D12BindGroupLayout* d3d12Layout = static_cast<D3D12BindGroupLayout*>(layout);
+
+    D3D12BindGroup* bindGroup = new D3D12BindGroup();
+    bindGroup->device = this;
+    bindGroup->bindGroupLayout = d3d12Layout;
+    bindGroup->bindGroupLayout->AddRef();
+
+    // Set up the initial bindings
+    bindGroup->Update(desc->entryCount, desc->entries);
+
+    return bindGroup;
 }
 
 /* Pipeline */
@@ -2834,6 +3656,12 @@ D3D12Pipeline::~D3D12Pipeline()
 void D3D12Pipeline::SetLabel(const char* label)
 {
     D3D12SetName(handle, label);
+}
+
+static void FillShaderBytecode(D3D12_SHADER_BYTECODE& shaderBytecode, const VGPUShaderStageDesc& shaderDesc)
+{
+    shaderBytecode.pShaderBytecode = shaderDesc.bytecode;
+    shaderBytecode.BytecodeLength = shaderDesc.size;
 }
 
 VGPUPipeline D3D12Device::CreateRenderPipeline(const VGPURenderPipelineDesc* desc)
@@ -2930,35 +3758,34 @@ VGPUPipeline D3D12Device::CreateRenderPipeline(const VGPURenderPipelineDesc* des
     for (uint32_t i = 0; i < desc->shaderStageCount; i++)
     {
         const VGPUShaderStageDesc& shader = desc->shaderStages[i];
-        const D3D12_SHADER_BYTECODE& bytecode = static_cast<D3D12ShaderModule*>(desc->shaderStages[i].module)->handle;
 
         if (shader.stage == VGPUShaderStage_Vertex)
         {
-            stream.stream1.VS = bytecode;
+            FillShaderBytecode(stream.stream1.VS, shader);
         }
         else if (shader.stage == VGPUShaderStage_Hull)
         {
-            stream.stream1.HS = bytecode;
+            FillShaderBytecode(stream.stream1.HS, shader);
         }
         else if (shader.stage == VGPUShaderStage_Domain)
         {
-            stream.stream1.DS = bytecode;
+            FillShaderBytecode(stream.stream1.DS, shader);
         }
         else if (shader.stage == VGPUShaderStage_Geometry)
         {
-            stream.stream1.GS = bytecode;
+            FillShaderBytecode(stream.stream1.GS, shader);
         }
         else if (shader.stage == VGPUShaderStage_Fragment)
         {
-            stream.stream1.PS = bytecode;
+            FillShaderBytecode(stream.stream1.PS, shader);
         }
         else if (shader.stage == VGPUShaderStage_Amplification)
         {
-            stream.stream2.AS = bytecode;
+            FillShaderBytecode(stream.stream2.AS, shader);
         }
         else if (shader.stage == VGPUShaderStage_Mesh)
         {
-            stream.stream2.MS = bytecode;
+            FillShaderBytecode(stream.stream2.MS, shader);
         }
     }
 
@@ -3113,7 +3940,7 @@ VGPUPipeline D3D12Device::CreateComputePipeline(const VGPUComputePipelineDesc* d
     } stream;
 
     stream.pRootSignature = pipeline->pipelineLayout->handle;
-    stream.CS = static_cast<D3D12ShaderModule*>(desc->computeShader.module)->handle;
+    FillShaderBytecode(stream.CS, desc->shader);
 
     D3D12_PIPELINE_STATE_STREAM_DESC streamDesc = {};
     streamDesc.pPipelineStateSubobjectStream = &stream;
@@ -3326,6 +4153,18 @@ void D3D12CommandBuffer::Reset()
     insideRenderPass = false;
     numBarriersToFlush = 0;
 
+    bindGroupsDirty = false;
+    numBoundBindGroups = 0;
+    for (uint32_t i = 0; i < VGPU_MAX_BIND_GROUPS; ++i)
+    {
+        if (boundBindGroups[i])
+        {
+            boundBindGroups[i]->Release();
+            boundBindGroups[i] = nullptr;
+        }
+    }
+
+
     if (currentPipeline)
     {
         currentPipeline->Release();
@@ -3344,8 +4183,8 @@ void D3D12CommandBuffer::Begin(uint32_t frameIndex, const char* label)
         queueType == VGPUCommandQueue_Compute)
     {
         ID3D12DescriptorHeap* heaps[2] = {
-            renderer->resourceDescriptorHeap.handle,
-            renderer->samplerDescriptorHeap.handle
+            renderer->shaderResourceViewHeap.GetShaderVisibleHeap(),
+            renderer->samplerHeap.GetShaderVisibleHeap()
         };
         commandList->SetDescriptorHeaps(2u, heaps);
     }
@@ -3400,6 +4239,10 @@ void D3D12CommandBuffer::InsertDebugMarker(const char* markerLabel)
 
 void D3D12CommandBuffer::ClearBuffer(VGPUBuffer buffer, uint64_t offset, uint64_t size)
 {
+    VGPU_UNUSED(buffer);
+    VGPU_UNUSED(offset);
+    VGPU_UNUSED(size);
+
     // TODO:
     //commandList->buffer
 }
@@ -3428,7 +4271,16 @@ void D3D12CommandBuffer::SetPipeline(VGPUPipeline pipeline)
 
 void D3D12CommandBuffer::SetBindGroup(uint32_t groupIndex, VGPUBindGroup bindGroup)
 {
+    VGPU_ASSERT(bindGroup != nullptr);
+    VGPU_ASSERT(groupIndex < VGPU_MAX_BIND_GROUPS);
 
+    if (boundBindGroups[groupIndex] != bindGroup)
+    {
+        bindGroupsDirty = true;
+        boundBindGroups[groupIndex] = static_cast<D3D12BindGroup*>(bindGroup);
+        boundBindGroups[groupIndex]->AddRef();
+        numBoundBindGroups = _VGPU_MAX(groupIndex + 1, numBoundBindGroups);
+    }
 }
 
 void D3D12CommandBuffer::SetPushConstants(uint32_t pushConstantIndex, const void* data, uint32_t size)
@@ -3505,7 +4357,7 @@ VGPUTexture D3D12CommandBuffer::AcquireSwapchainTexture(VGPUSwapChain swapChain)
         height == 0)
     {
         return nullptr;
-}
+    }
 
     if (width != swapChainDesc.Width ||
         height != swapChainDesc.Height)
@@ -3585,7 +4437,7 @@ void D3D12CommandBuffer::BeginRenderPass(const VGPURenderPassDesc* desc)
         const uint32_t level = attachment->level;
         const uint32_t slice = attachment->slice;
 
-        RTVs[i].cpuDescriptor = d3d12_GetRTV(renderer, texture, level, slice);
+        RTVs[i].cpuDescriptor = d3d12_GetRTV(texture, level, slice);
 
         // Transition to RenderTarget
         TransitionResource(texture, D3D12_RESOURCE_STATE_RENDER_TARGET, true);
@@ -3620,7 +4472,7 @@ void D3D12CommandBuffer::BeginRenderPass(const VGPURenderPassDesc* desc)
         width = _VGPU_MIN(width, _VGPU_MAX(1U, texture->desc.width >> level));
         height = _VGPU_MIN(height, _VGPU_MAX(1U, texture->desc.height >> level));
 
-        DSV.cpuDescriptor = d3d12_GetDSV(renderer, texture, level, slice);
+        DSV.cpuDescriptor = d3d12_GetDSV(texture, level, slice);
 
         DSV.DepthBeginningAccess.Type = ToD3D12(attachment->depthLoadAction);
         if (attachment->depthLoadAction == VGPULoadAction_Clear)
@@ -3758,6 +4610,54 @@ void D3D12CommandBuffer::ResetQuery(VGPUQueryHeap heap, uint32_t index, uint32_t
     VGPU_UNUSED(count);
 }
 
+void D3D12CommandBuffer::FlushBindGroups(bool graphics)
+{
+    VGPU_ASSERT(currentPipeline != nullptr);
+    VGPU_ASSERT(currentPipeline->pipelineLayout != nullptr);
+
+    if (!bindGroupsDirty)
+        return;
+
+    bindGroupsDirty = false;
+
+    for (size_t groupIndex = 0; groupIndex < currentPipeline->pipelineLayout->bindGroupLayoutCount; groupIndex++)
+    {
+        VGPU_ASSERT(boundBindGroups[groupIndex] != nullptr);
+
+        D3D12BindGroup* bindGroup = boundBindGroups[groupIndex];
+
+        if (currentPipeline->pipelineLayout->cbvUavSrvRootParameterIndex[groupIndex] != ~0u)
+        {
+            uint32_t rootParameterIndex = currentPipeline->pipelineLayout->cbvUavSrvRootParameterIndex[groupIndex];
+            D3D12_GPU_DESCRIPTOR_HANDLE gpuHadle = renderer->shaderResourceViewHeap.GetGpuHandle(bindGroup->descriptorTableCbvUavSrv);
+
+            if (graphics)
+            {
+                commandList->SetGraphicsRootDescriptorTable(rootParameterIndex, gpuHadle);
+            }
+            else
+            {
+                commandList->SetComputeRootDescriptorTable(rootParameterIndex, gpuHadle);
+            }
+        }
+
+        if (currentPipeline->pipelineLayout->samplerRootParameterIndex[groupIndex] != ~0u)
+        {
+            uint32_t rootParameterIndex = currentPipeline->pipelineLayout->samplerRootParameterIndex[groupIndex];
+            D3D12_GPU_DESCRIPTOR_HANDLE gpuHadle = renderer->samplerHeap.GetGpuHandle(bindGroup->descriptorTableSamplers);
+
+            if (graphics)
+            {
+                commandList->SetGraphicsRootDescriptorTable(rootParameterIndex, gpuHadle);
+            }
+            else
+            {
+                commandList->SetComputeRootDescriptorTable(rootParameterIndex, gpuHadle);
+            }
+        }
+    }
+}
+
 void D3D12CommandBuffer::PrepareDraw()
 {
     VGPU_VERIFY(insideRenderPass);
@@ -3771,17 +4671,20 @@ void D3D12CommandBuffer::PrepareDraw()
 
         commandList->IASetVertexBuffers(0, currentPipeline->numVertexBindings, vboViews);
     }
+    FlushBindGroups(true);
 }
 
 void D3D12CommandBuffer::Draw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance)
 {
     PrepareDraw();
+
     commandList->DrawInstanced(vertexCount, instanceCount, firstVertex, firstInstance);
 }
 
 void D3D12CommandBuffer::DrawIndexed(uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t baseVertex, uint32_t firstInstance)
 {
     PrepareDraw();
+
     commandList->DrawIndexedInstanced(indexCount, instanceCount, firstIndex, baseVertex, firstInstance);
 }
 
@@ -3848,7 +4751,7 @@ void D3D12CommandBuffer::DispatchMeshIndirectCount(VGPUBuffer indirectBuffer, ui
     PrepareDraw();
     commandList->ExecuteIndirect(
         renderer->dispatchMeshIndirectCommandSignature,
-        1,
+        maxCount,
         d3dIndirectBuffer->handle, indirectBufferOffset,
         d3dCountBuffer->handle, countBufferOffset
     );
@@ -3985,9 +4888,6 @@ uint64_t D3D12Device::Submit(VGPUCommandBuffer* commandBuffers, uint32_t count)
         }
     }
 
-    resourceDescriptorHeap.SignalGPU(queues[VGPUCommandQueue_Graphics].handle);
-    samplerDescriptorHeap.SignalGPU(queues[VGPUCommandQueue_Graphics].handle);
-
     // Begin new frame
     frameCount++;
     frameIndex = frameCount % VGPU_MAX_INFLIGHT_FRAMES;
@@ -4093,441 +4993,20 @@ static VGPUBool32 d3d12_isSupported(void)
     return false;
 }
 
-inline void __stdcall _D3D12_DebugMessageCallback(
-    D3D12_MESSAGE_CATEGORY Category,
-    D3D12_MESSAGE_SEVERITY Severity,
-    D3D12_MESSAGE_ID ID,
-    LPCSTR pDescription,
-    void* pContext)
-{
-    VGPU_UNUSED(Category);
-    VGPU_UNUSED(ID);
-    VGPU_UNUSED(pContext);
-
-    if (Severity == D3D12_MESSAGE_SEVERITY_CORRUPTION || Severity == D3D12_MESSAGE_SEVERITY_ERROR)
-    {
-        vgpuLogError("%s", pDescription);
-        VGPU_UNREACHABLE();
-    }
-    else if (Severity == D3D12_MESSAGE_SEVERITY_WARNING)
-    {
-        vgpuLogWarn("%s", pDescription);
-    }
-    else
-    {
-        vgpuLogInfo("%s", pDescription);
-    }
-}
 
 static VGPUDeviceImpl* d3d12_createDevice(const VGPUDeviceDescriptor* info)
 {
     VGPU_ASSERT(info);
 
-    D3D12Device* renderer = new D3D12Device();
+    D3D12Device* device = new D3D12Device();
 
-    DWORD dxgiFactoryFlags = 0;
-    if (info->validationMode != VGPUValidationMode_Disabled)
+    if (!device->Init(info))
     {
-        ComPtr<ID3D12Debug> debugController;
-#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
-        if (vgpuD3D12GetDebugInterface != nullptr &&
-            SUCCEEDED(vgpuD3D12GetDebugInterface(IID_PPV_ARGS(debugController.GetAddressOf()))))
-#else
-        if (SUCCEEDED(vgpuD3D12GetDebugInterface(IID_PPV_ARGS(debugController.GetAddressOf()))))
-#endif
-        {
-            debugController->EnableDebugLayer();
-
-            if (info->validationMode == VGPUValidationMode_GPU)
-            {
-                ComPtr<ID3D12Debug1> debugController1;
-                if (SUCCEEDED(debugController.As(&debugController1)))
-                {
-                    debugController1->SetEnableGPUBasedValidation(TRUE);
-                    debugController1->SetEnableSynchronizedCommandQueueValidation(TRUE);
-                }
-
-                ComPtr<ID3D12Debug2> debugController2;
-                if (SUCCEEDED(debugController.As(&debugController2)))
-                {
-                    debugController2->SetGPUBasedValidationFlags(D3D12_GPU_BASED_VALIDATION_FLAGS_NONE);
-                }
-        }
-    }
-        else
-        {
-            OutputDebugStringA("WARNING: Direct3D Debug Device is not available\n");
-        }
-
-#if defined(_DEBUG) && WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
-        ComPtr<IDXGIInfoQueue> dxgiInfoQueue;
-        if (vgpuDXGIGetDebugInterface1 != nullptr &&
-            SUCCEEDED(vgpuDXGIGetDebugInterface1(0, IID_PPV_ARGS(dxgiInfoQueue.GetAddressOf()))))
-        {
-            dxgiFactoryFlags = DXGI_CREATE_FACTORY_DEBUG;
-
-            dxgiInfoQueue->SetBreakOnSeverity(VGFX_DXGI_DEBUG_ALL, DXGI_INFO_QUEUE_MESSAGE_SEVERITY_ERROR, true);
-            dxgiInfoQueue->SetBreakOnSeverity(VGFX_DXGI_DEBUG_ALL, DXGI_INFO_QUEUE_MESSAGE_SEVERITY_CORRUPTION, true);
-
-            DXGI_INFO_QUEUE_MESSAGE_ID hide[] =
-            {
-                80 /* IDXGISwapChain::GetContainingOutput: The swapchain's adapter does not control the output on which the swapchain's window resides. */,
-            };
-            DXGI_INFO_QUEUE_FILTER filter = {};
-            filter.DenyList.NumIDs = _countof(hide);
-            filter.DenyList.pIDList = hide;
-            dxgiInfoQueue->AddStorageFilterEntries(VGFX_DXGI_DEBUG_DXGI, &filter);
-        }
-#endif
-}
-
-    if (FAILED(vgpuCreateDXGIFactory2(dxgiFactoryFlags, IID_PPV_ARGS(&renderer->factory))))
-    {
-        delete renderer;
+        delete device;
         return nullptr;
     }
 
-    // Determines whether tearing support is available for fullscreen borderless windows.
-    {
-        BOOL allowTearing = FALSE;
-        HRESULT hr = renderer->factory->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &allowTearing, sizeof(allowTearing));
-
-        if (FAILED(hr) || !allowTearing)
-        {
-            renderer->tearingSupported = false;
-#ifdef _DEBUG
-            OutputDebugStringA("WARNING: Variable refresh rate displays not supported");
-#endif
-        }
-        else
-        {
-            renderer->tearingSupported = true;
-        }
-    }
-
-    {
-        const DXGI_GPU_PREFERENCE gpuPreference = (info->powerPreference == VGPUPowerPreference_LowPower) ? DXGI_GPU_PREFERENCE_MINIMUM_POWER : DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE;
-
-        static constexpr D3D_FEATURE_LEVEL s_featureLevels[] =
-        {
-            D3D_FEATURE_LEVEL_12_2,
-            D3D_FEATURE_LEVEL_12_1,
-            D3D_FEATURE_LEVEL_12_0,
-            D3D_FEATURE_LEVEL_11_1,
-            D3D_FEATURE_LEVEL_11_0,
-        };
-
-        for (uint32_t i = 0;
-            renderer->factory->EnumAdapterByGpuPreference(i, gpuPreference, IID_PPV_ARGS(renderer->dxgiAdapter.ReleaseAndGetAddressOf())) != DXGI_ERROR_NOT_FOUND;
-            ++i)
-        {
-            DXGI_ADAPTER_DESC1 adapterDesc;
-            renderer->dxgiAdapter->GetDesc1(&adapterDesc);
-
-            // Don't select the Basic Render Driver adapter.
-            if (adapterDesc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)
-            {
-                continue;
-            }
-
-            for (auto& featurelevel : s_featureLevels)
-            {
-                if (SUCCEEDED(vgpuD3D12CreateDevice(renderer->dxgiAdapter.Get(), featurelevel, IID_PPV_ARGS(&renderer->device))))
-                {
-                    break;
-                }
-            }
-
-            if (renderer->device != nullptr)
-                break;
-        }
-
-        VGPU_ASSERT(renderer->dxgiAdapter != nullptr);
-        if (renderer->dxgiAdapter == nullptr)
-        {
-            vgpuLogError("DXGI: No capable adapter found!");
-            delete renderer;
-            return nullptr;
-        }
-
-        // Init feature check (https://devblogs.microsoft.com/directx/introducing-a-new-api-for-checking-feature-support-in-direct3d-12/)
-        VHR(renderer->d3dFeatures.Init(renderer->device));
-
-        if (renderer->d3dFeatures.HighestRootSignatureVersion() < D3D_ROOT_SIGNATURE_VERSION_1_1)
-        {
-            vgpuLogError("Direct3D12: Root signature version 1.1 not supported!");
-            delete renderer;
-            return nullptr;
-        }
-
-        // Assign label object.
-        if (info->label)
-        {
-            renderer->SetLabel(info->label);
-        }
-
-        if (info->validationMode != VGPUValidationMode_Disabled)
-        {
-            // Configure debug device (if active).
-            ID3D12InfoQueue* infoQueue = nullptr;
-            if (SUCCEEDED(renderer->device->QueryInterface(&infoQueue)))
-            {
-                infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, TRUE);
-                infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, TRUE);
-
-                std::vector<D3D12_MESSAGE_SEVERITY> enabledSeverities;
-                std::vector<D3D12_MESSAGE_ID> disabledMessages;
-
-                // These severities should be seen all the time
-                enabledSeverities.push_back(D3D12_MESSAGE_SEVERITY_CORRUPTION);
-                enabledSeverities.push_back(D3D12_MESSAGE_SEVERITY_ERROR);
-                enabledSeverities.push_back(D3D12_MESSAGE_SEVERITY_WARNING);
-                enabledSeverities.push_back(D3D12_MESSAGE_SEVERITY_MESSAGE);
-
-                if (info->validationMode == VGPUValidationMode_Verbose)
-                {
-                    // Verbose only filters
-                    enabledSeverities.push_back(D3D12_MESSAGE_SEVERITY_INFO);
-                }
-
-                disabledMessages.push_back(D3D12_MESSAGE_ID_CLEARRENDERTARGETVIEW_MISMATCHINGCLEARVALUE);
-                disabledMessages.push_back(D3D12_MESSAGE_ID_CLEARDEPTHSTENCILVIEW_MISMATCHINGCLEARVALUE);
-                disabledMessages.push_back(D3D12_MESSAGE_ID_MAP_INVALID_NULLRANGE);
-                disabledMessages.push_back(D3D12_MESSAGE_ID_UNMAP_INVALID_NULLRANGE);
-                disabledMessages.push_back(D3D12_MESSAGE_ID_EXECUTECOMMANDLISTS_WRONGSWAPCHAINBUFFERREFERENCE);
-                disabledMessages.push_back(D3D12_MESSAGE_ID_RESOURCE_BARRIER_MISMATCHING_COMMAND_LIST_TYPE);
-                disabledMessages.push_back(D3D12_MESSAGE_ID_EXECUTECOMMANDLISTS_GPU_WRITTEN_READBACK_RESOURCE_MAPPED);
-                disabledMessages.push_back(D3D12_MESSAGE_ID_LOADPIPELINE_NAMENOTFOUND);
-                disabledMessages.push_back(D3D12_MESSAGE_ID_STOREPIPELINE_DUPLICATENAME);
-
-                D3D12_INFO_QUEUE_FILTER filter = {};
-                filter.AllowList.NumSeverities = static_cast<UINT>(enabledSeverities.size());
-                filter.AllowList.pSeverityList = enabledSeverities.data();
-                filter.DenyList.NumIDs = static_cast<UINT>(disabledMessages.size());
-                filter.DenyList.pIDList = disabledMessages.data();
-
-                // Clear out the existing filters since we're taking full control of them
-                infoQueue->PushEmptyStorageFilter();
-
-                infoQueue->AddStorageFilterEntries(&filter);
-                infoQueue->Release();
-            }
-
-            ID3D12InfoQueue1* infoQueue1 = nullptr;
-            if (SUCCEEDED(renderer->device->QueryInterface(&infoQueue1)))
-            {
-                infoQueue1->RegisterMessageCallback(_D3D12_DebugMessageCallback, D3D12_MESSAGE_CALLBACK_FLAG_NONE, renderer, &renderer->callbackCookie);
-                infoQueue1->Release();
-            }
-        }
-
-        // Create allocator
-        D3D12MA::ALLOCATOR_DESC allocatorDesc = {};
-        allocatorDesc.pDevice = renderer->device;
-        allocatorDesc.pAdapter = renderer->dxgiAdapter.Get();
-        allocatorDesc.Flags = D3D12MA::ALLOCATOR_FLAG_NONE;
-        if (FAILED(D3D12MA::CreateAllocator(&allocatorDesc, &renderer->allocator)))
-        {
-            delete renderer;
-            return nullptr;
-        }
-
-        // Init adapter info.
-        renderer->dxgiAdapter->GetDesc1(&renderer->adapterDesc);
-
-        // Convert the adapter's D3D12 driver version to a readable string like "24.21.13.9793".
-        LARGE_INTEGER umdVersion;
-        if (renderer->dxgiAdapter->CheckInterfaceSupport(__uuidof(IDXGIDevice), &umdVersion) != DXGI_ERROR_UNSUPPORTED)
-        {
-            uint64_t encodedVersion = umdVersion.QuadPart;
-            std::ostringstream o;
-            o << "D3D12 driver version ";
-            uint16_t driverVersion[4] = {};
-
-            for (size_t i = 0; i < 4; ++i) {
-                driverVersion[i] = (encodedVersion >> (48 - 16 * i)) & 0xFFFF;
-                o << driverVersion[i] << ".";
-            }
-
-            renderer->driverDescription = o.str();
-        }
-    }
-
-    // Create command queues
-    {
-        // Create Copy queye
-        D3D12_COMMAND_QUEUE_DESC queueDesc = {};
-        queueDesc.Type = D3D12_COMMAND_LIST_TYPE_COPY;
-        queueDesc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
-        queueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
-        queueDesc.NodeMask = 0;
-        VHR(renderer->device->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&renderer->uploadCommandQueue)));
-        VHR(renderer->uploadCommandQueue->SetName(L"Upload Copy Queue"));
-
-        for (uint32_t queue = 0; queue < _VGPUCommandQueue_Count; ++queue)
-        {
-            VGPUCommandQueue queueType = (VGPUCommandQueue)queue;
-
-            D3D12_COMMAND_QUEUE_DESC queueDesc{};
-
-            queueDesc.Type = ToD3D12(queueType);
-            queueDesc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
-            queueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
-            queueDesc.NodeMask = 0;
-            VHR(
-                renderer->device->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&renderer->queues[queue].handle))
-            );
-            VHR(
-                renderer->device->CreateFence(0, D3D12_FENCE_FLAG_SHARED, IID_PPV_ARGS(&renderer->queues[queue].fence))
-            );
-
-            switch (queueType)
-            {
-                case VGPUCommandQueue_Graphics:
-                    renderer->queues[queue].handle->SetName(L"Graphics Queue");
-                    renderer->queues[queue].fence->SetName(L"GraphicsQueue - Fence");
-                    break;
-                case VGPUCommandQueue_Compute:
-                    renderer->queues[queue].handle->SetName(L"Compute Queue");
-                    renderer->queues[queue].fence->SetName(L"ComputeQueue - Fence");
-                    break;
-                case VGPUCommandQueue_Copy:
-                    renderer->queues[queue].handle->SetName(L"CopyQueue");
-                    renderer->queues[queue].fence->SetName(L"CopyQueue - Fence");
-                    break;
-                default:
-                    VGPU_UNREACHABLE();
-                    break;
-            }
-
-            // Create frame-resident resources:
-            for (uint32_t frameIndex = 0; frameIndex < VGPU_MAX_INFLIGHT_FRAMES; ++frameIndex)
-            {
-                VHR(
-                    renderer->device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&renderer->queues[queue].frameFences[frameIndex]))
-                );
-
-#if defined(_DEBUG)
-                wchar_t fenceName[64];
-
-                switch (queueType)
-                {
-                    case VGPUCommandQueue_Graphics:
-                        swprintf(fenceName, 64, L"GraphicsQueue - Frame Fence %u", frameIndex);
-                        break;
-                    case VGPUCommandQueue_Compute:
-                        swprintf(fenceName, 64, L"ComputeQueue - Frame Fence %u", frameIndex);
-                        break;
-                    case VGPUCommandQueue_Copy:
-                        swprintf(fenceName, 64, L"CopyQueue - Frame Fence %u", frameIndex);
-                        break;
-                    default:
-                        VGPU_UNREACHABLE();
-                        break;
-                }
-
-                renderer->queues[queue].frameFences[frameIndex]->SetName(fenceName);
-#endif
-            }
-        }
-    }
-
-    // Init CPU descriptor allocators
-    renderer->resourceAllocator.Init(renderer->device, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 4096);
-    renderer->samplerAllocator.Init(renderer->device, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 256);
-    renderer->rtvAllocator.Init(renderer->device, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 512);
-    renderer->dsvAllocator.Init(renderer->device, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 128);
-
-    // Resource descriptor heap (shader visible)
-    {
-        renderer->resourceDescriptorHeap.numDescriptors = 1000000; // tier 2 limit
-
-        D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {};
-        heapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-        heapDesc.NumDescriptors = renderer->resourceDescriptorHeap.numDescriptors;
-        heapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-        heapDesc.NodeMask = 0;
-        VHR(renderer->device->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(&renderer->resourceDescriptorHeap.handle)));
-        renderer->resourceDescriptorHeap.cpuStart = renderer->resourceDescriptorHeap.handle->GetCPUDescriptorHandleForHeapStart();
-        renderer->resourceDescriptorHeap.gpuStart = renderer->resourceDescriptorHeap.handle->GetGPUDescriptorHandleForHeapStart();
-
-        VHR(renderer->device->CreateFence(0, D3D12_FENCE_FLAG_SHARED, IID_PPV_ARGS(&renderer->resourceDescriptorHeap.fence)));
-        renderer->resourceDescriptorHeap.fenceValue = renderer->resourceDescriptorHeap.fence->GetCompletedValue();
-
-        //for (uint32_t i = 0; i < kBindlessResourceCapacity; ++i)
-        //{
-        //    freeBindlessResources.push_back(kBindlessResourceCapacity - i - 1);
-        //}
-
-        renderer->samplerDescriptorHeap.numDescriptors = 2048; // tier 2 limit
-
-        heapDesc.NodeMask = 0;
-        heapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
-        heapDesc.NumDescriptors = renderer->samplerDescriptorHeap.numDescriptors;
-        heapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-        VHR(renderer->device->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(&renderer->samplerDescriptorHeap.handle)));
-
-        renderer->samplerDescriptorHeap.cpuStart = renderer->samplerDescriptorHeap.handle->GetCPUDescriptorHandleForHeapStart();
-        renderer->samplerDescriptorHeap.gpuStart = renderer->samplerDescriptorHeap.handle->GetGPUDescriptorHandleForHeapStart();
-
-        VHR(renderer->device->CreateFence(0, D3D12_FENCE_FLAG_SHARED, IID_PPV_ARGS(&renderer->samplerDescriptorHeap.fence)));
-        renderer->samplerDescriptorHeap.fenceValue = renderer->samplerDescriptorHeap.fence->GetCompletedValue();
-
-        //for (uint32_t i = 0; i < kBindlessSamplerCapacity; ++i)
-        //{
-        //    freeBindlessSamplers.push_back(kBindlessSamplerCapacity - i - 1);
-        //}
-    }
-
-    // Create common indirect command signatures
-    {
-        // DispatchIndirectCommand
-        D3D12_INDIRECT_ARGUMENT_DESC dispatchArg{};
-        dispatchArg.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH;
-
-        D3D12_COMMAND_SIGNATURE_DESC cmdSignatureDesc = {};
-        cmdSignatureDesc.ByteStride = sizeof(VGPUDispatchIndirectCommand);
-        cmdSignatureDesc.NumArgumentDescs = 1;
-        cmdSignatureDesc.pArgumentDescs = &dispatchArg;
-        VHR(renderer->device->CreateCommandSignature(&cmdSignatureDesc, nullptr, IID_PPV_ARGS(&renderer->dispatchIndirectCommandSignature)));
-
-        // DrawIndirectCommand
-        D3D12_INDIRECT_ARGUMENT_DESC drawInstancedArg{};
-        drawInstancedArg.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW;
-        cmdSignatureDesc.ByteStride = sizeof(VGPUDrawIndirectCommand);
-        cmdSignatureDesc.NumArgumentDescs = 1;
-        cmdSignatureDesc.pArgumentDescs = &drawInstancedArg;
-        VHR(renderer->device->CreateCommandSignature(&cmdSignatureDesc, nullptr, IID_PPV_ARGS(&renderer->drawIndirectCommandSignature)));
-
-        // DrawIndexedIndirectCommand
-        D3D12_INDIRECT_ARGUMENT_DESC drawIndexedInstancedArg{};
-        drawIndexedInstancedArg.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED;
-        cmdSignatureDesc.ByteStride = sizeof(VGPUDrawIndexedIndirectCommand);
-        cmdSignatureDesc.NumArgumentDescs = 1;
-        cmdSignatureDesc.pArgumentDescs = &drawIndexedInstancedArg;
-        VHR(renderer->device->CreateCommandSignature(&cmdSignatureDesc, nullptr, IID_PPV_ARGS(&renderer->drawIndexedIndirectCommandSignature)));
-
-        if (renderer->d3dFeatures.MeshShaderTier() >= D3D12_MESH_SHADER_TIER_1)
-        {
-            D3D12_INDIRECT_ARGUMENT_DESC dispatchMeshArg{};
-            dispatchMeshArg.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH_MESH;
-
-            cmdSignatureDesc.ByteStride = sizeof(VGPUDispatchIndirectCommand);
-            cmdSignatureDesc.NumArgumentDescs = 1;
-            cmdSignatureDesc.pArgumentDescs = &dispatchMeshArg;
-            VHR(renderer->device->CreateCommandSignature(&cmdSignatureDesc, nullptr, IID_PPV_ARGS(&renderer->dispatchMeshIndirectCommandSignature)));
-        }
-    }
-
-    // Init features
-    renderer->featureLevel = renderer->d3dFeatures.MaxSupportedFeatureLevel();
-    VHR(renderer->queues[VGPUCommandQueue_Graphics].handle->GetTimestampFrequency(&renderer->timestampFrequency));
-
-    // Log some info
-    vgpuLogInfo("VGPU Driver: D3D12");
-    vgpuLogInfo("D3D12 Adapter: %ls", renderer->adapterDesc.Description);
-
-    return renderer;
+    return device;
 }
 
 VGPUDriver D3D12_Driver = {

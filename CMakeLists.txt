@@ -270,6 +270,9 @@ if (MSVC)
 
     # Use fast floating point model
     target_compile_options(${PROJECT_NAME} PRIVATE /fp:fast "$<$<NOT:$<CONFIG:DEBUG>>:/guard:cf>")
+
+    # Ignore specific warnings (D3D12MA)
+    #target_compile_options(${PROJECT_NAME} PRIVATE /wd4100 /wd4189 /wd4324 /wd4505)
 else()
     target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra)
 endif()
