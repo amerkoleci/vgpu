@@ -5,6 +5,9 @@
 
 #include "vgpu_driver.h"
 
+#define VK_NO_PROTOTYPES
+#include <vulkan/vulkan.h>
+
 #if defined(_WIN32)
 // Use the C++ standard templated min/max
 #define NOMINMAX
@@ -16,25 +19,34 @@
 #define NOHELP
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
+#include <vulkan/vulkan_win32.h>
+#elif defined(__ANDROID__)
+#include <vulkan/vulkan_android.h>
+#elif defined(__APPLE__)
+#include <vulkan/vulkan_metal.h>
+#include <vulkan/vulkan_beta.h>
 #else
+typedef struct xcb_connection_t xcb_connection_t;
+typedef uint32_t xcb_window_t;
+typedef uint32_t xcb_visualid_t;
+
+#include <vulkan/vulkan_xcb.h>
+
+struct wl_display;
+struct wl_surface;
+#include <vulkan/vulkan_wayland.h>
+#endif
+
+#if !defined(_WIN32)
 #include <dlfcn.h>
 #endif
 
-//#if defined(_WIN32)
-//#define VK_USE_PLATFORM_WIN32_KHR
-//#elif defined(__APPLE__)
-//#define VK_USE_PLATFORM_METAL_EXT
-//#elif defined(__ANDROID__)
-//#define VK_USE_PLATFORM_ANDROID_KHR
 //#elif defined(__linux__)
 //#define VK_USE_PLATFORM_XCB_KHR
 //#endif
 
 VGPU_DISABLE_WARNINGS()
-#define VK_NO_PROTOTYPES
-//#include <vulkan/vk_platform.h>
-//#include <vulkan/vulkan_core.h>
-#include <vulkan/vulkan.h>
+
 //#include "third_party/volk.h"
 #define VMA_STATS_STRING_ENABLED 0
 #define VMA_STATIC_VULKAN_FUNCTIONS 0
@@ -74,23 +86,21 @@ VGPU_ENABLE_WARNINGS()
   X(vkDestroyDevice)\
   X(vkGetDeviceProcAddr) 
 
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
+#if defined(_WIN32)
 #define GPU_FOREACH_INSTANCE_PLATFORM(X)\
   X(vkGetPhysicalDeviceWin32PresentationSupportKHR)\
   X(vkCreateWin32SurfaceKHR)\
   X(vkGetMemoryWin32HandleKHR)
-#elif defined(VK_USE_PLATFORM_ANDROID_KHR)
+#elif defined(__ANDROID__)
 #define GPU_FOREACH_INSTANCE_PLATFORM(X)\
   X(vkCreateAndroidSurfaceKHR)
-#elif defined(VK_USE_PLATFORM_METAL_EXT)
+#elif defined(__APPLE__)
 #define GPU_FOREACH_INSTANCE_PLATFORM(X)\
   X(vkCreateMetalSurfaceEXT)
-#elif defined(VK_USE_PLATFORM_XCB_KHR) || defined(VK_USE_PLATFORM_XLIB_KHR)
+#else
 #define GPU_FOREACH_INSTANCE_PLATFORM(X)\
   X(vkCreateXlibSurfaceKHR)\
   X(vkCreateXcbSurfaceKHR)\
-#elif defined(VK_USE_PLATFORM_WAYLAND_KHR)
-#define GPU_FOREACH_INSTANCE_PLATFORM(X)\
   X(vkCreateWaylandSurfaceKHR)
 #endif
 
@@ -228,7 +238,6 @@ GPU_FOREACH_DEVICE_MESH_SHADER(GPU_DECLARE)
 
 
 #if defined(VK_USE_PLATFORM_XLIB_KHR) || defined(VK_USE_PLATFORM_XCB_KHR)
-#include <dlfcn.h>
 #include <xcb/xcb.h>
 #include <X11/Xlib.h>
 
@@ -250,8 +259,6 @@ namespace
 {
     inline const char* ToString(VkResult result)
     {
-        IsWindow(nullptr);
-
         switch (result)
         {
 #define STR(r)   \
@@ -380,10 +387,10 @@ namespace
         VGPU_UNUSED(physicalDevice);
         VGPU_UNUSED(queueFamilyIndex);
 
-#if defined(VK_USE_PLATFORM_ANDROID_KHR)
+#if defined(__ANDROID__)
         // All Android queues surfaces support present.
         return true;
-#elif defined(VK_USE_PLATFORM_WIN32_KHR)
+#elif defined(_WIN32)
         return vkGetPhysicalDeviceWin32PresentationSupportKHR(physicalDevice, queueFamilyIndex);
 #elif defined(VK_USE_PLATFORM_XCB_KHR)
         // TODO: vkGetPhysicalDeviceXcbPresentationSupportKHR
@@ -583,7 +590,7 @@ namespace
                 extensions.maintenance5 = true;
             }
 
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
+#if defined(_WIN32)
             if (strcmp(vk_extensions[i].extensionName, VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME) == 0)
             {
                 extensions.externalMemory = true;
@@ -1976,18 +1983,18 @@ VkSurfaceKHR VulkanDevice::CreateSurface(const VGPUSwapChainDesc* desc)
     VkResult result = VK_SUCCESS;
     VkSurfaceKHR vk_surface = VK_NULL_HANDLE;
 
-#if defined(VK_USE_PLATFORM_ANDROID_KHR)
+#if defined(__ANDROID__)
     VkAndroidSurfaceCreateInfoKHR createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR;
     createInfo.window = (ANativeWindow*)desc->windowHandle;
     result = vkCreateAndroidSurfaceKHR(instance, &createInfo, NULL, &vk_surface);
-#elif defined(VK_USE_PLATFORM_WIN32_KHR)
+#elif defined(_WIN32)
     VkWin32SurfaceCreateInfoKHR createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
     createInfo.hinstance = GetModuleHandle(nullptr);
     createInfo.hwnd = (HWND)desc->windowHandle;
     result = vkCreateWin32SurfaceKHR(instance, &createInfo, nullptr, &vk_surface);
-#elif defined(VK_USE_PLATFORM_METAL_EXT)
+#elif defined(__APPLE__)
     VkMetalSurfaceCreateInfoEXT createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_METAL_SURFACE_CREATE_INFO_EXT;
     createInfo.pLayer = (const CAMetalLayer*)desc->windowHandle;
@@ -2362,11 +2369,11 @@ bool VulkanDevice::Init(const VGPUDeviceDescriptor* info)
         instanceExtensions.push_back(VK_KHR_SURFACE_EXTENSION_NAME);
 
         // Enable surface extensions depending on os
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
+#if defined(_WIN32)
         instanceExtensions.push_back(VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
-#elif defined(VK_USE_PLATFORM_ANDROID_KHR)
+#elif defined(__ANDROID__)
         instanceExtensions.push_back(VK_KHR_ANDROID_SURFACE_EXTENSION_NAME);
-#elif defined(VK_USE_PLATFORM_METAL_EXT)
+#elif defined(__APPLE__)
         instanceExtensions.push_back(VK_EXT_METAL_SURFACE_EXTENSION_NAME);
 #else
         if (xlib_surface)
@@ -2836,7 +2843,7 @@ bool VulkanDevice::Init(const VGPUDeviceDescriptor* info)
             features_chain = &conditionalRenderingFeatures.pNext;
         }
 
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
+#if defined(_WIN32)
         if (supportedExtensions.externalMemory)
         {
             enabledDeviceExtensions.push_back(VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME);
@@ -3163,7 +3170,7 @@ bool VulkanDevice::Init(const VGPUDeviceDescriptor* info)
         if (supportedExtensions.externalMemory)
         {
             std::vector<VkExternalMemoryHandleTypeFlags> externalMemoryHandleTypes;
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
+#if defined(_WIN32)
             externalMemoryHandleTypes.resize(memoryProperties2.memoryProperties.memoryTypeCount, VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT);
 #else
             externalMemoryHandleTypes.resize(memoryProperties2.memoryProperties.memoryTypeCount, VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT);
@@ -4079,7 +4086,7 @@ VGPUTexture VulkanDevice::CreateTexture(const VGPUTextureDesc* desc, const VGPUT
 
         VkPhysicalDeviceExternalImageFormatInfo externalFormatInfo = {};
         externalFormatInfo.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTERNAL_IMAGE_FORMAT_INFO;
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
+#if defined(_WIN32)
         externalFormatInfo.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT;
 #else
         externalFormatInfo.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT;
@@ -4093,7 +4100,7 @@ VGPUTexture VulkanDevice::CreateTexture(const VGPUTextureDesc* desc, const VGPUT
         }
 
         externalInfo.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO;
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
+#if defined(_WIN32)
         externalInfo.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT;
 #else
         externalInfo.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT;
@@ -4151,7 +4158,7 @@ VGPUTexture VulkanDevice::CreateTexture(const VGPUTextureDesc* desc, const VGPUT
 
     if (isShared)
     {
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
+#if defined(_WIN32)
         VkMemoryGetWin32HandleInfoKHR getWin32HandleInfoKHR = {};
         getWin32HandleInfoKHR.sType = VK_STRUCTURE_TYPE_MEMORY_GET_WIN32_HANDLE_INFO_KHR;
         getWin32HandleInfoKHR.pNext = nullptr;
