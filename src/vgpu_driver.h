@@ -8,6 +8,8 @@
 #include <stdbool.h>
 #include <string.h> 
 #include <atomic>
+#include <functional>
+
 
 #ifndef VGPU_ASSERT
 #   include <assert.h>

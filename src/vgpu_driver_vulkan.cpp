@@ -32,8 +32,9 @@
 
 VGPU_DISABLE_WARNINGS()
 #define VK_NO_PROTOTYPES
-#include <vulkan/vk_platform.h>
-#include <vulkan/vulkan_core.h>
+//#include <vulkan/vk_platform.h>
+//#include <vulkan/vulkan_core.h>
+#include <vulkan/vulkan.h>
 //#include "third_party/volk.h"
 #define VMA_STATS_STRING_ENABLED 0
 #define VMA_STATIC_VULKAN_FUNCTIONS 0
@@ -199,12 +200,6 @@ VGPU_ENABLE_WARNINGS()
   X(vkDestroyBufferView) \
   X(vkGetBufferDeviceAddress)
 
-// Functions that require a device with 1.3 or VK_KHR_synchronization2
-#define GPU_FOREACH_DEVICE_SYNC2(X)\
-    X(vkCmdPipelineBarrier2)\
-    X(vkCmdWriteTimestamp2)\
-    X(vkQueueSubmit2)
-
 // Functions that require a device and mesh shader extension
 #define GPU_FOREACH_DEVICE_MESH_SHADER(X)\
   X(vkCmdDrawMeshTasksEXT)\
@@ -215,7 +210,6 @@ VGPU_ENABLE_WARNINGS()
 #define GPU_LOAD_ANONYMOUS(fn) fn = (PFN_##fn) vkGetInstanceProcAddr(NULL, #fn);
 #define GPU_LOAD_INSTANCE(fn) fn = (PFN_##fn) vkGetInstanceProcAddr(instance, #fn);
 #define GPU_LOAD_DEVICE(fn) fn = (PFN_##fn) vkGetDeviceProcAddr(device, #fn);
-#define GPU_LOAD_DEVICE_KHR(fn) fn = (PFN_##fn) vkGetDeviceProcAddr(device, #fn##"KHR");
 #define GPU_DECLARE(fn) static PFN_##fn fn;
 
 // Declare function pointers
@@ -224,7 +218,12 @@ GPU_FOREACH_ANONYMOUS(GPU_DECLARE)
 GPU_FOREACH_INSTANCE(GPU_DECLARE)
 GPU_FOREACH_INSTANCE_PLATFORM(GPU_DECLARE)
 GPU_FOREACH_DEVICE(GPU_DECLARE)
-GPU_FOREACH_DEVICE_SYNC2(GPU_DECLARE)
+
+// Functions that require a device with 1.3 or VK_KHR_synchronization2
+GPU_DECLARE(vkCmdPipelineBarrier2);
+GPU_DECLARE(vkCmdWriteTimestamp2);
+GPU_DECLARE(vkQueueSubmit2);
+
 GPU_FOREACH_DEVICE_MESH_SHADER(GPU_DECLARE)
 
 
@@ -3033,11 +3032,15 @@ bool VulkanDevice::Init(const VGPUDeviceDescriptor* info)
         GPU_FOREACH_DEVICE(GPU_LOAD_DEVICE);
         if (features1_3.synchronization2 == VK_TRUE)
         {
-            GPU_FOREACH_DEVICE_SYNC2(GPU_LOAD_DEVICE);
+            GPU_LOAD_DEVICE(vkCmdPipelineBarrier2);
+            GPU_LOAD_DEVICE(vkCmdWriteTimestamp2);
+            GPU_LOAD_DEVICE(vkQueueSubmit2);
         }
         else if (synchronization2Features.synchronization2 == VK_TRUE)
         {
-            GPU_FOREACH_DEVICE_SYNC2(GPU_LOAD_DEVICE_KHR)
+            vkCmdPipelineBarrier2 = (PFN_vkCmdPipelineBarrier2)vkGetDeviceProcAddr(device, "vkCmdPipelineBarrier2KHR");
+            vkCmdWriteTimestamp2 = (PFN_vkCmdWriteTimestamp2)vkGetDeviceProcAddr(device, "vkCmdWriteTimestamp2KHR");
+            vkQueueSubmit2 = (PFN_vkQueueSubmit2)vkGetDeviceProcAddr(device, "vkQueueSubmit2KHR");
         }
 
         if (meshShaderFeatures.meshShader == VK_TRUE && meshShaderFeatures.taskShader == VK_TRUE)
