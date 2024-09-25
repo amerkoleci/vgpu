@@ -2851,7 +2851,7 @@ bool VulkanDevice::Init(const VGPUDeviceDescriptor* info)
         {
             enabledDeviceExtensions.push_back(VK_KHR_EXTERNAL_FENCE_WIN32_EXTENSION_NAME);
         }
-#elif
+#else
         if (supportedExtensions.externalMemory)
         {
             enabledDeviceExtensions.push_back(VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME);
