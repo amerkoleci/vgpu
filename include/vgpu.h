@@ -83,6 +83,7 @@ typedef enum VGPUBackend {
     _VGPUBackend_Default = 0,
     VGPUBackend_Vulkan,
     VGPUBackend_D3D12,
+    VGPUBackend_WGPU,
 
     _VGPUBackend_Count,
     _VGPUBackend_Force32 = 0x7FFFFFFF

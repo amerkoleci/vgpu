@@ -8,7 +8,6 @@
 #include <stdbool.h>
 #include <string.h> 
 #include <atomic>
-#include <functional>
 
 #ifndef VGPU_ASSERT
 #   include <assert.h>
@@ -267,6 +266,7 @@ public:
 
 struct VGPUDeviceImpl : public VGPUObject
 {
+public:
     virtual void WaitIdle() = 0;
     virtual VGPUBackend GetBackendType() const = 0;
     virtual VGPUBool32 QueryFeatureSupport(VGPUFeature feature) const = 0;
@@ -294,8 +294,11 @@ struct VGPUDeviceImpl : public VGPUObject
     virtual VGPUCommandBuffer BeginCommandBuffer(VGPUCommandQueue queueType, const char* label) = 0;
     virtual uint64_t Submit(VGPUCommandBuffer* commandBuffers, uint32_t count) = 0;
 
-    virtual uint64_t GetFrameCount() = 0;
-    virtual uint32_t GetFrameIndex() = 0;
+    uint64_t GetFrameCount() const { return frameCount; }
+    uint32_t GetFrameIndex() const { return frameIndex; }
+
+    uint64_t frameCount = 0;
+    uint32_t frameIndex = 0;
 };
 
 typedef struct VGPUDriver
@@ -306,8 +309,7 @@ typedef struct VGPUDriver
 } VGPUDriver;
 
 _VGPU_EXTERN VGPUDriver Vulkan_Driver;
-_VGPU_EXTERN VGPUDriver D3D11_Driver;
 _VGPU_EXTERN VGPUDriver D3D12_Driver;
-//_VGPU_EXTERN VGPUDriver WebGPU_driver;
+_VGPU_EXTERN VGPUDriver WGPU_Driver;
 
 #endif /* _VGPU_DRIVER_H_ */

@@ -107,7 +107,7 @@ endif ()
 
 # Graphics backends
 if(EMSCRIPTEN)
-    option(VGPU_WEBGPU_DRIVER "Enable WebGPU backend" ON)
+    option(VGPU_WGPU_DRIVER "Enable WebGPU backend" ON)
 elseif(IOS OR APPLE)
     set(VGPU_METAL_DRIVER ON CACHE BOOL "Use Metal backend" FORCE)
 elseif(WINDOWS_STORE)
@@ -115,6 +115,7 @@ elseif(WINDOWS_STORE)
 elseif(WIN32)
     option(VGPU_VULKAN_DRIVER "Enable Vulkan backend" ON)
     option(VGPU_D3D12_DRIVER "Enable Direct3D12 backend" ON)
+    option(VGPU_WGPU_DRIVER "Enable WebGPU backend" ON)
 
     #option(VGPU_D3D12_DRIVER_AGILITY_SDK "Use Direct3D12 Agility SDK" OFF)
 else()
@@ -187,6 +188,9 @@ endif()
 if (VGPU_D3D12_DRIVER)
     message(STATUS "      - Direct3D12")
 endif ()
+if (VGPU_WGPU_DRIVER)
+    message(STATUS "      - WGPU")
+endif ()
 
 # GLFW
 if(NOT (ANDROID OR EMSCRIPTEN OR WINDOWS_STORE))
@@ -229,9 +233,12 @@ endif ()
 # Include directories
 target_include_directories(${PROJECT_NAME} PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>
+)
+
+target_include_directories(${PROJECT_NAME} PRIVATE
 	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/third_party>
-    $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>
 )
 
 if (MSVC)
@@ -281,8 +288,6 @@ if (VGPU_VULKAN_DRIVER)
     target_sources(${PROJECT_NAME} PRIVATE
         src/vgpu_driver_vulkan.cpp
         src/third_party/vk_mem_alloc.h
-        src/third_party/volk.h
-        src/third_party/volk.c
     )
 
     target_compile_definitions(${PROJECT_NAME} PRIVATE VGPU_VULKAN_DRIVER)
@@ -319,17 +324,26 @@ if (VGPU_D3D12_DRIVER)
     endif ()
 endif ()
 
-if (VGPU_WEBGPU_DRIVER)
+if (VGPU_WGPU_DRIVER)
     target_sources(${PROJECT_NAME} PRIVATE
-        src/vgpu_driver_webgpu.cpp
+        src/vgpu_driver_wgpu.cpp
     )
 
-    target_compile_definitions(${PROJECT_NAME} PRIVATE VGPU_WEBGPU_DRIVER)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE VGPU_WGPU_DRIVER)
+
+    if(EMSCRIPTEN)
+        target_compile_definitions(${PROJECT_NAME} PRIVATE WEBGPU_BACKEND_EMSCRIPTEN)
+        target_link_options(${PROJECT_NAME} PRIVATE
+            -sUSE_WEBGPU # Handle WebGPU symbols
+	    )
+    else()
+        target_compile_definitions(${PROJECT_NAME} PRIVATE WEBGPU_BACKEND_WGPU)
+    endif()
 endif ()
 
 if(WIN32)
-    target_compile_definitions(${PROJECT_NAME} PRIVATE _UNICODE UNICODE _CRT_SECURE_NO_WARNINGS)
-    target_compile_definitions(${PROJECT_NAME} PRIVATE NOMINMAX)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE _UNICODE UNICODE)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE _CRT_SECURE_NO_WARNINGS)
 endif ()
 
 set_target_properties(

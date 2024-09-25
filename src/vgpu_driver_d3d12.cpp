@@ -2,12 +2,8 @@
 // Licensed under the MIT License (MIT). See LICENSE in the repository root for more information.
 
 #if defined(VGPU_D3D12_DRIVER)
-
 // Use the C++ standard templated min/max
-#ifndef NOMINMAX
 #define NOMINMAX
-#endif
-
 #define NODRAWTEXT
 #define NOGDI
 #define NOBITMAP
@@ -1379,9 +1375,6 @@ public:
     VGPUCommandBuffer BeginCommandBuffer(VGPUCommandQueue queueType, const char* label) override;
     uint64_t Submit(VGPUCommandBuffer* commandBuffers, uint32_t count) override;
 
-    uint64_t GetFrameCount() override { return frameCount; }
-    uint32_t GetFrameIndex() override { return frameIndex; }
-
     void* GetNativeObject(VGPUNativeObjectType objectType) const override;
 
     void DeferDestroy(IUnknown* resource, D3D12MA::Allocation* allocation = nullptr);
@@ -1414,9 +1407,6 @@ public:
     std::mutex cmdBuffersLocker;
     uint32_t cmdBuffersCount{ 0 };
     std::vector<D3D12CommandBuffer*> commandBuffersPool;
-
-    uint32_t frameIndex = 0;
-    uint64_t frameCount = 0;
 
     D3D12DescriptorAllocator renderTargetViewHeap;
     D3D12DescriptorAllocator depthStencilViewHeap;

@@ -4,6 +4,9 @@
 #include "vgpu_driver.h"
 #include <stdio.h>
 #include <stdarg.h>
+#if defined(_MSC_VER)
+#include <intrin.h>
+#endif
 
 #define MAX_MESSAGE_SIZE 1024
 
@@ -77,17 +80,14 @@ void vgpuSetLogCallback(VGPULogCallback func, void* userData)
 }
 
 static const VGPUDriver* drivers[] = {
-    //#if defined(VGPU_D3D11_DRIVER)
-    //    &D3D11_Driver,
-    //#endif
     #if defined(VGPU_D3D12_DRIVER)
         &D3D12_Driver,
     #endif
     #if defined(VGPU_VULKAN_DRIVER)
         &Vulkan_Driver,
     #endif
-    #if defined(VGPU_WEBGPU_DRIVER)
-        &WebGPU_driver,
+    #if defined(VGPU_WGPU_DRIVER) && defined(TODO)
+        &WGPU_Driver,
     #endif
         NULL
 };
