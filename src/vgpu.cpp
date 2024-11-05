@@ -86,10 +86,10 @@ static const VGPUDriver* drivers[] = {
     #if defined(VGPU_VULKAN_DRIVER)
         &Vulkan_Driver,
     #endif
-    #if defined(VGPU_WGPU_DRIVER) && defined(TODO)
+    #if defined(VGPU_WGPU_DRIVER)
         &WGPU_Driver,
     #endif
-        NULL
+        nullptr
 };
 
 #define NULL_RETURN(name) if (name == NULL) { return; }
@@ -111,18 +111,17 @@ VGPUBool32 vgpuIsBackendSupported(VGPUBackend backend)
     return false;
 }
 
-VGPUDevice vgpuCreateDevice(const VGPUDeviceDescriptor* desc)
+VGPUInstance vgpuCreateInstance(const VGPUInstanceDesc* desc)
 {
-    if (!desc) {
-        vgpuLogWarn("vgpu_init: Invalid config");
-        return nullptr;
-    }
+    VGPUInstanceDesc creationDesc{};
+    if (desc)
+        creationDesc = *desc;
 
-    VGPUDevice device = NULL;
-    VGPUBackend backend = desc->preferredBackend;
+    VGPUInstance instance = nullptr;
+    VGPUBackend backend = creationDesc.preferredBackend;
 
 retry:
-    if (backend == _VGPUBackend_Default)
+    if (backend == VGPUBackendType_Undefined)
     {
         for (uint32_t i = 0; i < _VGPU_COUNT_OF(drivers); ++i)
         {
@@ -131,7 +130,7 @@ retry:
 
             if (drivers[i]->isSupported())
             {
-                device = drivers[i]->createDevice(desc);
+                instance = drivers[i]->CreateInstance(&creationDesc);
                 break;
             }
         }
@@ -147,13 +146,74 @@ retry:
             {
                 if (drivers[i]->isSupported())
                 {
-                    device = drivers[i]->createDevice(desc);
+                    instance = drivers[i]->CreateInstance(&creationDesc);
                     break;
                 }
                 else
                 {
                     vgpuLogWarn("Wanted API not supported, fallback to default");
-                    backend = _VGPUBackend_Default;
+                    backend = VGPUBackendType_Undefined;
+                    goto retry;
+                }
+            }
+        }
+    }
+
+    return instance;
+}
+
+void vgpuInstanceAddRef(VGPUInstance instance)
+{
+    instance->AddRef();
+}
+
+void vgpuInstanceRelease(VGPUInstance instance)
+{
+    instance->Release();
+}
+
+VGPUDevice vgpuCreateDevice(const VGPUDeviceDesc* desc)
+{
+    VGPUDeviceDesc creationDesc{};
+    if (desc)
+        creationDesc = *desc;
+
+    VGPUDevice device = NULL;
+    VGPUBackend backend = creationDesc.preferredBackend;
+
+retry:
+    if (backend == VGPUBackendType_Undefined)
+    {
+        for (uint32_t i = 0; i < _VGPU_COUNT_OF(drivers); ++i)
+        {
+            if (!drivers[i])
+                break;
+
+            if (drivers[i]->isSupported())
+            {
+                device = drivers[i]->createDevice(&creationDesc);
+                break;
+            }
+        }
+    }
+    else
+    {
+        for (uint32_t i = 0; i < _VGPU_COUNT_OF(drivers); ++i)
+        {
+            if (!drivers[i])
+                break;
+
+            if (drivers[i]->backend == backend)
+            {
+                if (drivers[i]->isSupported())
+                {
+                    device = drivers[i]->createDevice(&creationDesc);
+                    break;
+                }
+                else
+                {
+                    vgpuLogWarn("Wanted API not supported, fallback to default");
+                    backend = VGPUBackendType_Undefined;
                     goto retry;
                 }
             }

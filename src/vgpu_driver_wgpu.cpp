@@ -1,11 +1,12 @@
-// Copyright © Amer Koleci and Contributors.
+// Copyright (c) Amer Koleci and Contributors.
 // Licensed under the MIT License (MIT). See LICENSE in the repository root for more information.
  
-#if defined(VGPU_WGPU_DRIVER) && defined(TODO)
+#if defined(VGPU_WGPU_DRIVER)
 
 #include "vgpu_driver.h"
 
-#if defined(WEBGPU_BACKEND_EMSCRIPTEN) 
+#if defined(__EMSCRIPTEN__)
+#include <emscripten.h>
 #include <emscripten/html5_webgpu.h>
 #else
 #define WGPU_SKIP_DECLARATIONS
@@ -80,7 +81,12 @@
     x(TextureReference) \
     x(TextureRelease) 
 
+#define WGPU_DECLARE_PROC(name) WGPUProc##name wgpu##name;
+ALIMER_RHI_WGPU_PROCS(WGPU_DECLARE_PROC);
+
 #if defined(WEBGPU_BACKEND_WGPU)
+// wgpu_native 
+//#include <webgpu/wgpu.h>
 typedef enum WGPULogLevel {
     WGPULogLevel_Off = 0x00000000,
     WGPULogLevel_Error = 0x00000001,
@@ -101,18 +107,11 @@ typedef uint32_t(*WGPUProcGetVersion)() WGPU_FUNCTION_ATTRIBUTE;
     x(SetLogCallback)\
     x(SetLogLevel)\
     x(GetVersion)
-#endif
-// clang-format on
 
-#define WGPU_DECLARE_PROC(name) WGPUProc##name wgpu##name;
-ALIMER_RHI_WGPU_PROCS(WGPU_DECLARE_PROC);
-
-#if defined(WEBGPU_BACKEND_WGPU)
 ALIMER_RHI_WGPU_NATIVE_PROCS(WGPU_DECLARE_PROC);
 #endif
 
-#if defined(WEBGPU_BACKEND_DAWN)
-#endif
+#undef WGPU_DECLARE_PROC
 
 #if defined(_WIN32)
 // Use the C++ standard templated min/max
@@ -129,6 +128,29 @@ ALIMER_RHI_WGPU_NATIVE_PROCS(WGPU_DECLARE_PROC);
 #include <dlfcn.h>
 #endif
 
+struct WGPU_State
+{
+#if defined(_WIN32)
+    HMODULE nativeLibrary = nullptr;
+#else
+    void nativeLibrary = nullptr;
+#endif
+    bool dawn = false;
+
+    ~WGPU_State()
+    {
+        if (nativeLibrary)
+        {
+#if defined(_WIN32)
+            FreeLibrary(nativeLibrary);
+#else
+            dlclose(nativeLibrary);
+#endif
+            nativeLibrary = nullptr;
+        }
+    }
+} wgpu_state;
+
 #endif
 
 struct VWGPUDevice final : public VGPUDeviceImpl
@@ -139,7 +161,7 @@ public:
 
     ~VWGPUDevice() override;
 
-    bool Init(const VGPUDeviceDescriptor* info);
+    bool Init(const VGPUDeviceDesc* desc);
     void SetLabel(const char* label) override;
     void WaitIdle() override;
     VGPUBackend GetBackendType() const override { return VGPUBackend_Vulkan; }
@@ -175,16 +197,13 @@ VWGPUDevice::~VWGPUDevice()
 
 }
 
-bool VWGPUDevice::Init(const VGPUDeviceDescriptor* info)
+bool VWGPUDevice::Init(const VGPUDeviceDesc* desc)
 {
-#if defined(WEBGPU_BACKEND_EMSCRIPTEN)
+    VGPU_UNUSED(desc);
+
+#if defined(__EMSCRIPTEN__) && defined(TODO)
     renderer->device = emscripten_webgpu_get_device();
-#else
-#endif
 
-    //renderer->queue = wgpuDeviceGetQueue(renderer->device);
-
-#if defined(__EMSCRIPTEN__)
     // Create surface first.
     WGPUSurfaceDescriptorFromCanvasHTMLSelector canvDesc = {};
     canvDesc.chain.sType = WGPUSType_SurfaceDescriptorFromCanvasHTMLSelector;
@@ -301,13 +320,118 @@ VGPUBool32 VWGPUDevice::QueryFeatureSupport(VGPUFeature feature) const
 
 void VWGPUDevice::GetAdapterProperties(VGPUAdapterProperties* properties) const
 {
+    VGPU_UNUSED(properties);
 }
 
 void VWGPUDevice::GetLimits(VGPULimits* limits) const
 {
+    VGPU_UNUSED(limits);
 }
 
-static VGPUBool32 wgpu_isSupported(void)
+VGPUBuffer VWGPUDevice::CreateBuffer(const VGPUBufferDesc* desc, const void* pInitialData)
+{
+    VGPU_UNUSED(desc);
+    VGPU_UNUSED(pInitialData);
+
+    return nullptr;
+}
+
+VGPUTexture VWGPUDevice::CreateTexture(const VGPUTextureDesc* desc, const VGPUTextureData* pInitialData)
+{
+    VGPU_UNUSED(desc);
+    VGPU_UNUSED(pInitialData);
+
+    return nullptr;
+}
+
+VGPUSampler VWGPUDevice::CreateSampler(const VGPUSamplerDesc* desc)
+{
+    VGPU_UNUSED(desc);
+
+    return nullptr;
+}
+
+VGPUBindGroupLayout VWGPUDevice::CreateBindGroupLayout(const VGPUBindGroupLayoutDesc* desc)
+{
+    VGPU_UNUSED(desc);
+
+    return nullptr;
+}
+
+VGPUPipelineLayout VWGPUDevice::CreatePipelineLayout(const VGPUPipelineLayoutDesc* desc)
+{
+    VGPU_UNUSED(desc);
+
+    return nullptr;
+}
+
+VGPUBindGroup VWGPUDevice::CreateBindGroup(const VGPUBindGroupLayout layout, const VGPUBindGroupDesc* desc)
+{
+    VGPU_UNUSED(layout);
+    VGPU_UNUSED(desc);
+
+    return nullptr;
+}
+
+VGPUPipeline VWGPUDevice::CreateRenderPipeline(const VGPURenderPipelineDesc* desc)
+{
+    VGPU_UNUSED(desc);
+
+    return nullptr;
+}
+
+VGPUPipeline VWGPUDevice::CreateComputePipeline(const VGPUComputePipelineDesc* desc)
+{
+    VGPU_UNUSED(desc);
+
+    return nullptr;
+}
+
+VGPUPipeline VWGPUDevice::CreateRayTracingPipeline(const VGPURayTracingPipelineDesc* desc)
+{
+    VGPU_UNUSED(desc);
+
+    return nullptr;
+}
+
+VGPUQueryHeap VWGPUDevice::CreateQueryHeap(const VGPUQueryHeapDesc* desc)
+{
+    VGPU_UNUSED(desc);
+
+    return nullptr;
+}
+
+VGPUSwapChain VWGPUDevice::CreateSwapChain(const VGPUSwapChainDesc* desc)
+{
+    VGPU_UNUSED(desc);
+
+    return nullptr;
+}
+
+VGPUCommandBuffer VWGPUDevice::BeginCommandBuffer(VGPUCommandQueue queueType, const char* label)
+{
+    VGPU_UNUSED(queueType);
+    VGPU_UNUSED(label);
+
+    return nullptr;
+}
+
+uint64_t VWGPUDevice::Submit(VGPUCommandBuffer* commandBuffers, uint32_t count)
+{
+    VGPU_UNUSED(commandBuffers);
+    VGPU_UNUSED(count);
+
+    return 0;
+}
+
+void* VWGPUDevice::GetNativeObject(VGPUNativeObjectType objectType) const
+{
+    VGPU_UNUSED(objectType);
+
+    return nullptr;
+}
+
+static bool wgpu_IsSupported(void)
 {
     static bool available_initialized = false;
     static bool available = false;
@@ -318,33 +442,44 @@ static VGPUBool32 wgpu_isSupported(void)
 
     available_initialized = true;
 
+#if defined(__EMSCRIPTEN__)
+#else
 #if defined(_WIN32)
-    HMODULE module = LoadLibraryA("wgpu_native.dll");
-    if (!module)
-        module = LoadLibraryA("dawn.dll");
+    wgpu_state.nativeLibrary = LoadLibraryA("wgpu_native.dll");
+    if (!wgpu_state.nativeLibrary)
+    {
+        wgpu_state.nativeLibrary = LoadLibraryA("dawn.dll");
+        wgpu_state.dawn = true;
+    }
 
-    if (!module)
+    if (!wgpu_state.nativeLibrary)
         return false;
 #elif defined(__APPLE__)
-    void* module = dlopen("libvulkan.dylib", RTLD_LAZY);
-    if (!module)
-        module = dlopen("libdawn.dylib", RTLD_LAZY);
+    wgpu_state.nativeLibrary = dlopen("libvulkan.dylib", RTLD_LAZY);
+    if (!wgpu_state.nativeLibrary)
+    {
+        wgpu_state.nativeLibrary = dlopen("libdawn.dylib", RTLD_LAZY);
+        wgpu_state.dawn = true;
+    } 
 
-    if (!module)
+    if (!wgpu_state.nativeLibrary)
         return false;
 #else
-    void* module = dlopen("libwgpu_native.so", RTLD_LAZY);
-    if (!module)
-        module = dlopen("libdawn.so", RTLD_LAZY);
+    wgpu_state.nativeLibrary = dlopen("libwgpu_native.so", RTLD_LAZY);
+    if (!wgpu_state.nativeLibrary)
+    {
+        wgpu_state.nativeLibrary = dlopen("libdawn.so", RTLD_LAZY);
+        wgpu_state.dawn = true;
+    }
 
-    if (!module)
+    if (!wgpu_state.nativeLibrary)
         return false;
 #endif
 
 #if defined(_WIN32)
-#define LOAD_PROC(name) wgpu##name = (WGPUProc##name)GetProcAddress(module, "wgpu" #name);
+#define LOAD_PROC(name) wgpu##name = (WGPUProc##name)GetProcAddress(wgpu_state.nativeLibrary, "wgpu" #name);
 #else
-#define LOAD_PROC(name) wgpu##name = (WGPUProc##name)dlsym(module, "wgpu" #name);
+#define LOAD_PROC(name) wgpu##name = (WGPUProc##name)dlsym(wgpu_state.nativeLibrary, "wgpu" #name);
 #endif
 
     ALIMER_RHI_WGPU_PROCS(LOAD_PROC);
@@ -353,17 +488,26 @@ static VGPUBool32 wgpu_isSupported(void)
 #endif
 #undef LOAD_PROC
 
+#endif
+
     available = true;
     return true;
 }
 
-static VGPUDeviceImpl* wgpu_createDevice(const VGPUDeviceDescriptor* info)
+static VGPUInstanceImpl* wgpu_CreateInstance(const VGPUInstanceDesc* desc)
 {
-    VGPU_ASSERT(info);
+    VGPU_UNUSED(desc);
+
+    return nullptr;
+}
+
+static VGPUDeviceImpl* wgpu_CreateDevice(const VGPUDeviceDesc* desc)
+{
+    VGPU_ASSERT(desc);
 
     VWGPUDevice* device = new VWGPUDevice();
 
-    if (!device->Init(info))
+    if (!device->Init(desc))
     {
         delete device;
         return nullptr;
@@ -374,8 +518,9 @@ static VGPUDeviceImpl* wgpu_createDevice(const VGPUDeviceDescriptor* info)
 
 VGPUDriver WGPU_Driver = {
     VGPUBackend_WGPU,
-    wgpu_isSupported,
-    wgpu_createDevice
+    wgpu_IsSupported,
+    wgpu_CreateInstance,
+    wgpu_CreateDevice
 };
 
 #endif /* VGPU_WEBGPU_DRIVER */

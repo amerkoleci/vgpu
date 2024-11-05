@@ -227,6 +227,7 @@ GPU_DECLARE(vkGetInstanceProcAddr)
 GPU_FOREACH_ANONYMOUS(GPU_DECLARE)
 GPU_FOREACH_INSTANCE(GPU_DECLARE)
 GPU_FOREACH_INSTANCE_PLATFORM(GPU_DECLARE)
+GPU_DECLARE(vkGetMemoryFdKHR)
 GPU_FOREACH_DEVICE(GPU_DECLARE)
 
 // Functions that require a device with 1.3 or VK_KHR_synchronization2
@@ -1528,7 +1529,7 @@ struct VulkanDevice final : public VGPUDeviceImpl
 public:
     ~VulkanDevice() override;
 
-    bool Init(const VGPUDeviceDescriptor* info);
+    bool Init(const VGPUDeviceDesc* desc);
     void SetLabel(const char* label) override;
     void WaitIdle() override;
     VGPUBackend GetBackendType() const override { return VGPUBackend_Vulkan; }
@@ -2297,7 +2298,7 @@ VulkanDevice::~VulkanDevice()
 #endif
 }
 
-bool VulkanDevice::Init(const VGPUDeviceDescriptor* info)
+bool VulkanDevice::Init(const VGPUDeviceDesc* desc)
 {
 #if defined(VK_USE_PLATFORM_XLIB_KHR) || defined(VK_USE_PLATFORM_XCB_KHR)
 #if defined(__CYGWIN__)
@@ -2391,7 +2392,7 @@ bool VulkanDevice::Init(const VGPUDeviceDescriptor* info)
         }
 #endif
 
-        if (info->validationMode != VGPUValidationMode_Disabled)
+        if (desc->validationMode != VGPUValidationMode_Disabled)
         {
             // Determine the optimal validation layers to enable that are necessary for useful debugging
             std::vector<const char*> optimalValidationLyers = GetOptimalValidationLayers(availableInstanceLayers);
@@ -2400,7 +2401,7 @@ bool VulkanDevice::Init(const VGPUDeviceDescriptor* info)
 
 #if defined(_DEBUG)
         bool validationFeatures = false;
-        if (info->validationMode == VGPUValidationMode_GPU)
+        if (desc->validationMode == VGPUValidationMode_GPU)
         {
             uint32_t layerInstanceExtensionCount;
             VK_CHECK(vkEnumerateInstanceExtensionProperties("VK_LAYER_KHRONOS_validation", &layerInstanceExtensionCount, nullptr));
@@ -2420,7 +2421,7 @@ bool VulkanDevice::Init(const VGPUDeviceDescriptor* info)
 
         VkApplicationInfo appInfo = {};
         appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-        appInfo.pApplicationName = info->label;
+        appInfo.pApplicationName = desc->label;
         appInfo.applicationVersion = 1;
         appInfo.pEngineName = "vgpu";
         appInfo.engineVersion = VK_MAKE_VERSION(VGPU_VERSION_MAJOR, VGPU_VERSION_MINOR, VGPU_VERSION_PATCH);
@@ -2436,14 +2437,14 @@ bool VulkanDevice::Init(const VGPUDeviceDescriptor* info)
 
         VkDebugUtilsMessengerCreateInfoEXT debugUtilsCreateInfo{};
 
-        if (info->validationMode != VGPUValidationMode_Disabled && debugUtils)
+        if (desc->validationMode != VGPUValidationMode_Disabled && debugUtils)
         {
             debugUtilsCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
             debugUtilsCreateInfo.pNext = nullptr;
             debugUtilsCreateInfo.flags = 0;
 
             debugUtilsCreateInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-            if (info->validationMode == VGPUValidationMode_Verbose)
+            if (desc->validationMode == VGPUValidationMode_Verbose)
             {
                 debugUtilsCreateInfo.messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT;
             }
@@ -2483,7 +2484,7 @@ bool VulkanDevice::Init(const VGPUDeviceDescriptor* info)
         GPU_FOREACH_INSTANCE(GPU_LOAD_INSTANCE);
         GPU_FOREACH_INSTANCE_PLATFORM(GPU_LOAD_INSTANCE);
 
-        if (info->validationMode != VGPUValidationMode_Disabled && debugUtils)
+        if (desc->validationMode != VGPUValidationMode_Disabled && debugUtils)
         {
             result = vkCreateDebugUtilsMessengerEXT(instance, &debugUtilsCreateInfo, nullptr, &debugUtilsMessenger);
             if (result != VK_SUCCESS)
@@ -2551,7 +2552,7 @@ bool VulkanDevice::Init(const VGPUDeviceDescriptor* info)
             }
 
             bool priority = physicalDeviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
-            if (info->powerPreference == VGPUPowerPreference_LowPower)
+            if (desc->powerPreference == VGPUPowerPreference_LowPower)
             {
                 priority = properties2.properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU;
             }
@@ -3037,6 +3038,7 @@ bool VulkanDevice::Init(const VGPUDeviceDescriptor* info)
         }
 
         GPU_FOREACH_DEVICE(GPU_LOAD_DEVICE);
+        GPU_LOAD_DEVICE(vkGetMemoryFdKHR);
         if (features1_3.synchronization2 == VK_TRUE)
         {
             GPU_LOAD_DEVICE(vkCmdPipelineBarrier2);
@@ -3083,11 +3085,11 @@ bool VulkanDevice::Init(const VGPUDeviceDescriptor* info)
         for (uint32_t i = 0; i < createInfo.enabledExtensionCount; ++i)
         {
             vgpuLogInfo("	\t%s", createInfo.ppEnabledExtensionNames[i]);
-        }
+    }
 #endif
-        if (info->label)
+        if (desc->label)
         {
-            SetObjectName(VK_OBJECT_TYPE_DEVICE, reinterpret_cast<uint64_t>(device), info->label);
+            SetObjectName(VK_OBJECT_TYPE_DEVICE, reinterpret_cast<uint64_t>(device), desc->label);
         }
 
         if (properties2.properties.apiVersion >= VK_API_VERSION_1_3)
@@ -3106,7 +3108,7 @@ bool VulkanDevice::Init(const VGPUDeviceDescriptor* info)
                 //driverDescription += std::to_string(": ") + driverProperties.driverInfo;
             }
         }
-    }
+}
 
     // Create memory allocator
     {
@@ -6504,7 +6506,7 @@ uint64_t VulkanDevice::Submit(VGPUCommandBuffer* commandBuffers, uint32_t count)
     return frameCount - 1;
 }
 
-static VGPUBool32 vulkan_isSupported(void)
+static bool vulkan_isSupported(void)
 {
     static bool available_initialized = false;
     static bool available = false;
@@ -6543,11 +6545,13 @@ static VGPUBool32 vulkan_isSupported(void)
     vkGetInstanceProcAddr = (PFN_vkGetInstanceProcAddr)dlsym(module, "vkGetInstanceProcAddr");
 #else
     void* module = dlopen("libvulkan.so.1", RTLD_NOW | RTLD_LOCAL);
-    if (!module)
+    if (!module) {
         module = dlopen("libvulkan.so", RTLD_NOW | RTLD_LOCAL);
-    if (!module)
+    }
+    if (!module) {
         return false;
-        vkGetInstanceProcAddr = (PFN_vkGetInstanceProcAddr)dlsym(module, "vkGetInstanceProcAddr");
+    }
+    vkGetInstanceProcAddr = (PFN_vkGetInstanceProcAddr)dlsym(module, "vkGetInstanceProcAddr");
 #endif
 
     GPU_FOREACH_ANONYMOUS(GPU_LOAD_ANONYMOUS);
@@ -6566,11 +6570,16 @@ static VGPUBool32 vulkan_isSupported(void)
     return true;
 }
 
-static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
+static VGPUInstanceImpl* vulkan_CreateInstance(const VGPUInstanceDesc* desc)
+{
+    return nullptr;
+}
+
+static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDesc* desc)
 {
     VulkanDevice* device = new VulkanDevice();
 
-    if (!device->Init(info))
+    if (!device->Init(desc))
     {
         delete device;
         return nullptr;
@@ -6582,6 +6591,7 @@ static VGPUDeviceImpl* vulkan_createDevice(const VGPUDeviceDescriptor* info)
 VGPUDriver Vulkan_Driver = {
     VGPUBackend_Vulkan,
     vulkan_isSupported,
+    vulkan_CreateInstance,
     vulkan_createDevice
 };
 

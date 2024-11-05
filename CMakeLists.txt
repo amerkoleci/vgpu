@@ -122,13 +122,8 @@ else()
     set(VGPU_VULKAN_DRIVER ON CACHE BOOL "Use Vulkan backend" FORCE)
 endif ()
 
+option(VGPU_SAMPLES "Enable samples" ${VGPU_MASTER_PROJECT})
 option(VGPU_INSTALL "Generate the install target" ${VGPU_MASTER_PROJECT})
-
-if(EMSCRIPTEN OR WINDOWS_STORE)
-    set(VGPU_SAMPLES OFF CACHE BOOL "Disable samples" FORCE)
-else()
-    option(VGPU_SAMPLES "Enable samples" ${VGPU_MASTER_PROJECT})
-endif()
 
 include(cmake/CPM.cmake)
 include(GNUInstallDirs)
@@ -209,6 +204,9 @@ if(NOT (ANDROID OR EMSCRIPTEN OR WINDOWS_STORE))
     set_property(TARGET glfw PROPERTY FOLDER "ThirdParty")
 endif ()
 
+# Third party libs
+add_subdirectory(third_party)
+
 # Setup library
 set(SOURCE_FILES
     include/vgpu.h
@@ -281,7 +279,7 @@ if (MSVC)
     # Ignore specific warnings (D3D12MA)
     #target_compile_options(${PROJECT_NAME} PRIVATE /wd4100 /wd4189 /wd4324 /wd4505)
 else()
-    target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra)
+    target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -pedantic)
 endif()
 
 if (VGPU_VULKAN_DRIVER)
@@ -324,12 +322,14 @@ if (VGPU_WGPU_DRIVER)
     )
 
     target_compile_definitions(${PROJECT_NAME} PRIVATE VGPU_WGPU_DRIVER)
+    target_link_libraries(${PROJECT_NAME} PRIVATE webgpu)
 
     if(EMSCRIPTEN)
-        target_compile_definitions(${PROJECT_NAME} PRIVATE WEBGPU_BACKEND_EMSCRIPTEN)
-        target_link_options(${PROJECT_NAME} PRIVATE
-            -sUSE_WEBGPU # Handle WebGPU symbols
-	    )
+        # Enable the use of emscripten_sleep()
+	    target_link_options(${PROJECT_NAME} PRIVATE -sASYNCIFY)
+
+         # Handle WebGPU symbols
+        target_link_options(${PROJECT_NAME} PRIVATE -sUSE_WEBGPU)
     else()
         target_compile_definitions(${PROJECT_NAME} PRIVATE WEBGPU_BACKEND_WGPU)
     endif()
@@ -341,13 +341,13 @@ if(WIN32)
 endif ()
 
 set_target_properties(
-        ${PROJECT_NAME} PROPERTIES
+    ${PROJECT_NAME} PROPERTIES
 
-        # Postfix for different profiles
-        DEBUG_POSTFIX "d"
-        RELWITHDEBINFO_POSTFIX "rd"
-        MINSIZEREL_POSTFIX "s"
-    )
+    # Postfix for different profiles
+    DEBUG_POSTFIX "d"
+    RELWITHDEBINFO_POSTFIX "rd"
+    MINSIZEREL_POSTFIX "s"
+)
 
 # Samples
 if (VGPU_SAMPLES)

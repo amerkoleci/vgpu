@@ -50,20 +50,36 @@ namespace
 {
 #if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
     using PFN_CREATE_DXGI_FACTORY2 = decltype(&CreateDXGIFactory2);
-    static PFN_CREATE_DXGI_FACTORY2 vgpuCreateDXGIFactory2 = nullptr;
 
-    static PFN_D3D12_GET_DEBUG_INTERFACE vgpuD3D12GetDebugInterface = nullptr;
-    static PFN_D3D12_CREATE_DEVICE vgpuD3D12CreateDevice = nullptr;
-    static PFN_D3D12_SERIALIZE_VERSIONED_ROOT_SIGNATURE vgpuD3D12SerializeVersionedRootSignature = nullptr;
-
+    static constexpr IID VGPU_CLSID_D3D12Debug = { 0xf2352aeb, 0xdd84, 0x49fe, {0xb9, 0x7b, 0xa9, 0xdc, 0xfd, 0xcc, 0x1b, 0x4f} };
+    static constexpr IID VGPU_CLSID_D3D12DeviceRemovedExtendedData = { 0x4a75bbc4, 0x9ff4, 0x4ad8, {0x9f, 0x18, 0xab, 0xae, 0x84, 0xdc, 0x5f, 0xf2} };
+    static constexpr IID VGPU_CLSID_D3D12SDKConfiguration = { 0x7cda6aca, 0xa03e, 0x49c8, {0x94, 0x58, 0x03, 0x34, 0xd2, 0x0e, 0x07, 0xce} };
+    static constexpr IID VGPU_CLSID_D3D12DeviceFactory = { 0x114863bf, 0xc386, 0x4aee, {0xb3, 0x9d, 0x8f, 0x0b, 0xbb, 0x06, 0x29, 0x55} };
+    
 #if defined(_DEBUG)
     // Declare debug guids to avoid linking with "dxguid.lib"
-    static constexpr IID VGFX_DXGI_DEBUG_ALL = { 0xe48ae283, 0xda80, 0x490b, {0x87, 0xe6, 0x43, 0xe9, 0xa9, 0xcf, 0xda, 0x8} };
-    static constexpr IID VGFX_DXGI_DEBUG_DXGI = { 0x25cddaa4, 0xb1c6, 0x47e1, {0xac, 0x3e, 0x98, 0x87, 0x5b, 0x5a, 0x2e, 0x2a} };
+    static constexpr IID VGPU_DXGI_DEBUG_ALL = { 0xe48ae283, 0xda80, 0x490b, {0x87, 0xe6, 0x43, 0xe9, 0xa9, 0xcf, 0xda, 0x8} };
+    static constexpr IID VGPU_DXGI_DEBUG_DXGI = { 0x25cddaa4, 0xb1c6, 0x47e1, {0xac, 0x3e, 0x98, 0x87, 0x5b, 0x5a, 0x2e, 0x2a} };
 
     using PFN_DXGI_GET_DEBUG_INTERFACE1 = decltype(&DXGIGetDebugInterface1);
-    static PFN_DXGI_GET_DEBUG_INTERFACE1 vgpuDXGIGetDebugInterface1 = nullptr;
 #endif
+
+    static constexpr IID ID_D3DDebugObjectName = { 0x429b8c22, 0x9188, 0x4b0c, {0x87,0x42,0xac,0xb0,0xbf,0x85,0xc2,0x00} };
+
+    void WINAPI PIXBeginEventOnCommandListFn(ID3D12GraphicsCommandList* commandList, UINT64 color, _In_ PCSTR formatString);
+    void WINAPI PIXEndEventOnCommandListFn(ID3D12GraphicsCommandList* commandList);
+    void WINAPI PIXSetMarkerOnCommandListFn(ID3D12GraphicsCommandList* commandList, UINT64 color, _In_ PCSTR formatString);
+    //void WINAPI PIXBeginEventOnCommandQueue(ID3D12CommandQueue* commandQueue, UINT64 color, _In_ PCSTR formatString);
+    //void WINAPI PIXEndEventOnCommandQueue(ID3D12CommandQueue* commandQueue);
+    //void WINAPI PIXSetMarkerOnCommandQueue(ID3D12CommandQueue* commandQueue, UINT64 color, _In_ PCSTR formatString);
+
+    using PFN_PIXBeginEventOnCommandList = decltype(&PIXBeginEventOnCommandListFn);
+    using PFN_PIXEndEventOnCommandList = decltype(&PIXEndEventOnCommandListFn);
+    using PFN_PIXSetMarkerOnCommandList = decltype(&PIXSetMarkerOnCommandListFn);
+
+    static PFN_PIXBeginEventOnCommandList PIXBeginEventOnCommandList = nullptr;
+    static PFN_PIXEndEventOnCommandList PIXEndEventOnCommandList = nullptr;
+    static PFN_PIXSetMarkerOnCommandList PIXSetMarkerOnCommandList = nullptr;
 #endif
 
     inline std::string WCharToUTF8(const wchar_t* input)
@@ -802,13 +818,15 @@ namespace
     }
 }
 
-#if !WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
+#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
+#define vgpuCreateDXGIFactory2 d3d12_state.CreateDXGIFactory2
+#define vgpuD3D12CreateDevice d3d12_state.D3D12CreateDevice
+#define vgpuD3D12SerializeVersionedRootSignature d3d12_state.D3D12SerializeVersionedRootSignature
+#else
 #define vgpuCreateDXGIFactory2 CreateDXGIFactory2
 #define vgpuD3D12CreateDevice D3D12CreateDevice
-#define vgpuD3D12GetDebugInterface D3D12GetDebugInterface
 #define vgpuD3D12SerializeVersionedRootSignature D3D12SerializeVersionedRootSignature
 #endif
-
 
 using DescriptorIndex = uint32_t;
 using RootParameterIndex = uint32_t;
@@ -1061,6 +1079,8 @@ struct D3D12Texture final : public VGPUTextureImpl, public D3D12Resource
 
     ~D3D12Texture() override;
     void SetLabel(const char* label) override;
+    D3D12_CPU_DESCRIPTOR_HANDLE GetRTV(uint32_t mipLevel, uint32_t slice);
+    D3D12_CPU_DESCRIPTOR_HANDLE GetDSV(uint32_t mipLevel, uint32_t slice);
 
     VGPUTextureDimension GetDimension() const override { return desc.dimension; }
     VGPUTextureFormat GetFormat() const override { return desc.format; }
@@ -1346,7 +1366,7 @@ class D3D12Device final : public VGPUDeviceImpl
 public:
     ~D3D12Device() override;
 
-    bool Init(const VGPUDeviceDescriptor* info);
+    bool Init(const VGPUDeviceDesc* desc);
     void SetLabel(const char* label) override;
     void WaitIdle() override;
     VGPUBackend GetBackendType() const override { return VGPUBackend_D3D12; }
@@ -1424,6 +1444,1287 @@ public:
     std::deque<std::pair<IUnknown*, uint64_t>> deferredReleases;
 };
 
+class D3D12Instance final : public VGPUInstanceImpl
+{
+public:
+    ~D3D12Instance() override;
+};
+
+struct D3D12_State
+{
+#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
+    HMODULE lib_dxgi = nullptr;
+    HMODULE lib_d3d12 = nullptr;
+    HMODULE WinPixEventRuntimeDLL = nullptr;
+
+    PFN_CREATE_DXGI_FACTORY2 CreateDXGIFactory2 = nullptr;
+
+    PFN_D3D12_GET_DEBUG_INTERFACE D3D12GetDebugInterface = nullptr;
+    PFN_D3D12_CREATE_DEVICE D3D12CreateDevice = nullptr;
+    PFN_D3D12_SERIALIZE_VERSIONED_ROOT_SIGNATURE D3D12SerializeVersionedRootSignature = nullptr;
+
+#if defined(_DEBUG)
+    PFN_DXGI_GET_DEBUG_INTERFACE1 DXGIGetDebugInterface1 = nullptr;
+#endif
+#endif
+    ComPtr<ID3D12DeviceFactory> deviceFactory = nullptr;
+
+    ~D3D12_State()
+    {
+        deviceFactory.Reset();
+
+#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
+        if (d3d12_state.WinPixEventRuntimeDLL)
+            FreeLibrary(d3d12_state.WinPixEventRuntimeDLL);
+
+        if (lib_d3d12)
+            FreeLibrary(lib_d3d12);
+
+        if (lib_dxgi)
+            FreeLibrary(lib_dxgi);
+#endif
+    }
+} d3d12_state;
+
+
+/* D3D12Buffer */
+D3D12Buffer::~D3D12Buffer()
+{
+    renderer->DeferDestroy(handle, allocation);
+}
+
+void D3D12Buffer::SetLabel(const char* label)
+{
+    D3D12SetName(handle, label);
+}
+
+/* D3D12Texture */
+D3D12Texture::~D3D12Texture()
+{
+    renderer->DeferDestroy(handle, allocation);
+    for (auto& it : RTVs)
+    {
+        renderer->renderTargetViewHeap.ReleaseDescriptor(it.second);
+    }
+    RTVs.clear();
+    for (auto& it : DSVs)
+    {
+        renderer->depthStencilViewHeap.ReleaseDescriptor(it.second);
+    }
+    DSVs.clear();
+}
+
+void D3D12Texture::SetLabel(const char* label)
+{
+    D3D12SetName(handle, label);
+}
+
+D3D12_CPU_DESCRIPTOR_HANDLE D3D12Texture::GetRTV(uint32_t mipLevel, uint32_t slice)
+{
+    size_t hash = 0;
+    //hash_combine(hash, format);
+    hash_combine(hash, mipLevel);
+    hash_combine(hash, slice);
+
+    auto it = RTVs.find(hash);
+    if (it == RTVs.end())
+    {
+        const D3D12_RESOURCE_DESC& resourceDesc = handle->GetDesc();
+
+        D3D12_RENDER_TARGET_VIEW_DESC viewDesc = {};
+        viewDesc.Format = dxgiFormat;
+
+        switch (resourceDesc.Dimension)
+        {
+            case D3D12_RESOURCE_DIMENSION_TEXTURE1D:
+            {
+                if (resourceDesc.DepthOrArraySize > 1)
+                {
+                    viewDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE1DARRAY;
+                    viewDesc.Texture1DArray.MipSlice = mipLevel;
+                    viewDesc.Texture1DArray.FirstArraySlice = slice;
+                    viewDesc.Texture1DArray.ArraySize = 1;
+                }
+                else
+                {
+                    viewDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE1D;
+                    viewDesc.Texture1D.MipSlice = mipLevel;
+                }
+            }
+            break;
+
+            case D3D12_RESOURCE_DIMENSION_TEXTURE2D:
+            {
+                if (resourceDesc.DepthOrArraySize > 1)
+                {
+                    if (resourceDesc.SampleDesc.Count > 1)
+                    {
+                        viewDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2DMSARRAY;
+                        viewDesc.Texture2DMSArray.FirstArraySlice = slice;
+                        viewDesc.Texture2DMSArray.ArraySize = 1;
+                    }
+                    else
+                    {
+                        viewDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2DARRAY;
+                        viewDesc.Texture2DArray.MipSlice = mipLevel;
+                        viewDesc.Texture2DArray.FirstArraySlice = slice;
+                        viewDesc.Texture2DArray.ArraySize = 1;
+                    }
+                }
+                else
+                {
+                    if (resourceDesc.SampleDesc.Count > 1)
+                    {
+                        viewDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2DMS;
+                    }
+                    else
+                    {
+                        viewDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
+                        viewDesc.Texture2D.MipSlice = mipLevel;
+                    }
+                }
+            }
+            break;
+
+            case D3D12_RESOURCE_DIMENSION_TEXTURE3D:
+            {
+                viewDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE3D;
+                viewDesc.Texture3D.MipSlice = mipLevel;
+                viewDesc.Texture3D.FirstWSlice = slice;
+                viewDesc.Texture3D.WSize = static_cast<UINT>(-1);
+                break;
+            }
+            break;
+
+            default:
+                vgpuLogError("D3D12: Invalid texture dimension");
+                return {};
+        }
+
+        DescriptorIndex descriptorIndex = renderer->renderTargetViewHeap.AllocateDescriptors();
+        D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = renderer->renderTargetViewHeap.GetCpuHandle(descriptorIndex);
+        renderer->device->CreateRenderTargetView(handle, &viewDesc, cpuHandle);
+        RTVs[hash] = descriptorIndex;
+        return cpuHandle;
+    }
+
+    return renderer->renderTargetViewHeap.GetCpuHandle(it->second);
+}
+
+D3D12_CPU_DESCRIPTOR_HANDLE D3D12Texture::GetDSV(uint32_t mipLevel, uint32_t slice)
+{
+    size_t hash = 0;
+    hash_combine(hash, mipLevel);
+    hash_combine(hash, slice);
+    //hash_combine(hash, format);
+
+    auto it = DSVs.find(hash);
+    if (it == DSVs.end())
+    {
+        const D3D12_RESOURCE_DESC& resourceDesc = handle->GetDesc();
+
+        D3D12_DEPTH_STENCIL_VIEW_DESC viewDesc = {};
+        viewDesc.Format = dxgiFormat;
+
+        switch (resourceDesc.Dimension)
+        {
+            case D3D12_RESOURCE_DIMENSION_TEXTURE1D:
+            {
+                if (resourceDesc.DepthOrArraySize > 1)
+                {
+                    viewDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE1DARRAY;
+                    viewDesc.Texture1DArray.MipSlice = mipLevel;
+                    viewDesc.Texture1DArray.FirstArraySlice = slice;
+                    viewDesc.Texture1DArray.ArraySize = 1;
+                }
+                else
+                {
+                    viewDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE1D;
+                    viewDesc.Texture1D.MipSlice = mipLevel;
+                }
+            }
+            break;
+
+            case D3D12_RESOURCE_DIMENSION_TEXTURE2D:
+            {
+                if (resourceDesc.DepthOrArraySize > 1)
+                {
+                    if (resourceDesc.SampleDesc.Count > 1)
+                    {
+                        viewDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DMSARRAY;
+                        viewDesc.Texture2DMSArray.FirstArraySlice = slice;
+                        viewDesc.Texture2DMSArray.ArraySize = 1;
+                    }
+                    else
+                    {
+                        viewDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
+                        viewDesc.Texture2DArray.MipSlice = mipLevel;
+                        viewDesc.Texture2DArray.FirstArraySlice = slice;
+                        viewDesc.Texture2DArray.ArraySize = 1;
+                    }
+                }
+                else
+                {
+                    if (resourceDesc.SampleDesc.Count > 1)
+                    {
+                        viewDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DMS;
+                    }
+                    else
+                    {
+                        viewDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+                        viewDesc.Texture2D.MipSlice = mipLevel;
+                    }
+                }
+            }
+            break;
+
+            case D3D12_RESOURCE_DIMENSION_TEXTURE3D:
+                vgpuLogError("D3D12: Cannot create 3D texture DSV");
+                return {};
+
+            default:
+                vgpuLogError("D3D12: Invalid texture dimension");
+                return {};
+        }
+
+        DescriptorIndex descriptorIndex = renderer->depthStencilViewHeap.AllocateDescriptors();
+        D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = renderer->depthStencilViewHeap.GetCpuHandle(descriptorIndex);
+        renderer->device->CreateDepthStencilView(handle, &viewDesc, cpuHandle);
+        DSVs[hash] = descriptorIndex;
+        return cpuHandle;
+    }
+
+    return renderer->depthStencilViewHeap.GetCpuHandle(it->second);
+}
+
+/* D3D12Sampler */
+D3D12Sampler::~D3D12Sampler()
+{
+}
+
+void D3D12Sampler::SetLabel(const char*/* label*/)
+{
+}
+
+/* BindGroupLayout */
+D3D12BindGroupLayout::~D3D12BindGroupLayout()
+{
+
+}
+
+void D3D12BindGroupLayout::SetLabel(const char* label)
+{
+    VGPU_UNUSED(label);
+}
+
+/* D3D12PipelineLayout */
+D3D12PipelineLayout::~D3D12PipelineLayout()
+{
+    renderer->DeferDestroy(handle, nullptr);
+}
+
+void D3D12PipelineLayout::SetLabel(const char* label)
+{
+    D3D12SetName(handle, label);
+}
+
+/* D3D12BindGroup */
+D3D12BindGroup::~D3D12BindGroup()
+{
+    if (descriptorTableCbvUavSrv)
+        device->shaderResourceViewHeap.ReleaseDescriptors(descriptorTableCbvUavSrv, bindGroupLayout->descriptorTableSizeCbvUavSrv);
+
+    if (descriptorTableSamplers)
+        device->samplerHeap.ReleaseDescriptors(descriptorTableSamplers, bindGroupLayout->descriptorTableSizeSamplers);
+
+    bindGroupLayout->Release();
+}
+
+void D3D12BindGroup::SetLabel(const char* label)
+{
+    VGPU_UNUSED(label);
+}
+
+static void CreateNullSRV(ID3D12Device* device, D3D12_CPU_DESCRIPTOR_HANDLE descriptor, DXGI_FORMAT srvFormat = DXGI_FORMAT_R32_UINT)
+{
+    D3D12_SHADER_RESOURCE_VIEW_DESC viewDesc{};
+    viewDesc.Format = srvFormat;
+    viewDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+    viewDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    device->CreateShaderResourceView(nullptr, &viewDesc, descriptor);
+}
+
+static void CreateNullUAV(ID3D12Device* device, D3D12_CPU_DESCRIPTOR_HANDLE descriptor, DXGI_FORMAT srvFormat = DXGI_FORMAT_R32_UINT)
+{
+    D3D12_UNORDERED_ACCESS_VIEW_DESC viewDesc{};
+    viewDesc.Format = srvFormat;
+    viewDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+    device->CreateUnorderedAccessView(nullptr, nullptr, &viewDesc, descriptor);
+}
+
+
+void D3D12BindGroup::Update(size_t entryCount, const VGPUBindGroupEntry* entries)
+{
+    if (descriptorTableCbvUavSrv)
+        device->shaderResourceViewHeap.ReleaseDescriptors(descriptorTableCbvUavSrv, bindGroupLayout->descriptorTableSizeCbvUavSrv);
+
+    if (descriptorTableSamplers)
+        device->samplerHeap.ReleaseDescriptors(descriptorTableSamplers, bindGroupLayout->descriptorTableSizeSamplers);
+
+    if (bindGroupLayout->descriptorTableSizeCbvUavSrv > 0)
+    {
+        DescriptorIndex descriptorTableBaseIndex = device->shaderResourceViewHeap.AllocateDescriptors(bindGroupLayout->descriptorTableSizeCbvUavSrv);
+        this->descriptorTableCbvUavSrv = descriptorTableBaseIndex;
+
+        size_t startIndex = 0;
+        for (const D3D12_DESCRIPTOR_RANGE1& range : bindGroupLayout->cbvUavSrvDescriptorRanges)
+        {
+            for (uint32_t index = 0; index < range.NumDescriptors; ++index)
+            {
+                uint32_t binding = range.BaseShaderRegister + index;
+
+                const D3D12_CPU_DESCRIPTOR_HANDLE descriptorHandle = device->shaderResourceViewHeap.GetCpuHandle(
+                    descriptorTableBaseIndex + range.OffsetInDescriptorsFromTableStart + index);
+
+                bool found = false;
+                for (size_t entryIndex = startIndex; entryIndex < entryCount; entryIndex++)
+                {
+                    const VGPUBindGroupEntry& entry = entries[entryIndex];
+
+                    if (entry.binding != binding)
+                        continue;
+
+                    if (range.RangeType == D3D12_DESCRIPTOR_RANGE_TYPE_CBV)
+                    {
+                        if (entry.buffer)
+                        {
+                            auto backendBuffer = static_cast<D3D12Buffer*>(entry.buffer);
+                            uint64_t size = (entry.size == 0 || entry.size == VGPU_WHOLE_SIZE) ? backendBuffer->GetSize() : entry.size;
+                            uint64_t offset = _VGPU_MIN(entry.offset, backendBuffer->GetSize());
+                            D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc{};
+                            cbvDesc.BufferLocation = backendBuffer->gpuAddress + offset;
+                            cbvDesc.SizeInBytes = (UINT)AlignUp<UINT>((UINT)size, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+                            device->device->CreateConstantBufferView(&cbvDesc, descriptorHandle);
+                            found = true;
+                        }
+
+                        break;
+                    }
+
+#if TODO
+                    if (range.RangeType == D3D12_DESCRIPTOR_RANGE_TYPE_SRV && (entry.buffer != nullptr || entry.textureView != nullptr))
+                    {
+                        if (entry.buffer != nullptr)
+                        {
+                            auto backendBuffer = static_cast<D3D12Buffer*>(entry.buffer);
+                            uint64_t size = (entry.size == 0 || entry.size == VGPU_WHOLE_SIZE) ? backendBuffer->GetSize() : entry.size;
+
+                            D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+                            srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+                            srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+
+                            if (entry.stride == 0)
+                            {
+                                // Raw Buffer (ByteAddressBuffer in HLSL) -> WebGPU 
+                                srvDesc.Format = DXGI_FORMAT_R32_TYPELESS;
+                                srvDesc.Buffer.FirstElement = entry.offset / sizeof(uint32_t);
+                                srvDesc.Buffer.NumElements = UINT(size / sizeof(uint32_t));
+                                srvDesc.Buffer.StructureByteStride = 0;
+                                srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_RAW;
+                            }
+                            else
+                            {
+                                // structured buffer offset must be aligned to structure stride!
+                                ALIMER_ASSERT(IsAligned(entry.offset, entry.stride));
+
+                                srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+                                srvDesc.Buffer.FirstElement = entry.offset / entry.stride;
+                                srvDesc.Buffer.NumElements = UINT((size - entry.offset) / entry.stride);
+                                srvDesc.Buffer.StructureByteStride = (UINT)entry.stride;
+                                srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
+                            }
+
+                            device->CreateShaderResourceView(backendBuffer->handle, &srvDesc, descriptorHandle);
+                        }
+                        else if (entry.textureView != nullptr)
+                        {
+                            auto backendTexture = static_cast<const D3D12Texture*>(entry.textureView);
+
+                            uint32_t baseMipLevel = 0;
+                            uint32_t mipLevelCount = backendTexture->GetMipLevelCount();
+                            uint32_t baseArrayLayer = 0;
+                            uint32_t arrayLayerCount = backendTexture->GetArrayLayers();
+                            uint32_t planeSlice = 0;
+
+                            D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
+                            srvDesc.Shader4ComponentMapping = ToD3D12Swizzle(backendTexture->GetSwizzle());
+
+                            // Try to resolve resource format:
+                            switch (backendTexture->GetFormat())
+                            {
+                                case PixelFormat::Depth16Unorm:
+                                    srvDesc.Format = DXGI_FORMAT_R16_UNORM;
+                                    break;
+                                case PixelFormat::Depth32Float:
+                                    srvDesc.Format = DXGI_FORMAT_R32_FLOAT;
+                                    break;
+
+                                case PixelFormat::Stencil8:
+                                case PixelFormat::Depth24UnormStencil8:
+                                    srvDesc.Format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+                                    break;
+                                case PixelFormat::Depth32FloatStencil8:
+                                    srvDesc.Format = DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS;
+                                    break;
+                                    //case PixelFormat::NV12:
+                                    //    srvDesc.Format = DXGI_FORMAT_R8_UNORM;
+                                    //    break;
+                                default:
+                                    srvDesc.Format = (DXGI_FORMAT)ToDxgiFormat(backendTexture->GetFormat());
+                                    break;
+                            }
+
+                            const TextureDimension dimension = backendTexture->GetDimension();
+                            if (dimension == TextureDimension::Texture1D)
+                            {
+                                if (backendTexture->GetArrayLayers() > 1)
+                                {
+                                    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE1DARRAY;
+                                    srvDesc.Texture1DArray.MostDetailedMip = baseMipLevel;
+                                    srvDesc.Texture1DArray.MipLevels = mipLevelCount;
+                                    srvDesc.Texture1DArray.FirstArraySlice = baseMipLevel;
+                                    srvDesc.Texture1DArray.ArraySize = arrayLayerCount;
+                                    srvDesc.Texture1DArray.ResourceMinLODClamp = 0.0f;
+                                }
+                                else
+                                {
+                                    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE1D;
+                                    srvDesc.Texture1D.MostDetailedMip = baseMipLevel;
+                                    srvDesc.Texture1D.MipLevels = mipLevelCount;
+                                    srvDesc.Texture1D.ResourceMinLODClamp = 0.0f;
+                                }
+                            }
+                            else if (dimension == TextureDimension::Texture2D || dimension == TextureDimension::TextureCube)
+                            {
+                                if (backendTexture->GetArrayLayers() > 1)
+                                {
+                                    if (dimension == TextureDimension::TextureCube)
+                                    {
+                                        if (backendTexture->GetArrayLayers() > 6 && arrayLayerCount > 6)
+                                        {
+                                            srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBEARRAY;
+                                            srvDesc.TextureCubeArray.First2DArrayFace = baseMipLevel;
+                                            srvDesc.TextureCubeArray.NumCubes = std::min(backendTexture->GetArrayLayers(), arrayLayerCount) / 6;
+                                            srvDesc.TextureCubeArray.MostDetailedMip = baseMipLevel;
+                                            srvDesc.TextureCubeArray.MipLevels = mipLevelCount;
+                                            srvDesc.TextureCubeArray.ResourceMinLODClamp = 0.0f;
+                                        }
+                                        else
+                                        {
+                                            srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
+                                            srvDesc.TextureCube.MostDetailedMip = baseMipLevel;
+                                            srvDesc.TextureCube.MipLevels = mipLevelCount;
+                                            srvDesc.TextureCube.ResourceMinLODClamp = 0.0f;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        if (backendTexture->GetSampleCount() > TextureSampleCount::Count1)
+                                        {
+                                            srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DMSARRAY;
+                                            srvDesc.Texture2DMSArray.FirstArraySlice = baseArrayLayer;
+                                            srvDesc.Texture2DMSArray.ArraySize = arrayLayerCount;
+                                        }
+                                        else
+                                        {
+                                            srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
+                                            srvDesc.Texture2DArray.FirstArraySlice = baseArrayLayer;
+                                            srvDesc.Texture2DArray.ArraySize = arrayLayerCount;
+                                            srvDesc.Texture2DArray.MostDetailedMip = baseMipLevel;
+                                            srvDesc.Texture2DArray.MipLevels = mipLevelCount;
+                                            srvDesc.Texture2DArray.PlaneSlice = planeSlice;
+                                            srvDesc.Texture2DArray.ResourceMinLODClamp = 0.0f;
+                                        }
+                                    }
+                                }
+                                else
+                                {
+                                    if (backendTexture->GetSampleCount() > TextureSampleCount::Count1)
+                                    {
+                                        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DMS;
+                                    }
+                                    else
+                                    {
+                                        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+                                        srvDesc.Texture2D.MostDetailedMip = baseMipLevel;
+                                        srvDesc.Texture2D.MipLevels = mipLevelCount;
+                                        srvDesc.Texture2D.PlaneSlice = planeSlice;
+                                        srvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
+                                    }
+                                }
+                            }
+                            else if (dimension == TextureDimension::Texture3D)
+                            {
+                                srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE3D;
+                                srvDesc.Texture3D.MostDetailedMip = baseMipLevel;
+                                srvDesc.Texture3D.MipLevels = mipLevelCount;
+                            }
+
+                            device->CreateShaderResourceView(backendTexture->handle, &srvDesc, descriptorHandle);
+                        }
+
+                        found = true;
+                        break;
+                    }
+#endif // TODO
+
+                }
+
+                if (!found)
+                {
+                    // Create a null SRV, UAV, or CBV
+                    switch (range.RangeType)
+                    {
+                        case D3D12_DESCRIPTOR_RANGE_TYPE_SRV:
+                            CreateNullSRV(device->device, descriptorHandle);
+                            break;
+
+                        case D3D12_DESCRIPTOR_RANGE_TYPE_UAV:
+                            CreateNullUAV(device->device, descriptorHandle);
+                            break;
+
+                        case D3D12_DESCRIPTOR_RANGE_TYPE_CBV:
+                            device->device->CreateConstantBufferView(nullptr, descriptorHandle);
+                            break;
+
+                        case D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER:
+                        default:
+                            vgpuLogError("Invalid range type");
+                            break;
+                    }
+                }
+                else
+                {
+                    startIndex++;
+                }
+            }
+        }
+
+        device->shaderResourceViewHeap.CopyToShaderVisibleHeap(descriptorTableBaseIndex, bindGroupLayout->descriptorTableSizeCbvUavSrv);
+    }
+
+    if (bindGroupLayout->descriptorTableSizeSamplers > 0)
+    {
+        DescriptorIndex descriptorTableBaseIndex = device->samplerHeap.AllocateDescriptors(bindGroupLayout->descriptorTableSizeSamplers);
+        this->descriptorTableSamplers = descriptorTableBaseIndex;
+
+        size_t startIndex = 0;
+        for (const D3D12_DESCRIPTOR_RANGE1& range : bindGroupLayout->samplerDescriptorRanges)
+        {
+            for (uint32_t index = 0; index < range.NumDescriptors; ++index)
+            {
+                uint32_t binding = range.BaseShaderRegister + index;
+
+                D3D12_CPU_DESCRIPTOR_HANDLE descriptorHandle = device->samplerHeap.GetCpuHandle(descriptorTableBaseIndex + range.OffsetInDescriptorsFromTableStart + index);
+
+                bool found = false;
+                for (size_t entryIndex = startIndex; entryIndex < entryCount; entryIndex++)
+                {
+                    const VGPUBindGroupEntry& entry = entries[entryIndex];
+
+                    if (entry.binding == binding && entry.sampler != nullptr)
+                    {
+                        auto backendSampler = static_cast<D3D12Sampler*>(entry.sampler);
+                        const D3D12_SAMPLER_DESC& desc = backendSampler->samplerDesc;
+
+                        device->device->CreateSampler(&desc, descriptorHandle);
+                        found = true;
+                        startIndex++;
+                        break;
+                    }
+                }
+
+                if (!found)
+                {
+                    // Create a default sampler
+                    D3D12_SAMPLER_DESC samplerDesc{};
+                    device->device->CreateSampler(&samplerDesc, descriptorHandle);
+                    continue;
+                }
+
+                startIndex++;
+            }
+        }
+
+        device->samplerHeap.CopyToShaderVisibleHeap(descriptorTableBaseIndex, bindGroupLayout->descriptorTableSizeSamplers);
+    }
+}
+
+/* D3D12Pipeline */
+D3D12Pipeline::~D3D12Pipeline()
+{
+    pipelineLayout->Release();
+    renderer->DeferDestroy(handle, nullptr);
+}
+
+void D3D12Pipeline::SetLabel(const char* label)
+{
+    D3D12SetName(handle, label);
+}
+
+/*D3D12QueryHeap */
+D3D12QueryHeap::~D3D12QueryHeap()
+{
+    renderer->DeferDestroy(handle, nullptr);
+}
+
+void D3D12QueryHeap::SetLabel(const char* label)
+{
+    D3D12SetName(handle, label);
+}
+
+/* D3D12SwapChain */
+D3D12SwapChain::~D3D12SwapChain()
+{
+    for (size_t i = 0, count = backbufferTextures.size(); i < count; ++i)
+    {
+        backbufferTextures[i]->Release();
+    }
+    backbufferTextures.clear();
+    handle->Release();
+}
+
+void D3D12SwapChain::SetLabel(const char* label)
+{
+    VGPU_UNUSED(label);
+}
+
+/* D3D12CommandBuffer */
+D3D12CommandBuffer::~D3D12CommandBuffer()
+{
+    Reset();
+
+    for (uint32_t frameIndex = 0; frameIndex < VGPU_MAX_INFLIGHT_FRAMES; ++frameIndex)
+    {
+        SAFE_RELEASE(commandAllocators[frameIndex]);
+    }
+
+    SAFE_RELEASE(commandList);
+}
+
+void D3D12CommandBuffer::Reset()
+{
+    hasLabel = false;
+    hasRenderPassLabel = false;
+    insideRenderPass = false;
+    numBarriersToFlush = 0;
+
+    bindGroupsDirty = false;
+    numBoundBindGroups = 0;
+    for (uint32_t i = 0; i < VGPU_MAX_BIND_GROUPS; ++i)
+    {
+        if (boundBindGroups[i])
+        {
+            boundBindGroups[i]->Release();
+            boundBindGroups[i] = nullptr;
+        }
+    }
+
+
+    if (currentPipeline)
+    {
+        currentPipeline->Release();
+        currentPipeline = nullptr;
+    }
+}
+
+void D3D12CommandBuffer::Begin(uint32_t frameIndex, const char* label)
+{
+    Reset();
+
+    VHR(commandAllocators[frameIndex]->Reset());
+    VHR(commandList->Reset(commandAllocators[frameIndex], nullptr));
+
+    if (queueType == VGPUCommandQueue_Graphics ||
+        queueType == VGPUCommandQueue_Compute)
+    {
+        ID3D12DescriptorHeap* heaps[2] = {
+            renderer->shaderResourceViewHeap.GetShaderVisibleHeap(),
+            renderer->samplerHeap.GetShaderVisibleHeap()
+        };
+        commandList->SetDescriptorHeaps(2u, heaps);
+    }
+
+    if (queueType == VGPUCommandQueue_Graphics)
+    {
+        for (uint32_t i = 0; i < D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT; ++i)
+        {
+            vboViews[i] = {};
+        }
+
+        D3D12_RECT pRects[D3D12_VIEWPORT_AND_SCISSORRECT_MAX_INDEX + 1];
+        for (uint32_t i = 0; i < _countof(pRects); ++i)
+        {
+            pRects[i].bottom = D3D12_VIEWPORT_BOUNDS_MAX;
+            pRects[i].left = D3D12_VIEWPORT_BOUNDS_MIN;
+            pRects[i].right = D3D12_VIEWPORT_BOUNDS_MAX;
+            pRects[i].top = D3D12_VIEWPORT_BOUNDS_MIN;
+        }
+        commandList->RSSetScissorRects(_countof(pRects), pRects);
+
+        static constexpr float defaultBlendFactor[4] = { 0, 0, 0, 0 };
+        commandList->OMSetBlendFactor(defaultBlendFactor);
+        commandList->OMSetStencilRef(0);
+    }
+
+    if (label)
+    {
+        PushDebugGroup(label);
+        hasLabel = true;
+    }
+}
+
+void D3D12CommandBuffer::PushDebugGroup(const char* groupLabel)
+{
+    std::wstring wide_name = UTF8ToWStr(groupLabel);
+    UINT size = static_cast<UINT>((strlen(groupLabel) + 1) * sizeof(wchar_t));
+    commandList->BeginEvent(PIX_EVENT_UNICODE_VERSION, wide_name.c_str(), size);
+}
+
+void D3D12CommandBuffer::PopDebugGroup()
+{
+    commandList->EndEvent();
+}
+
+void D3D12CommandBuffer::InsertDebugMarker(const char* markerLabel)
+{
+    std::wstring wide_name = UTF8ToWStr(markerLabel);
+    UINT size = static_cast<UINT>((strlen(markerLabel) + 1) * sizeof(wchar_t));
+    commandList->SetMarker(PIX_EVENT_UNICODE_VERSION, wide_name.c_str(), size);
+}
+
+void D3D12CommandBuffer::ClearBuffer(VGPUBuffer buffer, uint64_t offset, uint64_t size)
+{
+    VGPU_UNUSED(buffer);
+    VGPU_UNUSED(offset);
+    VGPU_UNUSED(size);
+
+    // TODO:
+    //commandList->buffer
+}
+
+void D3D12CommandBuffer::SetPipeline(VGPUPipeline pipeline)
+{
+    D3D12Pipeline* backendPipeline = (D3D12Pipeline*)pipeline;
+
+    if (currentPipeline == backendPipeline)
+        return;
+
+    currentPipeline = backendPipeline;
+    currentPipeline->AddRef();
+
+    commandList->SetPipelineState(backendPipeline->handle);
+    if (backendPipeline->type == VGPUPipelineType_Render)
+    {
+        commandList->IASetPrimitiveTopology(backendPipeline->primitiveTopology);
+        commandList->SetGraphicsRootSignature(backendPipeline->pipelineLayout->handle);
+    }
+    else
+    {
+        commandList->SetGraphicsRootSignature(backendPipeline->pipelineLayout->handle);
+    }
+}
+
+void D3D12CommandBuffer::SetBindGroup(uint32_t groupIndex, VGPUBindGroup bindGroup)
+{
+    VGPU_ASSERT(bindGroup != nullptr);
+    VGPU_ASSERT(groupIndex < VGPU_MAX_BIND_GROUPS);
+
+    if (boundBindGroups[groupIndex] != bindGroup)
+    {
+        bindGroupsDirty = true;
+        boundBindGroups[groupIndex] = static_cast<D3D12BindGroup*>(bindGroup);
+        boundBindGroups[groupIndex]->AddRef();
+        numBoundBindGroups = _VGPU_MAX(groupIndex + 1, numBoundBindGroups);
+    }
+}
+
+void D3D12CommandBuffer::SetPushConstants(uint32_t pushConstantIndex, const void* data, uint32_t size)
+{
+    VGPU_ASSERT(currentPipeline);
+    //VGPU_ASSERT(size <= device->limits.pushConstantsMaxSize);
+    VGPU_ASSERT(size % 4 == 0);
+
+    const uint32_t rootParameterIndex = currentPipeline->pipelineLayout->pushConstantsBaseIndex + pushConstantIndex;
+    const uint32_t num32BitValuesToSet = size / 4;
+
+    if (currentPipeline->type == VGPUPipelineType_Render)
+    {
+        commandList->SetGraphicsRoot32BitConstants(
+            rootParameterIndex,
+            num32BitValuesToSet,
+            data,
+            0
+        );
+    }
+    else
+    {
+        commandList->SetComputeRoot32BitConstants(
+            rootParameterIndex,
+            num32BitValuesToSet,
+            data,
+            0
+        );
+    }
+}
+
+void D3D12CommandBuffer::Dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)
+{
+    VGPU_VERIFY(!insideRenderPass);
+
+    commandList->Dispatch(groupCountX, groupCountY, groupCountZ);
+}
+
+void D3D12CommandBuffer::DispatchIndirect(VGPUBuffer buffer, uint64_t offset)
+{
+    VGPU_VERIFY(!insideRenderPass);
+    D3D12Resource* d3dBuffer = (D3D12Resource*)buffer;
+
+    commandList->ExecuteIndirect(renderer->dispatchIndirectCommandSignature,
+        1,
+        d3dBuffer->handle, offset,
+        nullptr,
+        0);
+}
+
+VGPUTexture D3D12CommandBuffer::AcquireSwapchainTexture(VGPUSwapChain swapChain)
+{
+    D3D12SwapChain* d3d12SwapChain = (D3D12SwapChain*)swapChain;
+
+    HRESULT hr = S_OK;
+
+    /* Check for window size changes and resize the swapchain if needed. */
+    DXGI_SWAP_CHAIN_DESC1 swapChainDesc;
+    d3d12SwapChain->handle->GetDesc1(&swapChainDesc);
+
+    uint32_t width = 0;
+    uint32_t height = 0;
+#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
+    RECT windowRect;
+    GetClientRect(d3d12SwapChain->window, &windowRect);
+    width = static_cast<uint32_t>(windowRect.right - windowRect.left);
+    height = static_cast<uint32_t>(windowRect.bottom - windowRect.top);
+#else
+
+#endif
+
+    // Check if window is minimized
+    if (width == 0 ||
+        height == 0)
+    {
+        return nullptr;
+    }
+
+    if (width != swapChainDesc.Width ||
+        height != swapChainDesc.Height)
+    {
+        renderer->WaitIdle();
+
+        // Release resources that are tied to the swap chain and update fence values.
+        for (size_t i = 0, count = d3d12SwapChain->backbufferTextures.size(); i < count; ++i)
+        {
+            delete d3d12SwapChain->backbufferTextures[i];
+        }
+        d3d12SwapChain->backbufferTextures.clear();
+
+        hr = d3d12SwapChain->handle->ResizeBuffers(
+            d3d12SwapChain->backBufferCount,
+            width,
+            height,
+            DXGI_FORMAT_UNKNOWN, /* Keep the old format */
+            (renderer->tearingSupported) ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0u
+        );
+
+        if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET)
+        {
+#ifdef _DEBUG
+            char buff[64] = {};
+            sprintf_s(buff, "Device Lost on ResizeBuffers: Reason code 0x%08X\n",
+                static_cast<unsigned int>((hr == DXGI_ERROR_DEVICE_REMOVED) ? renderer->device->GetDeviceRemovedReason() : hr));
+            OutputDebugStringA(buff);
+#endif
+            // If the device was removed for any reason, a new device and swap chain will need to be created.
+            //HandleDeviceLost();
+
+            // Everything is set up now. Do not continue execution of this method. HandleDeviceLost will reenter this method
+            // and correctly set up the new device.
+            return nullptr;
+        }
+        else
+        {
+            if (FAILED(hr))
+            {
+                vgpuLogError("Could not resize swapchain");
+                return nullptr;
+            }
+
+            renderer->UpdateSwapChain(d3d12SwapChain);
+        }
+    }
+
+    D3D12Texture* swapChainTexture =
+        d3d12SwapChain->backbufferTextures[d3d12SwapChain->handle->GetCurrentBackBufferIndex()];
+
+    // Transition to RenderTarget state
+    TransitionResource(swapChainTexture, D3D12_RESOURCE_STATE_RENDER_TARGET, true);
+
+    swapChains.push_back(d3d12SwapChain);
+    return swapChainTexture;
+}
+
+void D3D12CommandBuffer::BeginRenderPass(const VGPURenderPassDesc* desc)
+{
+    uint32_t width = UINT32_MAX;
+    uint32_t height = UINT32_MAX;
+    uint32_t numRTVS = 0;
+    D3D12_RENDER_PASS_FLAGS renderPassFlags = D3D12_RENDER_PASS_FLAG_NONE;
+    D3D12_RENDER_PASS_DEPTH_STENCIL_DESC DSV = {};
+
+    if (desc->label)
+    {
+        PushDebugGroup(desc->label);
+        hasRenderPassLabel = true;
+    }
+
+    for (uint32_t i = 0; i < desc->colorAttachmentCount; ++i)
+    {
+        const VGPURenderPassColorAttachment* attachment = &desc->colorAttachments[i];
+        D3D12Texture* texture = (D3D12Texture*)attachment->texture;
+        const uint32_t level = attachment->level;
+        const uint32_t slice = attachment->slice;
+
+        RTVs[i].cpuDescriptor = texture->GetRTV(level, slice);
+
+        // Transition to RenderTarget
+        TransitionResource(texture, D3D12_RESOURCE_STATE_RENDER_TARGET, true);
+
+        RTVs[numRTVS].BeginningAccess.Type = ToD3D12(attachment->loadAction);
+        if (attachment->loadAction == VGPULoadAction_Clear)
+        {
+            RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Format = texture->dxgiFormat;
+            RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Color[0] = attachment->clearColor.r;
+            RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Color[1] = attachment->clearColor.g;
+            RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Color[2] = attachment->clearColor.b;
+            RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Color[3] = attachment->clearColor.a;
+        }
+
+        // TODO: Resolve
+        RTVs[numRTVS].EndingAccess.Type = ToD3D12(attachment->storeAction);
+
+        width = _VGPU_MIN(width, _VGPU_MAX(1U, texture->desc.width >> level));
+        height = _VGPU_MIN(height, _VGPU_MAX(1U, texture->desc.height >> level));
+
+        numRTVS++;
+    }
+
+    const bool hasDepthStencil = desc->depthStencilAttachment != nullptr;
+    if (hasDepthStencil)
+    {
+        const VGPURenderPassDepthStencilAttachment* attachment = desc->depthStencilAttachment;
+        D3D12Texture* texture = (D3D12Texture*)attachment->texture;
+        const uint32_t level = attachment->level;
+        const uint32_t slice = attachment->slice;
+
+        width = _VGPU_MIN(width, _VGPU_MAX(1U, texture->desc.width >> level));
+        height = _VGPU_MIN(height, _VGPU_MAX(1U, texture->desc.height >> level));
+
+        DSV.cpuDescriptor = texture->GetDSV(level, slice);
+
+        DSV.DepthBeginningAccess.Type = ToD3D12(attachment->depthLoadAction);
+        if (attachment->depthLoadAction == VGPULoadAction_Clear)
+        {
+            DSV.DepthBeginningAccess.Clear.ClearValue.Format = texture->dxgiFormat;
+            DSV.DepthBeginningAccess.Clear.ClearValue.DepthStencil.Depth = attachment->depthClearValue;
+        }
+        DSV.DepthEndingAccess.Type = ToD3D12(attachment->depthStoreAction);
+
+        DSV.StencilBeginningAccess.Type = ToD3D12(attachment->stencilLoadAction);
+        if (attachment->stencilLoadAction == VGPULoadAction_Clear)
+        {
+            DSV.StencilBeginningAccess.Clear.ClearValue.Format = texture->dxgiFormat;
+            DSV.StencilBeginningAccess.Clear.ClearValue.DepthStencil.Stencil = static_cast<UINT8>(attachment->stencilClearValue);
+        }
+        DSV.StencilEndingAccess.Type = ToD3D12(attachment->stencilStoreAction);
+    }
+
+    commandList->BeginRenderPass(numRTVS, RTVs, hasDepthStencil ? &DSV : nullptr, renderPassFlags);
+
+    // Set the viewport.
+    D3D12_VIEWPORT viewport = { 0.0f, 0.0f, float(width), float(height), 0.0f, 1.0f };
+    D3D12_RECT scissorRect = { 0, 0, LONG(width), LONG(height) };
+    commandList->RSSetViewports(1, &viewport);
+    commandList->RSSetScissorRects(1, &scissorRect);
+    insideRenderPass = true;
+}
+
+void D3D12CommandBuffer::EndRenderPass()
+{
+    commandList->EndRenderPass();
+
+    if (hasRenderPassLabel)
+    {
+        PopDebugGroup();
+    }
+
+    insideRenderPass = false;
+}
+
+void D3D12CommandBuffer::SetViewport(const VGPUViewport* viewport)
+{
+    commandList->RSSetViewports(1, (const D3D12_VIEWPORT*)viewport);
+}
+
+void D3D12CommandBuffer::SetViewports(uint32_t count, const VGPUViewport* viewports)
+{
+    VGPU_ASSERT(count < D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE);
+    commandList->RSSetViewports(count, (const D3D12_VIEWPORT*)viewports);
+}
+
+void D3D12CommandBuffer::SetScissorRect(const VGPURect* rect)
+{
+    D3D12_RECT d3d_rect = {};
+    d3d_rect.left = LONG(rect->x);
+    d3d_rect.top = LONG(rect->y);
+    d3d_rect.right = LONG(rect->x + rect->width);
+    d3d_rect.bottom = LONG(rect->y + rect->height);
+    commandList->RSSetScissorRects(1u, &d3d_rect);
+}
+
+void D3D12CommandBuffer::SetScissorRects(uint32_t count, const VGPURect* rects)
+{
+    VGPU_ASSERT(count < D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE);
+
+    D3D12_RECT d3dScissorRects[D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE];
+    for (uint32_t i = 0; i < count; i++)
+    {
+        d3dScissorRects[i].left = LONG(rects[i].x);
+        d3dScissorRects[i].top = LONG(rects[i].y);
+        d3dScissorRects[i].right = LONG(rects[i].x + rects[i].width);
+        d3dScissorRects[i].bottom = LONG(rects[i].y + rects[i].height);
+    }
+    commandList->RSSetScissorRects(count, d3dScissorRects);
+}
+
+void D3D12CommandBuffer::SetVertexBuffer(uint32_t index, VGPUBuffer buffer, uint64_t offset)
+{
+    D3D12Buffer* d3d12Buffer = (D3D12Buffer*)buffer;
+
+    vboViews[index].BufferLocation = d3d12Buffer->gpuAddress + (D3D12_GPU_VIRTUAL_ADDRESS)offset;
+    vboViews[index].SizeInBytes = (UINT)(d3d12Buffer->size - offset);
+    vboViews[index].StrideInBytes = 0;
+}
+
+void D3D12CommandBuffer::SetIndexBuffer(VGPUBuffer buffer, VGPUIndexType type, uint64_t offset)
+{
+    D3D12Buffer* d3d12Buffer = (D3D12Buffer*)buffer;
+
+    D3D12_INDEX_BUFFER_VIEW view{};
+    view.BufferLocation = d3d12Buffer->gpuAddress + (D3D12_GPU_VIRTUAL_ADDRESS)offset;
+    view.SizeInBytes = (UINT)(d3d12Buffer->size - offset);
+    view.Format = (type == VGPUIndexType_Uint16 ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT);
+    commandList->IASetIndexBuffer(&view);
+}
+
+void D3D12CommandBuffer::SetStencilReference(uint32_t reference)
+{
+    commandList->OMSetStencilRef(reference);
+}
+
+void D3D12CommandBuffer::BeginQuery(VGPUQueryHeap heap, uint32_t index)
+{
+    D3D12QueryHeap* d3dHeap = static_cast<D3D12QueryHeap*>(heap);
+
+    commandList->BeginQuery(d3dHeap->handle, d3dHeap->d3dQueryType, index);
+}
+
+void D3D12CommandBuffer::EndQuery(VGPUQueryHeap heap, uint32_t index)
+{
+    D3D12QueryHeap* d3dHeap = static_cast<D3D12QueryHeap*>(heap);
+
+    commandList->EndQuery(d3dHeap->handle, d3dHeap->d3dQueryType, index);
+}
+
+void D3D12CommandBuffer::ResolveQuery(VGPUQueryHeap heap, uint32_t index, uint32_t count, VGPUBuffer destinationBuffer, uint64_t destinationOffset)
+{
+    D3D12QueryHeap* d3dHeap = static_cast<D3D12QueryHeap*>(heap);
+    D3D12Buffer* d3dDestBuffer = static_cast<D3D12Buffer*>(destinationBuffer);
+
+    commandList->ResolveQueryData(
+        d3dHeap->handle,
+        d3dHeap->d3dQueryType,
+        index,
+        count,
+        d3dDestBuffer->handle,
+        destinationOffset
+    );
+}
+
+void D3D12CommandBuffer::ResetQuery(VGPUQueryHeap heap, uint32_t index, uint32_t count)
+{
+    VGPU_UNUSED(heap);
+    VGPU_UNUSED(index);
+    VGPU_UNUSED(count);
+}
+
+void D3D12CommandBuffer::FlushBindGroups(bool graphics)
+{
+    VGPU_ASSERT(currentPipeline != nullptr);
+    VGPU_ASSERT(currentPipeline->pipelineLayout != nullptr);
+
+    if (!bindGroupsDirty)
+        return;
+
+    bindGroupsDirty = false;
+
+    for (size_t groupIndex = 0; groupIndex < currentPipeline->pipelineLayout->bindGroupLayoutCount; groupIndex++)
+    {
+        VGPU_ASSERT(boundBindGroups[groupIndex] != nullptr);
+
+        D3D12BindGroup* bindGroup = boundBindGroups[groupIndex];
+
+        if (currentPipeline->pipelineLayout->cbvUavSrvRootParameterIndex[groupIndex] != ~0u)
+        {
+            uint32_t rootParameterIndex = currentPipeline->pipelineLayout->cbvUavSrvRootParameterIndex[groupIndex];
+            D3D12_GPU_DESCRIPTOR_HANDLE gpuHadle = renderer->shaderResourceViewHeap.GetGpuHandle(bindGroup->descriptorTableCbvUavSrv);
+
+            if (graphics)
+            {
+                commandList->SetGraphicsRootDescriptorTable(rootParameterIndex, gpuHadle);
+            }
+            else
+            {
+                commandList->SetComputeRootDescriptorTable(rootParameterIndex, gpuHadle);
+            }
+        }
+
+        if (currentPipeline->pipelineLayout->samplerRootParameterIndex[groupIndex] != ~0u)
+        {
+            uint32_t rootParameterIndex = currentPipeline->pipelineLayout->samplerRootParameterIndex[groupIndex];
+            D3D12_GPU_DESCRIPTOR_HANDLE gpuHadle = renderer->samplerHeap.GetGpuHandle(bindGroup->descriptorTableSamplers);
+
+            if (graphics)
+            {
+                commandList->SetGraphicsRootDescriptorTable(rootParameterIndex, gpuHadle);
+            }
+            else
+            {
+                commandList->SetComputeRootDescriptorTable(rootParameterIndex, gpuHadle);
+            }
+        }
+    }
+}
+
+void D3D12CommandBuffer::PrepareDraw()
+{
+    VGPU_VERIFY(insideRenderPass);
+
+    if (currentPipeline->numVertexBindings > 0)
+    {
+        for (uint32_t i = 0; i < currentPipeline->numVertexBindings; ++i)
+        {
+            vboViews[i].StrideInBytes = currentPipeline->strides[i];
+        }
+
+        commandList->IASetVertexBuffers(0, currentPipeline->numVertexBindings, vboViews);
+    }
+    FlushBindGroups(true);
+}
+
+void D3D12CommandBuffer::Draw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance)
+{
+    PrepareDraw();
+
+    commandList->DrawInstanced(vertexCount, instanceCount, firstVertex, firstInstance);
+}
+
+void D3D12CommandBuffer::DrawIndexed(uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t baseVertex, uint32_t firstInstance)
+{
+    PrepareDraw();
+
+    commandList->DrawIndexedInstanced(indexCount, instanceCount, firstIndex, baseVertex, firstInstance);
+}
+
+void D3D12CommandBuffer::DrawIndirect(VGPUBuffer indirectBuffer, uint64_t indirectBufferOffset)
+{
+    VGPU_ASSERT(indirectBuffer);
+    PrepareDraw();
+
+    D3D12Buffer* backendBuffer = static_cast<D3D12Buffer*>(indirectBuffer);
+    commandList->ExecuteIndirect(
+        renderer->drawIndirectCommandSignature,
+        1,
+        backendBuffer->handle,
+        indirectBufferOffset,
+        nullptr,
+        0);
+}
+
+void D3D12CommandBuffer::DrawIndexedIndirect(VGPUBuffer indirectBuffer, uint64_t indirectBufferOffset)
+{
+    VGPU_ASSERT(indirectBuffer);
+    PrepareDraw();
+
+    D3D12Buffer* backendBuffer = static_cast<D3D12Buffer*>(indirectBuffer);
+    commandList->ExecuteIndirect(
+        renderer->drawIndexedIndirectCommandSignature,
+        1,
+        backendBuffer->handle,
+        indirectBufferOffset,
+        nullptr,
+        0);
+}
+
+void D3D12CommandBuffer::DispatchMesh(uint32_t threadGroupCountX, uint32_t threadGroupCountY, uint32_t threadGroupCountZ)
+{
+    PrepareDraw();
+
+    commandList->DispatchMesh(threadGroupCountX, threadGroupCountY, threadGroupCountZ);
+}
+
+void D3D12CommandBuffer::DispatchMeshIndirect(VGPUBuffer indirectBuffer, uint64_t indirectBufferOffset)
+{
+    VGPU_ASSERT(indirectBuffer);
+    PrepareDraw();
+
+    D3D12Buffer* backendBuffer = static_cast<D3D12Buffer*>(indirectBuffer);
+    commandList->ExecuteIndirect(
+        renderer->dispatchMeshIndirectCommandSignature,
+        1,
+        backendBuffer->handle,
+        indirectBufferOffset,
+        nullptr,
+        0);
+}
+
+void D3D12CommandBuffer::DispatchMeshIndirectCount(VGPUBuffer indirectBuffer, uint64_t indirectBufferOffset, VGPUBuffer countBuffer, uint64_t countBufferOffset, uint32_t maxCount)
+{
+    VGPU_ASSERT(indirectBuffer);
+    VGPU_ASSERT(countBuffer);
+
+    D3D12Buffer* d3dIndirectBuffer = static_cast<D3D12Buffer*>(indirectBuffer);
+    D3D12Buffer* d3dCountBuffer = static_cast<D3D12Buffer*>(countBuffer);
+
+    PrepareDraw();
+    commandList->ExecuteIndirect(
+        renderer->dispatchMeshIndirectCommandSignature,
+        maxCount,
+        d3dIndirectBuffer->handle, indirectBufferOffset,
+        d3dCountBuffer->handle, countBufferOffset
+    );
+}
+
+
+/* D3D12Device */
 void* D3D12Device::GetNativeObject(VGPUNativeObjectType objectType) const
 {
     switch (objectType)
@@ -1548,184 +2849,6 @@ D3D12_UploadContext D3D12Device::UploadAllocate(uint64_t size)
     return context;
 }
 
-static D3D12_CPU_DESCRIPTOR_HANDLE d3d12_GetRTV(D3D12Texture* texture, uint32_t mipLevel, uint32_t slice)
-{
-    size_t hash = 0;
-    //hash_combine(hash, format);
-    hash_combine(hash, mipLevel);
-    hash_combine(hash, slice);
-
-    auto it = texture->RTVs.find(hash);
-    if (it == texture->RTVs.end())
-    {
-        const D3D12_RESOURCE_DESC& resourceDesc = texture->handle->GetDesc();
-
-        D3D12_RENDER_TARGET_VIEW_DESC viewDesc = {};
-        viewDesc.Format = texture->dxgiFormat;
-
-        switch (resourceDesc.Dimension)
-        {
-            case D3D12_RESOURCE_DIMENSION_TEXTURE1D:
-            {
-                if (resourceDesc.DepthOrArraySize > 1)
-                {
-                    viewDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE1DARRAY;
-                    viewDesc.Texture1DArray.MipSlice = mipLevel;
-                    viewDesc.Texture1DArray.FirstArraySlice = slice;
-                    viewDesc.Texture1DArray.ArraySize = 1;
-                }
-                else
-                {
-                    viewDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE1D;
-                    viewDesc.Texture1D.MipSlice = mipLevel;
-                }
-            }
-            break;
-
-            case D3D12_RESOURCE_DIMENSION_TEXTURE2D:
-            {
-                if (resourceDesc.DepthOrArraySize > 1)
-                {
-                    if (resourceDesc.SampleDesc.Count > 1)
-                    {
-                        viewDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2DMSARRAY;
-                        viewDesc.Texture2DMSArray.FirstArraySlice = slice;
-                        viewDesc.Texture2DMSArray.ArraySize = 1;
-                    }
-                    else
-                    {
-                        viewDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2DARRAY;
-                        viewDesc.Texture2DArray.MipSlice = mipLevel;
-                        viewDesc.Texture2DArray.FirstArraySlice = slice;
-                        viewDesc.Texture2DArray.ArraySize = 1;
-                    }
-                }
-                else
-                {
-                    if (resourceDesc.SampleDesc.Count > 1)
-                    {
-                        viewDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2DMS;
-                    }
-                    else
-                    {
-                        viewDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
-                        viewDesc.Texture2D.MipSlice = mipLevel;
-                    }
-                }
-            }
-            break;
-
-            case D3D12_RESOURCE_DIMENSION_TEXTURE3D:
-            {
-                viewDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE3D;
-                viewDesc.Texture3D.MipSlice = mipLevel;
-                viewDesc.Texture3D.FirstWSlice = slice;
-                viewDesc.Texture3D.WSize = static_cast<UINT>(-1);
-                break;
-            }
-            break;
-
-            default:
-                vgpuLogError("D3D12: Invalid texture dimension");
-                return {};
-        }
-
-        DescriptorIndex descriptorIndex = texture->renderer->renderTargetViewHeap.AllocateDescriptors();
-        D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = texture->renderer->renderTargetViewHeap.GetCpuHandle(descriptorIndex);
-        texture->renderer->device->CreateRenderTargetView(texture->handle, &viewDesc, cpuHandle);
-        texture->RTVs[hash] = descriptorIndex;
-        return cpuHandle;
-    }
-
-    return texture->renderer->renderTargetViewHeap.GetCpuHandle(it->second);
-}
-
-static D3D12_CPU_DESCRIPTOR_HANDLE d3d12_GetDSV(D3D12Texture* texture, uint32_t mipLevel, uint32_t slice)
-{
-    size_t hash = 0;
-    hash_combine(hash, mipLevel);
-    hash_combine(hash, slice);
-    //hash_combine(hash, format);
-
-    auto it = texture->DSVs.find(hash);
-    if (it == texture->DSVs.end())
-    {
-        const D3D12_RESOURCE_DESC& resourceDesc = texture->handle->GetDesc();
-
-        D3D12_DEPTH_STENCIL_VIEW_DESC viewDesc = {};
-        viewDesc.Format = texture->dxgiFormat;
-
-        switch (resourceDesc.Dimension)
-        {
-            case D3D12_RESOURCE_DIMENSION_TEXTURE1D:
-            {
-                if (resourceDesc.DepthOrArraySize > 1)
-                {
-                    viewDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE1DARRAY;
-                    viewDesc.Texture1DArray.MipSlice = mipLevel;
-                    viewDesc.Texture1DArray.FirstArraySlice = slice;
-                    viewDesc.Texture1DArray.ArraySize = 1;
-                }
-                else
-                {
-                    viewDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE1D;
-                    viewDesc.Texture1D.MipSlice = mipLevel;
-                }
-            }
-            break;
-
-            case D3D12_RESOURCE_DIMENSION_TEXTURE2D:
-            {
-                if (resourceDesc.DepthOrArraySize > 1)
-                {
-                    if (resourceDesc.SampleDesc.Count > 1)
-                    {
-                        viewDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DMSARRAY;
-                        viewDesc.Texture2DMSArray.FirstArraySlice = slice;
-                        viewDesc.Texture2DMSArray.ArraySize = 1;
-                    }
-                    else
-                    {
-                        viewDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
-                        viewDesc.Texture2DArray.MipSlice = mipLevel;
-                        viewDesc.Texture2DArray.FirstArraySlice = slice;
-                        viewDesc.Texture2DArray.ArraySize = 1;
-                    }
-                }
-                else
-                {
-                    if (resourceDesc.SampleDesc.Count > 1)
-                    {
-                        viewDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DMS;
-                    }
-                    else
-                    {
-                        viewDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
-                        viewDesc.Texture2D.MipSlice = mipLevel;
-                    }
-                }
-            }
-            break;
-
-            case D3D12_RESOURCE_DIMENSION_TEXTURE3D:
-                vgpuLogError("D3D12: Cannot create 3D texture DSV");
-                return {};
-
-            default:
-                vgpuLogError("D3D12: Invalid texture dimension");
-                return {};
-        }
-
-        DescriptorIndex descriptorIndex = texture->renderer->depthStencilViewHeap.AllocateDescriptors();
-        D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = texture->renderer->depthStencilViewHeap.GetCpuHandle(descriptorIndex);
-        texture->renderer->device->CreateDepthStencilView(texture->handle, &viewDesc, cpuHandle);
-        texture->DSVs[hash] = descriptorIndex;
-        return cpuHandle;
-    }
-
-    return texture->renderer->depthStencilViewHeap.GetCpuHandle(it->second);
-}
-
 void D3D12Device::UploadSubmit(D3D12_UploadContext context)
 {
     uploadLocker.lock();
@@ -1749,47 +2872,6 @@ void D3D12Device::UploadSubmit(D3D12_UploadContext context)
     //{
     //    VHR(device->GetVideoDecode().handle->Wait(context.fence, context.fenceValueSignaled));
     //}
-}
-
-/* D3D12Buffer */
-D3D12Buffer::~D3D12Buffer()
-{
-    renderer->DeferDestroy(handle, allocation);
-}
-
-void D3D12Buffer::SetLabel(const char* label)
-{
-    D3D12SetName(handle, label);
-}
-
-/* D3D12Texture */
-D3D12Texture::~D3D12Texture()
-{
-    renderer->DeferDestroy(handle, allocation);
-    for (auto& it : RTVs)
-    {
-        renderer->renderTargetViewHeap.ReleaseDescriptor(it.second);
-    }
-    RTVs.clear();
-    for (auto& it : DSVs)
-    {
-        renderer->depthStencilViewHeap.ReleaseDescriptor(it.second);
-    }
-    DSVs.clear();
-}
-
-void D3D12Texture::SetLabel(const char* label)
-{
-    D3D12SetName(handle, label);
-}
-
-/* D3D12Sampler */
-D3D12Sampler::~D3D12Sampler()
-{
-}
-
-void D3D12Sampler::SetLabel(const char*/* label*/)
-{
 }
 
 /* D3D12Device */
@@ -1889,10 +2971,10 @@ D3D12Device::~D3D12Device()
 #if defined(_DEBUG) && WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
     {
         IDXGIDebug1* dxgiDebug = nullptr;
-        if (vgpuDXGIGetDebugInterface1 != nullptr
-            && SUCCEEDED(vgpuDXGIGetDebugInterface1(0, IID_PPV_ARGS(&dxgiDebug))))
+        if (d3d12_state.DXGIGetDebugInterface1 != nullptr
+            && SUCCEEDED(d3d12_state.DXGIGetDebugInterface1(0, IID_PPV_ARGS(&dxgiDebug))))
         {
-            dxgiDebug->ReportLiveObjects(VGFX_DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_FLAGS(DXGI_DEBUG_RLO_SUMMARY | DXGI_DEBUG_RLO_IGNORE_INTERNAL));
+            dxgiDebug->ReportLiveObjects(VGPU_DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_FLAGS(DXGI_DEBUG_RLO_SUMMARY | DXGI_DEBUG_RLO_IGNORE_INTERNAL));
             dxgiDebug->Release();
         }
     }
@@ -2097,22 +3179,32 @@ void D3D12Device::GetLimits(VGPULimits* limits) const
 
 }
 
-bool D3D12Device::Init(const VGPUDeviceDescriptor* info)
+bool D3D12Device::Init(const VGPUDeviceDesc* desc)
 {
     DWORD dxgiFactoryFlags = 0;
-    if (info->validationMode != VGPUValidationMode_Disabled)
+    if (desc->validationMode != VGPUValidationMode_Disabled)
     {
         ComPtr<ID3D12Debug> debugController;
+        HRESULT hr = E_FAIL;
+        if (d3d12_state.deviceFactory)
+        {
+            hr = d3d12_state.deviceFactory->GetConfigurationInterface(VGPU_CLSID_D3D12Debug, IID_PPV_ARGS(debugController.GetAddressOf()));
+        }
+        else
+        {
 #if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
-        if (vgpuD3D12GetDebugInterface != nullptr &&
-            SUCCEEDED(vgpuD3D12GetDebugInterface(IID_PPV_ARGS(debugController.GetAddressOf()))))
-#else
-        if (SUCCEEDED(vgpuD3D12GetDebugInterface(IID_PPV_ARGS(debugController.GetAddressOf()))))
+            if (d3d12_state.D3D12GetDebugInterface != nullptr)
 #endif
+            {
+                hr = d3d12_state.D3D12GetDebugInterface(IID_PPV_ARGS(debugController.GetAddressOf()));
+            }
+        }
+
+        if (SUCCEEDED(hr))
         {
             debugController->EnableDebugLayer();
 
-            if (info->validationMode == VGPUValidationMode_GPU)
+            if (desc->validationMode == VGPUValidationMode_GPU)
             {
                 ComPtr<ID3D12Debug1> debugController1;
                 if (SUCCEEDED(debugController.As(&debugController1)))
@@ -2134,14 +3226,14 @@ bool D3D12Device::Init(const VGPUDeviceDescriptor* info)
         }
 
 #if defined(_DEBUG) && WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
-        ComPtr<IDXGIInfoQueue> dxgiInfoQueue;
-        if (vgpuDXGIGetDebugInterface1 != nullptr &&
-            SUCCEEDED(vgpuDXGIGetDebugInterface1(0, IID_PPV_ARGS(dxgiInfoQueue.GetAddressOf()))))
+        IDXGIInfoQueue* dxgiInfoQueue = nullptr;
+        if (d3d12_state.DXGIGetDebugInterface1 != nullptr &&
+            SUCCEEDED(d3d12_state.DXGIGetDebugInterface1(0, IID_PPV_ARGS(&dxgiInfoQueue))))
         {
             dxgiFactoryFlags = DXGI_CREATE_FACTORY_DEBUG;
 
-            dxgiInfoQueue->SetBreakOnSeverity(VGFX_DXGI_DEBUG_ALL, DXGI_INFO_QUEUE_MESSAGE_SEVERITY_ERROR, true);
-            dxgiInfoQueue->SetBreakOnSeverity(VGFX_DXGI_DEBUG_ALL, DXGI_INFO_QUEUE_MESSAGE_SEVERITY_CORRUPTION, true);
+            dxgiInfoQueue->SetBreakOnSeverity(VGPU_DXGI_DEBUG_ALL, DXGI_INFO_QUEUE_MESSAGE_SEVERITY_ERROR, true);
+            dxgiInfoQueue->SetBreakOnSeverity(VGPU_DXGI_DEBUG_ALL, DXGI_INFO_QUEUE_MESSAGE_SEVERITY_CORRUPTION, true);
 
             DXGI_INFO_QUEUE_MESSAGE_ID hide[] =
             {
@@ -2150,7 +3242,8 @@ bool D3D12Device::Init(const VGPUDeviceDescriptor* info)
             DXGI_INFO_QUEUE_FILTER filter = {};
             filter.DenyList.NumIDs = _countof(hide);
             filter.DenyList.pIDList = hide;
-            dxgiInfoQueue->AddStorageFilterEntries(VGFX_DXGI_DEBUG_DXGI, &filter);
+            dxgiInfoQueue->AddStorageFilterEntries(VGPU_DXGI_DEBUG_DXGI, &filter);
+            dxgiInfoQueue->Release();
         }
 #endif
     }
@@ -2179,7 +3272,7 @@ bool D3D12Device::Init(const VGPUDeviceDescriptor* info)
     }
 
     {
-        const DXGI_GPU_PREFERENCE gpuPreference = (info->powerPreference == VGPUPowerPreference_LowPower) ? DXGI_GPU_PREFERENCE_MINIMUM_POWER : DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE;
+        const DXGI_GPU_PREFERENCE gpuPreference = (desc->powerPreference == VGPUPowerPreference_LowPower) ? DXGI_GPU_PREFERENCE_MINIMUM_POWER : DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE;
 
         static constexpr D3D_FEATURE_LEVEL s_featureLevels[] =
         {
@@ -2232,12 +3325,12 @@ bool D3D12Device::Init(const VGPUDeviceDescriptor* info)
         }
 
         // Assign label object.
-        if (info->label)
+        if (desc->label)
         {
-            SetLabel(info->label);
+            SetLabel(desc->label);
         }
 
-        if (info->validationMode != VGPUValidationMode_Disabled)
+        if (desc->validationMode != VGPUValidationMode_Disabled)
         {
             // Configure debug device (if active).
             ID3D12InfoQueue* infoQueue = nullptr;
@@ -2255,7 +3348,7 @@ bool D3D12Device::Init(const VGPUDeviceDescriptor* info)
                 enabledSeverities.push_back(D3D12_MESSAGE_SEVERITY_WARNING);
                 enabledSeverities.push_back(D3D12_MESSAGE_SEVERITY_MESSAGE);
 
-                if (info->validationMode == VGPUValidationMode_Verbose)
+                if (desc->validationMode == VGPUValidationMode_Verbose)
                 {
                     // Verbose only filters
                     enabledSeverities.push_back(D3D12_MESSAGE_SEVERITY_INFO);
@@ -3001,17 +4094,6 @@ VGPUSampler D3D12Device::CreateSampler(const VGPUSamplerDesc* desc)
     return sampler;
 }
 
-/* BindGroupLayout */
-D3D12BindGroupLayout::~D3D12BindGroupLayout()
-{
-
-}
-
-void D3D12BindGroupLayout::SetLabel(const char* label)
-{
-    VGPU_UNUSED(label);
-}
-
 VGPUBindGroupLayout D3D12Device::CreateBindGroupLayout(const VGPUBindGroupLayoutDesc* desc)
 {
     const uint32_t bindingLayoutCount = static_cast<uint32_t>(desc->entryCount);
@@ -3147,16 +4229,6 @@ VGPUBindGroupLayout D3D12Device::CreateBindGroupLayout(const VGPUBindGroupLayout
 }
 
 /* PipelineLayout */
-D3D12PipelineLayout::~D3D12PipelineLayout()
-{
-    renderer->DeferDestroy(handle, nullptr);
-}
-
-void D3D12PipelineLayout::SetLabel(const char* label)
-{
-    D3D12SetName(handle, label);
-}
-
 static HRESULT d3d12_CreateRootSignature(ID3D12Device* device, ID3D12RootSignature** rootSignature, const D3D12_ROOT_SIGNATURE_DESC1& desc)
 {
     D3D12_VERSIONED_ROOT_SIGNATURE_DESC versionedDesc = { };
@@ -3290,337 +4362,6 @@ VGPUPipelineLayout D3D12Device::CreatePipelineLayout(const VGPUPipelineLayoutDes
 }
 
 /* BindGroup */
-D3D12BindGroup::~D3D12BindGroup()
-{
-    if (descriptorTableCbvUavSrv)
-        device->shaderResourceViewHeap.ReleaseDescriptors(descriptorTableCbvUavSrv, bindGroupLayout->descriptorTableSizeCbvUavSrv);
-
-    if (descriptorTableSamplers)
-        device->samplerHeap.ReleaseDescriptors(descriptorTableSamplers, bindGroupLayout->descriptorTableSizeSamplers);
-
-    bindGroupLayout->Release();
-}
-
-void D3D12BindGroup::SetLabel(const char* label)
-{
-    VGPU_UNUSED(label);
-}
-
-static void CreateNullSRV(ID3D12Device* device, D3D12_CPU_DESCRIPTOR_HANDLE descriptor, DXGI_FORMAT srvFormat = DXGI_FORMAT_R32_UINT)
-{
-    D3D12_SHADER_RESOURCE_VIEW_DESC viewDesc{};
-    viewDesc.Format = srvFormat;
-    viewDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-    viewDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-    device->CreateShaderResourceView(nullptr, &viewDesc, descriptor);
-}
-
-static void CreateNullUAV(ID3D12Device* device, D3D12_CPU_DESCRIPTOR_HANDLE descriptor, DXGI_FORMAT srvFormat = DXGI_FORMAT_R32_UINT)
-{
-    D3D12_UNORDERED_ACCESS_VIEW_DESC viewDesc{};
-    viewDesc.Format = srvFormat;
-    viewDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
-    device->CreateUnorderedAccessView(nullptr, nullptr, &viewDesc, descriptor);
-}
-
-
-void D3D12BindGroup::Update(size_t entryCount, const VGPUBindGroupEntry* entries)
-{
-    if (descriptorTableCbvUavSrv)
-        device->shaderResourceViewHeap.ReleaseDescriptors(descriptorTableCbvUavSrv, bindGroupLayout->descriptorTableSizeCbvUavSrv);
-
-    if (descriptorTableSamplers)
-        device->samplerHeap.ReleaseDescriptors(descriptorTableSamplers, bindGroupLayout->descriptorTableSizeSamplers);
-
-    if (bindGroupLayout->descriptorTableSizeCbvUavSrv > 0)
-    {
-        DescriptorIndex descriptorTableBaseIndex = device->shaderResourceViewHeap.AllocateDescriptors(bindGroupLayout->descriptorTableSizeCbvUavSrv);
-        this->descriptorTableCbvUavSrv = descriptorTableBaseIndex;
-
-        size_t startIndex = 0;
-        for (const D3D12_DESCRIPTOR_RANGE1& range : bindGroupLayout->cbvUavSrvDescriptorRanges)
-        {
-            for (uint32_t index = 0; index < range.NumDescriptors; ++index)
-            {
-                uint32_t binding = range.BaseShaderRegister + index;
-
-                const D3D12_CPU_DESCRIPTOR_HANDLE descriptorHandle = device->shaderResourceViewHeap.GetCpuHandle(
-                    descriptorTableBaseIndex + range.OffsetInDescriptorsFromTableStart + index);
-
-                bool found = false;
-                for (size_t entryIndex = startIndex; entryIndex < entryCount; entryIndex++)
-                {
-                    const VGPUBindGroupEntry& entry = entries[entryIndex];
-
-                    if (entry.binding != binding)
-                        continue;
-
-                    if (range.RangeType == D3D12_DESCRIPTOR_RANGE_TYPE_CBV)
-                    {
-                        if (entry.buffer)
-                        {
-                            auto backendBuffer = static_cast<D3D12Buffer*>(entry.buffer);
-                            uint64_t size = (entry.size == 0 || entry.size == VGPU_WHOLE_SIZE) ? backendBuffer->GetSize() : entry.size;
-                            uint64_t offset = _VGPU_MIN(entry.offset, backendBuffer->GetSize());
-                            D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc{};
-                            cbvDesc.BufferLocation = backendBuffer->gpuAddress + offset;
-                            cbvDesc.SizeInBytes = (UINT)AlignUp<UINT>((UINT)size, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
-                            device->device->CreateConstantBufferView(&cbvDesc, descriptorHandle);
-                            found = true;
-                        }
-
-                        break;
-                    }
-
-#if TODO
-                    if (range.RangeType == D3D12_DESCRIPTOR_RANGE_TYPE_SRV && (entry.buffer != nullptr || entry.textureView != nullptr))
-                    {
-                        if (entry.buffer != nullptr)
-                        {
-                            auto backendBuffer = static_cast<D3D12Buffer*>(entry.buffer);
-                            uint64_t size = (entry.size == 0 || entry.size == VGPU_WHOLE_SIZE) ? backendBuffer->GetSize() : entry.size;
-
-                            D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-                            srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-                            srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-
-                            if (entry.stride == 0)
-                            {
-                                // Raw Buffer (ByteAddressBuffer in HLSL) -> WebGPU 
-                                srvDesc.Format = DXGI_FORMAT_R32_TYPELESS;
-                                srvDesc.Buffer.FirstElement = entry.offset / sizeof(uint32_t);
-                                srvDesc.Buffer.NumElements = UINT(size / sizeof(uint32_t));
-                                srvDesc.Buffer.StructureByteStride = 0;
-                                srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_RAW;
-                            }
-                            else
-                            {
-                                // structured buffer offset must be aligned to structure stride!
-                                ALIMER_ASSERT(IsAligned(entry.offset, entry.stride));
-
-                                srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-                                srvDesc.Buffer.FirstElement = entry.offset / entry.stride;
-                                srvDesc.Buffer.NumElements = UINT((size - entry.offset) / entry.stride);
-                                srvDesc.Buffer.StructureByteStride = (UINT)entry.stride;
-                                srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
-                            }
-
-                            device->CreateShaderResourceView(backendBuffer->handle, &srvDesc, descriptorHandle);
-                        }
-                        else if (entry.textureView != nullptr)
-                        {
-                            auto backendTexture = static_cast<const D3D12Texture*>(entry.textureView);
-
-                            uint32_t baseMipLevel = 0;
-                            uint32_t mipLevelCount = backendTexture->GetMipLevelCount();
-                            uint32_t baseArrayLayer = 0;
-                            uint32_t arrayLayerCount = backendTexture->GetArrayLayers();
-                            uint32_t planeSlice = 0;
-
-                            D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
-                            srvDesc.Shader4ComponentMapping = ToD3D12Swizzle(backendTexture->GetSwizzle());
-
-                            // Try to resolve resource format:
-                            switch (backendTexture->GetFormat())
-                            {
-                                case PixelFormat::Depth16Unorm:
-                                    srvDesc.Format = DXGI_FORMAT_R16_UNORM;
-                                    break;
-                                case PixelFormat::Depth32Float:
-                                    srvDesc.Format = DXGI_FORMAT_R32_FLOAT;
-                                    break;
-
-                                case PixelFormat::Stencil8:
-                                case PixelFormat::Depth24UnormStencil8:
-                                    srvDesc.Format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
-                                    break;
-                                case PixelFormat::Depth32FloatStencil8:
-                                    srvDesc.Format = DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS;
-                                    break;
-                                    //case PixelFormat::NV12:
-                                    //    srvDesc.Format = DXGI_FORMAT_R8_UNORM;
-                                    //    break;
-                                default:
-                                    srvDesc.Format = (DXGI_FORMAT)ToDxgiFormat(backendTexture->GetFormat());
-                                    break;
-                            }
-
-                            const TextureDimension dimension = backendTexture->GetDimension();
-                            if (dimension == TextureDimension::Texture1D)
-                            {
-                                if (backendTexture->GetArrayLayers() > 1)
-                                {
-                                    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE1DARRAY;
-                                    srvDesc.Texture1DArray.MostDetailedMip = baseMipLevel;
-                                    srvDesc.Texture1DArray.MipLevels = mipLevelCount;
-                                    srvDesc.Texture1DArray.FirstArraySlice = baseMipLevel;
-                                    srvDesc.Texture1DArray.ArraySize = arrayLayerCount;
-                                    srvDesc.Texture1DArray.ResourceMinLODClamp = 0.0f;
-                                }
-                                else
-                                {
-                                    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE1D;
-                                    srvDesc.Texture1D.MostDetailedMip = baseMipLevel;
-                                    srvDesc.Texture1D.MipLevels = mipLevelCount;
-                                    srvDesc.Texture1D.ResourceMinLODClamp = 0.0f;
-                                }
-                            }
-                            else if (dimension == TextureDimension::Texture2D || dimension == TextureDimension::TextureCube)
-                            {
-                                if (backendTexture->GetArrayLayers() > 1)
-                                {
-                                    if (dimension == TextureDimension::TextureCube)
-                                    {
-                                        if (backendTexture->GetArrayLayers() > 6 && arrayLayerCount > 6)
-                                        {
-                                            srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBEARRAY;
-                                            srvDesc.TextureCubeArray.First2DArrayFace = baseMipLevel;
-                                            srvDesc.TextureCubeArray.NumCubes = std::min(backendTexture->GetArrayLayers(), arrayLayerCount) / 6;
-                                            srvDesc.TextureCubeArray.MostDetailedMip = baseMipLevel;
-                                            srvDesc.TextureCubeArray.MipLevels = mipLevelCount;
-                                            srvDesc.TextureCubeArray.ResourceMinLODClamp = 0.0f;
-                                        }
-                                        else
-                                        {
-                                            srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
-                                            srvDesc.TextureCube.MostDetailedMip = baseMipLevel;
-                                            srvDesc.TextureCube.MipLevels = mipLevelCount;
-                                            srvDesc.TextureCube.ResourceMinLODClamp = 0.0f;
-                                        }
-                                    }
-                                    else
-                                    {
-                                        if (backendTexture->GetSampleCount() > TextureSampleCount::Count1)
-                                        {
-                                            srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DMSARRAY;
-                                            srvDesc.Texture2DMSArray.FirstArraySlice = baseArrayLayer;
-                                            srvDesc.Texture2DMSArray.ArraySize = arrayLayerCount;
-                                        }
-                                        else
-                                        {
-                                            srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
-                                            srvDesc.Texture2DArray.FirstArraySlice = baseArrayLayer;
-                                            srvDesc.Texture2DArray.ArraySize = arrayLayerCount;
-                                            srvDesc.Texture2DArray.MostDetailedMip = baseMipLevel;
-                                            srvDesc.Texture2DArray.MipLevels = mipLevelCount;
-                                            srvDesc.Texture2DArray.PlaneSlice = planeSlice;
-                                            srvDesc.Texture2DArray.ResourceMinLODClamp = 0.0f;
-                                        }
-                                    }
-                                }
-                                else
-                                {
-                                    if (backendTexture->GetSampleCount() > TextureSampleCount::Count1)
-                                    {
-                                        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DMS;
-                                    }
-                                    else
-                                    {
-                                        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-                                        srvDesc.Texture2D.MostDetailedMip = baseMipLevel;
-                                        srvDesc.Texture2D.MipLevels = mipLevelCount;
-                                        srvDesc.Texture2D.PlaneSlice = planeSlice;
-                                        srvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
-                                    }
-                                }
-                            }
-                            else if (dimension == TextureDimension::Texture3D)
-                            {
-                                srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE3D;
-                                srvDesc.Texture3D.MostDetailedMip = baseMipLevel;
-                                srvDesc.Texture3D.MipLevels = mipLevelCount;
-                            }
-
-                            device->CreateShaderResourceView(backendTexture->handle, &srvDesc, descriptorHandle);
-                        }
-
-                        found = true;
-                        break;
-                    }
-#endif // TODO
-
-                }
-
-                if (!found)
-                {
-                    // Create a null SRV, UAV, or CBV
-                    switch (range.RangeType)
-                    {
-                        case D3D12_DESCRIPTOR_RANGE_TYPE_SRV:
-                            CreateNullSRV(device->device, descriptorHandle);
-                            break;
-
-                        case D3D12_DESCRIPTOR_RANGE_TYPE_UAV:
-                            CreateNullUAV(device->device, descriptorHandle);
-                            break;
-
-                        case D3D12_DESCRIPTOR_RANGE_TYPE_CBV:
-                            device->device->CreateConstantBufferView(nullptr, descriptorHandle);
-                            break;
-
-                        case D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER:
-                        default:
-                            vgpuLogError("Invalid range type");
-                            break;
-                    }
-                }
-                else
-                {
-                    startIndex++;
-                }
-            }
-        }
-
-        device->shaderResourceViewHeap.CopyToShaderVisibleHeap(descriptorTableBaseIndex, bindGroupLayout->descriptorTableSizeCbvUavSrv);
-    }
-
-    if (bindGroupLayout->descriptorTableSizeSamplers > 0)
-    {
-        DescriptorIndex descriptorTableBaseIndex = device->samplerHeap.AllocateDescriptors(bindGroupLayout->descriptorTableSizeSamplers);
-        this->descriptorTableSamplers = descriptorTableBaseIndex;
-
-        size_t startIndex = 0;
-        for (const D3D12_DESCRIPTOR_RANGE1& range : bindGroupLayout->samplerDescriptorRanges)
-        {
-            for (uint32_t index = 0; index < range.NumDescriptors; ++index)
-            {
-                uint32_t binding = range.BaseShaderRegister + index;
-
-                D3D12_CPU_DESCRIPTOR_HANDLE descriptorHandle = device->samplerHeap.GetCpuHandle(descriptorTableBaseIndex + range.OffsetInDescriptorsFromTableStart + index);
-
-                bool found = false;
-                for (size_t entryIndex = startIndex; entryIndex < entryCount; entryIndex++)
-                {
-                    const VGPUBindGroupEntry& entry = entries[entryIndex];
-
-                    if (entry.binding == binding && entry.sampler != nullptr)
-                    {
-                        auto backendSampler = static_cast<D3D12Sampler*>(entry.sampler);
-                        const D3D12_SAMPLER_DESC& desc = backendSampler->samplerDesc;
-
-                        device->device->CreateSampler(&desc, descriptorHandle);
-                        found = true;
-                        startIndex++;
-                        break;
-                    }
-                }
-
-                if (!found)
-                {
-                    // Create a default sampler
-                    D3D12_SAMPLER_DESC samplerDesc{};
-                    device->device->CreateSampler(&samplerDesc, descriptorHandle);
-                    continue;
-                }
-
-                startIndex++;
-            }
-        }
-
-        device->samplerHeap.CopyToShaderVisibleHeap(descriptorTableBaseIndex, bindGroupLayout->descriptorTableSizeSamplers);
-    }
-}
-
 VGPUBindGroup D3D12Device::CreateBindGroup(const VGPUBindGroupLayout layout, const VGPUBindGroupDesc* desc)
 {
     D3D12BindGroupLayout* d3d12Layout = static_cast<D3D12BindGroupLayout*>(layout);
@@ -3637,17 +4378,6 @@ VGPUBindGroup D3D12Device::CreateBindGroup(const VGPUBindGroupLayout layout, con
 }
 
 /* Pipeline */
-D3D12Pipeline::~D3D12Pipeline()
-{
-    pipelineLayout->Release();
-    renderer->DeferDestroy(handle, nullptr);
-}
-
-void D3D12Pipeline::SetLabel(const char* label)
-{
-    D3D12SetName(handle, label);
-}
-
 static void FillShaderBytecode(D3D12_SHADER_BYTECODE& shaderBytecode, const VGPUShaderStageDesc& shaderDesc)
 {
     shaderBytecode.pShaderBytecode = shaderDesc.bytecode;
@@ -3962,16 +4692,10 @@ VGPUPipeline D3D12Device::CreateRayTracingPipeline(const VGPURayTracingPipelineD
     return pipeline;
 }
 
-
-/*D3D12QueryHeap */
-D3D12QueryHeap::~D3D12QueryHeap()
+/* D3D12Instance */
+D3D12Instance::~D3D12Instance()
 {
-    renderer->DeferDestroy(handle, nullptr);
-}
 
-void D3D12QueryHeap::SetLabel(const char* label)
-{
-    D3D12SetName(handle, label);
 }
 
 VGPUQueryHeap D3D12Device::CreateQueryHeap(const VGPUQueryHeapDesc* desc)
@@ -4004,21 +4728,6 @@ VGPUQueryHeap D3D12Device::CreateQueryHeap(const VGPUQueryHeapDesc* desc)
     return heap;
 }
 
-/* SwapChain */
-D3D12SwapChain::~D3D12SwapChain()
-{
-    for (size_t i = 0, count = backbufferTextures.size(); i < count; ++i)
-    {
-        backbufferTextures[i]->Release();
-    }
-    backbufferTextures.clear();
-    handle->Release();
-}
-
-void D3D12SwapChain::SetLabel(const char* label)
-{
-    VGPU_UNUSED(label);
-}
 
 VGPUSwapChain D3D12Device::CreateSwapChain(const VGPUSwapChainDesc* desc)
 {
@@ -4122,629 +4831,6 @@ VGPUSwapChain D3D12Device::CreateSwapChain(const VGPUSwapChainDesc* desc)
     swapChain->syncInterval = PresentModeToSwapInterval(desc->presentMode);
     UpdateSwapChain(swapChain);
     return swapChain;
-}
-
-/* CommandBuffer */
-D3D12CommandBuffer::~D3D12CommandBuffer()
-{
-    Reset();
-
-    for (uint32_t frameIndex = 0; frameIndex < VGPU_MAX_INFLIGHT_FRAMES; ++frameIndex)
-    {
-        SAFE_RELEASE(commandAllocators[frameIndex]);
-    }
-
-    SAFE_RELEASE(commandList);
-}
-void D3D12CommandBuffer::Reset()
-{
-    hasLabel = false;
-    hasRenderPassLabel = false;
-    insideRenderPass = false;
-    numBarriersToFlush = 0;
-
-    bindGroupsDirty = false;
-    numBoundBindGroups = 0;
-    for (uint32_t i = 0; i < VGPU_MAX_BIND_GROUPS; ++i)
-    {
-        if (boundBindGroups[i])
-        {
-            boundBindGroups[i]->Release();
-            boundBindGroups[i] = nullptr;
-        }
-    }
-
-
-    if (currentPipeline)
-    {
-        currentPipeline->Release();
-        currentPipeline = nullptr;
-    }
-}
-
-void D3D12CommandBuffer::Begin(uint32_t frameIndex, const char* label)
-{
-    Reset();
-
-    VHR(commandAllocators[frameIndex]->Reset());
-    VHR(commandList->Reset(commandAllocators[frameIndex], nullptr));
-
-    if (queueType == VGPUCommandQueue_Graphics ||
-        queueType == VGPUCommandQueue_Compute)
-    {
-        ID3D12DescriptorHeap* heaps[2] = {
-            renderer->shaderResourceViewHeap.GetShaderVisibleHeap(),
-            renderer->samplerHeap.GetShaderVisibleHeap()
-        };
-        commandList->SetDescriptorHeaps(2u, heaps);
-    }
-
-    if (queueType == VGPUCommandQueue_Graphics)
-    {
-        for (uint32_t i = 0; i < D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT; ++i)
-        {
-            vboViews[i] = {};
-        }
-
-        D3D12_RECT pRects[D3D12_VIEWPORT_AND_SCISSORRECT_MAX_INDEX + 1];
-        for (uint32_t i = 0; i < _countof(pRects); ++i)
-        {
-            pRects[i].bottom = D3D12_VIEWPORT_BOUNDS_MAX;
-            pRects[i].left = D3D12_VIEWPORT_BOUNDS_MIN;
-            pRects[i].right = D3D12_VIEWPORT_BOUNDS_MAX;
-            pRects[i].top = D3D12_VIEWPORT_BOUNDS_MIN;
-        }
-        commandList->RSSetScissorRects(_countof(pRects), pRects);
-
-        static constexpr float defaultBlendFactor[4] = { 0, 0, 0, 0 };
-        commandList->OMSetBlendFactor(defaultBlendFactor);
-        commandList->OMSetStencilRef(0);
-    }
-
-    if (label)
-    {
-        PushDebugGroup(label);
-        hasLabel = true;
-    }
-}
-
-void D3D12CommandBuffer::PushDebugGroup(const char* groupLabel)
-{
-    std::wstring wide_name = UTF8ToWStr(groupLabel);
-    UINT size = static_cast<UINT>((strlen(groupLabel) + 1) * sizeof(wchar_t));
-    commandList->BeginEvent(PIX_EVENT_UNICODE_VERSION, wide_name.c_str(), size);
-}
-
-void D3D12CommandBuffer::PopDebugGroup()
-{
-    commandList->EndEvent();
-}
-
-void D3D12CommandBuffer::InsertDebugMarker(const char* markerLabel)
-{
-    std::wstring wide_name = UTF8ToWStr(markerLabel);
-    UINT size = static_cast<UINT>((strlen(markerLabel) + 1) * sizeof(wchar_t));
-    commandList->SetMarker(PIX_EVENT_UNICODE_VERSION, wide_name.c_str(), size);
-}
-
-void D3D12CommandBuffer::ClearBuffer(VGPUBuffer buffer, uint64_t offset, uint64_t size)
-{
-    VGPU_UNUSED(buffer);
-    VGPU_UNUSED(offset);
-    VGPU_UNUSED(size);
-
-    // TODO:
-    //commandList->buffer
-}
-
-void D3D12CommandBuffer::SetPipeline(VGPUPipeline pipeline)
-{
-    D3D12Pipeline* backendPipeline = (D3D12Pipeline*)pipeline;
-
-    if (currentPipeline == backendPipeline)
-        return;
-
-    currentPipeline = backendPipeline;
-    currentPipeline->AddRef();
-
-    commandList->SetPipelineState(backendPipeline->handle);
-    if (backendPipeline->type == VGPUPipelineType_Render)
-    {
-        commandList->IASetPrimitiveTopology(backendPipeline->primitiveTopology);
-        commandList->SetGraphicsRootSignature(backendPipeline->pipelineLayout->handle);
-    }
-    else
-    {
-        commandList->SetGraphicsRootSignature(backendPipeline->pipelineLayout->handle);
-    }
-}
-
-void D3D12CommandBuffer::SetBindGroup(uint32_t groupIndex, VGPUBindGroup bindGroup)
-{
-    VGPU_ASSERT(bindGroup != nullptr);
-    VGPU_ASSERT(groupIndex < VGPU_MAX_BIND_GROUPS);
-
-    if (boundBindGroups[groupIndex] != bindGroup)
-    {
-        bindGroupsDirty = true;
-        boundBindGroups[groupIndex] = static_cast<D3D12BindGroup*>(bindGroup);
-        boundBindGroups[groupIndex]->AddRef();
-        numBoundBindGroups = _VGPU_MAX(groupIndex + 1, numBoundBindGroups);
-    }
-}
-
-void D3D12CommandBuffer::SetPushConstants(uint32_t pushConstantIndex, const void* data, uint32_t size)
-{
-    VGPU_ASSERT(currentPipeline);
-    //VGPU_ASSERT(size <= device->limits.pushConstantsMaxSize);
-    VGPU_ASSERT(size % 4 == 0);
-
-    const uint32_t rootParameterIndex = currentPipeline->pipelineLayout->pushConstantsBaseIndex + pushConstantIndex;
-    const uint32_t num32BitValuesToSet = size / 4;
-
-    if (currentPipeline->type == VGPUPipelineType_Render)
-    {
-        commandList->SetGraphicsRoot32BitConstants(
-            rootParameterIndex,
-            num32BitValuesToSet,
-            data,
-            0
-        );
-    }
-    else
-    {
-        commandList->SetComputeRoot32BitConstants(
-            rootParameterIndex,
-            num32BitValuesToSet,
-            data,
-            0
-        );
-    }
-}
-
-void D3D12CommandBuffer::Dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)
-{
-    VGPU_VERIFY(!insideRenderPass);
-
-    commandList->Dispatch(groupCountX, groupCountY, groupCountZ);
-}
-
-void D3D12CommandBuffer::DispatchIndirect(VGPUBuffer buffer, uint64_t offset)
-{
-    VGPU_VERIFY(!insideRenderPass);
-    D3D12Resource* d3dBuffer = (D3D12Resource*)buffer;
-
-    commandList->ExecuteIndirect(renderer->dispatchIndirectCommandSignature,
-        1,
-        d3dBuffer->handle, offset,
-        nullptr,
-        0);
-}
-
-VGPUTexture D3D12CommandBuffer::AcquireSwapchainTexture(VGPUSwapChain swapChain)
-{
-    D3D12SwapChain* d3d12SwapChain = (D3D12SwapChain*)swapChain;
-
-    HRESULT hr = S_OK;
-
-    /* Check for window size changes and resize the swapchain if needed. */
-    DXGI_SWAP_CHAIN_DESC1 swapChainDesc;
-    d3d12SwapChain->handle->GetDesc1(&swapChainDesc);
-
-    uint32_t width = 0;
-    uint32_t height = 0;
-#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
-    RECT windowRect;
-    GetClientRect(d3d12SwapChain->window, &windowRect);
-    width = static_cast<uint32_t>(windowRect.right - windowRect.left);
-    height = static_cast<uint32_t>(windowRect.bottom - windowRect.top);
-#else
-
-#endif
-
-    // Check if window is minimized
-    if (width == 0 ||
-        height == 0)
-    {
-        return nullptr;
-    }
-
-    if (width != swapChainDesc.Width ||
-        height != swapChainDesc.Height)
-    {
-        renderer->WaitIdle();
-
-        // Release resources that are tied to the swap chain and update fence values.
-        for (size_t i = 0, count = d3d12SwapChain->backbufferTextures.size(); i < count; ++i)
-        {
-            delete d3d12SwapChain->backbufferTextures[i];
-        }
-        d3d12SwapChain->backbufferTextures.clear();
-
-        hr = d3d12SwapChain->handle->ResizeBuffers(
-            d3d12SwapChain->backBufferCount,
-            width,
-            height,
-            DXGI_FORMAT_UNKNOWN, /* Keep the old format */
-            (renderer->tearingSupported) ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0u
-        );
-
-        if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET)
-        {
-#ifdef _DEBUG
-            char buff[64] = {};
-            sprintf_s(buff, "Device Lost on ResizeBuffers: Reason code 0x%08X\n",
-                static_cast<unsigned int>((hr == DXGI_ERROR_DEVICE_REMOVED) ? renderer->device->GetDeviceRemovedReason() : hr));
-            OutputDebugStringA(buff);
-#endif
-            // If the device was removed for any reason, a new device and swap chain will need to be created.
-            //HandleDeviceLost();
-
-            // Everything is set up now. Do not continue execution of this method. HandleDeviceLost will reenter this method
-            // and correctly set up the new device.
-            return nullptr;
-        }
-        else
-        {
-            if (FAILED(hr))
-            {
-                vgpuLogError("Could not resize swapchain");
-                return nullptr;
-            }
-
-            renderer->UpdateSwapChain(d3d12SwapChain);
-        }
-    }
-
-    D3D12Texture* swapChainTexture =
-        d3d12SwapChain->backbufferTextures[d3d12SwapChain->handle->GetCurrentBackBufferIndex()];
-
-    // Transition to RenderTarget state
-    TransitionResource(swapChainTexture, D3D12_RESOURCE_STATE_RENDER_TARGET, true);
-
-    swapChains.push_back(d3d12SwapChain);
-    return swapChainTexture;
-}
-
-void D3D12CommandBuffer::BeginRenderPass(const VGPURenderPassDesc* desc)
-{
-    uint32_t width = UINT32_MAX;
-    uint32_t height = UINT32_MAX;
-    uint32_t numRTVS = 0;
-    D3D12_RENDER_PASS_FLAGS renderPassFlags = D3D12_RENDER_PASS_FLAG_NONE;
-    D3D12_RENDER_PASS_DEPTH_STENCIL_DESC DSV = {};
-
-    if (desc->label)
-    {
-        PushDebugGroup(desc->label);
-        hasRenderPassLabel = true;
-    }
-
-    for (uint32_t i = 0; i < desc->colorAttachmentCount; ++i)
-    {
-        const VGPURenderPassColorAttachment* attachment = &desc->colorAttachments[i];
-        D3D12Texture* texture = (D3D12Texture*)attachment->texture;
-        const uint32_t level = attachment->level;
-        const uint32_t slice = attachment->slice;
-
-        RTVs[i].cpuDescriptor = d3d12_GetRTV(texture, level, slice);
-
-        // Transition to RenderTarget
-        TransitionResource(texture, D3D12_RESOURCE_STATE_RENDER_TARGET, true);
-
-        RTVs[numRTVS].BeginningAccess.Type = ToD3D12(attachment->loadAction);
-        if (attachment->loadAction == VGPULoadAction_Clear)
-        {
-            RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Format = texture->dxgiFormat;
-            RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Color[0] = attachment->clearColor.r;
-            RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Color[1] = attachment->clearColor.g;
-            RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Color[2] = attachment->clearColor.b;
-            RTVs[numRTVS].BeginningAccess.Clear.ClearValue.Color[3] = attachment->clearColor.a;
-        }
-
-        // TODO: Resolve
-        RTVs[numRTVS].EndingAccess.Type = ToD3D12(attachment->storeAction);
-
-        width = _VGPU_MIN(width, _VGPU_MAX(1U, texture->desc.width >> level));
-        height = _VGPU_MIN(height, _VGPU_MAX(1U, texture->desc.height >> level));
-
-        numRTVS++;
-    }
-
-    const bool hasDepthStencil = desc->depthStencilAttachment != nullptr;
-    if (hasDepthStencil)
-    {
-        const VGPURenderPassDepthStencilAttachment* attachment = desc->depthStencilAttachment;
-        D3D12Texture* texture = (D3D12Texture*)attachment->texture;
-        const uint32_t level = attachment->level;
-        const uint32_t slice = attachment->slice;
-
-        width = _VGPU_MIN(width, _VGPU_MAX(1U, texture->desc.width >> level));
-        height = _VGPU_MIN(height, _VGPU_MAX(1U, texture->desc.height >> level));
-
-        DSV.cpuDescriptor = d3d12_GetDSV(texture, level, slice);
-
-        DSV.DepthBeginningAccess.Type = ToD3D12(attachment->depthLoadAction);
-        if (attachment->depthLoadAction == VGPULoadAction_Clear)
-        {
-            DSV.DepthBeginningAccess.Clear.ClearValue.Format = texture->dxgiFormat;
-            DSV.DepthBeginningAccess.Clear.ClearValue.DepthStencil.Depth = attachment->depthClearValue;
-        }
-        DSV.DepthEndingAccess.Type = ToD3D12(attachment->depthStoreAction);
-
-        DSV.StencilBeginningAccess.Type = ToD3D12(attachment->stencilLoadAction);
-        if (attachment->stencilLoadAction == VGPULoadAction_Clear)
-        {
-            DSV.StencilBeginningAccess.Clear.ClearValue.Format = texture->dxgiFormat;
-            DSV.StencilBeginningAccess.Clear.ClearValue.DepthStencil.Stencil = static_cast<UINT8>(attachment->stencilClearValue);
-        }
-        DSV.StencilEndingAccess.Type = ToD3D12(attachment->stencilStoreAction);
-    }
-
-    commandList->BeginRenderPass(numRTVS, RTVs, hasDepthStencil ? &DSV : nullptr, renderPassFlags);
-
-    // Set the viewport.
-    D3D12_VIEWPORT viewport = { 0.0f, 0.0f, float(width), float(height), 0.0f, 1.0f };
-    D3D12_RECT scissorRect = { 0, 0, LONG(width), LONG(height) };
-    commandList->RSSetViewports(1, &viewport);
-    commandList->RSSetScissorRects(1, &scissorRect);
-    insideRenderPass = true;
-}
-
-void D3D12CommandBuffer::EndRenderPass()
-{
-    commandList->EndRenderPass();
-
-    if (hasRenderPassLabel)
-    {
-        PopDebugGroup();
-    }
-
-    insideRenderPass = false;
-}
-
-void D3D12CommandBuffer::SetViewport(const VGPUViewport* viewport)
-{
-    commandList->RSSetViewports(1, (const D3D12_VIEWPORT*)viewport);
-}
-
-void D3D12CommandBuffer::SetViewports(uint32_t count, const VGPUViewport* viewports)
-{
-    VGPU_ASSERT(count < D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE);
-    commandList->RSSetViewports(count, (const D3D12_VIEWPORT*)viewports);
-}
-
-void D3D12CommandBuffer::SetScissorRect(const VGPURect* rect)
-{
-    D3D12_RECT d3d_rect = {};
-    d3d_rect.left = LONG(rect->x);
-    d3d_rect.top = LONG(rect->y);
-    d3d_rect.right = LONG(rect->x + rect->width);
-    d3d_rect.bottom = LONG(rect->y + rect->height);
-    commandList->RSSetScissorRects(1u, &d3d_rect);
-}
-
-void D3D12CommandBuffer::SetScissorRects(uint32_t count, const VGPURect* rects)
-{
-    VGPU_ASSERT(count < D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE);
-
-    D3D12_RECT d3dScissorRects[D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE];
-    for (uint32_t i = 0; i < count; i++)
-    {
-        d3dScissorRects[i].left = LONG(rects[i].x);
-        d3dScissorRects[i].top = LONG(rects[i].y);
-        d3dScissorRects[i].right = LONG(rects[i].x + rects[i].width);
-        d3dScissorRects[i].bottom = LONG(rects[i].y + rects[i].height);
-    }
-    commandList->RSSetScissorRects(count, d3dScissorRects);
-}
-
-void D3D12CommandBuffer::SetVertexBuffer(uint32_t index, VGPUBuffer buffer, uint64_t offset)
-{
-    D3D12Buffer* d3d12Buffer = (D3D12Buffer*)buffer;
-
-    vboViews[index].BufferLocation = d3d12Buffer->gpuAddress + (D3D12_GPU_VIRTUAL_ADDRESS)offset;
-    vboViews[index].SizeInBytes = (UINT)(d3d12Buffer->size - offset);
-    vboViews[index].StrideInBytes = 0;
-}
-
-void D3D12CommandBuffer::SetIndexBuffer(VGPUBuffer buffer, VGPUIndexType type, uint64_t offset)
-{
-    D3D12Buffer* d3d12Buffer = (D3D12Buffer*)buffer;
-
-    D3D12_INDEX_BUFFER_VIEW view{};
-    view.BufferLocation = d3d12Buffer->gpuAddress + (D3D12_GPU_VIRTUAL_ADDRESS)offset;
-    view.SizeInBytes = (UINT)(d3d12Buffer->size - offset);
-    view.Format = (type == VGPUIndexType_Uint16 ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT);
-    commandList->IASetIndexBuffer(&view);
-}
-
-void D3D12CommandBuffer::SetStencilReference(uint32_t reference)
-{
-    commandList->OMSetStencilRef(reference);
-}
-
-void D3D12CommandBuffer::BeginQuery(VGPUQueryHeap heap, uint32_t index)
-{
-    D3D12QueryHeap* d3dHeap = static_cast<D3D12QueryHeap*>(heap);
-
-    commandList->BeginQuery(d3dHeap->handle, d3dHeap->d3dQueryType, index);
-}
-
-void D3D12CommandBuffer::EndQuery(VGPUQueryHeap heap, uint32_t index)
-{
-    D3D12QueryHeap* d3dHeap = static_cast<D3D12QueryHeap*>(heap);
-
-    commandList->EndQuery(d3dHeap->handle, d3dHeap->d3dQueryType, index);
-}
-
-void D3D12CommandBuffer::ResolveQuery(VGPUQueryHeap heap, uint32_t index, uint32_t count, VGPUBuffer destinationBuffer, uint64_t destinationOffset)
-{
-    D3D12QueryHeap* d3dHeap = static_cast<D3D12QueryHeap*>(heap);
-    D3D12Buffer* d3dDestBuffer = static_cast<D3D12Buffer*>(destinationBuffer);
-
-    commandList->ResolveQueryData(
-        d3dHeap->handle,
-        d3dHeap->d3dQueryType,
-        index,
-        count,
-        d3dDestBuffer->handle,
-        destinationOffset
-    );
-}
-
-void D3D12CommandBuffer::ResetQuery(VGPUQueryHeap heap, uint32_t index, uint32_t count)
-{
-    VGPU_UNUSED(heap);
-    VGPU_UNUSED(index);
-    VGPU_UNUSED(count);
-}
-
-void D3D12CommandBuffer::FlushBindGroups(bool graphics)
-{
-    VGPU_ASSERT(currentPipeline != nullptr);
-    VGPU_ASSERT(currentPipeline->pipelineLayout != nullptr);
-
-    if (!bindGroupsDirty)
-        return;
-
-    bindGroupsDirty = false;
-
-    for (size_t groupIndex = 0; groupIndex < currentPipeline->pipelineLayout->bindGroupLayoutCount; groupIndex++)
-    {
-        VGPU_ASSERT(boundBindGroups[groupIndex] != nullptr);
-
-        D3D12BindGroup* bindGroup = boundBindGroups[groupIndex];
-
-        if (currentPipeline->pipelineLayout->cbvUavSrvRootParameterIndex[groupIndex] != ~0u)
-        {
-            uint32_t rootParameterIndex = currentPipeline->pipelineLayout->cbvUavSrvRootParameterIndex[groupIndex];
-            D3D12_GPU_DESCRIPTOR_HANDLE gpuHadle = renderer->shaderResourceViewHeap.GetGpuHandle(bindGroup->descriptorTableCbvUavSrv);
-
-            if (graphics)
-            {
-                commandList->SetGraphicsRootDescriptorTable(rootParameterIndex, gpuHadle);
-            }
-            else
-            {
-                commandList->SetComputeRootDescriptorTable(rootParameterIndex, gpuHadle);
-            }
-        }
-
-        if (currentPipeline->pipelineLayout->samplerRootParameterIndex[groupIndex] != ~0u)
-        {
-            uint32_t rootParameterIndex = currentPipeline->pipelineLayout->samplerRootParameterIndex[groupIndex];
-            D3D12_GPU_DESCRIPTOR_HANDLE gpuHadle = renderer->samplerHeap.GetGpuHandle(bindGroup->descriptorTableSamplers);
-
-            if (graphics)
-            {
-                commandList->SetGraphicsRootDescriptorTable(rootParameterIndex, gpuHadle);
-            }
-            else
-            {
-                commandList->SetComputeRootDescriptorTable(rootParameterIndex, gpuHadle);
-            }
-        }
-    }
-}
-
-void D3D12CommandBuffer::PrepareDraw()
-{
-    VGPU_VERIFY(insideRenderPass);
-
-    if (currentPipeline->numVertexBindings > 0)
-    {
-        for (uint32_t i = 0; i < currentPipeline->numVertexBindings; ++i)
-        {
-            vboViews[i].StrideInBytes = currentPipeline->strides[i];
-        }
-
-        commandList->IASetVertexBuffers(0, currentPipeline->numVertexBindings, vboViews);
-    }
-    FlushBindGroups(true);
-}
-
-void D3D12CommandBuffer::Draw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance)
-{
-    PrepareDraw();
-
-    commandList->DrawInstanced(vertexCount, instanceCount, firstVertex, firstInstance);
-}
-
-void D3D12CommandBuffer::DrawIndexed(uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t baseVertex, uint32_t firstInstance)
-{
-    PrepareDraw();
-
-    commandList->DrawIndexedInstanced(indexCount, instanceCount, firstIndex, baseVertex, firstInstance);
-}
-
-void D3D12CommandBuffer::DrawIndirect(VGPUBuffer indirectBuffer, uint64_t indirectBufferOffset)
-{
-    VGPU_ASSERT(indirectBuffer);
-    PrepareDraw();
-
-    D3D12Buffer* backendBuffer = static_cast<D3D12Buffer*>(indirectBuffer);
-    commandList->ExecuteIndirect(
-        renderer->drawIndirectCommandSignature,
-        1,
-        backendBuffer->handle,
-        indirectBufferOffset,
-        nullptr,
-        0);
-}
-
-void D3D12CommandBuffer::DrawIndexedIndirect(VGPUBuffer indirectBuffer, uint64_t indirectBufferOffset)
-{
-    VGPU_ASSERT(indirectBuffer);
-    PrepareDraw();
-
-    D3D12Buffer* backendBuffer = static_cast<D3D12Buffer*>(indirectBuffer);
-    commandList->ExecuteIndirect(
-        renderer->drawIndexedIndirectCommandSignature,
-        1,
-        backendBuffer->handle,
-        indirectBufferOffset,
-        nullptr,
-        0);
-}
-
-void D3D12CommandBuffer::DispatchMesh(uint32_t threadGroupCountX, uint32_t threadGroupCountY, uint32_t threadGroupCountZ)
-{
-    PrepareDraw();
-
-    commandList->DispatchMesh(threadGroupCountX, threadGroupCountY, threadGroupCountZ);
-}
-
-void D3D12CommandBuffer::DispatchMeshIndirect(VGPUBuffer indirectBuffer, uint64_t indirectBufferOffset)
-{
-    VGPU_ASSERT(indirectBuffer);
-    PrepareDraw();
-
-    D3D12Buffer* backendBuffer = static_cast<D3D12Buffer*>(indirectBuffer);
-    commandList->ExecuteIndirect(
-        renderer->dispatchMeshIndirectCommandSignature,
-        1,
-        backendBuffer->handle,
-        indirectBufferOffset,
-        nullptr,
-        0);
-}
-
-void D3D12CommandBuffer::DispatchMeshIndirectCount(VGPUBuffer indirectBuffer, uint64_t indirectBufferOffset, VGPUBuffer countBuffer, uint64_t countBufferOffset, uint32_t maxCount)
-{
-    VGPU_ASSERT(indirectBuffer);
-    VGPU_ASSERT(countBuffer);
-
-    D3D12Buffer* d3dIndirectBuffer = static_cast<D3D12Buffer*>(indirectBuffer);
-    D3D12Buffer* d3dCountBuffer = static_cast<D3D12Buffer*>(countBuffer);
-
-    PrepareDraw();
-    commandList->ExecuteIndirect(
-        renderer->dispatchMeshIndirectCommandSignature,
-        maxCount,
-        d3dIndirectBuffer->handle, indirectBufferOffset,
-        d3dCountBuffer->handle, countBufferOffset
-    );
 }
 
 /* D3D12Device */
@@ -4902,52 +4988,84 @@ uint64_t D3D12Device::Submit(VGPUCommandBuffer* commandBuffers, uint32_t count)
     return frameCount - 1;
 }
 
-static VGPUBool32 d3d12_isSupported(void)
+static bool d3d12_isSupported(void)
 {
     static bool available_initialized = false;
     static bool available = false;
 
-    if (available_initialized) {
+    if (available_initialized)
         return available;
-    }
 
     available_initialized = true;
 
 #if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
-    HMODULE dxgiDLL = LoadLibraryExW(L"dxgi.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
-    HMODULE d3d12DLL = LoadLibraryExW(L"d3d12.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    d3d12_state.lib_dxgi = LoadLibraryExW(L"dxgi.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    d3d12_state.lib_d3d12 = LoadLibraryExW(L"d3d12.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
 
-    if (dxgiDLL == nullptr ||
-        d3d12DLL == nullptr)
+    if (d3d12_state.lib_dxgi == nullptr || d3d12_state.lib_d3d12 == nullptr)
     {
         return false;
     }
 
-    vgpuCreateDXGIFactory2 = (PFN_CREATE_DXGI_FACTORY2)GetProcAddress(dxgiDLL, "CreateDXGIFactory2");
-    if (vgpuCreateDXGIFactory2 == nullptr)
+    d3d12_state.CreateDXGIFactory2 = (PFN_CREATE_DXGI_FACTORY2)GetProcAddress(d3d12_state.lib_dxgi, "CreateDXGIFactory2");
+    if (d3d12_state.CreateDXGIFactory2 == nullptr)
     {
         return false;
     }
 
 #if defined(_DEBUG)
-    vgpuDXGIGetDebugInterface1 = (PFN_DXGI_GET_DEBUG_INTERFACE1)GetProcAddress(dxgiDLL, "DXGIGetDebugInterface1");
+    d3d12_state.DXGIGetDebugInterface1 = (PFN_DXGI_GET_DEBUG_INTERFACE1)GetProcAddress(d3d12_state.lib_dxgi, "DXGIGetDebugInterface1");
 #endif
 
-    vgpuD3D12GetDebugInterface = (PFN_D3D12_GET_DEBUG_INTERFACE)GetProcAddress(d3d12DLL, "D3D12GetDebugInterface");
-    vgpuD3D12CreateDevice = (PFN_D3D12_CREATE_DEVICE)GetProcAddress(d3d12DLL, "D3D12CreateDevice");
-    if (!vgpuD3D12CreateDevice)
+    // Use new D3D12GetInterface and agility SDK
+    static PFN_D3D12_GET_INTERFACE func_D3D12GetInterface = (PFN_D3D12_GET_INTERFACE)GetProcAddress(d3d12_state.lib_d3d12, "D3D12GetInterface");
+    if (func_D3D12GetInterface)
     {
-        return false;
+        ComPtr<ID3D12SDKConfiguration> sdkConfig;
+        if (SUCCEEDED(func_D3D12GetInterface(VGPU_CLSID_D3D12SDKConfiguration, IID_PPV_ARGS(sdkConfig.GetAddressOf()))))
+        {
+            ComPtr<ID3D12SDKConfiguration1> sdkConfig1 = nullptr;
+            if (SUCCEEDED(sdkConfig.As(&sdkConfig1)))
+            {
+                uint32_t agilitySdkVersion = D3D12_SDK_VERSION;
+                std::string agilitySdkPath = ".\\D3D12\\"; // D3D12SDKPath;
+                if (SUCCEEDED(sdkConfig1->CreateDeviceFactory(agilitySdkVersion, agilitySdkPath.c_str(), IID_PPV_ARGS(d3d12_state.deviceFactory.GetAddressOf()))))
+                {
+                    func_D3D12GetInterface(VGPU_CLSID_D3D12DeviceFactory, IID_PPV_ARGS(d3d12_state.deviceFactory.GetAddressOf()));
+                }
+                else if (SUCCEEDED(sdkConfig1->CreateDeviceFactory(agilitySdkVersion, ".\\", IID_PPV_ARGS(d3d12_state.deviceFactory.GetAddressOf()))))
+                {
+                    func_D3D12GetInterface(VGPU_CLSID_D3D12DeviceFactory, IID_PPV_ARGS(d3d12_state.deviceFactory.GetAddressOf()));
+                }
+            }
+        }
     }
 
-    vgpuD3D12SerializeVersionedRootSignature = (PFN_D3D12_SERIALIZE_VERSIONED_ROOT_SIGNATURE)GetProcAddress(d3d12DLL, "D3D12SerializeVersionedRootSignature");
-    if (!vgpuD3D12SerializeVersionedRootSignature) {
-        return false;
+    if (!d3d12_state.deviceFactory)
+    {
+        d3d12_state.D3D12CreateDevice = (PFN_D3D12_CREATE_DEVICE)GetProcAddress(d3d12_state.lib_d3d12, "D3D12CreateDevice");
+        if (!d3d12_state.D3D12CreateDevice)
+            return false;
+
+        d3d12_state.D3D12SerializeVersionedRootSignature = (PFN_D3D12_SERIALIZE_VERSIONED_ROOT_SIGNATURE)GetProcAddress(d3d12_state.lib_d3d12, "D3D12SerializeVersionedRootSignature");
+        if (!d3d12_state.D3D12SerializeVersionedRootSignature) 
+            return false;
+
+        d3d12_state.D3D12GetDebugInterface = (PFN_D3D12_GET_DEBUG_INTERFACE)GetProcAddress(d3d12_state.lib_d3d12, "D3D12GetDebugInterface");
+    }
+
+    // Try to load PIX (WinPixEventRuntime.dll)
+    d3d12_state.WinPixEventRuntimeDLL = LoadLibraryW(L"WinPixEventRuntime.dll");
+    if (d3d12_state.WinPixEventRuntimeDLL != nullptr)
+    {
+        PIXBeginEventOnCommandList = (PFN_PIXBeginEventOnCommandList)GetProcAddress(d3d12_state.WinPixEventRuntimeDLL, "PIXBeginEventOnCommandList");
+        PIXEndEventOnCommandList = (PFN_PIXEndEventOnCommandList)GetProcAddress(d3d12_state.WinPixEventRuntimeDLL, "PIXEndEventOnCommandList");
+        PIXSetMarkerOnCommandList = (PFN_PIXSetMarkerOnCommandList)GetProcAddress(d3d12_state.WinPixEventRuntimeDLL, "PIXSetMarkerOnCommandList");
     }
 #endif
 
     ComPtr<IDXGIFactory4> dxgiFactory;
-    if (FAILED(vgpuCreateDXGIFactory2(0, IID_PPV_ARGS(&dxgiFactory))))
+    if (FAILED(vgpuCreateDXGIFactory2(0, IID_PPV_ARGS(dxgiFactory.GetAddressOf()))))
     {
         return false;
     }
@@ -4965,12 +5083,22 @@ static VGPUBool32 d3d12_isSupported(void)
             continue;
         }
 
-        // Check to see if the adapter supports Direct3D 12,
-        // but don't create the actual device.
-        if (SUCCEEDED(vgpuD3D12CreateDevice(dxgiAdapter.Get(), D3D_FEATURE_LEVEL_12_0, _uuidof(ID3D12Device), nullptr)))
+        // Check to see if the adapter supports Direct3D 12, but don't create the actual device.
+        if (d3d12_state.deviceFactory != nullptr)
         {
-            foundCompatibleDevice = true;
-            break;
+            if (SUCCEEDED(d3d12_state.deviceFactory->CreateDevice(dxgiAdapter.Get(), D3D_FEATURE_LEVEL_12_0, _uuidof(ID3D12Device), nullptr)))
+            {
+                foundCompatibleDevice = true;
+                break;
+            }
+        }
+        else
+        {
+            if (SUCCEEDED(vgpuD3D12CreateDevice(dxgiAdapter.Get(), D3D_FEATURE_LEVEL_12_0, _uuidof(ID3D12Device), nullptr)))
+            {
+                foundCompatibleDevice = true;
+                break;
+            }
         }
     }
 
@@ -4983,14 +5111,18 @@ static VGPUBool32 d3d12_isSupported(void)
     return false;
 }
 
-
-static VGPUDeviceImpl* d3d12_createDevice(const VGPUDeviceDescriptor* info)
+static VGPUInstanceImpl* d3d12_CreateInstance(const VGPUInstanceDesc* desc)
 {
-    VGPU_ASSERT(info);
+    return nullptr;
+}
+
+static VGPUDeviceImpl* d3d12_createDevice(const VGPUDeviceDesc* desc)
+{
+    VGPU_ASSERT(desc);
 
     D3D12Device* device = new D3D12Device();
 
-    if (!device->Init(info))
+    if (!device->Init(desc))
     {
         delete device;
         return nullptr;
@@ -5002,6 +5134,7 @@ static VGPUDeviceImpl* d3d12_createDevice(const VGPUDeviceDescriptor* info)
 VGPUDriver D3D12_Driver = {
     VGPUBackend_D3D12,
     d3d12_isSupported,
+    d3d12_CreateInstance,
     d3d12_createDevice
 };
 

@@ -30,8 +30,20 @@
 
 #define VGPU_API _VGPU_EXTERN _VGPU_EXPORT
 
+#if !defined(VGPU_OBJECT_ATTRIBUTE)
+#define VGPU_OBJECT_ATTRIBUTE
+#endif
 #if !defined(VGPU_ENUM_ATTRIBUTE)
 #define VGPU_ENUM_ATTRIBUTE
+#endif
+#if !defined(VGPU_STRUCT_ATTRIBUTE)
+#define VGPU_STRUCT_ATTRIBUTE
+#endif
+#if !defined(VGPU_FUNC_ATTRIBUTE)
+#define VGPU_FUNC_ATTRIBUTE
+#endif
+#if !defined(VGPU_NULLABLE)
+#define VGPU_NULLABLE
 #endif
 
 #include <stddef.h>
@@ -53,19 +65,21 @@ typedef uint32_t VGPUBool32;
 typedef uint32_t VGPUFlags;
 typedef uint64_t VGPUDeviceAddress;
 
-typedef struct VGPUDeviceImpl*          VGPUDevice;
-typedef struct VGPUBufferImpl*          VGPUBuffer;
-typedef struct VGPUTextureImpl*         VGPUTexture;
-typedef struct VGPUTextureViewImpl*     VGPUTextureView;
-typedef struct VGPUSamplerImpl*         VGPUSampler;
-typedef struct VGPUBindGroupLayoutImpl* VGPUBindGroupLayout;
-typedef struct VGPUPipelineLayoutImpl*  VGPUPipelineLayout;
-typedef struct VGPUBindGroupImpl*       VGPUBindGroup;
-typedef struct VGPUPipelineImpl*        VGPUPipeline;
-typedef struct VGPUQueryHeapImpl*       VGPUQueryHeap;
-typedef struct VGPUSurfaceImpl*         VGPUSurface;
-typedef struct VGPUSwapChainImpl*       VGPUSwapChain;
-typedef struct VGPUCommandBufferImpl*   VGPUCommandBuffer;
+typedef struct VGPUInstanceImpl*        VGPUInstance VGPU_OBJECT_ATTRIBUTE;
+typedef struct VGPUAdapterImpl*         VGPUAdapter VGPU_OBJECT_ATTRIBUTE;
+typedef struct VGPUDeviceImpl*          VGPUDevice VGPU_OBJECT_ATTRIBUTE;
+typedef struct VGPUBufferImpl*          VGPUBuffer VGPU_OBJECT_ATTRIBUTE;
+typedef struct VGPUTextureImpl*         VGPUTexture VGPU_OBJECT_ATTRIBUTE;
+typedef struct VGPUTextureViewImpl*     VGPUTextureView VGPU_OBJECT_ATTRIBUTE;
+typedef struct VGPUSamplerImpl*         VGPUSampler VGPU_OBJECT_ATTRIBUTE;
+typedef struct VGPUBindGroupLayoutImpl* VGPUBindGroupLayout VGPU_OBJECT_ATTRIBUTE;
+typedef struct VGPUPipelineLayoutImpl*  VGPUPipelineLayout VGPU_OBJECT_ATTRIBUTE;
+typedef struct VGPUBindGroupImpl*       VGPUBindGroup VGPU_OBJECT_ATTRIBUTE;
+typedef struct VGPUPipelineImpl*        VGPUPipeline VGPU_OBJECT_ATTRIBUTE;
+typedef struct VGPUQueryHeapImpl*       VGPUQueryHeap VGPU_OBJECT_ATTRIBUTE;
+typedef struct VGPUSurfaceImpl*         VGPUSurface VGPU_OBJECT_ATTRIBUTE;
+typedef struct VGPUSwapChainImpl*       VGPUSwapChain VGPU_OBJECT_ATTRIBUTE;
+typedef struct VGPUCommandBufferImpl*   VGPUCommandBuffer VGPU_OBJECT_ATTRIBUTE;
 
 typedef enum VGPULogLevel {
     VGPULogLevel_Off = 0,
@@ -77,17 +91,17 @@ typedef enum VGPULogLevel {
 
     _VGPULogLevel_Count,
     _VGPULogLevel_Force32 = 0x7FFFFFFF
-} VGPULogLevel;
+} VGPULogLevel VGPU_ENUM_ATTRIBUTE;
 
 typedef enum VGPUBackend {
-    _VGPUBackend_Default = 0,
+    VGPUBackendType_Undefined = 0,
     VGPUBackend_Vulkan,
     VGPUBackend_D3D12,
     VGPUBackend_WGPU,
 
     _VGPUBackend_Count,
     _VGPUBackend_Force32 = 0x7FFFFFFF
-} VGPUBackend;
+} VGPUBackend VGPU_ENUM_ATTRIBUTE;
 
 typedef enum VGPUValidationMode {
     VGPUValidationMode_Disabled = 0,
@@ -97,7 +111,7 @@ typedef enum VGPUValidationMode {
 
     _VGPUValidationMode_Count,
     _VGPUValidationMode_Force32 = 0x7FFFFFFF
-} VGPUValidationMode;
+} VGPUValidationMode VGPU_ENUM_ATTRIBUTE;
 
 typedef enum VGPUPowerPreference {
     VGPUPowerPreference_Undefined = 0,
@@ -105,7 +119,7 @@ typedef enum VGPUPowerPreference {
     VGPUPowerPreference_HighPerformance = 2,
 
     _VGPUPowerPreference_Force32 = 0x7FFFFFFF
-} VGPUPowerPreference;
+} VGPUPowerPreference VGPU_ENUM_ATTRIBUTE;
 
 typedef enum VGPUCommandQueue {
     VGPUCommandQueue_Graphics,
@@ -114,7 +128,7 @@ typedef enum VGPUCommandQueue {
 
     _VGPUCommandQueue_Count,
     _VGPUCommandQueue_Force32 = 0x7FFFFFFF
-} VGPUCommandQueue;
+} VGPUCommandQueue VGPU_ENUM_ATTRIBUTE;
 
 typedef enum VGPUAdapterType {
     VGPUAdapterType_DiscreteGPU = 0,
@@ -124,7 +138,7 @@ typedef enum VGPUAdapterType {
 
     _VGPUAdapterType_Count,
     _VGPUAdapterType_Force32 = 0x7FFFFFFF
-} VGPUAdapterType;
+} VGPUAdapterType VGPU_ENUM_ATTRIBUTE;
 
 typedef enum VGPUCpuAccessMode {
     VGPUCpuAccessMode_None = 0,
@@ -133,7 +147,7 @@ typedef enum VGPUCpuAccessMode {
 
     _VGPUCpuAccessMode_Count,
     _VGPUCpuAccessMode_Force32 = 0x7FFFFFFF
-} VGPUCpuAccessMode;
+} VGPUCpuAccessMode VGPU_ENUM_ATTRIBUTE;
 
 typedef enum VGPUBufferUsage {
     VGPUBufferUsage_None = 0,
@@ -147,7 +161,7 @@ typedef enum VGPUBufferUsage {
     VGPUBufferUsage_RayTracing = (1 << 7),
 
     _VGPUBufferUsage_Force32 = 0x7FFFFFFF
-} VGPUBufferUsage;
+} VGPUBufferUsage VGPU_ENUM_ATTRIBUTE;
 typedef VGPUFlags VGPUBufferUsageFlags;
 
 typedef enum VGPUTextureDimension {
@@ -158,7 +172,7 @@ typedef enum VGPUTextureDimension {
 
     _VGPUTextureDimension_Count,
     _VGPUTextureDimension_Force32 = 0x7FFFFFFF
-} VGPUTextureDimension;
+} VGPUTextureDimension VGPU_ENUM_ATTRIBUTE;
 
 typedef enum VGPUTextureUsage {
     VGPUTextureUsage_None = 0,
@@ -170,7 +184,7 @@ typedef enum VGPUTextureUsage {
     VGPUTextureUsage_Shared = (1 << 5),
 
     _VGPUTextureUsage_Force32 = 0x7FFFFFFF
-} VGPUTextureUsage;
+} VGPUTextureUsage VGPU_ENUM_ATTRIBUTE;
 typedef VGPUFlags VGPUTextureUsageFlags;
 
 typedef enum VGPUTextureFormat {
@@ -292,7 +306,7 @@ typedef enum VGPUTextureFormat {
 
     _VGPUTextureFormat_Count,
     _VGPUTextureFormat_Force32 = 0x7FFFFFFF
-} VGPUTextureFormat;
+} VGPUTextureFormat VGPU_ENUM_ATTRIBUTE;
 
 typedef enum VGPUFormatKind {
     VGPUFormatKind_Unorm,
@@ -304,7 +318,7 @@ typedef enum VGPUFormatKind {
 
     _VGPUFormatKind_Count,
     _VGPUFormatKind_Force32 = 0x7FFFFFFF
-} VGPUFormatKind;
+} VGPUFormatKind VGPU_ENUM_ATTRIBUTE;
 
 typedef enum VGPUPresentMode {
     VGPUPresentMode_Immediate = 0,
@@ -325,7 +339,7 @@ typedef enum VGPUShaderStage {
     VGPUShaderStage_Compute = (1 << 5),
     VGPUShaderStage_Amplification = (1 << 6),
     VGPUShaderStage_Mesh = (1 << 7),
-} VGPUShaderStage;
+} VGPUShaderStage VGPU_ENUM_ATTRIBUTE;
 typedef VGPUFlags VGPUShaderStageFlags;
 
 typedef enum VGPUFeature {
@@ -483,7 +497,7 @@ typedef enum VGPUPrimitiveTopology {
     VGPUPrimitiveTopology_PatchList,
 
     _VGPUPrimitiveTopology_Force32 = 0x7FFFFFFF
-} VGPUPrimitiveTopology;
+} VGPUPrimitiveTopology VGPU_ENUM_ATTRIBUTE;
 
 typedef enum VGPUBlendFactor {
     _VGPUBlendFactor_Default = 0,
@@ -509,7 +523,7 @@ typedef enum VGPUBlendFactor {
 
     _VGPUBlendFactor_Count,
     _VGPUBlendFactor_Force32 = 0x7FFFFFFF
-} VGPUBlendFactor;
+} VGPUBlendFactor VGPU_ENUM_ATTRIBUTE;
 
 typedef enum VGPUBlendOperation {
     _VGPUBlendOperation_Default = 0,
@@ -520,7 +534,7 @@ typedef enum VGPUBlendOperation {
     VGPUBlendOperation_Max,
 
     _VGPUBlendOperation_Force32 = 0x7FFFFFFF
-} VGPUBlendOperation;
+} VGPUBlendOperation VGPU_ENUM_ATTRIBUTE;
 
 typedef enum VGPUColorWriteMask {
     _VGPUColorWriteMask_Default = 0,
@@ -532,7 +546,7 @@ typedef enum VGPUColorWriteMask {
     VGPUColorWriteMask_All = 0x0F,
 
     _VGPUColorWriteMask_Force32 = 0x7FFFFFFF
-} VGPUColorWriteMask;
+} VGPUColorWriteMask VGPU_ENUM_ATTRIBUTE;
 typedef VGPUFlags VGPUColorWriteMaskFlags;
 
 typedef enum VGPUVertexFormat {
@@ -570,14 +584,14 @@ typedef enum VGPUVertexFormat {
     VGPUVertexFormat_Int1010102Normalized,
     VGPUVertexFormat_UInt1010102Normalized,
     _VGPUVertexFormat_Force32 = 0x7FFFFFFF
-} VGPUVertexFormat;
+} VGPUVertexFormat VGPU_ENUM_ATTRIBUTE;
 
 typedef enum VGPUVertexStepMode {
     VGPUVertexStepMode_Vertex = 0,
     VGPUVertexStepMode_Instance = 1,
 
     _VGPUVertexStepMode_Force32 = 0x7FFFFFFF
-} VGPUVertexStepMode;
+} VGPUVertexStepMode VGPU_ENUM_ATTRIBUTE;
 
 typedef enum VGPUPipelineType
 {
@@ -586,7 +600,7 @@ typedef enum VGPUPipelineType
     VGPUPipelineType_RayTracing = 2,
 
     _VGPUPipelineType_Force32 = 0x7FFFFFFF
-} VGPUPipelineType;
+} VGPUPipelineType VGPU_ENUM_ATTRIBUTE;
 
 typedef enum VGPUQueryType {
     /// Used for occlusion query heap or occlusion queries
@@ -599,8 +613,7 @@ typedef enum VGPUQueryType {
     VGPUQueryType_PipelineStatistics = 3,
 
     _VGPUQueryType_Force32 = 0x7FFFFFFF
-} VGPUQueryType;
-
+} VGPUQueryType VGPU_ENUM_ATTRIBUTE;
 
 typedef enum VGPUNativeObjectType {
     // Vulkan
@@ -613,32 +626,32 @@ typedef enum VGPUNativeObjectType {
     VGPUNativeObjectType_DXGIFactory = 103,
 
     _VGPUNativeObjectType_Force32 = 0x7FFFFFFF
-} VGPUNativeObjectType;
+} VGPUNativeObjectType VGPU_ENUM_ATTRIBUTE;
 
 typedef struct VGPUColor {
     float r;
     float g;
     float b;
     float a;
-} VGPUColor;
+} VGPUColor VGPU_STRUCT_ATTRIBUTE;
 
 typedef struct VGPUExtent2D {
     uint32_t width;
     uint32_t height;
-} VGPUExtent2D;
+} VGPUExtent2D VGPU_STRUCT_ATTRIBUTE;
 
 typedef struct VGPUExtent3D {
     uint32_t width;
     uint32_t height;
     uint32_t depth;
-} VGPUExtent3D;
+} VGPUExtent3D VGPU_STRUCT_ATTRIBUTE;
 
 typedef struct VGPURect {
     int32_t x;
     int32_t y;
     int32_t width;
     int32_t height;
-} VGPURect;
+} VGPURect VGPU_STRUCT_ATTRIBUTE;
 
 typedef struct VGPUViewport {
     float x;
@@ -647,14 +660,14 @@ typedef struct VGPUViewport {
     float height;
     float minDepth;
     float maxDepth;
-} VGPUViewport;
+} VGPUViewport VGPU_STRUCT_ATTRIBUTE;
 
 typedef struct VGPUDispatchIndirectCommand
 {
     uint32_t x;
     uint32_t y;
     uint32_t z;
-} VGPUDispatchIndirectCommand;
+} VGPUDispatchIndirectCommand VGPU_STRUCT_ATTRIBUTE;
 
 typedef struct VGPUDrawIndirectCommand
 {
@@ -662,7 +675,7 @@ typedef struct VGPUDrawIndirectCommand
     uint32_t instanceCount;
     uint32_t firstVertex;
     uint32_t firstInstance;
-} VGPUDrawIndirectCommand;
+} VGPUDrawIndirectCommand VGPU_STRUCT_ATTRIBUTE;
 
 typedef struct VGPUDrawIndexedIndirectCommand
 {
@@ -671,7 +684,7 @@ typedef struct VGPUDrawIndexedIndirectCommand
     uint32_t firstIndex;
     int32_t  baseVertex;
     uint32_t firstInstance;
-} VGPUDrawIndexedIndirectCommand;
+} VGPUDrawIndexedIndirectCommand VGPU_STRUCT_ATTRIBUTE;
 
 typedef struct VGPURenderPassColorAttachment {
     VGPUTexture         texture;
@@ -680,7 +693,7 @@ typedef struct VGPURenderPassColorAttachment {
     VGPULoadAction      loadAction;
     VGPUStoreAction     storeAction;
     VGPUColor           clearColor;
-} VGPURenderPassColorAttachment;
+} VGPURenderPassColorAttachment VGPU_STRUCT_ATTRIBUTE;
 
 typedef struct VGPURenderPassDepthStencilAttachment {
     VGPUTexture         texture;
@@ -692,14 +705,14 @@ typedef struct VGPURenderPassDepthStencilAttachment {
     VGPULoadAction      stencilLoadAction;
     VGPUStoreAction     stencilStoreAction;
     uint32_t            stencilClearValue;
-} VGPURenderPassDepthStencilAttachment;
+} VGPURenderPassDepthStencilAttachment VGPU_STRUCT_ATTRIBUTE;
 
 typedef struct VGPURenderPassDesc {
     const char* label;
     uint32_t colorAttachmentCount;
     const VGPURenderPassColorAttachment* colorAttachments;
     const VGPURenderPassDepthStencilAttachment* depthStencilAttachment;
-} VGPURenderPassDesc;
+} VGPURenderPassDesc VGPU_STRUCT_ATTRIBUTE;
 
 typedef struct VGPUBufferDesc {
     const char* label;
@@ -707,7 +720,7 @@ typedef struct VGPUBufferDesc {
     VGPUBufferUsageFlags usage;
     VGPUCpuAccessMode cpuAccess;
     void* existingHandle;
-} VGPUBufferDesc;
+} VGPUBufferDesc VGPU_STRUCT_ATTRIBUTE;
 
 typedef struct VGPUTextureDesc {
     const char* label;
@@ -720,14 +733,14 @@ typedef struct VGPUTextureDesc {
     uint32_t mipLevelCount;
     uint32_t sampleCount;
     VGPUCpuAccessMode cpuAccess;
-} VGPUTextureDesc;
+} VGPUTextureDesc VGPU_STRUCT_ATTRIBUTE;
 
 typedef struct VGPUTextureData
 {
     const void* pData;
     uint32_t rowPitch;
     uint32_t slicePitch;
-} VGPUTextureData;
+} VGPUTextureData VGPU_STRUCT_ATTRIBUTE;
 
 typedef struct VGPUSamplerDesc {
     const char*             label;
@@ -743,7 +756,7 @@ typedef struct VGPUSamplerDesc {
     float                   lodMinClamp;
     float                   lodMaxClamp;
     VGPUSamplerBorderColor  borderColor;
-} VGPUSamplerDesc;
+} VGPUSamplerDesc VGPU_STRUCT_ATTRIBUTE;
 
 typedef enum VGPUDescriptorType {
     VGPUDescriptorType_Sampler,
@@ -757,20 +770,20 @@ typedef enum VGPUDescriptorType {
     VGPUDescriptorType_ReadOnlyStorageBuffer,
 
     _VGPUDescriptorType_Force32 = 0x7FFFFFFF
-} VGPUDescriptorType;
+} VGPUDescriptorType VGPU_STRUCT_ATTRIBUTE;
 
 typedef struct VGPUBindGroupLayoutEntry {
     uint32_t binding;
     uint32_t count;
     VGPUDescriptorType descriptorType;
     VGPUShaderStage visibility;
-} VGPUBindGroupLayoutEntry;
+} VGPUBindGroupLayoutEntry VGPU_STRUCT_ATTRIBUTE;
 
 typedef struct VGPUBindGroupLayoutDesc {
     const char* label;
     size_t entryCount;
     const VGPUBindGroupLayoutEntry* entries;
-} VGPUBindGroupLayoutDesc;
+} VGPUBindGroupLayoutDesc VGPU_STRUCT_ATTRIBUTE;
 
 typedef struct VGPUPushConstantRange {
     /// Register index to bind to (supplied in shader).
@@ -779,7 +792,7 @@ typedef struct VGPUPushConstantRange {
     uint32_t size;
     /// The shader stage the constants will be accessible to.
     VGPUShaderStageFlags visibility;
-} VGPUPushConstantRange;
+} VGPUPushConstantRange VGPU_STRUCT_ATTRIBUTE;
 
 typedef struct VGPUPipelineLayoutDesc {
     const char* label;
@@ -787,7 +800,7 @@ typedef struct VGPUPipelineLayoutDesc {
     const VGPUBindGroupLayout* bindGroupLayouts;
     uint32_t pushConstantRangeCount;
     const VGPUPushConstantRange* pushConstantRanges;
-} VGPUPipelineLayoutDesc;
+} VGPUPipelineLayoutDesc VGPU_STRUCT_ATTRIBUTE;
 
 typedef struct VGPUBindGroupEntry {
     uint32_t                binding;
@@ -798,20 +811,20 @@ typedef struct VGPUBindGroupEntry {
     //uint64_t                stride = 0;
     VGPUSampler             sampler;
     //const RHITexture* textureView = nullptr;
-} VGPUBindGroupEntry;
+} VGPUBindGroupEntry VGPU_STRUCT_ATTRIBUTE;
 
 typedef struct VGPUBindGroupDesc {
     const char* label;
     size_t entryCount;
     const VGPUBindGroupEntry* entries;
-} VGPUBindGroupDesc;
+} VGPUBindGroupDesc VGPU_STRUCT_ATTRIBUTE;
 
 typedef struct VGPUShaderStageDesc {
     VGPUShaderStage stage;
     const void* bytecode;
     size_t size;
     const char* entryPointName;
-} VGPUShaderStageDesc;
+} VGPUShaderStageDesc VGPU_STRUCT_ATTRIBUTE;
 
 typedef struct VGPURenderTargetBlendState {
     VGPUBool32              blendEnabled;
@@ -822,28 +835,28 @@ typedef struct VGPURenderTargetBlendState {
     VGPUBlendFactor         dstAlphaBlendFactor;
     VGPUBlendOperation      alphaBlendOperation;
     VGPUColorWriteMaskFlags colorWriteMask;
-} VGPURenderTargetBlendState;
+} VGPURenderTargetBlendState VGPU_STRUCT_ATTRIBUTE;
 
 typedef struct VGPUBlendState {
     VGPUBool32 alphaToCoverageEnable;
     VGPUBool32 independentBlendEnable;
 
     VGPURenderTargetBlendState renderTargets[VGPU_MAX_COLOR_ATTACHMENTS];
-} VGPUBlendState;
+} VGPUBlendState VGPU_STRUCT_ATTRIBUTE;
 
 typedef struct VGPURasterizerState {
     VGPUFillMode fillMode;
     VGPUCullMode cullMode;
     VGPUFrontFace frontFace;
     VGPUBool32 conservativeRaster;
-} VGPURasterizerState;
+} VGPURasterizerState VGPU_STRUCT_ATTRIBUTE;
 
 typedef struct VGPUStencilFaceState {
     VGPUCompareFunction compareFunction;
     VGPUStencilOperation failOperation;
     VGPUStencilOperation depthFailOperation;
     VGPUStencilOperation passOperation;
-} VGPUStencilFaceState;
+} VGPUStencilFaceState VGPU_STRUCT_ATTRIBUTE;
 
 typedef struct VGPUDepthStencilState {
     VGPUBool32 depthWriteEnabled;
@@ -857,25 +870,25 @@ typedef struct VGPUDepthStencilState {
     float depthBiasClamp;
     VGPUDepthClipMode depthClipMode;
     VGPUBool32 depthBoundsTestEnable; /* Only if VGPUFeature_DepthBoundsTest is supported */
-} VGPUDepthStencilState;
+} VGPUDepthStencilState VGPU_STRUCT_ATTRIBUTE;
 
 typedef struct VGPUVertexAttribute {
     VGPUVertexFormat format;
     uint32_t offset;
     uint32_t shaderLocation;
-} VGPUVertexAttribute;
+} VGPUVertexAttribute VGPU_STRUCT_ATTRIBUTE;
 
 typedef struct VGPUVertexBufferLayout {
     uint32_t stride;
     VGPUVertexStepMode stepMode;
     uint32_t attributeCount;
     const VGPUVertexAttribute* attributes;
-} VGPUVertexBufferLayout;
+} VGPUVertexBufferLayout VGPU_STRUCT_ATTRIBUTE;
 
 typedef struct VGPUVertexState {
     uint32_t layoutCount;
     const VGPUVertexBufferLayout* layouts;
-} VGPUVertexState;
+} VGPUVertexState VGPU_STRUCT_ATTRIBUTE;
 
 typedef struct VGPURenderPipelineDesc {
     const char* label;
@@ -897,25 +910,25 @@ typedef struct VGPURenderPipelineDesc {
     const VGPUTextureFormat*    colorFormats;
     VGPUTextureFormat           depthStencilFormat;
     uint32_t                    sampleCount;
-} VGPURenderPipelineDesc;
+} VGPURenderPipelineDesc VGPU_STRUCT_ATTRIBUTE;
 
 typedef struct VGPUComputePipelineDesc {
-    const char* label;
-    VGPUPipelineLayout layout;
-    VGPUShaderStageDesc shader;
-} VGPUComputePipelineDesc;
+    const char*             label;
+    VGPUPipelineLayout      layout;
+    VGPUShaderStageDesc     shader;
+} VGPUComputePipelineDesc VGPU_STRUCT_ATTRIBUTE;
 
 typedef struct VGPURayTracingPipelineDesc {
-    const char* label;
-    VGPUPipelineLayout layout;
-} VGPURayTracingPipelineDesc;
+    const char*             label;
+    VGPUPipelineLayout      layout;
+} VGPURayTracingPipelineDesc VGPU_STRUCT_ATTRIBUTE;
 
 typedef struct VGPUQueryHeapDesc {
-    const char* label;
-    VGPUQueryType type;
-    uint32_t count;
+    const char*     label;
+    VGPUQueryType   type;
+    uint32_t        count;
     //VGPUQueryPipelineStatisticFlags pipelineStatistics;
-} VGPUQueryHeapDesc;
+} VGPUQueryHeapDesc VGPU_STRUCT_ATTRIBUTE;
 
 typedef struct VGPUSwapChainDesc {
     const char* label;
@@ -926,14 +939,20 @@ typedef struct VGPUSwapChainDesc {
     VGPUTextureFormat format;
     VGPUPresentMode presentMode;
     VGPUBool32 isFullscreen;
-} VGPUSwapChainDesc;
+} VGPUSwapChainDesc VGPU_STRUCT_ATTRIBUTE;
 
-typedef struct VGPUDeviceDescriptor {
+typedef struct VGPUDeviceDesc {
     const char* label;
     VGPUBackend preferredBackend;
     VGPUValidationMode validationMode;
     VGPUPowerPreference powerPreference;
-} VGPUDeviceDescriptor;
+} VGPUDeviceDesc VGPU_STRUCT_ATTRIBUTE;
+
+typedef struct VGPUInstanceDesc {
+    const char* label;
+    VGPUBackend preferredBackend;
+    VGPUValidationMode validationMode;
+} VGPUInstanceDesc VGPU_STRUCT_ATTRIBUTE;
 
 typedef struct VGPUAdapterProperties {
     uint32_t vendorId;
@@ -941,7 +960,7 @@ typedef struct VGPUAdapterProperties {
     char name[VGPU_ADAPTER_NAME_MAX_LENGTH];
     const char* driverDescription;
     VGPUAdapterType type;
-} VGPUAdapterProperties;
+} VGPUAdapterProperties VGPU_STRUCT_ATTRIBUTE;
 
 typedef struct VGPULimits {
     uint32_t maxTextureDimension1D;
@@ -973,15 +992,19 @@ typedef struct VGPULimits {
     uint64_t rayTracingShaderTableMaxStride;
     uint32_t rayTracingShaderRecursionMaxDepth;
     uint32_t rayTracingMaxGeometryCount;
-} VGPULimits;
+} VGPULimits VGPU_STRUCT_ATTRIBUTE;
 
 typedef void (*VGPULogCallback)(VGPULogLevel level, const char* message, void* userData);
 VGPU_API VGPULogLevel vgpuGetLogLevel(void);
 VGPU_API void vgpuSetLogLevel(VGPULogLevel level);
 VGPU_API void vgpuSetLogCallback(VGPULogCallback func, void* userData);
 
-VGPU_API VGPUBool32 vgpuIsBackendSupported(VGPUBackend backend);
-VGPU_API VGPUDevice vgpuCreateDevice(const VGPUDeviceDescriptor* descriptor);
+VGPU_API VGPUBool32 vgpuIsBackendSupported(VGPUBackend backend) VGPU_FUNC_ATTRIBUTE;
+VGPU_API VGPUInstance vgpuCreateInstance(const VGPUInstanceDesc* desc) VGPU_FUNC_ATTRIBUTE;
+VGPU_API void vgpuInstanceAddRef(VGPUInstance instance) VGPU_FUNC_ATTRIBUTE;
+VGPU_API void vgpuInstanceRelease(VGPUInstance instance) VGPU_FUNC_ATTRIBUTE;
+
+VGPU_API VGPUDevice vgpuCreateDevice(const VGPUDeviceDesc* desc);
 VGPU_API void vgpuDeviceSetLabel(VGPUDevice device, const char* label);
 VGPU_API uint32_t vgpuDeviceAddRef(VGPUDevice device);
 VGPU_API uint32_t vgpuDeviceRelease(VGPUDevice device);

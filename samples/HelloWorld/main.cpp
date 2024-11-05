@@ -2,12 +2,16 @@
 // Distributed under the MIT license. See the LICENSE file in the project root for more information.
 
 #include "GLFW/glfw3.h"
+#if defined(__EMSCRIPTEN__)
+#include <emscripten/emscripten.h>
+#else
 #if defined(__linux__)
 #   define GLFW_EXPOSE_NATIVE_X11
 #elif defined(_WIN32)
 #   define GLFW_EXPOSE_NATIVE_WIN32
 #endif
 #include "GLFW/glfw3native.h"
+#endif
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,6 +24,7 @@
 
 #include <vgpu.h>
 
+VGPUInstance instance = nullptr;
 VGPUDevice device = nullptr;
 VGPUSwapChain swapChain = nullptr;
 VGPUTexture depthStencilTexture = nullptr;
@@ -39,15 +44,8 @@ inline void vgpu_log(VGPULogLevel level, const char* message, void* user_data)
 #endif
 }
 
-struct float4 {
-    float x;
-    float y;
-    float z;
-    float w;
-};
-
 struct PushData {
-    float4 color;
+    VGPUColor color;
 };
 
 std::string getAssetPath()
@@ -90,20 +88,14 @@ static std::vector<uint8_t> LoadShader(const char* fileName)
 
 void init_vgpu(GLFWwindow* window)
 {
-#ifdef _DEBUG
-    vgpuSetLogLevel(VGPULogLevel_Debug);
-#else
-    vgpuSetLogLevel(VGPULogLevel_Info);
-#endif
-
-    VGPUDeviceDescriptor deviceDesc{};
+    VGPUDeviceDesc deviceDesc{};
     deviceDesc.label = "test device";
 #ifdef _DEBUG
     deviceDesc.validationMode = VGPUValidationMode_Enabled;
 #endif
 
     //deviceDesc.preferredBackend = VGPUBackend_D3D12;
-    if (deviceDesc.preferredBackend == _VGPUBackend_Default
+    if (deviceDesc.preferredBackend == VGPUBackendType_Undefined
         && vgpuIsBackendSupported(VGPUBackend_Vulkan))
     {
         deviceDesc.preferredBackend = VGPUBackend_Vulkan;
@@ -206,7 +198,7 @@ void init_vgpu(GLFWwindow* window)
     constantBufferDesc.usage = VGPUBufferUsage_Constant;
 
     PushData pushData{};
-    pushData.color.x = 1.0f;
+    pushData.color.r = 1.0f;
     constantBuffer = vgpuCreateBuffer(device, &constantBufferDesc, &pushData);
 
     VGPUBindGroupEntry bindGroupEntry{};
@@ -270,6 +262,9 @@ void init_vgpu(GLFWwindow* window)
 
 void draw_frame()
 {
+#if defined(__EMSCRIPTEN__)
+    return;
+#else
     VGPUCommandBuffer commandBuffer = vgpuBeginCommandBuffer(device, VGPUCommandQueue_Graphics, "Frame");
 
     // When window minimized texture is null
@@ -312,28 +307,41 @@ void draw_frame()
     }
 
     vgpuDeviceSubmit(device, &commandBuffer, 1u);
+#endif
 }
 
 int main()
 {
-    if (!glfwInit())
-    {
+    if (!glfwInit()) {
         return EXIT_FAILURE;
     }
 
+#ifdef _DEBUG
+    vgpuSetLogLevel(VGPULogLevel_Debug);
+#else
+    vgpuSetLogLevel(VGPULogLevel_Info);
+#endif
     vgpuSetLogCallback(vgpu_log, nullptr);
 
-    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
-    GLFWwindow* window = glfwCreateWindow(1280, 720, "Hello World", NULL, NULL);
-    init_vgpu(window);
+    instance = vgpuCreateInstance(nullptr); 
 
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+#if !defined(__EMSCRIPTEN__)
+    glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+#endif
+    GLFWwindow* window = glfwCreateWindow(1280, 720, "VGPU Window", nullptr, nullptr);
+
+#if defined(__EMSCRIPTEN__)
+    emscripten_set_main_loop(draw_frame, 0, false);
+#else
+    init_vgpu(window);
     glfwShowWindow(window);
     while (!glfwWindowShouldClose(window))
     {
         draw_frame();
         glfwPollEvents();
     }
+#endif
 
     vgpuDeviceWaitIdle(device);
     vgpuBufferRelease(vertexBuffer);

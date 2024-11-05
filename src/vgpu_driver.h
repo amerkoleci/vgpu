@@ -303,11 +303,18 @@ public:
     uint32_t frameIndex = 0;
 };
 
+struct VGPUInstanceImpl : public VGPUObject
+{
+
+};
+
 typedef struct VGPUDriver
 {
     VGPUBackend backend;
-    VGPUBool32(*isSupported)(void);
-    VGPUDeviceImpl* (*createDevice)(const VGPUDeviceDescriptor* descriptor);
+    bool(*isSupported)(void);
+
+    VGPUInstanceImpl* (*CreateInstance)(const VGPUInstanceDesc* desc);
+    VGPUDeviceImpl* (*createDevice)(const VGPUDeviceDesc* desc);
 } VGPUDriver;
 
 _VGPU_EXTERN VGPUDriver Vulkan_Driver;
